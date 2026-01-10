@@ -159,7 +159,10 @@ const ShopProducts = () => {
     expiry_date: "",
     supplier_name: "",
     category_id: "",
+    custom_category: "",
   });
+
+  const [showCustomCategory, setShowCustomCategory] = useState(false);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -246,13 +249,32 @@ const ShopProducts = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      let categoryId = formData.category_id;
+
+      // If "others" is selected, create new category first
+      if (formData.category_id === "others" && formData.custom_category.trim()) {
+        try {
+          const result = await offlineShopService.createCategory({ name: formData.custom_category.trim() });
+          categoryId = result.category?.id || null;
+          // Reload categories
+          const categoriesRes = await offlineShopService.getCategories();
+          setCategories(categoriesRes.categories || []);
+        } catch (error) {
+          console.error("Failed to create category:", error);
+          toast.error(language === "bn" ? "ক্যাটাগরি তৈরি করতে সমস্যা" : "Failed to create category");
+          return;
+        }
+      } else if (formData.category_id === "others") {
+        categoryId = null;
+      }
+
       const productData = {
         ...formData,
         purchase_price: parseFloat(formData.purchase_price) || 0,
         selling_price: parseFloat(formData.selling_price) || 0,
         stock_quantity: parseInt(formData.stock_quantity) || 0,
         min_stock_alert: parseInt(formData.min_stock_alert) || 5,
-        category_id: formData.category_id || null,
+        category_id: categoryId || null,
         expiry_date: formData.expiry_date || null,
       };
 
@@ -288,6 +310,7 @@ const ShopProducts = () => {
 
   const handleEdit = (product: Product) => {
     setEditingProduct(product);
+    setShowCustomCategory(false);
     setFormData({
       name: product.name,
       description: product.description || "",
@@ -302,12 +325,14 @@ const ShopProducts = () => {
       expiry_date: product.expiry_date || "",
       supplier_name: product.supplier_name || "",
       category_id: product.category_id || "",
+      custom_category: "",
     });
     setIsModalOpen(true);
   };
 
   const resetForm = () => {
     setEditingProduct(null);
+    setShowCustomCategory(false);
     setFormData({
       name: "",
       description: "",
@@ -322,6 +347,7 @@ const ShopProducts = () => {
       expiry_date: "",
       supplier_name: "",
       category_id: "",
+      custom_category: "",
     });
   };
 
@@ -1121,7 +1147,10 @@ const ShopProducts = () => {
                 <Label htmlFor="category">{t("shop.category")}</Label>
                 <Select
                   value={formData.category_id}
-                  onValueChange={(value) => setFormData({ ...formData, category_id: value })}
+                  onValueChange={(value) => {
+                    setFormData({ ...formData, category_id: value, custom_category: "" });
+                    setShowCustomCategory(value === "others");
+                  }}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder={t("shop.select")} />
@@ -1132,8 +1161,19 @@ const ShopProducts = () => {
                         {cat.name}
                       </SelectItem>
                     ))}
+                    <SelectItem value="others">
+                      {language === "bn" ? "অন্যান্য (নতুন ক্যাটাগরি)" : "Others (New Category)"}
+                    </SelectItem>
                   </SelectContent>
                 </Select>
+                {showCustomCategory && (
+                  <Input
+                    placeholder={language === "bn" ? "নতুন ক্যাটাগরির নাম লিখুন" : "Enter new category name"}
+                    value={formData.custom_category}
+                    onChange={(e) => setFormData({ ...formData, custom_category: e.target.value })}
+                    className="mt-2"
+                  />
+                )}
               </div>
             </div>
 
