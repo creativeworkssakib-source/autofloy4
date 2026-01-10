@@ -14,6 +14,45 @@ export type Database = {
   }
   public: {
     Tables: {
+      appearance_settings: {
+        Row: {
+          created_at: string
+          custom_css: string | null
+          dark_mode_enabled: boolean | null
+          favicon_url: string | null
+          font_family: string | null
+          id: string
+          logo_url: string | null
+          primary_color: string | null
+          secondary_color: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          custom_css?: string | null
+          dark_mode_enabled?: boolean | null
+          favicon_url?: string | null
+          font_family?: string | null
+          id?: string
+          logo_url?: string | null
+          primary_color?: string | null
+          secondary_color?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          custom_css?: string | null
+          dark_mode_enabled?: boolean | null
+          favicon_url?: string | null
+          font_family?: string | null
+          id?: string
+          logo_url?: string | null
+          primary_color?: string | null
+          secondary_color?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       payment_requests: {
         Row: {
           admin_notes: string | null
@@ -124,6 +163,51 @@ export type Database = {
           name?: string
           price_monthly?: number | null
           price_yearly?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      seo_settings: {
+        Row: {
+          created_at: string
+          facebook_pixel_id: string | null
+          google_analytics_id: string | null
+          google_tag_manager_id: string | null
+          id: string
+          meta_description: string | null
+          meta_keywords: string | null
+          meta_title: string | null
+          og_image: string | null
+          robots_txt: string | null
+          sitemap_enabled: boolean | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          facebook_pixel_id?: string | null
+          google_analytics_id?: string | null
+          google_tag_manager_id?: string | null
+          id?: string
+          meta_description?: string | null
+          meta_keywords?: string | null
+          meta_title?: string | null
+          og_image?: string | null
+          robots_txt?: string | null
+          sitemap_enabled?: boolean | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          facebook_pixel_id?: string | null
+          google_analytics_id?: string | null
+          google_tag_manager_id?: string | null
+          id?: string
+          meta_description?: string | null
+          meta_keywords?: string | null
+          meta_title?: string | null
+          og_image?: string | null
+          robots_txt?: string | null
+          sitemap_enabled?: boolean | null
           updated_at?: string
         }
         Relationships: []
@@ -1502,6 +1586,57 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      site_settings: {
+        Row: {
+          address: string | null
+          contact_email: string | null
+          contact_phone: string | null
+          created_at: string
+          footer_text: string | null
+          id: string
+          maintenance_mode: boolean | null
+          site_name: string | null
+          site_tagline: string | null
+          social_facebook: string | null
+          social_instagram: string | null
+          social_linkedin: string | null
+          social_twitter: string | null
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          footer_text?: string | null
+          id?: string
+          maintenance_mode?: boolean | null
+          site_name?: string | null
+          site_tagline?: string | null
+          social_facebook?: string | null
+          social_instagram?: string | null
+          social_linkedin?: string | null
+          social_twitter?: string | null
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          footer_text?: string | null
+          id?: string
+          maintenance_mode?: boolean | null
+          site_name?: string | null
+          site_tagline?: string | null
+          social_facebook?: string | null
+          social_instagram?: string | null
+          social_linkedin?: string | null
+          social_twitter?: string | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       user_roles: {
         Row: {

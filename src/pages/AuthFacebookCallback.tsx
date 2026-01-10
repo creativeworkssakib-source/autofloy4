@@ -4,7 +4,7 @@ import { Loader2, AlertCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
-const SUPABASE_URL = "https://klkrzfwvrmffqkmkyqrh.supabase.co";
+const SUPABASE_URL = "https://xvwsqxfydvagfhfkwxdm.supabase.co";
 
 const AuthFacebookCallback = () => {
   const [searchParams] = useSearchParams();

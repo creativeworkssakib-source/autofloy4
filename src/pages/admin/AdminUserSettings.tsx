@@ -24,7 +24,7 @@ import { toast } from "sonner";
 import AdminLayout from "@/components/admin/AdminLayout";
 import { fetchAdminUsers, AdminUser } from "@/services/adminService";
 
-const SUPABASE_URL = "https://klkrzfwvrmffqkmkyqrh.supabase.co";
+const SUPABASE_URL = "https://xvwsqxfydvagfhfkwxdm.supabase.co";
 
 function getAuthHeaders() {
   const token = localStorage.getItem("autofloy_token");

@@ -96,7 +96,7 @@ export default function AdminWebhooks() {
   const [editingWebhook, setEditingWebhook] = useState<WebhookConfig | null>(null);
   const [editUrl, setEditUrl] = useState("");
 
-  const SUPABASE_URL = "https://klkrzfwvrmffqkmkyqrh.supabase.co";
+  const SUPABASE_URL = "https://xvwsqxfydvagfhfkwxdm.supabase.co";
   const functionsUrl = `${SUPABASE_URL}/functions/v1`;
 
   // Fetch webhooks from admin API
