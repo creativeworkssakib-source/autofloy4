@@ -924,7 +924,7 @@ const ShopProducts = () => {
                   </TableHead>
                   <TableHead className="text-xs sm:text-sm">{t("shop.productName")}</TableHead>
                   <TableHead className="text-xs sm:text-sm hidden sm:table-cell">{t("shop.purchasePrice")}</TableHead>
-                  <TableHead className="text-xs sm:text-sm hidden sm:table-cell">{language === "bn" ? "গড় মূল্য" : "Avg Cost"}</TableHead>
+                  <TableHead className="text-xs sm:text-sm hidden lg:table-cell">{language === "bn" ? "গড় মূল্য" : "Avg Cost"}</TableHead>
                   <TableHead className="text-xs sm:text-sm">{t("shop.sellingPrice")}</TableHead>
                   <TableHead className="text-xs sm:text-sm">{t("shop.stock")}</TableHead>
                   <TableHead className="text-xs sm:text-sm hidden md:table-cell">{t("shop.category")}</TableHead>
@@ -966,8 +966,8 @@ const ShopProducts = () => {
                         </div>
                       </TableCell>
                       <TableCell className="p-2 sm:p-4 hidden sm:table-cell text-xs sm:text-sm">{formatCurrency(product.purchase_price)}</TableCell>
-                      <TableCell className="p-2 sm:p-4 hidden sm:table-cell text-xs sm:text-sm text-muted-foreground">
-                        {product.average_cost ? formatCurrency(product.average_cost) : formatCurrency(product.purchase_price)}
+                      <TableCell className="p-2 sm:p-4 hidden lg:table-cell text-xs sm:text-sm text-muted-foreground">
+                        {product.average_cost ? formatCurrency(product.average_cost) : "-"}
                       </TableCell>
                       <TableCell className="p-2 sm:p-4 text-xs sm:text-sm font-medium">{formatCurrency(product.selling_price)}</TableCell>
                       <TableCell className="p-2 sm:p-4">
