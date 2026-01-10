@@ -730,6 +730,50 @@ class OfflineShopService {
     );
   }
 
+  // Scanner Logs
+  async getScannerLogs(limit?: number, productId?: string) {
+    const params: Record<string, string> = {};
+    if (limit) params.limit = String(limit);
+    if (productId) params.product_id = productId;
+    return this.request<{
+      logs: Array<{
+        id: string;
+        barcode: string;
+        product_id: string | null;
+        product_name: string | null;
+        scan_type: string;
+        is_matched: boolean;
+        scan_speed: number | null;
+        created_at: string;
+      }>;
+      stats: {
+        totalScans: number;
+        matchedScans: number;
+        unmatchedScans: number;
+        avgSpeed: number;
+        matchRate: number;
+      };
+    }>("scanner-logs", {}, params);
+  }
+
+  async logScan(data: {
+    barcode: string;
+    product_id?: string;
+    product_name?: string;
+    scan_type?: string;
+    is_matched?: boolean;
+    scan_speed?: number;
+  }) {
+    return this.request<{ log: any }>("scanner-logs", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async clearScannerLogs() {
+    return this.request<{ message: string }>("scanner-logs", { method: "DELETE" });
+  }
+
   // Search product by barcode
   async getProductByBarcode(barcode: string): Promise<{ product: any | null }> {
     const { products } = await this.getProducts();

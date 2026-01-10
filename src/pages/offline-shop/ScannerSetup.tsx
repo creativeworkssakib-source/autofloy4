@@ -13,7 +13,9 @@ import {
   RefreshCw,
   Wifi,
   WifiOff,
-  Loader2
+  Loader2,
+  Trash2,
+  BarChart3
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -33,6 +35,25 @@ interface ScannerDevice {
   lastActivity?: Date;
 }
 
+interface ScannerStats {
+  totalScans: number;
+  matchedScans: number;
+  unmatchedScans: number;
+  avgSpeed: number;
+  matchRate: number;
+}
+
+interface ScanLog {
+  id: string;
+  barcode: string;
+  product_id: string | null;
+  product_name: string | null;
+  scan_type: string;
+  is_matched: boolean;
+  scan_speed: number | null;
+  created_at: string;
+}
+
 const ScannerSetup = () => {
   const { language } = useLanguage();
   const { currentShop } = useShop();
@@ -45,38 +66,97 @@ const ScannerSetup = () => {
   const [testResults, setTestResults] = useState<{ code: string; product: string | null; time: Date }[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [scanSpeed, setScanSpeed] = useState<number>(0);
-  const [totalScans, setTotalScans] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  
+  // Real data from database
+  const [scannerStats, setScannerStats] = useState<ScannerStats>({
+    totalScans: 0,
+    matchedScans: 0,
+    unmatchedScans: 0,
+    avgSpeed: 0,
+    matchRate: 0,
+  });
+  const [recentLogs, setRecentLogs] = useState<ScanLog[]>([]);
+  
   const barcodeBufferRef = useRef<string>("");
   const lastKeyTimeRef = useRef<number>(0);
   const scanTimesRef = useRef<number[]>([]);
-  const detectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Load products for barcode matching
+  // Load products and scanner stats
   useEffect(() => {
-    const loadProducts = async () => {
+    const loadData = async () => {
+      setIsLoading(true);
       try {
-        const res = await offlineShopService.getProducts();
-        setProducts(res.products || []);
+        const [productsRes, logsRes] = await Promise.all([
+          offlineShopService.getProducts(),
+          offlineShopService.getScannerLogs(10),
+        ]);
+        
+        setProducts(productsRes.products || []);
+        setScannerStats(logsRes.stats);
+        setRecentLogs(logsRes.logs || []);
       } catch (error) {
-        console.error("Load products error:", error);
+        console.error("Load data error:", error);
+      } finally {
+        setIsLoading(false);
       }
     };
+    
     if (currentShop?.id) {
-      loadProducts();
+      loadData();
     }
   }, [currentShop?.id]);
 
+  // Log scan to database
+  const logScanToDatabase = useCallback(async (
+    barcode: string,
+    product: any | null,
+    speed: number
+  ) => {
+    try {
+      await offlineShopService.logScan({
+        barcode,
+        product_id: product?.id,
+        product_name: product?.name,
+        scan_type: 'usb',
+        is_matched: !!product,
+        scan_speed: speed,
+      });
+      
+      // Update local stats
+      setScannerStats(prev => ({
+        ...prev,
+        totalScans: prev.totalScans + 1,
+        matchedScans: product ? prev.matchedScans + 1 : prev.matchedScans,
+        unmatchedScans: product ? prev.unmatchedScans : prev.unmatchedScans + 1,
+        avgSpeed: Math.round((prev.avgSpeed * prev.totalScans + speed) / (prev.totalScans + 1)),
+        matchRate: Math.round(((product ? prev.matchedScans + 1 : prev.matchedScans) / (prev.totalScans + 1)) * 100),
+      }));
+      
+      // Add to recent logs
+      setRecentLogs(prev => [{
+        id: crypto.randomUUID(),
+        barcode,
+        product_id: product?.id || null,
+        product_name: product?.name || null,
+        scan_type: 'usb',
+        is_matched: !!product,
+        scan_speed: speed,
+        created_at: new Date().toISOString(),
+      }, ...prev.slice(0, 9)]);
+    } catch (error) {
+      console.error("Failed to log scan:", error);
+    }
+  }, []);
+
   // Detect USB devices using keyboard input patterns
   const detectScannerFromInput = useCallback((scannedCode: string, inputSpeed: number) => {
-    // USB scanners typically input at 50-200 chars per second
-    // Humans type at ~5-10 chars per second
-    const isScannerInput = inputSpeed > 30; // chars per second
+    const isScannerInput = inputSpeed > 30;
     
     if (isScannerInput && !scannerConnected) {
       setScannerConnected(true);
       setConnectionStatus('connected');
       
-      // Add as detected device
       setDetectedDevices(prev => {
         const exists = prev.some(d => d.type === 'keyboard');
         if (exists) return prev;
@@ -96,26 +176,23 @@ const ScannerSetup = () => {
       );
     }
     
-    // Update last activity
     setDetectedDevices(prev => 
       prev.map(d => d.type === 'keyboard' ? { ...d, lastActivity: new Date() } : d)
     );
   }, [scannerConnected, language]);
 
-  // Real-time USB device detection using WebHID (if supported)
+  // Real-time USB device detection
   const checkUSBDevices = useCallback(async () => {
     setIsDetecting(true);
     setConnectionStatus('checking');
     
     try {
-      // Check if WebHID is supported
       if ('hid' in navigator) {
         const devices = await (navigator as any).hid.getDevices();
-        const scannerDevices = devices.filter((device: any) => {
-          // Common barcode scanner vendor IDs
-          const scannerVendorIds = [0x05e0, 0x0c2e, 0x1504, 0x1eab, 0x05f9];
-          return scannerVendorIds.includes(device.vendorId);
-        });
+        const scannerVendorIds = [0x05e0, 0x0c2e, 0x1504, 0x1eab, 0x05f9];
+        const scannerDevices = devices.filter((device: any) => 
+          scannerVendorIds.includes(device.vendorId)
+        );
         
         if (scannerDevices.length > 0) {
           setDetectedDevices(scannerDevices.map((d: any) => ({
@@ -130,8 +207,6 @@ const ScannerSetup = () => {
         }
       }
       
-      // Fallback: Listen for keyboard-like input from scanner
-      // Most USB scanners act as HID keyboards
       setTimeout(() => {
         if (!scannerConnected) {
           setConnectionStatus('waiting');
@@ -146,18 +221,16 @@ const ScannerSetup = () => {
     }
   }, [language, scannerConnected]);
 
-  // Initial USB check on mount
   useEffect(() => {
     checkUSBDevices();
   }, []);
 
-  // USB Scanner listener - works both in test mode and always for detection
+  // USB Scanner listener
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const currentTime = Date.now();
       const timeDiff = currentTime - lastKeyTimeRef.current;
       
-      // Reset buffer if too much time has passed (typing vs scanning)
       if (timeDiff > 100) {
         barcodeBufferRef.current = "";
         scanTimesRef.current = [];
@@ -169,22 +242,24 @@ const ScannerSetup = () => {
       if (e.key === "Enter" && barcodeBufferRef.current.length >= 4) {
         const scannedCode = barcodeBufferRef.current;
         
-        // Calculate input speed (chars per second)
         const times = scanTimesRef.current;
+        let speed = 0;
         if (times.length > 1) {
-          const totalTime = (times[times.length - 1] - times[0]) / 1000; // seconds
-          const speed = barcodeBufferRef.current.length / totalTime;
-          setScanSpeed(Math.round(speed));
+          const totalTime = (times[times.length - 1] - times[0]) / 1000;
+          speed = Math.round(barcodeBufferRef.current.length / totalTime);
+          setScanSpeed(speed);
           detectScannerFromInput(scannedCode, speed);
         }
         
         setLastScannedCode(scannedCode);
-        setTotalScans(prev => prev + 1);
+        
+        // Check if product exists
+        const matchedProduct = products.find(p => p.barcode === scannedCode);
+        
+        // Log scan to database
+        logScanToDatabase(scannedCode, matchedProduct, speed);
         
         if (isTestMode) {
-          // Check if product exists
-          const matchedProduct = products.find(p => p.barcode === scannedCode);
-          
           setTestResults(prev => [{
             code: scannedCode,
             product: matchedProduct?.name || null,
@@ -216,9 +291,9 @@ const ScannerSetup = () => {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isTestMode, products, language, detectScannerFromInput]);
+  }, [isTestMode, products, language, detectScannerFromInput, logScanToDatabase]);
 
-  // Monitor connection - set to disconnected if no activity for 30 seconds
+  // Monitor connection
   useEffect(() => {
     if (!scannerConnected) return;
     
@@ -226,8 +301,7 @@ const ScannerSetup = () => {
       const lastDevice = detectedDevices.find(d => d.lastActivity);
       if (lastDevice?.lastActivity) {
         const inactiveTime = Date.now() - lastDevice.lastActivity.getTime();
-        if (inactiveTime > 30000) { // 30 seconds
-          // Don't disconnect, just show idle status
+        if (inactiveTime > 30000) {
           setConnectionStatus('connected');
         }
       }
@@ -235,6 +309,23 @@ const ScannerSetup = () => {
     
     return () => clearInterval(interval);
   }, [scannerConnected, detectedDevices]);
+
+  const clearLogs = async () => {
+    try {
+      await offlineShopService.clearScannerLogs();
+      setRecentLogs([]);
+      setScannerStats({
+        totalScans: 0,
+        matchedScans: 0,
+        unmatchedScans: 0,
+        avgSpeed: 0,
+        matchRate: 0,
+      });
+      toast.success(language === 'bn' ? 'লগ মুছে ফেলা হয়েছে' : 'Logs cleared');
+    } catch (error) {
+      toast.error(language === 'bn' ? 'মুছতে ব্যর্থ' : 'Failed to clear');
+    }
+  };
 
   const steps = language === "bn" ? [
     {
@@ -303,6 +394,62 @@ const ScannerSetup = () => {
           </p>
         </div>
 
+        {/* Scanner Stats - Real Data */}
+        <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
+          <Card>
+            <CardContent className="pt-4">
+              <div className="flex items-center gap-2">
+                <Scan className="h-5 w-5 text-primary" />
+                <div>
+                  <p className="text-2xl font-bold">{scannerStats.totalScans}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {language === 'bn' ? 'মোট স্ক্যান' : 'Total Scans'}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-5 w-5 text-green-600" />
+                <div>
+                  <p className="text-2xl font-bold">{scannerStats.matchedScans}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {language === 'bn' ? 'মিলেছে' : 'Matched'}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4">
+              <div className="flex items-center gap-2">
+                <XCircle className="h-5 w-5 text-yellow-600" />
+                <div>
+                  <p className="text-2xl font-bold">{scannerStats.unmatchedScans}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {language === 'bn' ? 'মেলেনি' : 'Unmatched'}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4">
+              <div className="flex items-center gap-2">
+                <BarChart3 className="h-5 w-5 text-blue-600" />
+                <div>
+                  <p className="text-2xl font-bold">{scannerStats.matchRate}%</p>
+                  <p className="text-xs text-muted-foreground">
+                    {language === 'bn' ? 'সাফল্যের হার' : 'Match Rate'}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
         {/* Connection Status */}
         <Card className={cn(
           "border-2 transition-all",
@@ -341,8 +488,8 @@ const ScannerSetup = () => {
                 <p className="text-sm text-muted-foreground">
                   {connectionStatus === 'connected'
                     ? (language === "bn" 
-                        ? `সর্বশেষ স্ক্যান: ${lastScannedCode || 'কোনো স্ক্যান নেই'} • মোট স্ক্যান: ${totalScans}` 
-                        : `Last scan: ${lastScannedCode || 'None'} • Total scans: ${totalScans}`)
+                        ? `সর্বশেষ স্ক্যান: ${lastScannedCode || 'কোনো স্ক্যান নেই'} • গড় গতি: ${scannerStats.avgSpeed} অক্ষর/সে` 
+                        : `Last scan: ${lastScannedCode || 'None'} • Avg speed: ${scannerStats.avgSpeed} chars/sec`)
                     : connectionStatus === 'checking'
                     ? (language === "bn"
                         ? "USB পোর্ট চেক করা হচ্ছে..."
@@ -524,7 +671,7 @@ const ScannerSetup = () => {
               <div className="mt-6">
                 <h4 className="font-medium mb-3 flex items-center gap-2">
                   <Volume2 className="h-4 w-4" />
-                  {language === "bn" ? "স্ক্যান ফলাফল" : "Scan Results"}
+                  {language === "bn" ? "টেস্ট ফলাফল" : "Test Results"}
                 </h4>
                 <div className="space-y-2 max-h-64 overflow-y-auto">
                   {testResults.map((result, idx) => (
@@ -556,6 +703,79 @@ const ScannerSetup = () => {
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Recent Scan Logs - Real Data */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <BarChart3 className="h-5 w-5" />
+                {language === "bn" ? "সাম্প্রতিক স্ক্যান লগ" : "Recent Scan Logs"}
+              </CardTitle>
+              <CardDescription>
+                {language === "bn" 
+                  ? "ডাটাবেসে সংরক্ষিত স্ক্যান ইতিহাস"
+                  : "Scan history saved in database"}
+              </CardDescription>
+            </div>
+            {recentLogs.length > 0 && (
+              <Button variant="outline" size="sm" onClick={clearLogs}>
+                <Trash2 className="h-4 w-4 mr-2" />
+                {language === 'bn' ? 'লগ মুছুন' : 'Clear Logs'}
+              </Button>
+            )}
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : recentLogs.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Scan className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                <p>{language === 'bn' ? 'কোনো স্ক্যান লগ নেই' : 'No scan logs yet'}</p>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {recentLogs.map((log) => (
+                  <div
+                    key={log.id}
+                    className={cn(
+                      "flex items-center justify-between p-3 rounded-lg border",
+                      log.is_matched 
+                        ? "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800"
+                        : "bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-800"
+                    )}
+                  >
+                    <div className="flex items-center gap-3">
+                      {log.is_matched ? (
+                        <CheckCircle2 className="h-5 w-5 text-green-600" />
+                      ) : (
+                        <AlertCircle className="h-5 w-5 text-yellow-600" />
+                      )}
+                      <div>
+                        <p className="font-mono font-medium">{log.barcode}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {log.product_name || (language === "bn" ? "প্রোডাক্ট পাওয়া যায়নি" : "Product not found")}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      {log.scan_speed && (
+                        <Badge variant="outline" className="text-xs mb-1">
+                          {log.scan_speed} {language === 'bn' ? 'অক্ষর/সে' : 'c/s'}
+                        </Badge>
+                      )}
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(log.created_at).toLocaleTimeString()}
+                      </p>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </CardContent>
