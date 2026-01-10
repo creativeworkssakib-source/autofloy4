@@ -12,6 +12,142 @@ const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const jwtSecret = Deno.env.get("JWT_SECRET")!;
 
+// ===== HELPER: Calculate Weighted Average Cost =====
+function calculateWeightedAverageCost(
+  currentQty: number,
+  currentAvgCost: number,
+  newQty: number,
+  newUnitCost: number
+): number {
+  if (currentQty + newQty === 0) return 0;
+  const totalCost = (currentQty * currentAvgCost) + (newQty * newUnitCost);
+  return totalCost / (currentQty + newQty);
+}
+
+// ===== HELPER: Create Stock Batch =====
+async function createStockBatch(
+  supabase: any,
+  productId: string,
+  userId: string,
+  shopId: string | null,
+  quantity: number,
+  unitCost: number,
+  purchaseId?: string,
+  purchaseItemId?: string,
+  expiryDate?: string,
+  isInitialBatch: boolean = false
+) {
+  const { data, error } = await supabase
+    .from("shop_stock_batches")
+    .insert({
+      product_id: productId,
+      user_id: userId,
+      shop_id: shopId,
+      quantity,
+      remaining_quantity: quantity,
+      unit_cost: unitCost,
+      purchase_id: purchaseId || null,
+      purchase_item_id: purchaseItemId || null,
+      expiry_date: expiryDate || null,
+      is_initial_batch: isInitialBatch,
+      batch_date: new Date().toISOString(),
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Failed to create stock batch:", error);
+    throw error;
+  }
+  return data;
+}
+
+// ===== HELPER: Update Product Average Cost =====
+async function updateProductAverageCost(
+  supabase: any,
+  productId: string,
+  userId: string
+) {
+  // Get all active batches for this product
+  const { data: batches } = await supabase
+    .from("shop_stock_batches")
+    .select("remaining_quantity, unit_cost")
+    .eq("product_id", productId)
+    .gt("remaining_quantity", 0);
+
+  if (!batches || batches.length === 0) {
+    // No batches, set average cost to 0
+    await supabase
+      .from("shop_products")
+      .update({ average_cost: 0 })
+      .eq("id", productId)
+      .eq("user_id", userId);
+    return 0;
+  }
+
+  // Calculate weighted average
+  let totalQty = 0;
+  let totalCost = 0;
+  for (const batch of batches) {
+    totalQty += batch.remaining_quantity;
+    totalCost += batch.remaining_quantity * Number(batch.unit_cost);
+  }
+
+  const avgCost = totalQty > 0 ? totalCost / totalQty : 0;
+
+  await supabase
+    .from("shop_products")
+    .update({ average_cost: avgCost })
+    .eq("id", productId)
+    .eq("user_id", userId);
+
+  return avgCost;
+}
+
+// ===== HELPER: Deduct Stock Using FIFO =====
+async function deductStockFIFO(
+  supabase: any,
+  productId: string,
+  quantityToDeduct: number
+): Promise<{ totalCost: number; batchesUsed: Array<{ batchId: string; quantity: number; unitCost: number }> }> {
+  // Get batches ordered by batch_date (oldest first) - FIFO
+  const { data: batches, error } = await supabase
+    .from("shop_stock_batches")
+    .select("id, remaining_quantity, unit_cost, batch_date")
+    .eq("product_id", productId)
+    .gt("remaining_quantity", 0)
+    .order("batch_date", { ascending: true });
+
+  if (error) throw error;
+
+  let remaining = quantityToDeduct;
+  let totalCost = 0;
+  const batchesUsed: Array<{ batchId: string; quantity: number; unitCost: number }> = [];
+
+  for (const batch of batches || []) {
+    if (remaining <= 0) break;
+
+    const deductFromBatch = Math.min(remaining, batch.remaining_quantity);
+    totalCost += deductFromBatch * Number(batch.unit_cost);
+    batchesUsed.push({
+      batchId: batch.id,
+      quantity: deductFromBatch,
+      unitCost: Number(batch.unit_cost),
+    });
+
+    // Update batch remaining quantity
+    const newRemaining = batch.remaining_quantity - deductFromBatch;
+    await supabase
+      .from("shop_stock_batches")
+      .update({ remaining_quantity: newRemaining, updated_at: new Date().toISOString() })
+      .eq("id", batch.id);
+
+    remaining -= deductFromBatch;
+  }
+
+  return { totalCost, batchesUsed };
+}
+
 // Generate EAN-13 like barcode
 function generateBarcode(shopId: string, sequence: number): string {
   const prefix = "890"; // Region code prefix
@@ -703,13 +839,45 @@ serve(async (req) => {
           barcode = generateBarcode(shopId || userId, sequence);
         }
         
+        // Set initial average_cost equal to purchase_price
+        const purchasePrice = Number(body.purchase_price) || 0;
+        const stockQuantity = Number(body.stock_quantity) || 0;
+        
         const { data, error } = await supabase
           .from("shop_products")
-          .insert({ ...body, barcode, user_id: userId, shop_id: shopId })
+          .insert({ 
+            ...body, 
+            barcode, 
+            user_id: userId, 
+            shop_id: shopId,
+            average_cost: purchasePrice // Initialize average cost
+          })
           .select()
           .single();
 
         if (error) throw error;
+        
+        // Create initial stock batch if stock quantity > 0
+        if (stockQuantity > 0 && purchasePrice > 0) {
+          try {
+            await createStockBatch(
+              supabase,
+              data.id,
+              userId,
+              shopId,
+              stockQuantity,
+              purchasePrice,
+              undefined,
+              undefined,
+              body.expiry_date,
+              true // is initial batch
+            );
+            console.log(`Created initial stock batch for product ${data.id}: ${stockQuantity} units @ ${purchasePrice}`);
+          } catch (batchError) {
+            console.error("Failed to create initial batch:", batchError);
+            // Don't fail the product creation, batch is optional enhancement
+          }
+        }
         
         // Log product history
         await supabase.from("shop_product_history").insert({
@@ -717,8 +885,8 @@ serve(async (req) => {
           shop_id: shopId,
           product_id: data.id,
           product_name: data.name,
-          quantity_added: data.stock_quantity || 0,
-          purchase_price: data.purchase_price || 0,
+          quantity_added: stockQuantity,
+          purchase_price: purchasePrice,
           selling_price: data.selling_price || 0,
           action_type: 'added',
         });
@@ -1616,9 +1784,35 @@ serve(async (req) => {
 
         if (saleError) throw saleError;
 
-        // Create sale items and update stock
+        // Create sale items and update stock using FIFO
+        let actualTotalCost = 0;
         for (const item of items) {
-          const itemProfit = item.total - (item.purchase_price || 0) * item.quantity;
+          let itemActualCost = (item.purchase_price || 0) * item.quantity;
+          
+          // Use FIFO to deduct from batches and get actual cost
+          if (item.product_id) {
+            try {
+              const { totalCost: fifoCost, batchesUsed } = await deductStockFIFO(
+                supabase,
+                item.product_id,
+                item.quantity
+              );
+              
+              if (batchesUsed.length > 0) {
+                itemActualCost = fifoCost;
+                console.log(`FIFO deduction for ${item.product_name}: ${item.quantity} units, cost: ${fifoCost}, batches used: ${batchesUsed.length}`);
+              }
+              
+              // Update average cost after deduction
+              await updateProductAverageCost(supabase, item.product_id, userId);
+            } catch (fifoError) {
+              console.error("FIFO deduction failed, using fallback:", fifoError);
+              // Fallback to provided purchase_price if FIFO fails
+            }
+          }
+          
+          const itemProfit = item.total - itemActualCost;
+          actualTotalCost += itemActualCost;
           
           await supabase.from("shop_sale_items").insert({
             sale_id: sale.id,
@@ -1626,13 +1820,13 @@ serve(async (req) => {
             product_name: item.product_name,
             quantity: item.quantity,
             unit_price: item.unit_price,
-            purchase_price: item.purchase_price || 0,
+            purchase_price: itemActualCost / item.quantity, // Store actual average cost per unit
             discount: item.discount || 0,
             total: item.total,
             profit: itemProfit,
           });
 
-          // Reduce stock in offline shop
+          // Reduce stock in offline shop (already deducted from batches)
           if (item.product_id) {
             const { data: product } = await supabase
               .from("shop_products")
@@ -1669,6 +1863,16 @@ serve(async (req) => {
             }
           }
         }
+        
+        // Update sale with actual cost and profit
+        const actualTotalProfit = total - actualTotalCost;
+        await supabase
+          .from("shop_sales")
+          .update({ 
+            total_cost: actualTotalCost, 
+            total_profit: actualTotalProfit 
+          })
+          .eq("id", sale.id);
 
         // Update customer totals
         if (customer_id) {
@@ -1918,7 +2122,8 @@ serve(async (req) => {
 
         // Create purchase items and update stock
         for (const item of items) {
-          await supabase.from("shop_purchase_items").insert({
+          // Insert purchase item and get its ID
+          const { data: purchaseItem, error: piError } = await supabase.from("shop_purchase_items").insert({
             purchase_id: purchase.id,
             product_id: item.product_id,
             product_name: item.product_name,
@@ -1926,26 +2131,62 @@ serve(async (req) => {
             unit_price: item.unit_price,
             total: item.total,
             expiry_date: item.expiry_date,
-          });
+          }).select().single();
 
-          // Increase stock and update purchase price
+          if (piError) throw piError;
+
+          // Increase stock, create batch, and update average cost
           if (item.product_id) {
             const { data: product } = await supabase
               .from("shop_products")
-              .select("stock_quantity, online_sku")
+              .select("stock_quantity, average_cost, online_sku")
               .eq("id", item.product_id)
               .single();
 
             if (product) {
-              const newStock = product.stock_quantity + item.quantity;
+              const currentQty = Number(product.stock_quantity) || 0;
+              const currentAvgCost = Number(product.average_cost) || Number(item.unit_price);
+              const newQty = Number(item.quantity);
+              const newUnitCost = Number(item.unit_price);
+              
+              // Calculate new weighted average cost
+              const newAvgCost = calculateWeightedAverageCost(
+                currentQty,
+                currentAvgCost,
+                newQty,
+                newUnitCost
+              );
+              
+              const newStock = currentQty + newQty;
+              
+              // Update product with new stock and average cost
               await supabase
                 .from("shop_products")
                 .update({
                   stock_quantity: newStock,
-                  purchase_price: item.unit_price,
+                  purchase_price: item.unit_price, // Keep latest purchase price
+                  average_cost: newAvgCost,
                   expiry_date: item.expiry_date,
                 })
                 .eq("id", item.product_id);
+              
+              // Create stock batch for this purchase
+              try {
+                await createStockBatch(
+                  supabase,
+                  item.product_id,
+                  userId,
+                  shopId,
+                  newQty,
+                  newUnitCost,
+                  purchase.id,
+                  purchaseItem.id,
+                  item.expiry_date
+                );
+                console.log(`Created stock batch for product ${item.product_id}: ${newQty} units @ ${newUnitCost}`);
+              } catch (batchError) {
+                console.error("Failed to create batch:", batchError);
+              }
               
               // If sync is enabled and product has online_sku, update online product stock too
               if (product.online_sku) {
@@ -4843,6 +5084,190 @@ serve(async (req) => {
         const pendingItems = Object.values(aggregated);
         
         return new Response(JSON.stringify({ items: pendingItems }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    // ===== STOCK BATCHES CRUD =====
+    if (resource === "stock-batches") {
+      if (req.method === "GET") {
+        const productId = url.searchParams.get("product_id");
+        
+        let query = supabase
+          .from("shop_stock_batches")
+          .select(`
+            *,
+            product:shop_products(id, name, sku)
+          `)
+          .eq("user_id", userId)
+          .order("batch_date", { ascending: true });
+        
+        if (shopId) query = query.eq("shop_id", shopId);
+        if (productId) query = query.eq("product_id", productId);
+        
+        const { data, error } = await query;
+        
+        if (error) throw error;
+        
+        return new Response(JSON.stringify({ batches: data }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      
+      if (req.method === "POST") {
+        // Manually add stock batch (for stock adjustments)
+        const body = await req.json();
+        const { product_id, quantity, unit_cost, expiry_date, notes } = body;
+        
+        if (!product_id || !quantity || quantity <= 0) {
+          return new Response(JSON.stringify({ error: "Missing required fields" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        
+        // Get current product data
+        const { data: product } = await supabase
+          .from("shop_products")
+          .select("stock_quantity, average_cost, purchase_price")
+          .eq("id", product_id)
+          .eq("user_id", userId)
+          .single();
+        
+        if (!product) {
+          return new Response(JSON.stringify({ error: "Product not found" }), {
+            status: 404,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        
+        const currentQty = Number(product.stock_quantity) || 0;
+        const currentAvgCost = Number(product.average_cost) || Number(product.purchase_price) || 0;
+        const newQty = Number(quantity);
+        const newUnitCost = Number(unit_cost) || currentAvgCost;
+        
+        // Calculate new weighted average cost
+        const newAvgCost = calculateWeightedAverageCost(
+          currentQty,
+          currentAvgCost,
+          newQty,
+          newUnitCost
+        );
+        
+        // Create batch
+        const batch = await createStockBatch(
+          supabase,
+          product_id,
+          userId,
+          shopId,
+          newQty,
+          newUnitCost,
+          undefined,
+          undefined,
+          expiry_date
+        );
+        
+        // Update product stock and average cost
+        const newStock = currentQty + newQty;
+        await supabase
+          .from("shop_products")
+          .update({
+            stock_quantity: newStock,
+            average_cost: newAvgCost,
+            purchase_price: newUnitCost, // Update latest purchase price
+          })
+          .eq("id", product_id)
+          .eq("user_id", userId);
+        
+        // Log product history
+        await supabase.from("shop_product_history").insert({
+          user_id: userId,
+          shop_id: shopId,
+          product_id: product_id,
+          product_name: body.product_name || "Unknown",
+          quantity_added: newQty,
+          purchase_price: newUnitCost,
+          action_type: 'stock_added',
+        });
+        
+        return new Response(JSON.stringify({ 
+          batch, 
+          new_stock: newStock, 
+          new_average_cost: newAvgCost 
+        }), {
+          status: 201,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+    
+    // ===== MIGRATE EXISTING PRODUCTS TO BATCHES =====
+    if (resource === "migrate-batches") {
+      if (req.method === "POST") {
+        // Migrate existing products that don't have batches
+        let productsQuery = supabase
+          .from("shop_products")
+          .select("id, name, stock_quantity, purchase_price, expiry_date")
+          .eq("user_id", userId)
+          .gt("stock_quantity", 0);
+        
+        if (shopId) productsQuery = productsQuery.eq("shop_id", shopId);
+        
+        const { data: products, error: productsError } = await productsQuery;
+        
+        if (productsError) throw productsError;
+        
+        let migratedCount = 0;
+        let skippedCount = 0;
+        
+        for (const product of products || []) {
+          // Check if product already has batches
+          const { count } = await supabase
+            .from("shop_stock_batches")
+            .select("*", { count: "exact", head: true })
+            .eq("product_id", product.id);
+          
+          if (count && count > 0) {
+            skippedCount++;
+            continue;
+          }
+          
+          // Create initial batch
+          try {
+            await createStockBatch(
+              supabase,
+              product.id,
+              userId,
+              shopId,
+              product.stock_quantity,
+              product.purchase_price || 0,
+              undefined,
+              undefined,
+              product.expiry_date,
+              true
+            );
+            
+            // Update average_cost
+            await supabase
+              .from("shop_products")
+              .update({ average_cost: product.purchase_price || 0 })
+              .eq("id", product.id);
+            
+            migratedCount++;
+          } catch (e) {
+            console.error(`Failed to migrate product ${product.id}:`, e);
+          }
+        }
+        
+        return new Response(JSON.stringify({ 
+          message: "Migration complete",
+          migrated: migratedCount,
+          skipped: skippedCount,
+          total: products?.length || 0
+        }), {
           status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });

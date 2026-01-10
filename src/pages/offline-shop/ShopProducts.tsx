@@ -76,6 +76,7 @@ import * as XLSX from "xlsx";
 import { format } from "date-fns";
 import { BarcodeGenerator } from "@/components/offline-shop/BarcodeGenerator";
 import { PrintBarcodeModal } from "@/components/offline-shop/PrintBarcodeModal";
+import StockBatchesModal from "@/components/offline-shop/StockBatchesModal";
 
 interface Product {
   id: string;
@@ -144,6 +145,10 @@ const ShopProducts = () => {
   const [printBarcodeOpen, setPrintBarcodeOpen] = useState(false);
   const [viewBarcodeProduct, setViewBarcodeProduct] = useState<Product | null>(null);
   const [isGeneratingBarcodes, setIsGeneratingBarcodes] = useState(false);
+  
+  // Stock batches state
+  const [batchesModalOpen, setBatchesModalOpen] = useState(false);
+  const [selectedProductForBatches, setSelectedProductForBatches] = useState<Product | null>(null);
 
   const [formData, setFormData] = useState({
     name: "",

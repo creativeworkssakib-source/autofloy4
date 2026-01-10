@@ -500,6 +500,37 @@ class OfflineShopService {
     return this.request<any>("reports", {}, params);
   }
 
+  // Stock Batches
+  async getStockBatches(productId?: string) {
+    const params: Record<string, string> = {};
+    if (productId) params.product_id = productId;
+    return this.request<{ batches: any[] }>("stock-batches", {}, params);
+  }
+
+  async addStockBatch(data: {
+    product_id: string;
+    product_name?: string;
+    quantity: number;
+    unit_cost: number;
+    expiry_date?: string;
+    notes?: string;
+  }) {
+    return this.request<{ batch: any; new_stock: number; new_average_cost: number }>(
+      "stock-batches",
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      }
+    );
+  }
+
+  async migrateExistingProductsToBatches() {
+    return this.request<{ migrated: number; skipped: number; total: number }>(
+      "migrate-batches",
+      { method: "POST" }
+    );
+  }
+
   // Shop Settings
   async getSettings() {
     return this.request<{ settings: any & { has_trash_passcode?: boolean } }>("settings");
