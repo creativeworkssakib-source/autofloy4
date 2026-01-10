@@ -18,7 +18,10 @@ import {
   BarChart3,
   Power,
   Edit2,
-  Save
+  Save,
+  Plug,
+  Play,
+  Info
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -352,6 +355,79 @@ const ScannerSetup = () => {
     }
   }, [language, scannerConnected, registerScannerDevice]);
 
+  // Request WebHID permission to connect a new scanner
+  const requestScannerConnection = useCallback(async () => {
+    setIsDetecting(true);
+    setConnectionStatus('checking');
+    
+    try {
+      if ('hid' in navigator) {
+        // Request user to select a HID device
+        const devices = await (navigator as any).hid.requestDevice({
+          filters: [] // Allow user to select any HID device
+        });
+        
+        if (devices && devices.length > 0) {
+          for (const d of devices) {
+            const deviceName = d.productName || (language === 'bn' ? 'USB স্ক্যানার' : 'USB Scanner');
+            await registerScannerDevice(deviceName, 'usb', String(d.vendorId), String(d.productId));
+          }
+          setScannerConnected(true);
+          setConnectionStatus('connected');
+          toast.success(language === 'bn' ? '✓ স্ক্যানার সফলভাবে সংযুক্ত!' : '✓ Scanner connected successfully!');
+        } else {
+          setConnectionStatus('waiting');
+          toast.info(language === 'bn' ? 'কোনো ডিভাইস নির্বাচন করা হয়নি' : 'No device selected');
+        }
+      } else {
+        // WebHID not supported, fall back to keyboard mode
+        toast.info(
+          language === 'bn' 
+            ? 'আপনার ব্রাউজার WebHID সাপোর্ট করে না। কীবোর্ড মোডে স্ক্যান করুন।'
+            : 'Your browser doesn\'t support WebHID. Please scan in keyboard mode.'
+        );
+        setConnectionStatus('waiting');
+      }
+    } catch (error: any) {
+      if (error.name === 'NotAllowedError') {
+        toast.warning(language === 'bn' ? 'অনুমতি প্রত্যাখ্যাত' : 'Permission denied');
+      } else {
+        console.log('WebHID connection fallback to keyboard mode', error);
+      }
+      setConnectionStatus('waiting');
+    } finally {
+      setIsDetecting(false);
+    }
+  }, [language, registerScannerDevice]);
+
+  // Reconnect a saved inactive device
+  const reconnectDevice = useCallback(async (device: ScannerDevice) => {
+    try {
+      await offlineShopService.updateScannerDevice(device.id, {
+        is_active: true,
+        last_connected_at: new Date().toISOString(),
+      });
+      
+      setSavedDevices(prev => prev.map(d => 
+        d.id === device.id 
+          ? { ...d, is_active: true, last_connected_at: new Date().toISOString() } 
+          : { ...d, is_active: false }
+      ));
+      
+      setActiveDeviceId(device.id);
+      setScannerConnected(true);
+      setConnectionStatus('connected');
+      
+      toast.success(
+        language === 'bn' 
+          ? `✓ ${device.device_name} পুনঃসংযুক্ত` 
+          : `✓ ${device.device_name} reconnected`
+      );
+    } catch (error) {
+      toast.error(language === 'bn' ? 'সংযোগ ব্যর্থ' : 'Connection failed');
+    }
+  }, [language]);
+
   useEffect(() => {
     checkUSBDevices();
   }, []);
@@ -593,9 +669,9 @@ const ScannerSetup = () => {
             : "border-dashed border-muted-foreground/30"
         )}>
           <CardContent className="py-6">
-            <div className="flex items-center gap-4">
+            <div className="flex flex-col lg:flex-row lg:items-center gap-4">
               <div className={cn(
-                "p-3 rounded-full relative",
+                "p-3 rounded-full relative self-start",
                 connectionStatus === 'connected' ? "bg-green-100 dark:bg-green-900" : 
                 connectionStatus === 'checking' ? "bg-blue-100 dark:bg-blue-900" : "bg-muted"
               )}>
@@ -616,7 +692,7 @@ const ScannerSetup = () => {
                     ? (language === "bn" ? "🔍 স্ক্যানার খোঁজা হচ্ছে..." : "🔍 Searching for scanner...")
                     : connectionStatus === 'connected'
                     ? (language === "bn" ? "✓ স্ক্যানার সংযুক্ত আছে!" : "✓ Scanner Connected!")
-                    : (language === "bn" ? "স্ক্যানার সংযোগের অপেক্ষায়..." : "Waiting for scanner connection...")}
+                    : (language === "bn" ? "স্ক্যানার সংযুক্ত করুন" : "Connect Your Scanner")}
                 </h3>
                 <p className="text-sm text-muted-foreground">
                   {connectionStatus === 'connected'
@@ -628,8 +704,8 @@ const ScannerSetup = () => {
                         ? "USB পোর্ট চেক করা হচ্ছে..."
                         : "Checking USB ports...")
                     : (language === "bn"
-                        ? "USB স্ক্যানার লাগিয়ে যেকোনো প্রোডাক্ট স্ক্যান করুন"
-                        : "Plug in USB scanner and scan any product")}
+                        ? "নিচের যেকোনো অপশন ব্যবহার করে স্ক্যানার সংযুক্ত করুন"
+                        : "Use any of the options below to connect your scanner")}
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -655,6 +731,123 @@ const ScannerSetup = () => {
                 </Badge>
               </div>
             </div>
+            
+            {/* Connection Options - Show only when not connected */}
+            {connectionStatus !== 'connected' && (
+              <div className="mt-6 p-4 bg-muted/50 rounded-lg border border-dashed">
+                <h4 className="font-medium mb-4 flex items-center gap-2">
+                  <Plug className="h-4 w-4 text-primary" />
+                  {language === 'bn' ? 'সংযোগ অপশন' : 'Connection Options'}
+                </h4>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {/* Option 1: WebHID Connect */}
+                  <div className="p-4 bg-card rounded-lg border hover:border-primary transition-colors">
+                    <div className="flex items-start gap-3">
+                      <div className="p-2 rounded-full bg-primary/10 text-primary">
+                        <Plug className="h-5 w-5" />
+                      </div>
+                      <div className="flex-1">
+                        <h5 className="font-medium text-sm mb-1">
+                          {language === 'bn' ? 'USB ডিভাইস নির্বাচন করুন' : 'Select USB Device'}
+                        </h5>
+                        <p className="text-xs text-muted-foreground mb-3">
+                          {language === 'bn' 
+                            ? 'আপনার USB স্ক্যানার ম্যানুয়ালি সিলেক্ট করুন'
+                            : 'Manually select your USB scanner from the list'}
+                        </p>
+                        <Button 
+                          size="sm" 
+                          onClick={requestScannerConnection}
+                          disabled={isDetecting}
+                          className="w-full"
+                        >
+                          {isDetecting ? (
+                            <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> {language === 'bn' ? 'খোঁজা হচ্ছে...' : 'Searching...'}</>
+                          ) : (
+                            <><Plug className="h-4 w-4 mr-2" /> {language === 'bn' ? 'কানেক্ট করুন' : 'Connect Device'}</>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Option 2: Auto Detect */}
+                  <div className="p-4 bg-card rounded-lg border hover:border-primary transition-colors">
+                    <div className="flex items-start gap-3">
+                      <div className="p-2 rounded-full bg-blue-500/10 text-blue-600">
+                        <Scan className="h-5 w-5" />
+                      </div>
+                      <div className="flex-1">
+                        <h5 className="font-medium text-sm mb-1">
+                          {language === 'bn' ? 'অটো সনাক্ত (সহজ উপায়)' : 'Auto Detect (Easy Way)'}
+                        </h5>
+                        <p className="text-xs text-muted-foreground mb-3">
+                          {language === 'bn' 
+                            ? 'যেকোনো বারকোড স্ক্যান করুন - স্বয়ংক্রিয়ভাবে সনাক্ত হবে'
+                            : 'Just scan any barcode - it will auto-detect'}
+                        </p>
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => {
+                            setIsTestMode(true);
+                            toast.info(
+                              language === 'bn' 
+                                ? 'এখন যেকোনো প্রোডাক্ট স্ক্যান করুন!'
+                                : 'Now scan any product!',
+                              { duration: 5000 }
+                            );
+                          }}
+                          className="w-full"
+                        >
+                          <Play className="h-4 w-4 mr-2" />
+                          {language === 'bn' ? 'স্ক্যান শুরু করুন' : 'Start Scanning'}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Option 3: Refresh Detection */}
+                  <div className="p-4 bg-card rounded-lg border hover:border-primary transition-colors">
+                    <div className="flex items-start gap-3">
+                      <div className="p-2 rounded-full bg-orange-500/10 text-orange-600">
+                        <RefreshCw className="h-5 w-5" />
+                      </div>
+                      <div className="flex-1">
+                        <h5 className="font-medium text-sm mb-1">
+                          {language === 'bn' ? 'পুনরায় খোঁজুন' : 'Refresh Detection'}
+                        </h5>
+                        <p className="text-xs text-muted-foreground mb-3">
+                          {language === 'bn' 
+                            ? 'পূর্বে সংযুক্ত ডিভাইস খুঁজুন'
+                            : 'Search for previously connected devices'}
+                        </p>
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={checkUSBDevices}
+                          disabled={isDetecting}
+                          className="w-full"
+                        >
+                          <RefreshCw className={cn("h-4 w-4 mr-2", isDetecting && "animate-spin")} />
+                          {language === 'bn' ? 'রিফ্রেশ' : 'Refresh'}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Info Message */}
+                <div className="mt-4 flex items-start gap-2 text-xs text-muted-foreground">
+                  <Info className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                  <p>
+                    {language === 'bn' 
+                      ? 'বেশিরভাগ USB বারকোড স্ক্যানার কীবোর্ডের মতো কাজ করে। শুধু USB পোর্টে লাগান এবং যেকোনো প্রোডাক্ট স্ক্যান করুন - সিস্টেম স্বয়ংক্রিয়ভাবে সনাক্ত করবে।'
+                      : 'Most USB barcode scanners work like keyboards. Just plug into USB port and scan any product - the system will auto-detect.'}
+                  </p>
+                </div>
+              </div>
+            )}
             
             {/* Saved Devices from Database */}
             {savedDevices.length > 0 && (
@@ -734,6 +927,20 @@ const ScannerSetup = () => {
                             ? (language === 'bn' ? 'সক্রিয়' : 'Active')
                             : (language === 'bn' ? 'নিষ্ক্রিয়' : 'Inactive')}
                         </Badge>
+                        
+                        {/* Reconnect button for inactive devices */}
+                        {!(device.is_active && device.id === activeDeviceId) && (
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            className="h-7 px-2 text-xs text-green-600 border-green-600 hover:bg-green-50 hover:text-green-700"
+                            onClick={() => reconnectDevice(device)}
+                          >
+                            <Plug className="h-3 w-3 mr-1" />
+                            {language === 'bn' ? 'সংযুক্ত করুন' : 'Connect'}
+                          </Button>
+                        )}
+                        
                         <Button 
                           size="sm" 
                           variant="ghost" 
@@ -751,6 +958,7 @@ const ScannerSetup = () => {
                             variant="ghost" 
                             className="h-7 w-7 p-0 text-orange-600 hover:text-orange-700"
                             onClick={() => disconnectDevice(device.id)}
+                            title={language === 'bn' ? 'বিচ্ছিন্ন করুন' : 'Disconnect'}
                           >
                             <Power className="h-3 w-3" />
                           </Button>
@@ -760,6 +968,7 @@ const ScannerSetup = () => {
                             variant="ghost" 
                             className="h-7 w-7 p-0 text-destructive hover:text-destructive"
                             onClick={() => deleteDevice(device.id)}
+                            title={language === 'bn' ? 'মুছে ফেলুন' : 'Delete'}
                           >
                             <Trash2 className="h-3 w-3" />
                           </Button>
@@ -771,26 +980,20 @@ const ScannerSetup = () => {
               </div>
             )}
             
-            {/* Refresh Button */}
-            <div className="mt-4 flex gap-2">
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={checkUSBDevices}
-                disabled={isDetecting}
-              >
-                <RefreshCw className={cn("h-4 w-4 mr-2", isDetecting && "animate-spin")} />
-                {language === 'bn' ? 'পুনরায় খোঁজুন' : 'Refresh Detection'}
-              </Button>
-              {!scannerConnected && (
-                <p className="text-xs text-muted-foreground flex items-center">
-                  <AlertCircle className="h-3 w-3 mr-1" />
-                  {language === 'bn' 
-                    ? 'স্ক্যানার স্বয়ংক্রিয়ভাবে সনাক্ত হবে যখন আপনি কিছু স্ক্যান করবেন'
-                    : 'Scanner will auto-detect when you scan something'}
-                </p>
-              )}
-            </div>
+            {/* Quick Actions when connected */}
+            {connectionStatus === 'connected' && (
+              <div className="mt-4 flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={checkUSBDevices}
+                  disabled={isDetecting}
+                >
+                  <RefreshCw className={cn("h-4 w-4 mr-2", isDetecting && "animate-spin")} />
+                  {language === 'bn' ? 'পুনরায় খোঁজুন' : 'Refresh'}
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
 
