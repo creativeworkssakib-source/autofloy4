@@ -62,6 +62,7 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
     { name: t("shop.productsStock"), href: "/offline-shop/products", icon: Package },
     { name: t("shop.purchasesBuyImport"), href: "/offline-shop/purchases", icon: PackagePlus },
     { name: language === "bn" ? "স্ক্যানার সেটআপ" : "Scanner Setup", href: "/offline-shop/scanner-setup", icon: Scan },
+    { name: language === "bn" ? "মূল্য ক্যালকুলেটর" : "Price Calculator", href: "/offline-shop/price-calculator", icon: Banknote },
     { name: t("shop.salesSellPOS"), href: "/offline-shop/sales", icon: ShoppingCart },
     { name: language === "bn" ? "বাকি গ্রাহক" : "Due Customers", href: "/offline-shop/due-customers", icon: Wallet },
     { name: t("shop.returns") || "Returns", href: "/offline-shop/returns", icon: RotateCcw },
