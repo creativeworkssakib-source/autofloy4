@@ -15,7 +15,8 @@ import {
   X,
   Barcode,
   Printer,
-  Wand2
+  Wand2,
+  Layers
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -95,6 +96,7 @@ interface Product {
   category_id?: string;
   category?: { id: string; name: string };
   is_active: boolean;
+  average_cost?: number;
   created_at?: string;
   updated_at?: string;
 }
@@ -922,6 +924,7 @@ const ShopProducts = () => {
                   </TableHead>
                   <TableHead className="text-xs sm:text-sm">{t("shop.productName")}</TableHead>
                   <TableHead className="text-xs sm:text-sm hidden sm:table-cell">{t("shop.purchasePrice")}</TableHead>
+                  <TableHead className="text-xs sm:text-sm hidden lg:table-cell">{language === "bn" ? "গড় মূল্য" : "Avg Cost"}</TableHead>
                   <TableHead className="text-xs sm:text-sm">{t("shop.sellingPrice")}</TableHead>
                   <TableHead className="text-xs sm:text-sm">{t("shop.stock")}</TableHead>
                   <TableHead className="text-xs sm:text-sm hidden md:table-cell">{t("shop.category")}</TableHead>
@@ -930,14 +933,14 @@ const ShopProducts = () => {
               </TableHeader>
               <TableBody>
                 {isLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8">
+                <TableRow>
+                    <TableCell colSpan={8} className="text-center py-8">
                       {t("common.loading")}
                     </TableCell>
                   </TableRow>
                 ) : filteredProducts.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8">
+                <TableRow>
+                    <TableCell colSpan={8} className="text-center py-8">
                       <Package className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
                       <p>{t("shop.noProducts")}</p>
                     </TableCell>
@@ -963,6 +966,9 @@ const ShopProducts = () => {
                         </div>
                       </TableCell>
                       <TableCell className="p-2 sm:p-4 hidden sm:table-cell text-xs sm:text-sm">{formatCurrency(product.purchase_price)}</TableCell>
+                      <TableCell className="p-2 sm:p-4 hidden lg:table-cell text-xs sm:text-sm text-muted-foreground">
+                        {product.average_cost ? formatCurrency(product.average_cost) : "-"}
+                      </TableCell>
                       <TableCell className="p-2 sm:p-4 text-xs sm:text-sm font-medium">{formatCurrency(product.selling_price)}</TableCell>
                       <TableCell className="p-2 sm:p-4">
                         <div className="flex items-center gap-1">
@@ -989,6 +995,13 @@ const ShopProducts = () => {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => {
+                              setSelectedProductForBatches(product);
+                              setBatchesModalOpen(true);
+                            }}>
+                              <Layers className="mr-2 h-4 w-4" />
+                              {language === "bn" ? "স্টক ব্যাচ" : "Stock Batches"}
+                            </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => setViewBarcodeProduct(product)}>
                               <Barcode className="mr-2 h-4 w-4" />
                               {language === "bn" ? "বারকোড" : "Barcode"}
@@ -1326,6 +1339,13 @@ const ShopProducts = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Stock Batches Modal */}
+      <StockBatchesModal
+        isOpen={batchesModalOpen}
+        onClose={() => setBatchesModalOpen(false)}
+        product={selectedProductForBatches}
+      />
     </ShopLayout>
   );
 };
