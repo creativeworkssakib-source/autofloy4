@@ -29,7 +29,7 @@ export async function fetchWebhookConfigs(): Promise<WebhookConfig[]> {
 
   try {
     const { data, error } = await supabase
-      .from("webhook_configs")
+      .from("webhook_configs" as any)
       .select("*")
       .order("category", { ascending: true })
       .order("name", { ascending: true });
@@ -39,7 +39,7 @@ export async function fetchWebhookConfigs(): Promise<WebhookConfig[]> {
       return webhookCache || [];
     }
 
-    webhookCache = data || [];
+    webhookCache = (data as any) || [];
     cacheTimestamp = Date.now();
     return webhookCache;
   } catch (error) {

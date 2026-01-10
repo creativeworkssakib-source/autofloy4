@@ -62,13 +62,13 @@ const PlatformAutomationsGrid = ({
   useEffect(() => {
     const fetchConfigs = async () => {
       const { data } = await supabase
-        .from('webhook_configs')
+        .from('webhook_configs' as any)
         .select('id, name, description, icon, is_active, is_coming_soon, category')
         .eq('category', 'platform')
         .order('name');
       
       if (data) {
-        setWebhookConfigs(data);
+        setWebhookConfigs(data as any);
       }
       setLoading(false);
     };
