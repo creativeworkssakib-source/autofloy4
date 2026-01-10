@@ -57,21 +57,20 @@ const Login = () => {
   return (
     <div className="min-h-screen flex">
       {/* Left Side - Gradient */}
-      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-secondary via-primary to-primary" />
+      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-gradient-to-br from-[hsl(262,100%,63%)] via-[hsl(217,100%,50%)] to-[hsl(217,100%,40%)]">
         <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.1)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.1)_1px,transparent_1px)] bg-[size:4rem_4rem]" />
         
         {/* Content */}
-        <div className="relative z-10 flex flex-col justify-center px-12 lg:px-16 text-primary-foreground">
+        <div className="relative z-10 flex flex-col justify-center px-12 lg:px-16 text-white">
           <Link to="/" className="flex items-center gap-2 mb-12">
-            <div className="w-12 h-12 rounded-xl bg-primary-foreground/20 backdrop-blur-sm flex items-center justify-center">
+            <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
               {settings.logo_url ? (
                 <img src={settings.logo_url} alt={settings.company_name} className="w-8 h-8 rounded object-contain" />
               ) : (
-                <Zap className="w-6 h-6 text-primary-foreground" />
+                <Zap className="w-6 h-6 text-white" />
               )}
             </div>
-            <span className="text-2xl font-bold">{settings.company_name}</span>
+            <span className="text-2xl font-bold text-white">{settings.company_name}</span>
           </Link>
           
           <motion.div
@@ -79,28 +78,28 @@ const Login = () => {
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.6 }}
           >
-            <h1 className="text-4xl lg:text-5xl font-bold mb-6">
-              Welcome back to {settings.company_name}
+            <h1 className="text-4xl lg:text-5xl font-bold mb-6 text-white">
+              Welcome back to<br />{settings.company_name}
             </h1>
-            <p className="text-lg text-primary-foreground/80 mb-10">
+            <p className="text-lg text-white/80 mb-10">
               Your automations are waiting. Let's get you back to saving time and growing your business.
             </p>
             
-            <div className="flex items-center gap-4 p-4 rounded-xl bg-primary-foreground/10 backdrop-blur-sm">
-              <div className="w-12 h-12 rounded-full bg-success/20 flex items-center justify-center">
-                <Zap className="w-6 h-6 text-success" />
+            <div className="flex items-center gap-4 p-4 rounded-xl bg-white/10 backdrop-blur-sm border border-white/20">
+              <div className="w-12 h-12 rounded-full bg-emerald-500/30 flex items-center justify-center">
+                <Zap className="w-6 h-6 text-emerald-300" />
               </div>
               <div>
-                <p className="font-semibold">Your shop is running 24/7</p>
-                <p className="text-sm text-primary-foreground/70">Even while you were away</p>
+                <p className="font-semibold text-white">Your shop is running 24/7</p>
+                <p className="text-sm text-white/70">Even while you were away</p>
               </div>
             </div>
           </motion.div>
         </div>
 
         {/* Decorative Elements */}
-        <div className="absolute bottom-0 left-0 w-96 h-96 bg-primary-glow/30 rounded-full blur-3xl" />
-        <div className="absolute top-0 right-0 w-64 h-64 bg-secondary/30 rounded-full blur-3xl" />
+        <div className="absolute bottom-0 left-0 w-96 h-96 bg-blue-400/30 rounded-full blur-3xl" />
+        <div className="absolute top-0 right-0 w-64 h-64 bg-purple-400/30 rounded-full blur-3xl" />
       </div>
 
       {/* Right Side - Form */}
