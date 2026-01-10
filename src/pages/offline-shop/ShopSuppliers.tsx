@@ -581,52 +581,21 @@ const ShopSuppliers = () => {
     });
   };
 
-  // Load all purchased products from all suppliers for Add to Stock
+  // Load all purchased products efficiently using the new endpoint
   const loadAllPurchasedProducts = async () => {
     try {
-      const allProducts: PurchasedProduct[] = [];
-      
-      for (const supplier of suppliers) {
-        const result = await offlineShopService.getSupplier(supplier.id);
-        const purchases = result.purchases || [];
-        
-        purchases.forEach((purchase: Purchase) => {
-          if (purchase.items) {
-            purchase.items.forEach((item) => {
-              // Only include items without product_id (not yet in stock)
-              if (!item.product_id) {
-                // Check if this product already exists in allProducts (aggregate by name)
-                const existing = allProducts.find(p => p.name.toLowerCase() === item.product_name.toLowerCase());
-                if (existing) {
-                  existing.quantity += Number(item.quantity);
-                } else {
-                  allProducts.push({
-                    name: item.product_name,
-                    quantity: Number(item.quantity),
-                    unit_price: Number(item.unit_price || 0),
-                    selling_price: Number((item as any).selling_price || item.unit_price * 1.2),
-                    supplier_name: supplier.name,
-                    purchase_date: purchase.purchase_date,
-                    unit: "pcs",
-                    min_stock_alert: 5,
-                  });
-                }
-              }
-            });
-          }
-        });
-      }
-      
-      setProductsToAddToStock(allProducts);
+      const result = await offlineShopService.getPendingStockItems();
+      setProductsToAddToStock(result.items || []);
     } catch (error) {
-      console.error("Error loading purchased products:", error);
+      console.error("Error loading pending stock items:", error);
+      toast.error(language === "bn" ? "প্রোডাক্ট লোড করতে সমস্যা" : "Failed to load products");
     }
   };
 
   // Handle opening the Add to Stock modal
   const handleOpenAddToStockModal = async () => {
-    await loadAllPurchasedProducts();
     setIsAddToStockModalOpen(true);
+    await loadAllPurchasedProducts();
   };
 
   const getBusinessTypeLabel = (type: string) => {
