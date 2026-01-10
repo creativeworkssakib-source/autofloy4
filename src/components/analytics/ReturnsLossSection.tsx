@@ -98,23 +98,23 @@ const ReturnsLossSection = () => {
       try {
         // Fetch returns
         const { data: returnsData } = await supabase
-          .from('shop_returns')
+          .from('shop_returns' as any)
           .select('*')
           .eq('user_id', user.id)
           .order('return_date', { ascending: false })
           .limit(50);
         
-        setReturns(returnsData || []);
+        setReturns((returnsData as any) || []);
 
         // Fetch damages
         const { data: damagesData } = await supabase
-          .from('shop_damages')
+          .from('shop_damages' as any)
           .select('*')
           .eq('user_id', user.id)
           .order('damage_date', { ascending: false })
           .limit(50);
         
-        setDamages(damagesData || []);
+        setDamages((damagesData as any) || []);
       } catch (error) {
         console.error('Error fetching returns/damages:', error);
       } finally {

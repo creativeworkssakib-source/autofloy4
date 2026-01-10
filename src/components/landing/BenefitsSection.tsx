@@ -201,7 +201,7 @@ const BenefitsSection = memo(() => {
   const fetchReviews = useCallback(async () => {
     try {
       const { data, error } = await supabase
-        .from('reviews')
+        .from('reviews' as any)
         .select('*')
         .order('created_at', { ascending: false })
         .limit(20);
@@ -209,7 +209,7 @@ const BenefitsSection = memo(() => {
       if (error) throw error;
 
       if (data && data.length > 0) {
-        const dbReviews: Review[] = data.map(r => ({
+        const dbReviews: Review[] = (data as any[]).map((r: any) => ({
           id: r.id,
           name: r.name,
           rating: r.rating,
