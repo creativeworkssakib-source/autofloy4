@@ -22,6 +22,8 @@ import Footer from "@/components/layout/Footer";
 import { getPlanById } from "@/data/plans";
 import { useToast } from "@/hooks/use-toast";
 import { useSiteSettings } from "@/contexts/SiteSettingsContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 
 type PaymentMethodId = "bkash" | "nagad" | "rocket" | "upay" | "bank" | "card";
 
@@ -150,6 +152,7 @@ const Checkout = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { settings } = useSiteSettings();
+  const { user } = useAuth();
   const planId = searchParams.get("plan") || "starter";
   const plan = getPlanById(planId);
 
@@ -201,15 +204,51 @@ const Checkout = () => {
     }
 
     setIsSubmitting(true);
-    await new Promise((r) => setTimeout(r, 2000));
-    
-    toast({ 
-      title: "Purchase Successful! 🎉", 
-      description: "Your order has been placed. Check your email for details." 
-    });
-    
-    setIsSubmitting(false);
-    navigate("/dashboard");
+
+    try {
+      // Save payment request to database
+      if (user && plan) {
+        const { error } = await supabase
+          .from('payment_requests' as any)
+          .insert({
+            user_id: user.id,
+            plan_id: plan.id,
+            plan_name: plan.name,
+            amount: plan.priceNumeric,
+            currency: 'BDT',
+            payment_method: formData.paymentMethod,
+            transaction_id: formData.transactionId || null,
+            status: 'pending',
+          });
+
+        if (error) {
+          console.error('Payment request error:', error);
+          toast({ 
+            title: "Error submitting payment", 
+            description: "Please try again or contact support.",
+            variant: "destructive" 
+          });
+          setIsSubmitting(false);
+          return;
+        }
+      }
+      
+      toast({ 
+        title: "Payment Request Submitted! 🎉", 
+        description: "Your payment will be verified within 24 hours. You'll receive a confirmation email." 
+      });
+      
+      navigate("/offline-shop");
+    } catch (err) {
+      console.error('Payment error:', err);
+      toast({ 
+        title: "Error", 
+        description: "Something went wrong. Please try again.",
+        variant: "destructive" 
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (!plan) {
