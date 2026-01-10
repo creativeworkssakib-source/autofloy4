@@ -59,6 +59,7 @@ const getPlanBadge = (plan: string) => {
 };
 
 const UnifiedDashboard = () => {
+  // Component initialized
   const { user } = useAuth();
   const { syncEnabled, isLoading: syncLoading } = useSyncSettings();
   const { t } = useLanguage();
