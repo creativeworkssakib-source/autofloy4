@@ -27,7 +27,7 @@ const Login = () => {
       if (!user.emailVerified) {
         navigate("/verify-email");
       } else {
-        navigate("/dashboard");
+        navigate("/offline-shop");
       }
     }
   }, [user, navigate]);

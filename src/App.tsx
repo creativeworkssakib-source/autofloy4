@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { NotificationProvider } from "@/contexts/NotificationContext";
-import { AuthProvider } from "@/contexts/AuthContext";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { SiteSettingsProvider } from "@/contexts/SiteSettingsContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { ShopProvider } from "@/contexts/ShopContext";
@@ -32,38 +32,16 @@ const Pricing = lazy(() => import("./pages/Pricing"));
 const Checkout = lazy(() => import("./pages/Checkout"));
 const Contact = lazy(() => import("./pages/Contact"));
 const About = lazy(() => import("./pages/About"));
-const Blog = lazy(() => import("./pages/Blog"));
-const Careers = lazy(() => import("./pages/Careers"));
-const Documentation = lazy(() => import("./pages/Documentation"));
-const HelpCenter = lazy(() => import("./pages/HelpCenter"));
-const HelpArticle = lazy(() => import("./pages/HelpArticle"));
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
 const TermsOfService = lazy(() => import("./pages/TermsOfService"));
-const GDPR = lazy(() => import("./pages/GDPR"));
-const CookiePolicy = lazy(() => import("./pages/CookiePolicy"));
-const FeatureDetail = lazy(() => import("./pages/FeatureDetail"));
-const TrialStart = lazy(() => import("./pages/TrialStart"));
-const Dashboard = lazy(() => import("./pages/dashboard/UnifiedDashboard"));
-const BusinessOverview = lazy(() => import("./pages/BusinessOverview"));
-const GlobalReports = lazy(() => import("./pages/dashboard/GlobalReports"));
-const SyncSettings = lazy(() => import("./pages/dashboard/SyncSettings"));
-const Products = lazy(() => import("./pages/Products"));
-const Logs = lazy(() => import("./pages/Logs"));
-const Settings = lazy(() => import("./pages/Settings"));
-const Automations = lazy(() => import("./pages/Automations"));
-const ConnectFacebook = lazy(() => import("./pages/ConnectFacebook"));
-const AuthFacebookCallback = lazy(() => import("./pages/AuthFacebookCallback"));
-const Marketing = lazy(() => import("./pages/dashboard/Marketing"));
 
-// Business Selector & Offline Shop pages
-const BusinessSelector = lazy(() => import("./pages/BusinessSelector"));
+// Offline Shop pages
 const ShopDashboard = lazy(() => import("./pages/offline-shop/ShopDashboard"));
 const ShopProducts = lazy(() => import("./pages/offline-shop/ShopProducts"));
 const ShopSales = lazy(() => import("./pages/offline-shop/ShopSales"));
 const ShopExpenses = lazy(() => import("./pages/offline-shop/ShopExpenses"));
 const ShopReports = lazy(() => import("./pages/offline-shop/ShopReports"));
 const ShopPurchases = lazy(() => import("./pages/offline-shop/ShopPurchases"));
-
 const ShopSuppliers = lazy(() => import("./pages/offline-shop/ShopSuppliers"));
 const SupplierProfile = lazy(() => import("./pages/offline-shop/SupplierProfile"));
 const ShopAdjustments = lazy(() => import("./pages/offline-shop/ShopAdjustments"));
@@ -77,24 +55,16 @@ const ShopFollowupSms = lazy(() => import("./pages/offline-shop/ShopFollowupSms"
 const ScannerSetup = lazy(() => import("./pages/offline-shop/ScannerSetup"));
 const ShopPriceCalculator = lazy(() => import("./pages/offline-shop/ShopPriceCalculator"));
 const ShopSettings = lazy(() => import("./pages/offline-shop/ShopSettings"));
+
 // Admin pages
 const AdminLogin = lazy(() => import("./pages/admin/AdminLogin"));
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
 const AdminUsers = lazy(() => import("./pages/admin/AdminUsers"));
 const AdminUserDetail = lazy(() => import("./pages/admin/AdminUserDetail"));
-const AdminUserSettings = lazy(() => import("./pages/admin/AdminUserSettings"));
 const AdminSubscriptions = lazy(() => import("./pages/admin/AdminSubscriptions"));
 const AdminSiteSettings = lazy(() => import("./pages/admin/AdminSiteSettings"));
-const AdminWebhooks = lazy(() => import("./pages/admin/AdminWebhooks"));
-const AdminPasscodeReset = lazy(() => import("./pages/admin/AdminPasscodeReset"));
-const AdminContentPages = lazy(() => import("./pages/admin/AdminContentPages"));
-const AdminBlogPosts = lazy(() => import("./pages/admin/AdminBlogPosts"));
 const AdminPricingPlans = lazy(() => import("./pages/admin/AdminPricingPlans"));
 const AdminAppearance = lazy(() => import("./pages/admin/AdminAppearance"));
-const AdminSEO = lazy(() => import("./pages/admin/AdminSEO"));
-const AdminEmailTemplates = lazy(() => import("./pages/admin/AdminEmailTemplates"));
-const AdminApiIntegrations = lazy(() => import("./pages/admin/AdminApiIntegrations"));
-
 
 // Loading fallback component
 const PageLoader = () => (
@@ -102,6 +72,21 @@ const PageLoader = () => (
     <Loader2 className="w-8 h-8 animate-spin text-primary" />
   </div>
 );
+
+// Smart Index component - redirects logged-in users to offline-shop
+const SmartIndex = () => {
+  const { user, isLoading } = useAuth();
+  
+  if (isLoading) {
+    return <PageLoader />;
+  }
+  
+  if (user && user.emailVerified) {
+    return <Navigate to="/offline-shop" replace />;
+  }
+  
+  return <Index />;
+};
 
 // Configure React Query with caching
 const queryClient = new QueryClient({
@@ -134,7 +119,7 @@ const App = () => (
               <Suspense fallback={<PageLoader />}>
                 <Routes>
                   {/* Public routes */}
-                  <Route path="/" element={<Index />} />
+                  <Route path="/" element={<SmartIndex />} />
                   <Route path="/signup" element={<Signup />} />
                   <Route path="/login" element={<Login />} />
                   <Route path="/verify-email" element={<VerifyEmail />} />
@@ -143,86 +128,13 @@ const App = () => (
                   <Route path="/pricing" element={<Pricing />} />
                   <Route path="/contact" element={<Contact />} />
                   <Route path="/about" element={<About />} />
-                  <Route path="/blog" element={<Blog />} />
-                  <Route path="/careers" element={<Careers />} />
-                  <Route path="/docs" element={<Documentation />} />
-                  <Route path="/help" element={<HelpCenter />} />
-                  <Route path="/help/:slug" element={<HelpArticle />} />
                   <Route path="/privacy" element={<PrivacyPolicy />} />
                   <Route path="/terms" element={<TermsOfService />} />
-                  <Route path="/gdpr" element={<GDPR />} />
-                  <Route path="/cookies" element={<CookiePolicy />} />
-                  <Route path="/features/:slug" element={<FeatureDetail />} />
-                  
-                  {/* OAuth callback routes - public but redirects internally */}
-                  <Route path="/auth/facebook/callback" element={<AuthFacebookCallback />} />
                   
                   {/* Protected routes */}
                   <Route path="/checkout" element={
                     <ProtectedRoute>
                       <Checkout />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/trial-start" element={
-                    <ProtectedRoute requireEmailVerification={false}>
-                      <TrialStart />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/connect-facebook" element={
-                    <ProtectedRoute>
-                      <ConnectFacebook />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/dashboard" element={
-                    <ProtectedRoute>
-                      <Dashboard />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/dashboard/business" element={
-                    <ProtectedRoute>
-                      <BusinessOverview />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/dashboard/logs" element={
-                    <ProtectedRoute>
-                      <Logs />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/dashboard/settings" element={
-                    <ProtectedRoute>
-                      <Settings />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/dashboard/automations" element={
-                    <ProtectedRoute>
-                      <Automations />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/dashboard/products" element={
-                    <ProtectedRoute>
-                      <Products />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/dashboard/reports" element={
-                    <ProtectedRoute>
-                      <GlobalReports />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/dashboard/sync" element={
-                    <ProtectedRoute>
-                      <SyncSettings />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/dashboard/marketing" element={
-                    <ProtectedRoute>
-                      <Marketing />
-                    </ProtectedRoute>
-                  } />
-                  
-                  {/* Business Selector */}
-                  <Route path="/business-selector" element={
-                    <ProtectedRoute>
-                      <BusinessSelector />
                     </ProtectedRoute>
                   } />
                   
@@ -323,6 +235,10 @@ const App = () => (
                     </ProtectedRoute>
                   } />
                   
+                  {/* Legacy redirects - redirect old routes to offline-shop */}
+                  <Route path="/dashboard" element={<Navigate to="/offline-shop" replace />} />
+                  <Route path="/dashboard/*" element={<Navigate to="/offline-shop" replace />} />
+                  
                   {/* Admin routes */}
                   <Route path="/admin/login" element={<AdminLogin />} />
                   <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
@@ -341,11 +257,6 @@ const App = () => (
                       <AdminUserDetail />
                     </AdminProtectedRoute>
                   } />
-                  <Route path="/admin/user-settings" element={
-                    <AdminProtectedRoute>
-                      <AdminUserSettings />
-                    </AdminProtectedRoute>
-                  } />
                   <Route path="/admin/subscriptions" element={
                     <AdminProtectedRoute>
                       <AdminSubscriptions />
@@ -356,26 +267,6 @@ const App = () => (
                       <AdminSiteSettings />
                     </AdminProtectedRoute>
                   } />
-                  <Route path="/admin/webhooks" element={
-                    <AdminProtectedRoute>
-                      <AdminWebhooks />
-                    </AdminProtectedRoute>
-                  } />
-                  <Route path="/admin/passcode-reset" element={
-                    <AdminProtectedRoute>
-                      <AdminPasscodeReset />
-                    </AdminProtectedRoute>
-                  } />
-                  <Route path="/admin/content-pages" element={
-                    <AdminProtectedRoute>
-                      <AdminContentPages />
-                    </AdminProtectedRoute>
-                  } />
-                  <Route path="/admin/blog-posts" element={
-                    <AdminProtectedRoute>
-                      <AdminBlogPosts />
-                    </AdminProtectedRoute>
-                  } />
                   <Route path="/admin/pricing-plans" element={
                     <AdminProtectedRoute>
                       <AdminPricingPlans />
@@ -384,21 +275,6 @@ const App = () => (
                   <Route path="/admin/appearance" element={
                     <AdminProtectedRoute>
                       <AdminAppearance />
-                    </AdminProtectedRoute>
-                  } />
-                  <Route path="/admin/seo" element={
-                    <AdminProtectedRoute>
-                      <AdminSEO />
-                    </AdminProtectedRoute>
-                  } />
-                  <Route path="/admin/email-templates" element={
-                    <AdminProtectedRoute>
-                      <AdminEmailTemplates />
-                    </AdminProtectedRoute>
-                  } />
-                  <Route path="/admin/api-integrations" element={
-                    <AdminProtectedRoute>
-                      <AdminApiIntegrations />
                     </AdminProtectedRoute>
                   } />
                   
