@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Plus, PackagePlus, Eye, Upload, FileSpreadsheet, Check, X, Loader2, Search, Calendar, Trash2, CheckSquare, Square, CreditCard, History, RotateCcw } from "lucide-react";
+import { Plus, PackagePlus, Eye, Upload, FileSpreadsheet, Check, X, Loader2, Search, Calendar, Trash2, CheckSquare, Square, CreditCard, History, RotateCcw, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +26,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import ShopLayout from "@/components/offline-shop/ShopLayout";
+import AddToStockModal, { PurchasedProduct } from "@/components/offline-shop/AddToStockModal";
 import { offlineShopService } from "@/services/offlineShopService";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useShop } from "@/contexts/ShopContext";
@@ -126,6 +127,10 @@ const ShopPurchases = () => {
   const [showTrash, setShowTrash] = useState(false);
   const [trashItems, setTrashItems] = useState<TrashItem[]>([]);
   const [isLoadingTrash, setIsLoadingTrash] = useState(false);
+
+  // Add to Stock modal states
+  const [isAddToStockModalOpen, setIsAddToStockModalOpen] = useState(false);
+  const [productsToAddToStock, setProductsToAddToStock] = useState<PurchasedProduct[]>([]);
 
   const [items, setItems] = useState<PurchaseItem[]>([]);
   const [supplierId, setSupplierId] = useState("");
@@ -251,6 +256,46 @@ const ShopPurchases = () => {
     } catch (error) {
       toast.error(language === "bn" ? "মুছে ফেলা যায়নি" : "Delete failed");
     }
+  };
+
+  // Load all purchased products that don't have product_id (not yet in stock)
+  const loadProductsForStock = async () => {
+    const allProducts: PurchasedProduct[] = [];
+    
+    for (const purchase of purchases) {
+      if (purchase.items) {
+        for (const item of purchase.items) {
+          // Only include items without product_id (new products not in stock)
+          if (!item.product_id) {
+            // Check if already in allProducts (aggregate by name)
+            const existing = allProducts.find(p => p.name.toLowerCase() === item.product_name.toLowerCase());
+            if (existing) {
+              existing.quantity += Number(item.quantity);
+            } else {
+              allProducts.push({
+                name: item.product_name,
+                quantity: Number(item.quantity),
+                unit_price: Number(item.unit_price || 0),
+                selling_price: Number(item.selling_price || item.unit_price * 1.2),
+                supplier_name: purchase.supplier_name || "",
+                purchase_date: purchase.purchase_date,
+                purchase_id: purchase.id,
+                unit: "pcs",
+                min_stock_alert: 5,
+              });
+            }
+          }
+        }
+      }
+    }
+    
+    setProductsToAddToStock(allProducts);
+  };
+
+  // Open Add to Stock modal
+  const handleOpenAddToStock = async () => {
+    await loadProductsForStock();
+    setIsAddToStockModalOpen(true);
   };
 
   const addItem = () => {
@@ -747,6 +792,15 @@ const ShopPurchases = () => {
             >
               <Upload className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
               {language === "bn" ? "Excel ইম্পোর্ট" : "Import"}
+            </Button>
+            <Button 
+              variant="secondary"
+              size="sm"
+              className="text-xs sm:text-sm"
+              onClick={handleOpenAddToStock}
+            >
+              <Package className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
+              {language === "bn" ? "স্টকে যোগ" : "Add to Stock"}
             </Button>
             <Button onClick={() => { resetForm(); setIsModalOpen(true); }} size="sm" className="text-xs sm:text-sm">
               <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
@@ -1489,6 +1543,14 @@ const ShopPurchases = () => {
         itemCount={selectedIds.size}
         isSoftDelete={true}
         isLoading={isDeleting}
+      />
+
+      {/* Add to Stock Modal */}
+      <AddToStockModal
+        isOpen={isAddToStockModalOpen}
+        onClose={() => setIsAddToStockModalOpen(false)}
+        products={productsToAddToStock}
+        onSuccess={loadData}
       />
     </ShopLayout>
 
