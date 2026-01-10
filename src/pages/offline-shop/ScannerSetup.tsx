@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { 
   Scan, 
   Usb, 
@@ -9,7 +9,11 @@ import {
   ShoppingCart,
   Settings,
   Volume2,
-  AlertCircle
+  AlertCircle,
+  RefreshCw,
+  Wifi,
+  WifiOff,
+  Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -21,16 +25,31 @@ import { offlineShopService } from "@/services/offlineShopService";
 import { useShop } from "@/contexts/ShopContext";
 import { cn } from "@/lib/utils";
 
+interface ScannerDevice {
+  id: string;
+  name: string;
+  type: 'usb' | 'keyboard' | 'camera';
+  connected: boolean;
+  lastActivity?: Date;
+}
+
 const ScannerSetup = () => {
   const { language } = useLanguage();
   const { currentShop } = useShop();
   const [isTestMode, setIsTestMode] = useState(false);
   const [lastScannedCode, setLastScannedCode] = useState<string | null>(null);
   const [scannerConnected, setScannerConnected] = useState(false);
+  const [isDetecting, setIsDetecting] = useState(false);
+  const [detectedDevices, setDetectedDevices] = useState<ScannerDevice[]>([]);
+  const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'disconnected' | 'waiting'>('waiting');
   const [testResults, setTestResults] = useState<{ code: string; product: string | null; time: Date }[]>([]);
   const [products, setProducts] = useState<any[]>([]);
+  const [scanSpeed, setScanSpeed] = useState<number>(0);
+  const [totalScans, setTotalScans] = useState(0);
   const barcodeBufferRef = useRef<string>("");
   const lastKeyTimeRef = useRef<number>(0);
+  const scanTimesRef = useRef<number[]>([]);
+  const detectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Load products for barcode matching
   useEffect(() => {
@@ -47,48 +66,148 @@ const ScannerSetup = () => {
     }
   }, [currentShop?.id]);
 
-  // USB Scanner listener in test mode
-  useEffect(() => {
-    if (!isTestMode) return;
+  // Detect USB devices using keyboard input patterns
+  const detectScannerFromInput = useCallback((scannedCode: string, inputSpeed: number) => {
+    // USB scanners typically input at 50-200 chars per second
+    // Humans type at ~5-10 chars per second
+    const isScannerInput = inputSpeed > 30; // chars per second
+    
+    if (isScannerInput && !scannerConnected) {
+      setScannerConnected(true);
+      setConnectionStatus('connected');
+      
+      // Add as detected device
+      setDetectedDevices(prev => {
+        const exists = prev.some(d => d.type === 'keyboard');
+        if (exists) return prev;
+        return [...prev, {
+          id: 'usb-hid-scanner',
+          name: language === 'bn' ? 'USB বারকোড স্ক্যানার (HID)' : 'USB Barcode Scanner (HID)',
+          type: 'keyboard',
+          connected: true,
+          lastActivity: new Date()
+        }];
+      });
+      
+      toast.success(
+        language === 'bn' 
+          ? '✓ USB স্ক্যানার সনাক্ত হয়েছে!' 
+          : '✓ USB Scanner Detected!'
+      );
+    }
+    
+    // Update last activity
+    setDetectedDevices(prev => 
+      prev.map(d => d.type === 'keyboard' ? { ...d, lastActivity: new Date() } : d)
+    );
+  }, [scannerConnected, language]);
 
+  // Real-time USB device detection using WebHID (if supported)
+  const checkUSBDevices = useCallback(async () => {
+    setIsDetecting(true);
+    setConnectionStatus('checking');
+    
+    try {
+      // Check if WebHID is supported
+      if ('hid' in navigator) {
+        const devices = await (navigator as any).hid.getDevices();
+        const scannerDevices = devices.filter((device: any) => {
+          // Common barcode scanner vendor IDs
+          const scannerVendorIds = [0x05e0, 0x0c2e, 0x1504, 0x1eab, 0x05f9];
+          return scannerVendorIds.includes(device.vendorId);
+        });
+        
+        if (scannerDevices.length > 0) {
+          setDetectedDevices(scannerDevices.map((d: any) => ({
+            id: `${d.vendorId}-${d.productId}`,
+            name: d.productName || (language === 'bn' ? 'USB স্ক্যানার' : 'USB Scanner'),
+            type: 'usb' as const,
+            connected: true
+          })));
+          setScannerConnected(true);
+          setConnectionStatus('connected');
+          toast.success(language === 'bn' ? 'USB স্ক্যানার পাওয়া গেছে!' : 'USB scanner found!');
+        }
+      }
+      
+      // Fallback: Listen for keyboard-like input from scanner
+      // Most USB scanners act as HID keyboards
+      setTimeout(() => {
+        if (!scannerConnected) {
+          setConnectionStatus('waiting');
+        }
+        setIsDetecting(false);
+      }, 2000);
+      
+    } catch (error) {
+      console.log('USB detection fallback to keyboard mode');
+      setConnectionStatus('waiting');
+      setIsDetecting(false);
+    }
+  }, [language, scannerConnected]);
+
+  // Initial USB check on mount
+  useEffect(() => {
+    checkUSBDevices();
+  }, []);
+
+  // USB Scanner listener - works both in test mode and always for detection
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const currentTime = Date.now();
+      const timeDiff = currentTime - lastKeyTimeRef.current;
       
       // Reset buffer if too much time has passed (typing vs scanning)
-      if (currentTime - lastKeyTimeRef.current > 100) {
+      if (timeDiff > 100) {
         barcodeBufferRef.current = "";
+        scanTimesRef.current = [];
       }
+      
       lastKeyTimeRef.current = currentTime;
+      scanTimesRef.current.push(currentTime);
 
       if (e.key === "Enter" && barcodeBufferRef.current.length >= 4) {
         const scannedCode = barcodeBufferRef.current;
+        
+        // Calculate input speed (chars per second)
+        const times = scanTimesRef.current;
+        if (times.length > 1) {
+          const totalTime = (times[times.length - 1] - times[0]) / 1000; // seconds
+          const speed = barcodeBufferRef.current.length / totalTime;
+          setScanSpeed(Math.round(speed));
+          detectScannerFromInput(scannedCode, speed);
+        }
+        
         setLastScannedCode(scannedCode);
-        setScannerConnected(true);
+        setTotalScans(prev => prev + 1);
         
-        // Check if product exists
-        const matchedProduct = products.find(p => p.barcode === scannedCode);
-        
-        setTestResults(prev => [{
-          code: scannedCode,
-          product: matchedProduct?.name || null,
-          time: new Date()
-        }, ...prev.slice(0, 9)]);
-        
-        if (matchedProduct) {
-          toast.success(
-            language === "bn" 
-              ? `✓ প্রোডাক্ট পাওয়া গেছে: ${matchedProduct.name}`
-              : `✓ Product found: ${matchedProduct.name}`
-          );
-        } else {
-          toast.warning(
-            language === "bn"
-              ? `⚠ এই বারকোডের প্রোডাক্ট নেই: ${scannedCode}`
-              : `⚠ No product found for: ${scannedCode}`
-          );
+        if (isTestMode) {
+          // Check if product exists
+          const matchedProduct = products.find(p => p.barcode === scannedCode);
+          
+          setTestResults(prev => [{
+            code: scannedCode,
+            product: matchedProduct?.name || null,
+            time: new Date()
+          }, ...prev.slice(0, 9)]);
+          
+          if (matchedProduct) {
+            toast.success(
+              language === "bn" 
+                ? `✓ প্রোডাক্ট পাওয়া গেছে: ${matchedProduct.name}`
+                : `✓ Product found: ${matchedProduct.name}`
+            );
+          } else {
+            toast.warning(
+              language === "bn"
+                ? `⚠ এই বারকোডের প্রোডাক্ট নেই: ${scannedCode}`
+                : `⚠ No product found for: ${scannedCode}`
+            );
+          }
         }
         
         barcodeBufferRef.current = "";
+        scanTimesRef.current = [];
         e.preventDefault();
       } else if (e.key.length === 1) {
         barcodeBufferRef.current += e.key;
@@ -97,7 +216,25 @@ const ScannerSetup = () => {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isTestMode, products, language]);
+  }, [isTestMode, products, language, detectScannerFromInput]);
+
+  // Monitor connection - set to disconnected if no activity for 30 seconds
+  useEffect(() => {
+    if (!scannerConnected) return;
+    
+    const interval = setInterval(() => {
+      const lastDevice = detectedDevices.find(d => d.lastActivity);
+      if (lastDevice?.lastActivity) {
+        const inactiveTime = Date.now() - lastDevice.lastActivity.getTime();
+        if (inactiveTime > 30000) { // 30 seconds
+          // Don't disconnect, just show idle status
+          setConnectionStatus('connected');
+        }
+      }
+    }, 5000);
+    
+    return () => clearInterval(interval);
+  }, [scannerConnected, detectedDevices]);
 
   const steps = language === "bn" ? [
     {
@@ -169,42 +306,126 @@ const ScannerSetup = () => {
         {/* Connection Status */}
         <Card className={cn(
           "border-2 transition-all",
-          scannerConnected 
-            ? "border-green-500 bg-green-50 dark:bg-green-950/20" 
+          connectionStatus === 'connected'
+            ? "border-green-500 bg-green-50 dark:bg-green-950/20"
+            : connectionStatus === 'checking'
+            ? "border-blue-500 bg-blue-50 dark:bg-blue-950/20"
             : "border-dashed border-muted-foreground/30"
         )}>
-          <CardContent className="flex items-center gap-4 py-6">
-            <div className={cn(
-              "p-3 rounded-full",
-              scannerConnected ? "bg-green-100 dark:bg-green-900" : "bg-muted"
-            )}>
-              {scannerConnected ? (
-                <CheckCircle2 className="h-8 w-8 text-green-600" />
-              ) : (
-                <Usb className="h-8 w-8 text-muted-foreground" />
+          <CardContent className="py-6">
+            <div className="flex items-center gap-4">
+              <div className={cn(
+                "p-3 rounded-full relative",
+                connectionStatus === 'connected' ? "bg-green-100 dark:bg-green-900" : 
+                connectionStatus === 'checking' ? "bg-blue-100 dark:bg-blue-900" : "bg-muted"
+              )}>
+                {connectionStatus === 'checking' ? (
+                  <Loader2 className="h-8 w-8 text-blue-600 animate-spin" />
+                ) : connectionStatus === 'connected' ? (
+                  <>
+                    <CheckCircle2 className="h-8 w-8 text-green-600" />
+                    <span className="absolute -top-1 -right-1 h-4 w-4 bg-green-500 rounded-full animate-pulse" />
+                  </>
+                ) : (
+                  <Usb className="h-8 w-8 text-muted-foreground" />
+                )}
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-lg">
+                  {connectionStatus === 'checking'
+                    ? (language === "bn" ? "🔍 স্ক্যানার খোঁজা হচ্ছে..." : "🔍 Searching for scanner...")
+                    : connectionStatus === 'connected'
+                    ? (language === "bn" ? "✓ স্ক্যানার সংযুক্ত আছে!" : "✓ Scanner Connected!")
+                    : (language === "bn" ? "স্ক্যানার সংযোগের অপেক্ষায়..." : "Waiting for scanner connection...")}
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  {connectionStatus === 'connected'
+                    ? (language === "bn" 
+                        ? `সর্বশেষ স্ক্যান: ${lastScannedCode || 'কোনো স্ক্যান নেই'} • মোট স্ক্যান: ${totalScans}` 
+                        : `Last scan: ${lastScannedCode || 'None'} • Total scans: ${totalScans}`)
+                    : connectionStatus === 'checking'
+                    ? (language === "bn"
+                        ? "USB পোর্ট চেক করা হচ্ছে..."
+                        : "Checking USB ports...")
+                    : (language === "bn"
+                        ? "USB স্ক্যানার লাগিয়ে যেকোনো প্রোডাক্ট স্ক্যান করুন"
+                        : "Plug in USB scanner and scan any product")}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                {connectionStatus === 'connected' && scanSpeed > 0 && (
+                  <Badge variant="outline" className="text-xs">
+                    {scanSpeed} {language === 'bn' ? 'অক্ষর/সেকেন্ড' : 'chars/sec'}
+                  </Badge>
+                )}
+                <Badge 
+                  variant={connectionStatus === 'connected' ? "default" : connectionStatus === 'checking' ? "secondary" : "outline"} 
+                  className={cn(
+                    "text-sm",
+                    connectionStatus === 'connected' && "bg-green-600 hover:bg-green-700"
+                  )}
+                >
+                  {connectionStatus === 'connected' ? (
+                    <><Wifi className="h-3 w-3 mr-1" /> {language === "bn" ? "অনলাইন" : "Online"}</>
+                  ) : connectionStatus === 'checking' ? (
+                    <><Loader2 className="h-3 w-3 mr-1 animate-spin" /> {language === "bn" ? "চেক হচ্ছে" : "Checking"}</>
+                  ) : (
+                    <><WifiOff className="h-3 w-3 mr-1" /> {language === "bn" ? "অফলাইন" : "Offline"}</>
+                  )}
+                </Badge>
+              </div>
+            </div>
+            
+            {/* Detected Devices */}
+            {detectedDevices.length > 0 && (
+              <div className="mt-4 pt-4 border-t">
+                <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                  <Usb className="h-4 w-4" />
+                  {language === 'bn' ? 'সনাক্তকৃত ডিভাইস' : 'Detected Devices'}
+                </h4>
+                <div className="flex flex-wrap gap-2">
+                  {detectedDevices.map(device => (
+                    <Badge 
+                      key={device.id} 
+                      variant="outline" 
+                      className={cn(
+                        "py-1.5 px-3",
+                        device.connected && "border-green-500 text-green-700 dark:text-green-400"
+                      )}
+                    >
+                      <CheckCircle2 className="h-3 w-3 mr-1.5" />
+                      {device.name}
+                      {device.lastActivity && (
+                        <span className="ml-2 text-xs opacity-70">
+                          {device.lastActivity.toLocaleTimeString()}
+                        </span>
+                      )}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Refresh Button */}
+            <div className="mt-4 flex gap-2">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={checkUSBDevices}
+                disabled={isDetecting}
+              >
+                <RefreshCw className={cn("h-4 w-4 mr-2", isDetecting && "animate-spin")} />
+                {language === 'bn' ? 'পুনরায় খোঁজুন' : 'Refresh Detection'}
+              </Button>
+              {!scannerConnected && (
+                <p className="text-xs text-muted-foreground flex items-center">
+                  <AlertCircle className="h-3 w-3 mr-1" />
+                  {language === 'bn' 
+                    ? 'স্ক্যানার স্বয়ংক্রিয়ভাবে সনাক্ত হবে যখন আপনি কিছু স্ক্যান করবেন'
+                    : 'Scanner will auto-detect when you scan something'}
+                </p>
               )}
             </div>
-            <div className="flex-1">
-              <h3 className="font-semibold text-lg">
-                {scannerConnected 
-                  ? (language === "bn" ? "✓ স্ক্যানার সংযুক্ত আছে!" : "✓ Scanner Connected!")
-                  : (language === "bn" ? "স্ক্যানার সংযোগের অপেক্ষায়..." : "Waiting for scanner connection...")}
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                {scannerConnected
-                  ? (language === "bn" 
-                      ? `সর্বশেষ স্ক্যান: ${lastScannedCode}` 
-                      : `Last scan: ${lastScannedCode}`)
-                  : (language === "bn"
-                      ? "USB স্ক্যানার লাগিয়ে টেস্ট মোড চালু করুন"
-                      : "Plug in USB scanner and enable test mode")}
-              </p>
-            </div>
-            <Badge variant={scannerConnected ? "default" : "secondary"} className="text-sm">
-              {scannerConnected 
-                ? (language === "bn" ? "অনলাইন" : "Online")
-                : (language === "bn" ? "অফলাইন" : "Offline")}
-            </Badge>
           </CardContent>
         </Card>
 
