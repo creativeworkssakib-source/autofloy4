@@ -12,7 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useSiteSettings, useUpdateSiteSettings, SiteSettings } from '@/contexts/SiteSettingsContext';
 import { toast as sonnerToast } from 'sonner';
 
-const SUPABASE_URL = "https://klkrzfwvrmffqkmkyqrh.supabase.co";
+const SUPABASE_URL = "https://xvwsqxfydvagfhfkwxdm.supabase.co";
 
 const AdminSiteSettings = () => {
   const { settings, isLoading, error } = useSiteSettings();

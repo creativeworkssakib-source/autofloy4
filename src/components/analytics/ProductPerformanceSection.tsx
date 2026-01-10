@@ -80,7 +80,7 @@ export const ProductPerformanceSection = ({ type, shopId, syncEnabled, title }: 
       if (shopId) params.append("shop_id", shopId);
       
       const response = await fetch(
-        `https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1/product-performance?${params}`,
+        `https://xvwsqxfydvagfhfkwxdm.supabase.co/functions/v1/product-performance?${params}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,

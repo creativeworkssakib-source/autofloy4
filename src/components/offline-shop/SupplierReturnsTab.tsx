@@ -103,7 +103,7 @@ const SUPPLIER_RETURN_REASONS = [
 
 const STATUS_OPTIONS = ["pending", "processed", "refunded", "rejected"];
 
-const SUPABASE_URL = "https://klkrzfwvrmffqkmkyqrh.supabase.co";
+const SUPABASE_URL = "https://xvwsqxfydvagfhfkwxdm.supabase.co";
 
 export default function SupplierReturnsTab() {
   const [returns, setReturns] = useState<SupplierReturn[]>([]);

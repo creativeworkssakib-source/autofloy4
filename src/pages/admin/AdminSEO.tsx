@@ -11,8 +11,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { SEOSettings, fetchSEOSettings, updateSEOSettings } from '@/services/adminCmsService';
 
-const SITEMAP_URL = 'https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1/sitemap';
-const ROBOTS_URL = 'https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1/robots';
+const SITEMAP_URL = 'https://xvwsqxfydvagfhfkwxdm.supabase.co/functions/v1/sitemap';
+const ROBOTS_URL = 'https://xvwsqxfydvagfhfkwxdm.supabase.co/functions/v1/robots';
 
 const AdminSEO = () => {
   const { toast } = useToast();
