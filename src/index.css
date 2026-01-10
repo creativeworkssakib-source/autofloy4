@@ -1,0 +1,350 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Core Brand Colors */
+    --primary: 217 100% 50%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 217 100% 60%;
+    
+    --secondary: 262 100% 63%;
+    --secondary-foreground: 0 0% 100%;
+    
+    --accent: 18 100% 60%;
+    --accent-foreground: 0 0% 100%;
+    
+    /* Background & Surface */
+    --background: 230 100% 99%;
+    --foreground: 240 24% 14%;
+    
+    --card: 0 0% 100%;
+    --card-foreground: 240 24% 14%;
+    
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 24% 14%;
+    
+    /* Muted & Subtle */
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
+    
+    /* Success, Warning & Error */
+    --success: 160 84% 39%;
+    --success-foreground: 0 0% 100%;
+    
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    
+    /* Borders & Inputs */
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 217 100% 50%;
+    
+    --radius: 0.75rem;
+    
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(217, 100%, 50%) 0%, hsl(262, 100%, 63%) 100%);
+    --gradient-hero: linear-gradient(135deg, hsl(230, 100%, 99%) 0%, hsl(230, 80%, 96%) 100%);
+    --gradient-card: linear-gradient(180deg, hsl(0, 0%, 100%) 0%, hsl(230, 50%, 98%) 100%);
+    --gradient-glow: radial-gradient(ellipse at center, hsl(217, 100%, 50%, 0.15) 0%, transparent 70%);
+    
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 hsl(217, 100%, 50%, 0.05);
+    --shadow-md: 0 4px 6px -1px hsl(217, 100%, 50%, 0.1), 0 2px 4px -2px hsl(217, 100%, 50%, 0.1);
+    --shadow-lg: 0 10px 15px -3px hsl(217, 100%, 50%, 0.1), 0 4px 6px -4px hsl(217, 100%, 50%, 0.1);
+    --shadow-xl: 0 20px 25px -5px hsl(217, 100%, 50%, 0.1), 0 8px 10px -6px hsl(217, 100%, 50%, 0.1);
+    --shadow-glow: 0 0 40px hsl(217, 100%, 50%, 0.3);
+    --shadow-card: 0 4px 24px -4px hsl(217, 100%, 50%, 0.12);
+    
+    /* Sidebar */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 217 100% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 14% 96%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217 100% 50%;
+  }
+
+  .dark {
+    --primary: 217 100% 60%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 217 100% 70%;
+    
+    --secondary: 262 100% 70%;
+    --secondary-foreground: 0 0% 100%;
+    
+    --accent: 18 100% 65%;
+    --accent-foreground: 0 0% 100%;
+    
+    --background: 240 10% 6%;
+    --foreground: 0 0% 98%;
+    
+    --card: 240 10% 10%;
+    --card-foreground: 0 0% 98%;
+    
+    --popover: 240 10% 10%;
+    --popover-foreground: 0 0% 98%;
+    
+    --muted: 240 5% 18%;
+    --muted-foreground: 240 5% 65%;
+    
+    --success: 160 84% 45%;
+    --success-foreground: 0 0% 100%;
+    
+    --warning: 38 92% 55%;
+    --warning-foreground: 0 0% 100%;
+    
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    
+    --border: 240 5% 18%;
+    --input: 240 5% 18%;
+    --ring: 217 100% 60%;
+    
+    --gradient-primary: linear-gradient(135deg, hsl(217, 100%, 55%) 0%, hsl(262, 100%, 68%) 100%);
+    --gradient-hero: linear-gradient(135deg, hsl(240, 10%, 6%) 0%, hsl(240, 15%, 10%) 100%);
+    --gradient-card: linear-gradient(180deg, hsl(240, 10%, 12%) 0%, hsl(240, 10%, 8%) 100%);
+    
+    --sidebar-background: 240 10% 8%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 217 100% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 5% 18%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 5% 18%;
+    --sidebar-ring: 217 100% 60%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  
+  /* Theme transition */
+  *,
+  *::before,
+  *::after {
+    transition: background-color 0.3s ease, border-color 0.3s ease, color 0.2s ease, box-shadow 0.3s ease, fill 0.3s ease, stroke 0.3s ease;
+  }
+  
+  body {
+    @apply bg-background text-foreground font-outfit antialiased;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-outfit font-bold tracking-tight;
+  }
+}
+
+/* Barcode Scanner Animation */
+@keyframes scan-line {
+  0% { top: 0; }
+  50% { top: 100%; }
+  100% { top: 0; }
+}
+
+.animate-scan-line {
+  animation: scan-line 1.5s ease-in-out infinite;
+}
+
+@layer components {
+  .gradient-text {
+    @apply bg-clip-text text-transparent;
+    background-image: var(--gradient-primary);
+  }
+  
+  .gradient-bg {
+    background: var(--gradient-primary);
+  }
+  
+  .glass {
+    @apply bg-card/80 backdrop-blur-xl border border-border/50;
+  }
+  
+  .glow {
+    box-shadow: var(--shadow-glow);
+  }
+  
+  .card-hover {
+    @apply transition-all duration-300 ease-out;
+  }
+  
+  .card-hover:hover {
+    @apply -translate-y-1;
+    box-shadow: var(--shadow-xl);
+  }
+}
+
+@layer utilities {
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  .animate-float-slow {
+    animation: float-slow 12s ease-in-out infinite;
+    will-change: transform, opacity;
+  }
+
+  .animate-float-3d {
+    animation: float-3d 8s ease-in-out infinite;
+    will-change: transform;
+  }
+
+  .animate-cube-3d {
+    animation: cube-3d 14s ease-in-out infinite;
+    will-change: transform;
+  }
+
+  .animate-ring-3d {
+    animation: ring-3d 16s ease-in-out infinite;
+    will-change: transform;
+  }
+
+  .animate-spin-slow {
+    animation: spin-slow 20s linear infinite;
+    will-change: transform;
+  }
+
+  .preserve-3d {
+    transform-style: preserve-3d;
+  }
+
+  .animate-pulse-slow {
+    animation: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  .animate-gradient {
+    background-size: 200% 200%;
+    animation: gradient 8s ease infinite;
+  }
+
+  .gpu-accelerated {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-15px);
+  }
+}
+
+@keyframes float-slow {
+  0%, 100% {
+    transform: translateY(0px) scale(1);
+    opacity: 0.2;
+  }
+  50% {
+    transform: translateY(-20px) scale(1.05);
+    opacity: 0.3;
+  }
+}
+
+@keyframes cube-3d {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) rotateX(18deg) rotateY(26deg) rotateZ(0deg);
+  }
+  50% {
+    transform: translate3d(0, -18px, 0) rotateX(24deg) rotateY(58deg) rotateZ(10deg);
+  }
+}
+
+@keyframes ring-3d {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) rotateX(70deg) rotateZ(0deg);
+    opacity: 0.35;
+  }
+  50% {
+    transform: translate3d(0, -14px, 0) rotateX(70deg) rotateZ(180deg);
+    opacity: 0.55;
+  }
+}
+
+@keyframes gradient {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes float-3d {
+  0%, 100% {
+    transform: translateY(0px) translateX(0px) rotate(0deg);
+  }
+  25% {
+    transform: translateY(-12px) translateX(5px) rotate(2deg);
+  }
+  50% {
+    transform: translateY(-20px) translateX(0px) rotate(0deg);
+  }
+  75% {
+    transform: translateY(-12px) translateX(-5px) rotate(-2deg);
+  }
+}
+
+@keyframes spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse-subtle {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 2s ease-in-out infinite;
+}
+
+/* Reduce motion for users who prefer it */
+@media (prefers-reduced-motion: reduce) {
+  .animate-float,
+  .animate-float-slow,
+  .animate-float-3d,
+  .animate-cube-3d,
+  .animate-ring-3d,
+  .animate-spin-slow,
+  .animate-pulse-slow,
+  .animate-pulse-subtle,
+  .animate-gradient {
+    animation: none;
+  }
+}
+
+/* Reduce motion for users who prefer it */
+@media (prefers-reduced-motion: reduce) {
+  .animate-float,
+  .animate-float-slow,
+  .animate-float-3d,
+  .animate-cube-3d,
+  .animate-ring-3d,
+  .animate-spin-slow,
+  .animate-pulse-slow,
+  .animate-gradient {
+    animation: none;
+  }
+}

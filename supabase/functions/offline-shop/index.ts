@@ -1,0 +1,4796 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { verify } from "https://deno.land/x/djwt@v3.0.2/mod.ts";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-shop-id",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+};
+
+const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const jwtSecret = Deno.env.get("JWT_SECRET")!;
+
+// Generate EAN-13 like barcode
+function generateBarcode(shopId: string, sequence: number): string {
+  const prefix = "890"; // Region code prefix
+  // Use last 4 chars of shop ID (after removing dashes)
+  const shopPart = shopId.replace(/-/g, "").slice(-4).padStart(4, "0").replace(/[^0-9]/g, "0");
+  const productPart = String(sequence).padStart(5, "0");
+  const baseCode = prefix + shopPart + productPart;
+  
+  // Calculate EAN-13 check digit
+  let sum = 0;
+  for (let i = 0; i < 12; i++) {
+    const digit = parseInt(baseCode[i] || "0");
+    sum += digit * (i % 2 === 0 ? 1 : 3);
+  }
+  const checkDigit = (10 - (sum % 10)) % 10;
+  
+  return baseCode + checkDigit;
+}
+
+// Get next barcode sequence for a shop
+async function getNextBarcodeSequence(supabase: any, userId: string, shopId: string | null): Promise<number> {
+  let query = supabase
+    .from("shop_products")
+    .select("barcode", { count: "exact" })
+    .eq("user_id", userId)
+    .not("barcode", "is", null);
+  
+  if (shopId) query = query.eq("shop_id", shopId);
+  
+  const { count } = await query;
+  return (count || 0) + 1;
+}
+
+async function verifyToken(authHeader: string | null): Promise<string | null> {
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return null;
+  }
+  const token = authHeader.substring(7);
+  try {
+    const key = await crypto.subtle.importKey(
+      "raw",
+      new TextEncoder().encode(jwtSecret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign", "verify"]
+    );
+    const payload = await verify(token, key);
+    return payload.sub as string;
+  } catch {
+    return null;
+  }
+}
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  const userId = await verifyToken(req.headers.get("Authorization"));
+  if (!userId) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+  const url = new URL(req.url);
+  const pathParts = url.pathname.split("/").filter(Boolean);
+  
+  // Find resource after "offline-shop" in the path
+  const offlineShopIndex = pathParts.findIndex(p => p === "offline-shop");
+  const resource = offlineShopIndex >= 0 && pathParts.length > offlineShopIndex + 1
+    ? pathParts[offlineShopIndex + 1]
+    : pathParts[pathParts.length - 1] || "dashboard";
+  
+  // Get shop_id from query params or header
+  const shopId = url.searchParams.get("shop_id") || req.headers.get("X-Shop-Id");
+  
+  console.log(`[offline-shop] ${req.method} path=${url.pathname} resource=${resource} shop_id=${shopId} parts=${JSON.stringify(pathParts)}`);
+
+  try {
+    // ===== SHOPS CRUD (Multi-shop support) =====
+    if (resource === "shops") {
+      if (req.method === "GET") {
+        // Get user's plan limits
+        const { data: userData } = await supabase
+          .from("users")
+          .select("subscription_plan")
+          .eq("id", userId)
+          .single();
+        
+        const planId = userData?.subscription_plan || "none";
+        
+        // Get max_shops from pricing_plans
+        const { data: planData } = await supabase
+          .from("pricing_plans")
+          .select("max_shops, name")
+          .eq("id", planId)
+          .maybeSingle();
+        
+        const maxShops = planData?.max_shops ?? 1;
+        const planName = planData?.name || planId;
+        
+        // Get user's shops
+        const { data: shops, error } = await supabase
+          .from("shops")
+          .select("*")
+          .eq("user_id", userId)
+          .eq("is_active", true)
+          .order("created_at", { ascending: true });
+        
+        if (error) throw error;
+        
+        // If no shops exist, create a default one
+        if (!shops || shops.length === 0) {
+          const { data: newShop, error: createErr } = await supabase
+            .from("shops")
+            .insert({
+              user_id: userId,
+              name: "My Shop",
+              is_default: true,
+              is_active: true,
+            })
+            .select()
+            .single();
+          
+          if (createErr) throw createErr;
+          
+          return new Response(JSON.stringify({
+            shops: [newShop],
+            limits: {
+              maxShops,
+              currentShopCount: 1,
+              canCreateMore: maxShops === -1 || 1 < maxShops,
+              planName,
+            }
+          }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        
+        return new Response(JSON.stringify({
+          shops,
+          limits: {
+            maxShops,
+            currentShopCount: shops.length,
+            canCreateMore: maxShops === -1 || shops.length < maxShops,
+            planName,
+          }
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      
+      if (req.method === "POST") {
+        const body = await req.json();
+        
+        // Check plan limits
+        const { data: userData } = await supabase
+          .from("users")
+          .select("subscription_plan")
+          .eq("id", userId)
+          .single();
+        
+        const planId = userData?.subscription_plan || "none";
+        
+        const { data: planData } = await supabase
+          .from("pricing_plans")
+          .select("max_shops, name")
+          .eq("id", planId)
+          .maybeSingle();
+        
+        const maxShops = planData?.max_shops ?? 1;
+        
+        // Count existing shops
+        const { count } = await supabase
+          .from("shops")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", userId)
+          .eq("is_active", true);
+        
+        if (maxShops !== -1 && (count || 0) >= maxShops) {
+          return new Response(JSON.stringify({
+            error: `আপনার প্ল্যানে সর্বোচ্চ ${maxShops}টি শপ তৈরি করতে পারবেন। আরও শপ যোগ করতে প্ল্যান আপগ্রেড করুন।`
+          }), {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        
+        const { data: shop, error } = await supabase
+          .from("shops")
+          .insert({
+            user_id: userId,
+            name: body.name,
+            address: body.address,
+            phone: body.phone,
+            email: body.email,
+            is_active: true,
+            is_default: false,
+          })
+          .select()
+          .single();
+        
+        if (error) throw error;
+        
+        return new Response(JSON.stringify({ shop }), {
+          status: 201,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      
+      if (req.method === "PUT") {
+        const body = await req.json();
+        const { id, ...updates } = body;
+        
+        const { data: shop, error } = await supabase
+          .from("shops")
+          .update({ ...updates, updated_at: new Date().toISOString() })
+          .eq("id", id)
+          .eq("user_id", userId)
+          .select()
+          .single();
+        
+        if (error) throw error;
+        
+        return new Response(JSON.stringify({ shop }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      
+      if (req.method === "DELETE") {
+        const { id, cascade } = await req.json();
+        
+        // Check if this is the only shop
+        const { count } = await supabase
+          .from("shops")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", userId)
+          .eq("is_active", true);
+        
+        if ((count || 0) <= 1) {
+          return new Response(JSON.stringify({ error: "আপনার কমপক্ষে একটি শপ থাকতে হবে" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        // If cascade delete, remove all related data permanently
+        if (cascade) {
+          console.log(`Cascade deleting shop: ${id}`);
+          
+          // Get all sales for this shop to handle their related data
+          const { data: shopSales } = await supabase
+            .from("shop_sales")
+            .select("id")
+            .eq("shop_id", id)
+            .eq("user_id", userId);
+          
+          const saleIds = (shopSales || []).map(s => s.id);
+          
+          // Delete in correct order to avoid FK constraints
+          if (saleIds.length > 0) {
+            // Nullify shop_returns references
+            await supabase
+              .from("shop_returns")
+              .update({ original_sale_id: null })
+              .in("original_sale_id", saleIds);
+            
+            // Delete sale items
+            await supabase
+              .from("shop_sale_items")
+              .delete()
+              .in("sale_id", saleIds);
+          }
+          
+          // Delete shop_returns for this shop
+          await supabase
+            .from("shop_returns")
+            .delete()
+            .eq("shop_id", id)
+            .eq("user_id", userId);
+          
+          // Delete shop_damages for this shop
+          await supabase
+            .from("shop_damages")
+            .delete()
+            .eq("shop_id", id)
+            .eq("user_id", userId);
+          
+          // Delete cash transactions for this shop
+          await supabase
+            .from("shop_cash_transactions")
+            .delete()
+            .eq("shop_id", id)
+            .eq("user_id", userId);
+          
+          // Delete shop_sales for this shop
+          await supabase
+            .from("shop_sales")
+            .delete()
+            .eq("shop_id", id)
+            .eq("user_id", userId);
+          
+          // Get all purchases for this shop
+          const { data: shopPurchases } = await supabase
+            .from("shop_purchases")
+            .select("id")
+            .eq("shop_id", id)
+            .eq("user_id", userId);
+          
+          const purchaseIds = (shopPurchases || []).map(p => p.id);
+          
+          if (purchaseIds.length > 0) {
+            // Delete purchase items
+            await supabase
+              .from("shop_purchase_items")
+              .delete()
+              .in("purchase_id", purchaseIds);
+            
+            // Delete purchase payments
+            await supabase
+              .from("shop_purchase_payments")
+              .delete()
+              .in("purchase_id", purchaseIds);
+          }
+          
+          // Delete shop_purchases for this shop
+          await supabase
+            .from("shop_purchases")
+            .delete()
+            .eq("shop_id", id)
+            .eq("user_id", userId);
+          
+          // Delete shop_expenses for this shop
+          await supabase
+            .from("shop_expenses")
+            .delete()
+            .eq("shop_id", id)
+            .eq("user_id", userId);
+          
+          // Delete shop_products for this shop
+          await supabase
+            .from("shop_products")
+            .delete()
+            .eq("shop_id", id)
+            .eq("user_id", userId);
+          
+          // Delete shop_categories for this shop
+          await supabase
+            .from("shop_categories")
+            .delete()
+            .eq("shop_id", id)
+            .eq("user_id", userId);
+          
+          // Delete shop_customers for this shop
+          await supabase
+            .from("shop_customers")
+            .delete()
+            .eq("shop_id", id)
+            .eq("user_id", userId);
+          
+          // Delete shop_suppliers for this shop
+          await supabase
+            .from("shop_suppliers")
+            .delete()
+            .eq("shop_id", id)
+            .eq("user_id", userId);
+          
+          // Delete shop_staff_users for this shop
+          await supabase
+            .from("shop_staff_users")
+            .delete()
+            .eq("shop_id", id)
+            .eq("user_id", userId);
+          
+          // Delete shop_settings for this shop
+          await supabase
+            .from("shop_settings")
+            .delete()
+            .eq("shop_id", id)
+            .eq("user_id", userId);
+          
+          // Finally delete the shop permanently
+          const { error } = await supabase
+            .from("shops")
+            .delete()
+            .eq("id", id)
+            .eq("user_id", userId);
+          
+          if (error) throw error;
+          
+          console.log(`Shop ${id} and all related data permanently deleted`);
+          
+          return new Response(JSON.stringify({ message: "Shop and all data permanently deleted" }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        
+        // Soft delete - just mark as inactive
+        const { error } = await supabase
+          .from("shops")
+          .update({ is_active: false, updated_at: new Date().toISOString() })
+          .eq("id", id)
+          .eq("user_id", userId);
+        
+        if (error) throw error;
+        
+        return new Response(JSON.stringify({ message: "Shop deleted" }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    // ===== DASHBOARD OVERVIEW =====
+    if (req.method === "GET" && resource === "dashboard") {
+      const dateRange = url.searchParams.get("range") || "today";
+      const today = new Date().toISOString().split("T")[0];
+      const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split("T")[0];
+      const startOfWeek = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+
+      let startDate = today;
+      if (dateRange === "week") startDate = startOfWeek;
+      if (dateRange === "month") startDate = startOfMonth;
+
+      // Get sales for selected period
+      let periodSalesQuery = supabase
+        .from("shop_sales")
+        .select("total, total_cost, total_profit, items:shop_sale_items(profit)")
+        .eq("user_id", userId)
+        .gte("sale_date", startDate);
+      if (shopId) periodSalesQuery = periodSalesQuery.eq("shop_id", shopId);
+      const { data: periodSales } = await periodSalesQuery;
+
+      // Get purchases for selected period
+      let periodPurchasesQuery = supabase
+        .from("shop_purchases")
+        .select("total_amount")
+        .eq("user_id", userId)
+        .gte("purchase_date", startDate);
+      if (shopId) periodPurchasesQuery = periodPurchasesQuery.eq("shop_id", shopId);
+      const { data: periodPurchases } = await periodPurchasesQuery;
+
+      // Get expenses for selected period
+      let periodExpensesQuery = supabase
+        .from("shop_expenses")
+        .select("amount")
+        .eq("user_id", userId)
+        .gte("expense_date", startDate);
+      if (shopId) periodExpensesQuery = periodExpensesQuery.eq("shop_id", shopId);
+      const { data: periodExpenses } = await periodExpensesQuery;
+
+      // Get lifetime totals
+      let lifetimeSalesQuery = supabase
+        .from("shop_sales")
+        .select("total, total_profit, due_amount")
+        .eq("user_id", userId);
+      if (shopId) lifetimeSalesQuery = lifetimeSalesQuery.eq("shop_id", shopId);
+      const { data: lifetimeSales } = await lifetimeSalesQuery;
+
+      // Get total due amounts (all sales with outstanding balance)
+      let dueDataQuery = supabase
+        .from("shop_sales")
+        .select("due_amount")
+        .eq("user_id", userId)
+        .gt("due_amount", 0);
+      if (shopId) dueDataQuery = dueDataQuery.eq("shop_id", shopId);
+      const { data: dueData } = await dueDataQuery;
+
+      // Get total products count
+      let totalProductsQuery = supabase
+        .from("shop_products")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .eq("is_active", true);
+      if (shopId) totalProductsQuery = totalProductsQuery.eq("shop_id", shopId);
+      const { count: totalProducts } = await totalProductsQuery;
+
+      // Get total customers count
+      let totalCustomersQuery = supabase
+        .from("shop_customers")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", userId);
+      if (shopId) totalCustomersQuery = totalCustomersQuery.eq("shop_id", shopId);
+      const { count: totalCustomers } = await totalCustomersQuery;
+
+      // Get total suppliers count
+      let totalSuppliersQuery = supabase
+        .from("shop_suppliers")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", userId);
+      if (shopId) totalSuppliersQuery = totalSuppliersQuery.eq("shop_id", shopId);
+      const { count: totalSuppliers } = await totalSuppliersQuery;
+
+      // Get low stock products
+      let lowStockQuery = supabase
+        .from("shop_products")
+        .select("id, name, stock_quantity, min_stock_alert")
+        .eq("user_id", userId)
+        .eq("is_active", true);
+      if (shopId) lowStockQuery = lowStockQuery.eq("shop_id", shopId);
+      const { data: lowStock } = await lowStockQuery;
+
+      const lowStockProducts = (lowStock || []).filter(
+        (p: any) => p.stock_quantity <= p.min_stock_alert
+      );
+
+      // Get recent sales
+      let recentSalesQuery = supabase
+        .from("shop_sales")
+        .select(`
+          id, invoice_number, total, total_profit, sale_date, payment_status,
+          customer:shop_customers(name)
+        `)
+        .eq("user_id", userId)
+        .order("sale_date", { ascending: false })
+        .limit(5);
+      if (shopId) recentSalesQuery = recentSalesQuery.eq("shop_id", shopId);
+      const { data: recentSales } = await recentSalesQuery;
+
+      // Get recently added products
+      let recentProductsQuery = supabase
+        .from("shop_products")
+        .select("id, name, selling_price, stock_quantity, created_at")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(5);
+      if (shopId) recentProductsQuery = recentProductsQuery.eq("shop_id", shopId);
+      const { data: recentProducts } = await recentProductsQuery;
+
+      // Get daily sales data for chart (last 7 days)
+      let dailySalesQuery = supabase
+        .from("shop_sales")
+        .select("total, total_profit, sale_date")
+        .eq("user_id", userId)
+        .gte("sale_date", startOfWeek)
+        .order("sale_date", { ascending: true });
+      if (shopId) dailySalesQuery = dailySalesQuery.eq("shop_id", shopId);
+      const { data: dailySales } = await dailySalesQuery;
+
+      // Get top products
+      const { data: topProducts } = await supabase
+        .from("shop_sale_items")
+        .select("product_name, quantity, total")
+        .in("sale_id", recentSales?.map((s: any) => s.id) || []);
+
+      // Get expense by category
+      let expensesByCategoryQuery = supabase
+        .from("shop_expenses")
+        .select("category, amount")
+        .eq("user_id", userId)
+        .gte("expense_date", startOfMonth);
+      if (shopId) expensesByCategoryQuery = expensesByCategoryQuery.eq("shop_id", shopId);
+      const { data: expensesByCategory } = await expensesByCategoryQuery;
+
+      // Get returns data for period
+      let periodReturnsQuery = supabase
+        .from("shop_returns")
+        .select("id, refund_amount, return_reason, status")
+        .eq("user_id", userId)
+        .gte("return_date", startDate);
+      if (shopId) periodReturnsQuery = periodReturnsQuery.eq("shop_id", shopId);
+      const { data: periodReturns } = await periodReturnsQuery;
+
+      // Get all-time returns for top reasons
+      let allReturnsQuery = supabase
+        .from("shop_returns")
+        .select("return_reason, refund_amount")
+        .eq("user_id", userId);
+      if (shopId) allReturnsQuery = allReturnsQuery.eq("shop_id", shopId);
+      const { data: allReturns } = await allReturnsQuery;
+
+      // Calculate returns totals
+      const totalReturnsCount = periodReturns?.length || 0;
+      const totalRefundAmount = (periodReturns || []).reduce((sum: number, r: any) => sum + Number(r.refund_amount), 0);
+      const processedReturns = (periodReturns || []).filter((r: any) => r.status === 'processed' || r.status === 'refunded').length;
+      const pendingReturns = (periodReturns || []).filter((r: any) => r.status === 'pending').length;
+
+      // Calculate top return reasons
+      const reasonCounts: Record<string, { count: number; amount: number }> = {};
+      (allReturns || []).forEach((r: any) => {
+        if (!reasonCounts[r.return_reason]) {
+          reasonCounts[r.return_reason] = { count: 0, amount: 0 };
+        }
+        reasonCounts[r.return_reason].count += 1;
+        reasonCounts[r.return_reason].amount += Number(r.refund_amount);
+      });
+
+      const topReturnReasons = Object.entries(reasonCounts)
+        .map(([reason, data]) => ({ reason, ...data }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5);
+
+      // Calculate totals
+      const periodTotalSales = (periodSales || []).reduce((sum: number, s: any) => sum + Number(s.total), 0);
+      const periodTotalPurchases = (periodPurchases || []).reduce((sum: number, p: any) => sum + Number(p.total_amount), 0);
+      const periodTotalExpenses = (periodExpenses || []).reduce((sum: number, e: any) => sum + Number(e.amount), 0);
+      const periodGrossProfit = periodTotalSales - periodTotalPurchases;
+      const periodNetProfit = periodGrossProfit - periodTotalExpenses;
+
+      const lifetimeTotalSales = (lifetimeSales || []).reduce((sum: number, s: any) => sum + Number(s.total), 0);
+      const lifetimeTotalProfit = (lifetimeSales || []).reduce((sum: number, s: any) => sum + Number(s.total_profit || 0), 0);
+      const totalDueAmount = (dueData || []).reduce((sum: number, s: any) => sum + Number(s.due_amount || 0), 0);
+
+      // Aggregate expense by category
+      const expenseByCategoryMap: Record<string, number> = {};
+      (expensesByCategory || []).forEach((e: any) => {
+        expenseByCategoryMap[e.category] = (expenseByCategoryMap[e.category] || 0) + Number(e.amount);
+      });
+
+      // Get customers served in period
+      let customersServedQuery = supabase
+        .from("shop_sales")
+        .select("customer_id", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .gte("sale_date", startDate)
+        .not("customer_id", "is", null);
+      if (shopId) customersServedQuery = customersServedQuery.eq("shop_id", shopId);
+      const { count: customersServed } = await customersServedQuery;
+
+      return new Response(JSON.stringify({
+        period: {
+          totalSales: periodTotalSales,
+          totalPurchases: periodTotalPurchases,
+          grossProfit: periodGrossProfit,
+          totalExpenses: periodTotalExpenses,
+          netProfit: periodNetProfit,
+          customersServed: customersServed || 0,
+        },
+        lifetime: {
+          totalSales: lifetimeTotalSales,
+          totalProfit: lifetimeTotalProfit,
+          totalProducts: totalProducts || 0,
+          totalSuppliers: totalSuppliers || 0,
+          totalDue: totalDueAmount,
+        },
+        returns: {
+          totalCount: totalReturnsCount,
+          totalRefundAmount,
+          processedCount: processedReturns,
+          pendingCount: pendingReturns,
+          topReasons: topReturnReasons,
+        },
+        totalProducts: totalProducts || 0,
+        totalCustomers: totalCustomers || 0,
+        totalSuppliers: totalSuppliers || 0,
+        lowStockProducts,
+        recentSales: recentSales || [],
+        recentProducts: recentProducts || [],
+        dailySales: dailySales || [],
+        expenseByCategory: expenseByCategoryMap,
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ===== PRODUCTS CRUD =====
+    if (resource === "products") {
+      if (req.method === "GET") {
+        let query = supabase
+          .from("shop_products")
+          .select(`*, category:shop_categories(id, name)`)
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false });
+        if (shopId) query = query.eq("shop_id", shopId);
+        const { data, error } = await query;
+
+        if (error) throw error;
+        return new Response(JSON.stringify({ products: data }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (req.method === "POST") {
+        const body = await req.json();
+        
+        // Auto-generate barcode if not provided
+        let barcode = body.barcode;
+        if (!barcode) {
+          const sequence = await getNextBarcodeSequence(supabase, userId, shopId);
+          barcode = generateBarcode(shopId || userId, sequence);
+        }
+        
+        const { data, error } = await supabase
+          .from("shop_products")
+          .insert({ ...body, barcode, user_id: userId, shop_id: shopId })
+          .select()
+          .single();
+
+        if (error) throw error;
+        
+        // Log product history
+        await supabase.from("shop_product_history").insert({
+          user_id: userId,
+          shop_id: shopId,
+          product_id: data.id,
+          product_name: data.name,
+          quantity_added: data.stock_quantity || 0,
+          purchase_price: data.purchase_price || 0,
+          selling_price: data.selling_price || 0,
+          action_type: 'added',
+        });
+        
+        return new Response(JSON.stringify({ product: data }), {
+          status: 201,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (req.method === "PUT") {
+        const body = await req.json();
+        const { id, ...updates } = body;
+        const { data, error } = await supabase
+          .from("shop_products")
+          .update({ ...updates, updated_at: new Date().toISOString() })
+          .eq("id", id)
+          .eq("user_id", userId)
+          .select()
+          .single();
+
+        if (error) throw error;
+        return new Response(JSON.stringify({ product: data }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (req.method === "DELETE") {
+        const body = await req.json().catch(() => ({} as any));
+        const ids: string[] = Array.isArray(body.ids)
+          ? body.ids
+          : body.id
+            ? [body.id]
+            : [];
+
+        if (ids.length === 0) {
+          return new Response(JSON.stringify({ error: "Missing product id(s)" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        // Pre-fetch user-owned purchase/sale ids to safely update child rows
+        const { data: purchaseRows } = await supabase
+          .from("shop_purchases")
+          .select("id")
+          .eq("user_id", userId);
+        const purchaseIds = (purchaseRows || []).map((p: any) => p.id);
+
+        const { data: saleRows } = await supabase
+          .from("shop_sales")
+          .select("id")
+          .eq("user_id", userId);
+        const saleIds = (saleRows || []).map((s: any) => s.id);
+
+        const deleted: string[] = [];
+        const failed: Array<{ id: string; error: string }> = [];
+
+        for (const productId of ids) {
+          try {
+            console.log(`Attempting to delete product (move to trash): ${productId}`);
+
+            const { data: product, error: fetchError } = await supabase
+              .from("shop_products")
+              .select("*")
+              .eq("id", productId)
+              .eq("user_id", userId)
+              .single();
+
+            if (fetchError || !product) {
+              failed.push({ id: productId, error: "Product not found" });
+              continue;
+            }
+
+            // Save to trash before removing from inventory
+            const { error: trashError } = await supabase.from("shop_trash").insert({
+              user_id: userId,
+              original_table: "shop_products",
+              original_id: productId,
+              data: product,
+            });
+            if (trashError) throw trashError;
+
+            // Remove FK references so product deletion won't fail
+            if (purchaseIds.length > 0) {
+              await supabase
+                .from("shop_purchase_items")
+                .update({ product_id: null })
+                .eq("product_id", productId)
+                .in("purchase_id", purchaseIds);
+            }
+
+            if (saleIds.length > 0) {
+              await supabase
+                .from("shop_sale_items")
+                .update({ product_id: null })
+                .eq("product_id", productId)
+                .in("sale_id", saleIds);
+            }
+
+            await supabase
+              .from("shop_stock_adjustments")
+              .update({ product_id: null })
+              .eq("product_id", productId)
+              .eq("user_id", userId);
+
+            await supabase
+              .from("shop_damages")
+              .update({ product_id: null })
+              .eq("product_id", productId)
+              .eq("user_id", userId);
+
+            await supabase
+              .from("shop_returns")
+              .update({ product_id: null })
+              .eq("product_id", productId)
+              .eq("user_id", userId);
+
+            const { error: deleteError } = await supabase
+              .from("shop_products")
+              .delete()
+              .eq("id", productId)
+              .eq("user_id", userId);
+
+            if (deleteError) throw deleteError;
+
+            deleted.push(productId);
+            console.log(`Deleted product ${productId} and moved to trash`);
+          } catch (e: any) {
+            console.error("Product delete failed:", productId, e);
+            failed.push({ id: productId, error: e?.message || "Delete failed" });
+          }
+        }
+
+        return new Response(
+          JSON.stringify({
+            message: "Product(s) deleted and moved to trash",
+            deleted,
+            failed,
+          }),
+          {
+            status: failed.length > 0 ? 207 : 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+    }
+
+    // ===== CATEGORIES CRUD =====
+    if (resource === "categories") {
+      if (req.method === "GET") {
+        let query = supabase
+          .from("shop_categories")
+          .select("*")
+          .eq("user_id", userId)
+          .order("name");
+        if (shopId) query = query.eq("shop_id", shopId);
+        const { data, error } = await query;
+
+        if (error) throw error;
+        return new Response(JSON.stringify({ categories: data }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (req.method === "POST") {
+        const body = await req.json();
+        const { data, error } = await supabase
+          .from("shop_categories")
+          .insert({ ...body, user_id: userId, shop_id: shopId })
+          .select()
+          .single();
+
+        if (error) throw error;
+        return new Response(JSON.stringify({ category: data }), {
+          status: 201,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (req.method === "DELETE") {
+        const { id } = await req.json();
+        
+        // Fetch category data before deleting
+        const { data: category, error: fetchError } = await supabase
+          .from("shop_categories")
+          .select("*")
+          .eq("id", id)
+          .eq("user_id", userId)
+          .single();
+
+        if (fetchError || !category) {
+          return new Response(JSON.stringify({ error: "Category not found" }), {
+            status: 404,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        // Save to trash before deleting
+        const { error: trashError } = await supabase.from("shop_trash").insert({
+          user_id: userId,
+          original_table: "shop_categories",
+          original_id: id,
+          data: category,
+        });
+        if (trashError) throw trashError;
+
+        // Nullify category references in products
+        await supabase
+          .from("shop_products")
+          .update({ category_id: null })
+          .eq("category_id", id)
+          .eq("user_id", userId);
+
+        // Delete the category
+        const { error } = await supabase
+          .from("shop_categories")
+          .delete()
+          .eq("id", id)
+          .eq("user_id", userId);
+
+        if (error) throw error;
+        
+        console.log(`Category ${id} moved to trash`);
+        
+        return new Response(JSON.stringify({ message: "Category deleted and moved to trash" }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    // ===== CUSTOMERS CRUD =====
+    if (resource === "customers") {
+      if (req.method === "GET") {
+        const id = url.searchParams.get("id");
+        
+        if (id) {
+          // Get single customer with their sales
+          let customerQuery = supabase
+            .from("shop_customers")
+            .select("*")
+            .eq("id", id)
+            .eq("user_id", userId);
+          if (shopId) customerQuery = customerQuery.eq("shop_id", shopId);
+          const { data: customer, error } = await customerQuery.single();
+
+          if (error) throw error;
+
+          let salesQuery = supabase
+            .from("shop_sales")
+            .select(`*, items:shop_sale_items(*)`)
+            .eq("customer_id", id)
+            .order("sale_date", { ascending: false });
+          if (shopId) salesQuery = salesQuery.eq("shop_id", shopId);
+          const { data: sales } = await salesQuery;
+
+          return new Response(JSON.stringify({ customer, sales: sales || [] }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        let query = supabase
+          .from("shop_customers")
+          .select("*")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false });
+        if (shopId) query = query.eq("shop_id", shopId);
+        const { data, error } = await query;
+
+        if (error) throw error;
+        return new Response(JSON.stringify({ customers: data }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (req.method === "POST") {
+        const body = await req.json();
+        const { data, error } = await supabase
+          .from("shop_customers")
+          .insert({ ...body, user_id: userId, shop_id: shopId })
+          .select()
+          .single();
+
+        if (error) throw error;
+        return new Response(JSON.stringify({ customer: data }), {
+          status: 201,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (req.method === "PUT") {
+        const body = await req.json();
+        const { id, ...updates } = body;
+        const { data, error } = await supabase
+          .from("shop_customers")
+          .update({ ...updates, updated_at: new Date().toISOString() })
+          .eq("id", id)
+          .eq("user_id", userId)
+          .select()
+          .single();
+
+        if (error) throw error;
+        return new Response(JSON.stringify({ customer: data }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (req.method === "DELETE") {
+        const body = await req.json().catch(() => ({} as any));
+        const ids: string[] = Array.isArray(body.ids) ? body.ids : body.id ? [body.id] : [];
+
+        if (ids.length === 0) {
+          return new Response(JSON.stringify({ error: "Missing customer id(s)" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const deleted: string[] = [];
+        const failed: Array<{ id: string; error: string }> = [];
+
+        for (const customerId of ids) {
+          try {
+            console.log(`Deleting customer (move to trash): ${customerId}`);
+
+            // Fetch customer data
+            const { data: customer, error: fetchError } = await supabase
+              .from("shop_customers")
+              .select("*")
+              .eq("id", customerId)
+              .eq("user_id", userId)
+              .single();
+
+            if (fetchError || !customer) {
+              failed.push({ id: customerId, error: "Customer not found" });
+              continue;
+            }
+
+            // Save to trash
+            const { error: trashError } = await supabase.from("shop_trash").insert({
+              user_id: userId,
+              original_table: "shop_customers",
+              original_id: customerId,
+              data: customer,
+            });
+            if (trashError) throw trashError;
+
+            // Nullify references in shop_sales
+            await supabase
+              .from("shop_sales")
+              .update({ customer_id: null })
+              .eq("customer_id", customerId)
+              .eq("user_id", userId);
+
+            // Delete customer
+            const { error: deleteError } = await supabase
+              .from("shop_customers")
+              .delete()
+              .eq("id", customerId)
+              .eq("user_id", userId);
+
+            if (deleteError) throw deleteError;
+
+            deleted.push(customerId);
+            console.log(`Customer ${customerId} moved to trash`);
+          } catch (e: any) {
+            console.error("Customer delete failed:", customerId, e);
+            failed.push({ id: customerId, error: e?.message || "Delete failed" });
+          }
+        }
+
+        return new Response(
+          JSON.stringify({ message: "Customer(s) deleted and moved to trash", deleted, failed }),
+          { status: failed.length > 0 ? 207 : 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
+    // ===== SUPPLIERS CRUD =====
+    if (resource === "suppliers") {
+      if (req.method === "GET") {
+        const id = url.searchParams.get("id");
+        const profile = url.searchParams.get("profile") === "true";
+        
+        if (id) {
+          let supplierQuery = supabase
+            .from("shop_suppliers")
+            .select("*")
+            .eq("id", id)
+            .eq("user_id", userId);
+          if (shopId) supplierQuery = supplierQuery.eq("shop_id", shopId);
+          const { data: supplier, error } = await supplierQuery.single();
+
+          if (error) throw error;
+
+          const { data: purchases } = await supabase
+            .from("shop_purchases")
+            .select(`*, items:shop_purchase_items(*)`)
+            .eq("supplier_id", id)
+            .order("purchase_date", { ascending: false });
+
+          // If profile requested, fetch additional data
+          if (profile) {
+            // Get supplier payments
+            const { data: payments } = await supabase
+              .from("shop_supplier_payments")
+              .select("*")
+              .eq("supplier_id", id)
+              .order("payment_date", { ascending: false });
+
+            // Calculate ledger entries from purchases and payments
+            const ledgerEntries: any[] = [];
+            let runningBalance = Number(supplier.opening_balance) || 0;
+
+            // Add opening balance entry
+            if (runningBalance !== 0) {
+              ledgerEntries.push({
+                id: 'opening',
+                date: supplier.created_at,
+                description: 'Opening Balance',
+                debit: runningBalance > 0 ? runningBalance : 0,
+                credit: 0,
+                balance: runningBalance,
+                type: 'opening'
+              });
+            }
+
+            // Combine purchases and payments sorted by date
+            const allTransactions = [
+              ...(purchases || []).map(p => ({
+                date: p.purchase_date,
+                type: 'purchase' as const,
+                data: p
+              })),
+              ...(payments || []).map(p => ({
+                date: p.payment_date,
+                type: 'payment' as const,
+                data: p
+              }))
+            ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+            for (const tx of allTransactions) {
+              if (tx.type === 'purchase') {
+                const purchaseAmount = Number(tx.data.total_amount) || 0;
+                runningBalance += purchaseAmount;
+                ledgerEntries.push({
+                  id: tx.data.id,
+                  date: tx.data.purchase_date,
+                  description: `Purchase - ${tx.data.invoice_number || 'N/A'}`,
+                  debit: purchaseAmount,
+                  credit: 0,
+                  balance: runningBalance,
+                  type: 'purchase',
+                  reference_id: tx.data.id
+                });
+                
+                // Add payment entries from this purchase
+                const paidAmount = Number(tx.data.paid_amount) || 0;
+                if (paidAmount > 0) {
+                  runningBalance -= paidAmount;
+                  ledgerEntries.push({
+                    id: `${tx.data.id}-payment`,
+                    date: tx.data.purchase_date,
+                    description: `Payment - ${tx.data.invoice_number || 'N/A'}`,
+                    debit: 0,
+                    credit: paidAmount,
+                    balance: runningBalance,
+                    type: 'purchase_payment',
+                    reference_id: tx.data.id
+                  });
+                }
+              } else {
+                const paymentAmount = Number(tx.data.amount) || 0;
+                runningBalance -= paymentAmount;
+                ledgerEntries.push({
+                  id: tx.data.id,
+                  date: tx.data.payment_date,
+                  description: `Due Payment - ${tx.data.notes || 'Supplier payment'}`,
+                  debit: 0,
+                  credit: paymentAmount,
+                  balance: runningBalance,
+                  type: 'due_payment',
+                  reference_id: tx.data.id
+                });
+              }
+            }
+
+            // Get unique products purchased from this supplier
+            const productMap = new Map();
+            for (const purchase of purchases || []) {
+              for (const item of purchase.items || []) {
+                const existing = productMap.get(item.product_name);
+                if (existing) {
+                  existing.totalQuantity += item.quantity;
+                  existing.totalAmount += item.total;
+                  if (new Date(purchase.purchase_date) > new Date(existing.lastPurchaseDate)) {
+                    existing.lastPurchaseDate = purchase.purchase_date;
+                    existing.lastPrice = item.unit_price;
+                  }
+                } else {
+                  productMap.set(item.product_name, {
+                    name: item.product_name,
+                    product_id: item.product_id,
+                    totalQuantity: item.quantity,
+                    totalAmount: item.total,
+                    lastPurchaseDate: purchase.purchase_date,
+                    lastPrice: item.unit_price,
+                    averagePrice: item.unit_price
+                  });
+                }
+              }
+            }
+
+            // Calculate average price
+            const productSummary = Array.from(productMap.values()).map(p => ({
+              ...p,
+              averagePrice: p.totalAmount / p.totalQuantity
+            }));
+
+            // Calculate summary stats
+            const totalPurchases = purchases?.length || 0;
+            const totalPurchaseAmount = (purchases || []).reduce((sum, p) => sum + Number(p.total_amount), 0);
+            const totalPaid = (purchases || []).reduce((sum, p) => sum + Number(p.paid_amount), 0) + 
+                             (payments || []).reduce((sum, p) => sum + Number(p.amount), 0);
+            const lastPurchaseDate = purchases?.[0]?.purchase_date || null;
+            const lastPaymentDate = payments?.[0]?.payment_date || null;
+
+            return new Response(JSON.stringify({ 
+              supplier, 
+              purchases: purchases || [],
+              payments: payments || [],
+              ledger: ledgerEntries,
+              productSummary,
+              summary: {
+                totalPurchases,
+                totalPurchaseAmount,
+                totalPaid,
+                totalDue: runningBalance,
+                lastPurchaseDate,
+                lastPaymentDate
+              }
+            }), {
+              status: 200,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+
+          return new Response(JSON.stringify({ supplier, purchases: purchases || [] }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        let suppliersQuery = supabase
+          .from("shop_suppliers")
+          .select("*")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false });
+        if (shopId) suppliersQuery = suppliersQuery.eq("shop_id", shopId);
+        const { data: suppliersData, error } = await suppliersQuery;
+
+        if (error) throw error;
+
+        // Fetch additional data for each supplier (total_paid, last_purchase_date)
+        const enrichedSuppliers = await Promise.all((suppliersData || []).map(async (supplier) => {
+          // Get total paid from purchases and supplier payments
+          const { data: purchasesData } = await supabase
+            .from("shop_purchases")
+            .select("paid_amount, purchase_date")
+            .eq("supplier_id", supplier.id)
+            .order("purchase_date", { ascending: false });
+
+          const { data: paymentsData } = await supabase
+            .from("shop_supplier_payments")
+            .select("amount")
+            .eq("supplier_id", supplier.id);
+
+          const totalPaidFromPurchases = (purchasesData || []).reduce((sum, p) => sum + Number(p.paid_amount || 0), 0);
+          const totalPaidFromPayments = (paymentsData || []).reduce((sum, p) => sum + Number(p.amount || 0), 0);
+          const totalPaid = totalPaidFromPurchases + totalPaidFromPayments;
+          const lastPurchaseDate = purchasesData?.[0]?.purchase_date || null;
+
+          return {
+            ...supplier,
+            total_paid: totalPaid,
+            last_purchase_date: lastPurchaseDate,
+          };
+        }));
+
+        return new Response(JSON.stringify({ suppliers: enrichedSuppliers }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (req.method === "POST") {
+        const body = await req.json();
+        
+        // Generate supplier code if not provided
+        let supplierCode = body.supplier_code;
+        if (!supplierCode) {
+          const { count } = await supabase
+            .from("shop_suppliers")
+            .select("*", { count: "exact", head: true })
+            .eq("user_id", userId);
+          supplierCode = `SUP-${String((count || 0) + 1).padStart(3, '0')}`;
+        }
+
+        // Set initial total_due from opening_balance
+        const openingBalance = Number(body.opening_balance) || 0;
+
+        const { data, error } = await supabase
+          .from("shop_suppliers")
+          .insert({ 
+            ...body, 
+            user_id: userId,
+            shop_id: shopId,
+            supplier_code: supplierCode,
+            total_due: openingBalance
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+        return new Response(JSON.stringify({ supplier: data }), {
+          status: 201,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (req.method === "PUT") {
+        const body = await req.json();
+        const { id, ...updates } = body;
+        const { data, error } = await supabase
+          .from("shop_suppliers")
+          .update({ ...updates, updated_at: new Date().toISOString() })
+          .eq("id", id)
+          .eq("user_id", userId)
+          .select()
+          .single();
+
+        if (error) throw error;
+        return new Response(JSON.stringify({ supplier: data }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (req.method === "DELETE") {
+        const body = await req.json().catch(() => ({} as any));
+        const ids: string[] = Array.isArray(body.ids) ? body.ids : body.id ? [body.id] : [];
+
+        if (ids.length === 0) {
+          return new Response(JSON.stringify({ error: "Missing supplier id(s)" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const deleted: string[] = [];
+        const failed: Array<{ id: string; error: string }> = [];
+
+        for (const supplierId of ids) {
+          try {
+            console.log(`Deleting supplier (move to trash): ${supplierId}`);
+
+            // Fetch supplier data
+            const { data: supplier, error: fetchError } = await supabase
+              .from("shop_suppliers")
+              .select("*")
+              .eq("id", supplierId)
+              .eq("user_id", userId)
+              .single();
+
+            if (fetchError || !supplier) {
+              failed.push({ id: supplierId, error: "Supplier not found" });
+              continue;
+            }
+
+            // Save to trash
+            const { error: trashError } = await supabase.from("shop_trash").insert({
+              user_id: userId,
+              original_table: "shop_suppliers",
+              original_id: supplierId,
+              data: supplier,
+            });
+            if (trashError) throw trashError;
+
+            // Nullify references in shop_purchases
+            await supabase
+              .from("shop_purchases")
+              .update({ supplier_id: null })
+              .eq("supplier_id", supplierId)
+              .eq("user_id", userId);
+
+            // Delete supplier payments
+            await supabase
+              .from("shop_supplier_payments")
+              .delete()
+              .eq("supplier_id", supplierId);
+
+            // Delete supplier
+            const { error: deleteError } = await supabase
+              .from("shop_suppliers")
+              .delete()
+              .eq("id", supplierId)
+              .eq("user_id", userId);
+
+            if (deleteError) throw deleteError;
+
+            deleted.push(supplierId);
+            console.log(`Supplier ${supplierId} moved to trash`);
+          } catch (e: any) {
+            console.error("Supplier delete failed:", supplierId, e);
+            failed.push({ id: supplierId, error: e?.message || "Delete failed" });
+          }
+        }
+
+        return new Response(
+          JSON.stringify({ message: "Supplier(s) deleted and moved to trash", deleted, failed }),
+          { status: failed.length > 0 ? 207 : 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
+    // ===== SUPPLIER PAYMENTS =====
+    if (resource === "supplier-payments") {
+      if (req.method === "GET") {
+        const supplierId = url.searchParams.get("supplierId");
+        
+        let query = supabase
+          .from("shop_supplier_payments")
+          .select("*")
+          .eq("user_id", userId)
+          .order("payment_date", { ascending: false });
+        
+        if (supplierId) {
+          query = query.eq("supplier_id", supplierId);
+        }
+        
+        const { data, error } = await query;
+        if (error) throw error;
+        
+        return new Response(JSON.stringify({ payments: data }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (req.method === "POST") {
+        const { supplier_id, amount, payment_method, notes, purchase_id } = await req.json();
+        
+        // Create payment record
+        const { data: payment, error } = await supabase
+          .from("shop_supplier_payments")
+          .insert({
+            user_id: userId,
+            supplier_id,
+            purchase_id,
+            amount,
+            payment_method: payment_method || 'cash',
+            notes
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        // Update supplier total_due
+        const { data: supplier } = await supabase
+          .from("shop_suppliers")
+          .select("total_due")
+          .eq("id", supplier_id)
+          .single();
+
+        if (supplier) {
+          const newDue = Math.max(0, Number(supplier.total_due) - amount);
+          await supabase
+            .from("shop_suppliers")
+            .update({ total_due: newDue, updated_at: new Date().toISOString() })
+            .eq("id", supplier_id);
+        }
+
+        // Create cash transaction
+        await supabase
+          .from("shop_cash_transactions")
+          .insert({
+            user_id: userId,
+            type: "out",
+            source: "supplier_payment",
+            amount,
+            reference_id: supplier_id,
+            reference_type: "supplier",
+            notes: notes || "Supplier payment",
+          });
+
+        return new Response(JSON.stringify({ payment, new_due: supplier ? Math.max(0, Number(supplier.total_due) - amount) : 0 }), {
+          status: 201,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    // ===== SALES CRUD =====
+    if (resource === "sales") {
+      if (req.method === "GET") {
+        const startDate = url.searchParams.get("startDate");
+        const endDate = url.searchParams.get("endDate");
+        const customerId = url.searchParams.get("customerId");
+        const paymentStatus = url.searchParams.get("paymentStatus");
+
+        let query = supabase
+          .from("shop_sales")
+          .select(`
+            *,
+            customer:shop_customers(id, name, phone),
+            items:shop_sale_items(*)
+          `)
+          .eq("user_id", userId)
+          .order("sale_date", { ascending: false });
+
+        if (shopId) query = query.eq("shop_id", shopId);
+        if (startDate) query = query.gte("sale_date", startDate);
+        if (endDate) query = query.lte("sale_date", endDate + "T23:59:59");
+        if (customerId) query = query.eq("customer_id", customerId);
+        if (paymentStatus) query = query.eq("payment_status", paymentStatus);
+
+        const { data, error } = await query;
+        if (error) throw error;
+        return new Response(JSON.stringify({ sales: data }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (req.method === "POST") {
+        const { customer_id, customer_name, customer_phone, items, discount, tax, paid_amount, payment_method, notes } = await req.json();
+
+        // Get shop settings for invoice prefix
+        const { data: settings } = await supabase
+          .from("shop_settings")
+          .select("invoice_prefix")
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        const prefix = settings?.invoice_prefix || "INV";
+
+        // Generate invoice number
+        const { count } = await supabase
+          .from("shop_sales")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", userId);
+
+        const invoiceNumber = `${prefix}-${String((count || 0) + 1).padStart(6, "0")}`;
+        const subtotal = items.reduce((sum: number, item: any) => sum + item.total, 0);
+        const totalCost = items.reduce((sum: number, item: any) => sum + (item.purchase_price || 0) * item.quantity, 0);
+        const total = subtotal - (discount || 0) + (tax || 0);
+        const totalProfit = total - totalCost;
+        const dueAmount = total - (paid_amount || total);
+
+        // Create sale with optional customer info
+        const saleData: any = {
+          user_id: userId,
+          shop_id: shopId || null,
+          invoice_number: invoiceNumber,
+          subtotal,
+          discount: discount || 0,
+          tax: tax || 0,
+          total,
+          total_cost: totalCost,
+          total_profit: totalProfit,
+          paid_amount: paid_amount || total,
+          due_amount: dueAmount,
+          payment_method: payment_method || "cash",
+          payment_status: dueAmount > 0 ? "partial" : "paid",
+          notes: notes || (customer_name ? `Customer: ${customer_name}${customer_phone ? ` (${customer_phone})` : ''}` : null),
+        };
+
+        // Only add customer_id if provided
+        if (customer_id) {
+          saleData.customer_id = customer_id;
+        }
+
+        const { data: sale, error: saleError } = await supabase
+          .from("shop_sales")
+          .insert(saleData)
+          .select()
+          .single();
+
+        if (saleError) throw saleError;
+
+        // Create sale items and update stock
+        for (const item of items) {
+          const itemProfit = item.total - (item.purchase_price || 0) * item.quantity;
+          
+          await supabase.from("shop_sale_items").insert({
+            sale_id: sale.id,
+            product_id: item.product_id,
+            product_name: item.product_name,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            purchase_price: item.purchase_price || 0,
+            discount: item.discount || 0,
+            total: item.total,
+            profit: itemProfit,
+          });
+
+          // Reduce stock in offline shop
+          if (item.product_id) {
+            const { data: product } = await supabase
+              .from("shop_products")
+              .select("stock_quantity, online_sku")
+              .eq("id", item.product_id)
+              .single();
+
+            if (product) {
+              const newStock = Math.max(0, product.stock_quantity - item.quantity);
+              await supabase
+                .from("shop_products")
+                .update({ stock_quantity: newStock })
+                .eq("id", item.product_id);
+              
+              // If sync is enabled and product has online_sku, update online product stock too
+              if (product.online_sku) {
+                const { data: syncSettings } = await supabase
+                  .from("sync_settings")
+                  .select("sync_enabled")
+                  .eq("user_id", userId)
+                  .maybeSingle();
+                
+                if (syncSettings?.sync_enabled) {
+                  // Update online product stock
+                  await supabase
+                    .from("products")
+                    .update({ stock_quantity: newStock, updated_at: new Date().toISOString() })
+                    .eq("user_id", userId)
+                    .eq("sku", product.online_sku);
+                  
+                  console.log(`Synced stock to online product SKU: ${product.online_sku}, new stock: ${newStock}`);
+                }
+              }
+            }
+          }
+        }
+
+        // Update customer totals
+        if (customer_id) {
+          const { data: customer } = await supabase
+            .from("shop_customers")
+            .select("total_purchases, total_due")
+            .eq("id", customer_id)
+            .single();
+
+          if (customer) {
+            await supabase
+              .from("shop_customers")
+              .update({
+                total_purchases: Number(customer.total_purchases) + total,
+                total_due: Number(customer.total_due) + dueAmount,
+              })
+              .eq("id", customer_id);
+          }
+        }
+
+        // Create cash transaction if payment received
+        if (paid_amount > 0) {
+          await supabase.from("shop_cash_transactions").insert({
+            user_id: userId,
+            shop_id: shopId || null,
+            type: "in",
+            source: "sale",
+            amount: paid_amount || total,
+            reference_id: sale.id,
+            reference_type: "sale",
+            notes: `Sale ${invoiceNumber}`,
+          });
+        }
+
+        // Add customer info to response for invoice display
+        const saleResponse = {
+          ...sale,
+          customer: customer_id ? undefined : (customer_name ? { name: customer_name, phone: customer_phone } : null),
+        };
+
+        return new Response(JSON.stringify({ sale: saleResponse, invoice_number: invoiceNumber }), {
+          status: 201,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (req.method === "PUT") {
+        const { id, paid_amount, due_amount, payment_status, notes } = await req.json();
+
+        if (!id) {
+          return new Response(JSON.stringify({ error: "Missing sale id" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        // Build update object only with provided fields
+        const updates: Record<string, any> = {};
+        if (paid_amount !== undefined) updates.paid_amount = paid_amount;
+        if (due_amount !== undefined) updates.due_amount = due_amount;
+        if (payment_status !== undefined) updates.payment_status = payment_status;
+        if (notes !== undefined) updates.notes = notes;
+        updates.updated_at = new Date().toISOString();
+
+        const { data: sale, error: updateError } = await supabase
+          .from("shop_sales")
+          .update(updates)
+          .eq("id", id)
+          .eq("user_id", userId)
+          .select()
+          .single();
+
+        if (updateError) throw updateError;
+
+        console.log(`Sale updated: ${id}`, updates);
+
+        return new Response(JSON.stringify({ sale }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (req.method === "DELETE") {
+        const body = await req.json().catch(() => ({} as any));
+        const ids: string[] = Array.isArray(body.ids) ? body.ids : body.id ? [body.id] : [];
+
+        if (ids.length === 0) {
+          return new Response(JSON.stringify({ error: "Missing sale id(s)" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const deleted: string[] = [];
+        const failed: Array<{ id: string; error: string }> = [];
+
+        for (const saleId of ids) {
+          try {
+            console.log(`Deleting sale (move to trash): ${saleId}`);
+
+            // Fetch sale with items
+            const { data: sale, error: fetchError } = await supabase
+              .from("shop_sales")
+              .select("*, items:shop_sale_items(*)")
+              .eq("id", saleId)
+              .eq("user_id", userId)
+              .single();
+
+            if (fetchError || !sale) {
+              failed.push({ id: saleId, error: "Sale not found" });
+              continue;
+            }
+
+            // Save to trash
+            const { error: trashError } = await supabase.from("shop_trash").insert({
+              user_id: userId,
+              original_table: "shop_sales",
+              original_id: saleId,
+              data: sale,
+            });
+            if (trashError) throw trashError;
+
+            // Restore stock for each item
+            for (const item of sale.items || []) {
+              if (item.product_id) {
+                const { data: product } = await supabase
+                  .from("shop_products")
+                  .select("stock_quantity")
+                  .eq("id", item.product_id)
+                  .single();
+
+                if (product) {
+                  await supabase
+                    .from("shop_products")
+                    .update({ stock_quantity: product.stock_quantity + item.quantity })
+                    .eq("id", item.product_id);
+                }
+              }
+            }
+
+            // Revert customer totals
+            if (sale.customer_id) {
+              const { data: customer } = await supabase
+                .from("shop_customers")
+                .select("total_purchases, total_due")
+                .eq("id", sale.customer_id)
+                .single();
+
+              if (customer) {
+                await supabase
+                  .from("shop_customers")
+                  .update({
+                    total_purchases: Math.max(0, Number(customer.total_purchases) - Number(sale.total)),
+                    total_due: Math.max(0, Number(customer.total_due) - Number(sale.due_amount)),
+                  })
+                  .eq("id", sale.customer_id);
+              }
+            }
+
+            // Delete cash transactions for this sale
+            await supabase
+              .from("shop_cash_transactions")
+              .delete()
+              .eq("reference_id", saleId)
+              .eq("reference_type", "sale")
+              .eq("user_id", userId);
+
+            // Nullify references in shop_returns to avoid foreign key constraint
+            await supabase
+              .from("shop_returns")
+              .update({ original_sale_id: null })
+              .eq("original_sale_id", saleId)
+              .eq("user_id", userId);
+
+            // Delete sale items
+            await supabase
+              .from("shop_sale_items")
+              .delete()
+              .eq("sale_id", saleId);
+
+            // Delete the sale
+            const { error: deleteError } = await supabase
+              .from("shop_sales")
+              .delete()
+              .eq("id", saleId)
+              .eq("user_id", userId);
+
+            if (deleteError) throw deleteError;
+
+            deleted.push(saleId);
+            console.log(`Sale ${saleId} moved to trash, stock restored`);
+          } catch (e: any) {
+            console.error("Sale delete failed:", saleId, e);
+            failed.push({ id: saleId, error: e?.message || "Delete failed" });
+          }
+        }
+
+        return new Response(
+          JSON.stringify({ message: "Sale(s) deleted and moved to trash", deleted, failed }),
+          { status: failed.length > 0 ? 207 : 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
+    // ===== PURCHASES CRUD =====
+    if (resource === "purchases") {
+      if (req.method === "GET") {
+        let query = supabase
+          .from("shop_purchases")
+          .select(`*, items:shop_purchase_items(*), supplier:shop_suppliers(id, name, phone)`)
+          .eq("user_id", userId)
+          .order("purchase_date", { ascending: false });
+        if (shopId) query = query.eq("shop_id", shopId);
+        const { data, error } = await query;
+
+        if (error) throw error;
+        return new Response(JSON.stringify({ purchases: data }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (req.method === "POST") {
+        const { supplier_id, supplier_name, supplier_contact, invoice_number, items, paid_amount, payment_method, notes } = await req.json();
+        const totalAmount = items.reduce((sum: number, item: any) => sum + item.total, 0);
+        const dueAmount = totalAmount - (paid_amount || totalAmount);
+
+        const { data: purchase, error: purchaseError } = await supabase
+          .from("shop_purchases")
+          .insert({
+            user_id: userId,
+            shop_id: shopId,
+            supplier_id,
+            supplier_name,
+            supplier_contact,
+            invoice_number,
+            total_amount: totalAmount,
+            paid_amount: paid_amount || totalAmount,
+            due_amount: dueAmount,
+            payment_status: dueAmount > 0 ? "partial" : "paid",
+            notes,
+          })
+          .select()
+          .single();
+
+        if (purchaseError) throw purchaseError;
+
+        // Create purchase items and update stock
+        for (const item of items) {
+          await supabase.from("shop_purchase_items").insert({
+            purchase_id: purchase.id,
+            product_id: item.product_id,
+            product_name: item.product_name,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            total: item.total,
+            expiry_date: item.expiry_date,
+          });
+
+          // Increase stock and update purchase price
+          if (item.product_id) {
+            const { data: product } = await supabase
+              .from("shop_products")
+              .select("stock_quantity, online_sku")
+              .eq("id", item.product_id)
+              .single();
+
+            if (product) {
+              const newStock = product.stock_quantity + item.quantity;
+              await supabase
+                .from("shop_products")
+                .update({
+                  stock_quantity: newStock,
+                  purchase_price: item.unit_price,
+                  expiry_date: item.expiry_date,
+                })
+                .eq("id", item.product_id);
+              
+              // If sync is enabled and product has online_sku, update online product stock too
+              if (product.online_sku) {
+                const { data: syncSettings } = await supabase
+                  .from("sync_settings")
+                  .select("sync_enabled")
+                  .eq("user_id", userId)
+                  .maybeSingle();
+                
+                if (syncSettings?.sync_enabled) {
+                  await supabase
+                    .from("products")
+                    .update({ stock_quantity: newStock, updated_at: new Date().toISOString() })
+                    .eq("user_id", userId)
+                    .eq("sku", product.online_sku);
+                  
+                  console.log(`Synced stock to online product SKU: ${product.online_sku}, new stock: ${newStock}`);
+                }
+              }
+            }
+          }
+        }
+
+        // Update supplier totals
+        if (supplier_id) {
+          const { data: supplier } = await supabase
+            .from("shop_suppliers")
+            .select("total_purchases, total_due")
+            .eq("id", supplier_id)
+            .single();
+
+          if (supplier) {
+            await supabase
+              .from("shop_suppliers")
+              .update({
+                total_purchases: Number(supplier.total_purchases) + totalAmount,
+                total_due: Number(supplier.total_due) + dueAmount,
+              })
+              .eq("id", supplier_id);
+          }
+        }
+
+        // Create cash transaction
+        if (paid_amount > 0) {
+          await supabase.from("shop_cash_transactions").insert({
+            user_id: userId,
+            shop_id: shopId,
+            type: "out",
+            source: "purchase",
+            amount: paid_amount || totalAmount,
+            reference_id: purchase.id,
+            reference_type: "purchase",
+            notes: `Purchase from ${supplier_name || "Supplier"}`,
+          });
+        }
+
+        return new Response(JSON.stringify({ purchase }), {
+          status: 201,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (req.method === "DELETE") {
+        const { id } = await req.json();
+        
+        console.log(`Attempting to delete purchase: ${id}`);
+        
+        // Get purchase details first
+        const { data: purchase, error: fetchError } = await supabase
+          .from("shop_purchases")
+          .select("*, items:shop_purchase_items(*)")
+          .eq("id", id)
+          .eq("user_id", userId)
+          .single();
+
+        if (fetchError || !purchase) {
+          console.error("Purchase not found:", fetchError);
+          return new Response(JSON.stringify({ error: "Purchase not found" }), {
+            status: 404,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        // Save to trash bin before deleting
+        await supabase.from("shop_trash").insert({
+          user_id: userId,
+          original_table: "shop_purchases",
+          original_id: id,
+          data: {
+            purchase,
+            items: purchase.items,
+          },
+        });
+
+        // Restore stock for each item
+        for (const item of purchase.items || []) {
+          if (item.product_id) {
+            const { data: product } = await supabase
+              .from("shop_products")
+              .select("stock_quantity")
+              .eq("id", item.product_id)
+              .single();
+
+            if (product) {
+              await supabase
+                .from("shop_products")
+                .update({
+                  stock_quantity: Math.max(0, product.stock_quantity - item.quantity),
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("id", item.product_id);
+            }
+          }
+        }
+
+        // Update supplier totals if supplier was linked
+        if (purchase.supplier_id) {
+          const { data: supplier } = await supabase
+            .from("shop_suppliers")
+            .select("total_purchases, total_due")
+            .eq("id", purchase.supplier_id)
+            .single();
+
+          if (supplier) {
+            await supabase
+              .from("shop_suppliers")
+              .update({
+                total_purchases: Math.max(0, Number(supplier.total_purchases) - Number(purchase.total_amount)),
+                total_due: Math.max(0, Number(supplier.total_due) - Number(purchase.due_amount)),
+              })
+              .eq("id", purchase.supplier_id);
+          }
+        }
+
+        // Delete purchase payments first
+        await supabase
+          .from("shop_purchase_payments")
+          .delete()
+          .eq("purchase_id", id);
+
+        // Delete purchase items
+        await supabase
+          .from("shop_purchase_items")
+          .delete()
+          .eq("purchase_id", id);
+
+        // Delete associated cash transactions
+        await supabase
+          .from("shop_cash_transactions")
+          .delete()
+          .eq("reference_id", id)
+          .eq("reference_type", "purchase");
+
+        // Delete payment cash transactions too
+        await supabase
+          .from("shop_cash_transactions")
+          .delete()
+          .eq("reference_id", id)
+          .eq("reference_type", "purchase_payment");
+
+        // Delete the purchase
+        const { error: deleteError } = await supabase
+          .from("shop_purchases")
+          .delete()
+          .eq("id", id)
+          .eq("user_id", userId);
+
+        if (deleteError) throw deleteError;
+
+        console.log(`Deleted purchase ${id} and restored stock, saved to trash`);
+
+        return new Response(JSON.stringify({ message: "Purchase deleted and moved to trash" }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Add payment to purchase
+      if (req.method === "PATCH") {
+        try {
+          const body = await req.json();
+          const { id, payment_method, notes } = body;
+          const amount = Number(body.amount) || 0;
+          
+          console.log(`Processing purchase payment: id=${id}, amount=${amount}, payment_method=${payment_method}`);
+          
+          if (!id) {
+            return new Response(JSON.stringify({ error: "Purchase ID required" }), {
+              status: 400,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+          
+          // Get current purchase
+          const { data: purchase, error: fetchError } = await supabase
+            .from("shop_purchases")
+            .select("*")
+            .eq("id", id)
+            .eq("user_id", userId)
+            .maybeSingle();
+
+          if (fetchError) {
+            console.error(`Purchase fetch error: ${id}`, fetchError);
+            return new Response(JSON.stringify({ error: "Database error" }), {
+              status: 500,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+
+          if (!purchase) {
+            console.error(`Purchase not found: ${id}`);
+            return new Response(JSON.stringify({ error: "Purchase not found" }), {
+              status: 404,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+
+          console.log(`Purchase found: due_amount=${purchase.due_amount}, paid_amount=${purchase.paid_amount}`);
+
+          const dueAmount = Number(purchase.due_amount) || 0;
+          const paymentAmount = Math.min(amount, dueAmount);
+          
+          if (paymentAmount <= 0) {
+            console.error(`Invalid payment: amount=${amount}, dueAmount=${dueAmount}, paymentAmount=${paymentAmount}`);
+            return new Response(JSON.stringify({ error: "Invalid payment amount or no due" }), {
+              status: 400,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+
+          // Record payment
+          const { data: payment, error: paymentError } = await supabase
+            .from("shop_purchase_payments")
+            .insert({
+              user_id: userId,
+              purchase_id: id,
+              amount: paymentAmount,
+              payment_method: payment_method || "cash",
+              notes: notes || null,
+            })
+            .select()
+            .maybeSingle();
+
+          if (paymentError) {
+            console.error("Payment insert error:", paymentError);
+            return new Response(JSON.stringify({ error: "Failed to record payment" }), {
+              status: 500,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+
+          // Update purchase totals
+          const newPaidAmount = Number(purchase.paid_amount || 0) + paymentAmount;
+          const newDueAmount = Math.max(0, dueAmount - paymentAmount);
+          const newStatus = newDueAmount <= 0 ? "paid" : "partial";
+
+          const { error: updateError } = await supabase
+            .from("shop_purchases")
+            .update({
+              paid_amount: newPaidAmount,
+              due_amount: newDueAmount,
+              payment_status: newStatus,
+            })
+            .eq("id", id);
+
+          if (updateError) {
+            console.error("Purchase update error:", updateError);
+          }
+
+          // Update supplier due amount
+          if (purchase.supplier_id) {
+            const { data: supplier } = await supabase
+              .from("shop_suppliers")
+              .select("total_due")
+              .eq("id", purchase.supplier_id)
+              .maybeSingle();
+
+            if (supplier) {
+              await supabase
+                .from("shop_suppliers")
+                .update({
+                  total_due: Math.max(0, Number(supplier.total_due || 0) - paymentAmount),
+                })
+                .eq("id", purchase.supplier_id);
+            }
+          }
+
+          // Create cash transaction for payment
+          await supabase.from("shop_cash_transactions").insert({
+            user_id: userId,
+            type: "out",
+            source: "purchase_payment",
+            amount: paymentAmount,
+            reference_id: id,
+            reference_type: "purchase_payment",
+            notes: `Payment for purchase from ${purchase.supplier_name || "Supplier"}. ${notes || ""}`,
+          });
+
+          console.log(`Payment successful: ${paymentAmount}, new_due: ${newDueAmount}`);
+
+          return new Response(JSON.stringify({ 
+            payment,
+            new_paid_amount: newPaidAmount,
+            new_due_amount: newDueAmount,
+            payment_status: newStatus,
+          }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        } catch (patchError) {
+          console.error("PATCH handler error:", patchError);
+          return new Response(JSON.stringify({ error: "Payment processing failed" }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
+    }
+
+    // ===== EXPENSES CRUD =====
+    if (resource === "expenses") {
+      if (req.method === "GET") {
+        const startDate = url.searchParams.get("startDate");
+        const endDate = url.searchParams.get("endDate");
+        const category = url.searchParams.get("category");
+
+        let query = supabase
+          .from("shop_expenses")
+          .select("*")
+          .eq("user_id", userId)
+          .order("expense_date", { ascending: false });
+        
+        if (shopId) query = query.eq("shop_id", shopId);
+        if (startDate) query = query.gte("expense_date", startDate);
+        if (endDate) query = query.lte("expense_date", endDate);
+        if (category) query = query.eq("category", category);
+
+        const { data, error } = await query;
+        if (error) throw error;
+        return new Response(JSON.stringify({ expenses: data }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (req.method === "POST") {
+        const body = await req.json();
+        const { data, error } = await supabase
+          .from("shop_expenses")
+          .insert({ ...body, user_id: userId, shop_id: shopId })
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        // Create cash transaction
+        await supabase.from("shop_cash_transactions").insert({
+          user_id: userId,
+          shop_id: shopId,
+          type: "out",
+          source: "expense",
+          amount: body.amount,
+          reference_id: data.id,
+          reference_type: "expense",
+          notes: `${body.category}: ${body.description || ""}`,
+        });
+
+        return new Response(JSON.stringify({ expense: data }), {
+          status: 201,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (req.method === "PUT") {
+        const body = await req.json();
+        const { id, ...updates } = body;
+        const { data, error } = await supabase
+          .from("shop_expenses")
+          .update(updates)
+          .eq("id", id)
+          .eq("user_id", userId)
+          .select()
+          .single();
+
+        if (error) throw error;
+        return new Response(JSON.stringify({ expense: data }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (req.method === "DELETE") {
+        const { id } = await req.json();
+        
+        // Fetch expense data before deleting
+        const { data: expense, error: fetchError } = await supabase
+          .from("shop_expenses")
+          .select("*")
+          .eq("id", id)
+          .eq("user_id", userId)
+          .single();
+
+        if (fetchError || !expense) {
+          return new Response(JSON.stringify({ error: "Expense not found" }), {
+            status: 404,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        // Save to trash before deleting
+        const { error: trashError } = await supabase.from("shop_trash").insert({
+          user_id: userId,
+          original_table: "shop_expenses",
+          original_id: id,
+          data: expense,
+        });
+        if (trashError) throw trashError;
+
+        // Delete related cash transaction
+        await supabase
+          .from("shop_cash_transactions")
+          .delete()
+          .eq("reference_id", id)
+          .eq("reference_type", "expense")
+          .eq("user_id", userId);
+
+        // Delete the expense
+        const { error } = await supabase
+          .from("shop_expenses")
+          .delete()
+          .eq("id", id)
+          .eq("user_id", userId);
+
+        if (error) throw error;
+        
+        console.log(`Expense ${id} moved to trash`);
+        
+        return new Response(JSON.stringify({ message: "Expense deleted and moved to trash" }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    // ===== STOCK ADJUSTMENTS =====
+    if (resource === "adjustments") {
+      if (req.method === "GET") {
+        const productId = url.searchParams.get("productId");
+        const type = url.searchParams.get("type");
+        const startDate = url.searchParams.get("startDate");
+        const endDate = url.searchParams.get("endDate");
+
+        let query = supabase
+          .from("shop_stock_adjustments")
+          .select("*")
+          .eq("user_id", userId)
+          .order("adjustment_date", { ascending: false });
+        
+        if (shopId) query = query.eq("shop_id", shopId);
+        if (productId) query = query.eq("product_id", productId);
+        if (type) query = query.eq("type", type);
+        if (startDate) query = query.gte("adjustment_date", startDate);
+        if (endDate) query = query.lte("adjustment_date", endDate);
+
+        const { data, error } = await query;
+        if (error) throw error;
+        return new Response(JSON.stringify({ adjustments: data }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (req.method === "POST") {
+        const body = await req.json();
+        
+        // Get product info for cost calculation
+        let costImpact = 0;
+        if (body.product_id) {
+          const { data: product } = await supabase
+            .from("shop_products")
+            .select("purchase_price, stock_quantity")
+            .eq("id", body.product_id)
+            .single();
+
+          if (product) {
+            costImpact = product.purchase_price * body.quantity;
+            
+            // Update stock based on adjustment type
+            const isIncrease = ["manual_increase", "return"].includes(body.type);
+            const newStock = isIncrease
+              ? product.stock_quantity + body.quantity
+              : Math.max(0, product.stock_quantity - body.quantity);
+
+            await supabase
+              .from("shop_products")
+              .update({ stock_quantity: newStock })
+              .eq("id", body.product_id);
+          }
+        }
+
+        const { data, error } = await supabase
+          .from("shop_stock_adjustments")
+          .insert({ ...body, user_id: userId, cost_impact: costImpact })
+          .select()
+          .single();
+
+        if (error) throw error;
+        return new Response(JSON.stringify({ adjustment: data }), {
+          status: 201,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // DELETE adjustments (single or bulk)
+      if (req.method === "DELETE") {
+        const { ids } = await req.json();
+        const idsToDelete = Array.isArray(ids) ? ids : [ids];
+        
+        if (idsToDelete.length === 0) {
+          return new Response(JSON.stringify({ error: "No IDs provided" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        // Get adjustments to delete
+        const { data: adjustmentsToDelete } = await supabase
+          .from("shop_stock_adjustments")
+          .select("*")
+          .eq("user_id", userId)
+          .in("id", idsToDelete);
+
+        const deletedIds: string[] = [];
+
+        for (const adjustment of adjustmentsToDelete || []) {
+          // Move to trash
+          await supabase.from("shop_trash").insert({
+            user_id: userId,
+            original_table: "shop_stock_adjustments",
+            original_id: adjustment.id,
+            data: adjustment,
+          });
+
+          // Delete from adjustments table
+          const { error } = await supabase
+            .from("shop_stock_adjustments")
+            .delete()
+            .eq("id", adjustment.id)
+            .eq("user_id", userId);
+
+          if (!error) {
+            deletedIds.push(adjustment.id);
+
+            // Optionally restore stock if it was a decrease adjustment
+            if (adjustment.product_id) {
+              const { data: product } = await supabase
+                .from("shop_products")
+                .select("stock_quantity")
+                .eq("id", adjustment.product_id)
+                .single();
+
+              if (product) {
+                const isIncrease = ["manual_increase", "return"].includes(adjustment.type);
+                // Reverse the adjustment
+                const restoredStock = isIncrease
+                  ? Math.max(0, product.stock_quantity - adjustment.quantity)
+                  : product.stock_quantity + adjustment.quantity;
+
+                await supabase
+                  .from("shop_products")
+                  .update({ stock_quantity: restoredStock })
+                  .eq("id", adjustment.product_id);
+              }
+            }
+          }
+        }
+
+        return new Response(JSON.stringify({ deleted: deletedIds }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    // ===== CASH TRANSACTIONS =====
+    if (resource === "cash") {
+      if (req.method === "GET") {
+        const startDate = url.searchParams.get("startDate");
+        const endDate = url.searchParams.get("endDate");
+        const source = url.searchParams.get("source");
+
+        let query = supabase
+          .from("shop_cash_transactions")
+          .select("*")
+          .eq("user_id", userId)
+          .order("transaction_date", { ascending: false });
+        
+        if (shopId) query = query.eq("shop_id", shopId);
+        if (startDate) query = query.gte("transaction_date", startDate);
+        if (endDate) query = query.lte("transaction_date", endDate + "T23:59:59");
+        if (source) query = query.eq("source", source);
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        // Calculate balance for this shop
+        let balanceQuery = supabase
+          .from("shop_cash_transactions")
+          .select("type, amount")
+          .eq("user_id", userId);
+        if (shopId) balanceQuery = balanceQuery.eq("shop_id", shopId);
+        const { data: allTransactions } = await balanceQuery;
+
+        const cashIn = (allTransactions || []).filter(t => t.type === "in").reduce((sum, t) => sum + Number(t.amount), 0);
+        const cashOut = (allTransactions || []).filter(t => t.type === "out").reduce((sum, t) => sum + Number(t.amount), 0);
+        const balance = cashIn - cashOut;
+
+        return new Response(JSON.stringify({ transactions: data, balance, cashIn, cashOut }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (req.method === "POST") {
+        const body = await req.json();
+        const { data, error } = await supabase
+          .from("shop_cash_transactions")
+          .insert({ ...body, user_id: userId, shop_id: shopId })
+          .select()
+          .single();
+
+        if (error) throw error;
+        return new Response(JSON.stringify({ transaction: data }), {
+          status: 201,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    // ===== STAFF USERS =====
+    if (resource === "staff") {
+      if (req.method === "GET") {
+        let query = supabase
+          .from("shop_staff_users")
+          .select("*")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false });
+        if (shopId) query = query.eq("shop_id", shopId);
+        const { data, error } = await query;
+
+        if (error) throw error;
+        return new Response(JSON.stringify({ staff: data }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (req.method === "POST") {
+        const body = await req.json();
+        const { data, error } = await supabase
+          .from("shop_staff_users")
+          .insert({ ...body, user_id: userId, shop_id: shopId })
+          .select()
+          .single();
+
+        if (error) throw error;
+        return new Response(JSON.stringify({ staffUser: data }), {
+          status: 201,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (req.method === "PUT") {
+        const body = await req.json();
+        const { id, ...updates } = body;
+        const { data, error } = await supabase
+          .from("shop_staff_users")
+          .update({ ...updates, updated_at: new Date().toISOString() })
+          .eq("id", id)
+          .eq("user_id", userId)
+          .select()
+          .single();
+
+        if (error) throw error;
+        return new Response(JSON.stringify({ staffUser: data }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (req.method === "DELETE") {
+        const { id } = await req.json();
+        
+        // Fetch staff data before deleting
+        const { data: staffUser, error: fetchError } = await supabase
+          .from("shop_staff_users")
+          .select("*")
+          .eq("id", id)
+          .eq("user_id", userId)
+          .single();
+
+        if (fetchError || !staffUser) {
+          return new Response(JSON.stringify({ error: "Staff not found" }), {
+            status: 404,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        // Save to trash before deleting
+        const { error: trashError } = await supabase.from("shop_trash").insert({
+          user_id: userId,
+          original_table: "shop_staff_users",
+          original_id: id,
+          data: staffUser,
+        });
+        if (trashError) throw trashError;
+
+        // Delete the staff user
+        const { error } = await supabase
+          .from("shop_staff_users")
+          .delete()
+          .eq("id", id)
+          .eq("user_id", userId);
+
+        if (error) throw error;
+        
+        console.log(`Staff ${id} moved to trash`);
+        
+        return new Response(JSON.stringify({ message: "Staff deleted and moved to trash" }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    // ===== SHOP SETTINGS =====
+    if (resource === "settings") {
+      if (req.method === "GET") {
+        // Get settings for specific shop or user default
+        let query = supabase
+          .from("shop_settings")
+          .select("*")
+          .eq("user_id", userId);
+        
+        if (shopId) {
+          query = query.eq("shop_id", shopId);
+        }
+        
+        const { data, error } = await query.maybeSingle();
+
+        if (error) throw error;
+        
+        // If no shop-specific settings exist but shopId is provided, get shop info
+        let settingsData = data;
+        if (!data && shopId) {
+          const { data: shopData } = await supabase
+            .from("shops")
+            .select("name, address, phone, email, logo_url")
+            .eq("id", shopId)
+            .single();
+          
+          if (shopData) {
+            settingsData = {
+              shop_name: shopData.name,
+              shop_address: shopData.address,
+              shop_phone: shopData.phone,
+              shop_email: shopData.email,
+              logo_url: shopData.logo_url,
+            };
+          }
+        }
+        
+        // Don't expose the actual hash, just indicate if passcode is set
+        const settingsResponse = settingsData ? {
+          ...settingsData,
+          trash_passcode_hash: undefined,
+          has_trash_passcode: !!(data?.trash_passcode_hash),
+        } : null;
+        return new Response(JSON.stringify({ settings: settingsResponse }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (req.method === "POST" || req.method === "PUT") {
+        const body = await req.json();
+        
+        // Don't allow setting trash_passcode_hash through regular settings update
+        delete body.trash_passcode_hash;
+        
+        // Build query based on shopId
+        let existingQuery = supabase
+          .from("shop_settings")
+          .select("id")
+          .eq("user_id", userId);
+        
+        if (shopId) {
+          existingQuery = existingQuery.eq("shop_id", shopId);
+        }
+        
+        const { data: existing } = await existingQuery.maybeSingle();
+
+        let data, error;
+        if (existing) {
+          let updateQuery = supabase
+            .from("shop_settings")
+            .update({ ...body, updated_at: new Date().toISOString() })
+            .eq("user_id", userId);
+          
+          if (shopId) {
+            updateQuery = updateQuery.eq("shop_id", shopId);
+          }
+          
+          ({ data, error } = await updateQuery.select().single());
+        } else {
+          ({ data, error } = await supabase
+            .from("shop_settings")
+            .insert({ ...body, user_id: userId, shop_id: shopId })
+            .select()
+            .single());
+        }
+
+        if (error) throw error;
+        
+        // Also update shop basic info if provided
+        if (shopId && (body.shop_name || body.shop_address || body.shop_phone || body.shop_email || body.logo_url !== undefined)) {
+          const shopUpdates: Record<string, any> = {};
+          if (body.shop_name) shopUpdates.name = body.shop_name;
+          if (body.shop_address !== undefined) shopUpdates.address = body.shop_address;
+          if (body.shop_phone !== undefined) shopUpdates.phone = body.shop_phone;
+          if (body.shop_email !== undefined) shopUpdates.email = body.shop_email;
+          if (body.logo_url !== undefined) shopUpdates.logo_url = body.logo_url;
+          
+          if (Object.keys(shopUpdates).length > 0) {
+            await supabase
+              .from("shops")
+              .update({ ...shopUpdates, updated_at: new Date().toISOString() })
+              .eq("id", shopId)
+              .eq("user_id", userId);
+          }
+        }
+        
+        const settingsResponse = data ? {
+          ...data,
+          trash_passcode_hash: undefined,
+          has_trash_passcode: !!data.trash_passcode_hash,
+        } : null;
+        return new Response(JSON.stringify({ settings: settingsResponse }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    // ===== SMS USAGE =====
+    if (resource === "sms-usage") {
+      if (req.method === "GET") {
+        try {
+          // Get user's subscription plan
+          const { data: userData } = await supabase
+            .from("users")
+            .select("subscription_plan")
+            .eq("id", userId)
+            .single();
+
+          const plan = userData?.subscription_plan || "none";
+
+          // Get site settings for SMS limits
+          const { data: siteSettings } = await supabase
+            .from("site_settings")
+            .select("platform_sms_enabled, sms_limit_trial, sms_limit_starter, sms_limit_professional, sms_limit_business, sms_limit_lifetime")
+            .limit(1)
+            .single();
+
+          // Determine daily limit based on plan
+          let dailyLimit = 0;
+          switch (plan) {
+            case "trial":
+            case "none":
+              dailyLimit = siteSettings?.sms_limit_trial ?? 0;
+              break;
+            case "starter":
+              dailyLimit = siteSettings?.sms_limit_starter ?? 50;
+              break;
+            case "professional":
+              dailyLimit = siteSettings?.sms_limit_professional ?? 200;
+              break;
+            case "business":
+              dailyLimit = siteSettings?.sms_limit_business ?? 1000;
+              break;
+            case "lifetime":
+              dailyLimit = siteSettings?.sms_limit_lifetime ?? -1;
+              break;
+            default:
+              dailyLimit = 0;
+          }
+
+          const isUnlimited = dailyLimit === -1;
+          const platformSmsEnabled = siteSettings?.platform_sms_enabled ?? false;
+
+          // Get today's SMS usage
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const todayStr = today.toISOString();
+
+          const { data: usageLogs } = await supabase
+            .from("sms_usage_logs")
+            .select("sms_count")
+            .eq("user_id", userId)
+            .gte("sent_at", todayStr);
+
+          const usedToday = (usageLogs || []).reduce((sum, log) => sum + (log.sms_count || 1), 0);
+          const remainingToday = isUnlimited ? Infinity : Math.max(0, dailyLimit - usedToday);
+          const canSendSms = platformSmsEnabled && (dailyLimit !== 0) && (isUnlimited || usedToday < dailyLimit);
+
+          return new Response(JSON.stringify({
+            usedToday,
+            dailyLimit,
+            isUnlimited,
+            platformSmsEnabled,
+            canSendSms,
+            remainingToday: isUnlimited ? -1 : remainingToday,
+            planId: plan,
+          }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        } catch (error) {
+          console.error("Error fetching SMS usage:", error);
+          return new Response(JSON.stringify({
+            usedToday: 0,
+            dailyLimit: 0,
+            isUnlimited: false,
+            platformSmsEnabled: false,
+            canSendSms: false,
+            remainingToday: 0,
+            planId: "none",
+          }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
+    }
+
+    // ===== TRASH PASSCODE =====
+    if (resource === "trash-passcode") {
+      // Set passcode (only if not already set)
+      if (req.method === "POST") {
+        const { passcode } = await req.json();
+        
+        if (!passcode || passcode.length < 4) {
+          return new Response(JSON.stringify({ error: "Passcode must be at least 4 characters" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        // Check if passcode already exists
+        const { data: existing } = await supabase
+          .from("shop_settings")
+          .select("id, trash_passcode_hash")
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        if (existing?.trash_passcode_hash) {
+          return new Response(JSON.stringify({ 
+            error: "Passcode already set. Contact admin to reset." 
+          }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        // Hash the passcode (simple base64 for now - in production use proper hashing)
+        const encoder = new TextEncoder();
+        const data = encoder.encode(passcode);
+        const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        const hashHex = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+
+        // Save or update settings with passcode
+        if (existing) {
+          await supabase
+            .from("shop_settings")
+            .update({ 
+              trash_passcode_hash: hashHex,
+              updated_at: new Date().toISOString() 
+            })
+            .eq("user_id", userId);
+        } else {
+          await supabase
+            .from("shop_settings")
+            .insert({ 
+              user_id: userId,
+              trash_passcode_hash: hashHex,
+            });
+        }
+
+        return new Response(JSON.stringify({ success: true, message: "Passcode set successfully" }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Verify passcode
+      if (req.method === "PUT") {
+        const { passcode } = await req.json();
+        
+        if (!passcode) {
+          return new Response(JSON.stringify({ error: "Passcode required" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const { data: settings } = await supabase
+          .from("shop_settings")
+          .select("trash_passcode_hash")
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        if (!settings?.trash_passcode_hash) {
+          return new Response(JSON.stringify({ error: "No passcode set" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        // Hash the provided passcode and compare
+        const encoder = new TextEncoder();
+        const data = encoder.encode(passcode);
+        const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        const hashHex = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+
+        if (hashHex !== settings.trash_passcode_hash) {
+          return new Response(JSON.stringify({ valid: false, error: "Invalid passcode" }), {
+            status: 401,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        return new Response(JSON.stringify({ valid: true }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    // ===== REPORTS =====
+    if (resource === "reports") {
+      const reportType = url.searchParams.get("type") || "sales";
+      const startDate = url.searchParams.get("startDate");
+      const endDate = url.searchParams.get("endDate");
+
+      if (reportType === "sales") {
+        let query = supabase
+          .from("shop_sales")
+          .select(`
+            *,
+            customer:shop_customers(name, phone),
+            items:shop_sale_items(product_name, quantity, unit_price, total, profit)
+          `)
+          .eq("user_id", userId)
+          .order("sale_date", { ascending: false });
+
+        if (startDate) query = query.gte("sale_date", startDate);
+        if (endDate) query = query.lte("sale_date", endDate + "T23:59:59");
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        const totalSales = (data || []).reduce((sum, s) => sum + Number(s.total), 0);
+        const totalProfit = (data || []).reduce((sum, s) => sum + Number(s.total_profit || 0), 0);
+        const totalDue = (data || []).reduce((sum, s) => sum + Number(s.due_amount || 0), 0);
+
+        return new Response(JSON.stringify({
+          sales: data,
+          summary: { totalSales, totalProfit, totalDue, count: data?.length || 0 }
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (reportType === "purchases") {
+        let query = supabase
+          .from("shop_purchases")
+          .select(`
+            *,
+            supplier:shop_suppliers(name, phone),
+            items:shop_purchase_items(product_name, quantity, unit_price, total)
+          `)
+          .eq("user_id", userId)
+          .order("purchase_date", { ascending: false });
+
+        if (startDate) query = query.gte("purchase_date", startDate);
+        if (endDate) query = query.lte("purchase_date", endDate + "T23:59:59");
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        const totalPurchases = (data || []).reduce((sum, p) => sum + Number(p.total_amount), 0);
+        const totalDue = (data || []).reduce((sum, p) => sum + Number(p.due_amount || 0), 0);
+
+        return new Response(JSON.stringify({
+          purchases: data,
+          summary: { totalPurchases, totalDue, count: data?.length || 0 }
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (reportType === "expenses") {
+        let query = supabase
+          .from("shop_expenses")
+          .select("*")
+          .eq("user_id", userId)
+          .order("expense_date", { ascending: false });
+
+        if (startDate) query = query.gte("expense_date", startDate);
+        if (endDate) query = query.lte("expense_date", endDate);
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        const totalExpenses = (data || []).reduce((sum, e) => sum + Number(e.amount), 0);
+        const byCategory: Record<string, number> = {};
+        (data || []).forEach((e) => {
+          byCategory[e.category] = (byCategory[e.category] || 0) + Number(e.amount);
+        });
+
+        return new Response(JSON.stringify({
+          expenses: data,
+          summary: { totalExpenses, byCategory, count: data?.length || 0 }
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (reportType === "inventory") {
+        const { data, error } = await supabase
+          .from("shop_products")
+          .select(`*, category:shop_categories(name)`)
+          .eq("user_id", userId)
+          .eq("is_active", true)
+          .order("name");
+
+        if (error) throw error;
+
+        const totalValue = (data || []).reduce((sum, p) => 
+          sum + Number(p.purchase_price) * p.stock_quantity, 0);
+        const lowStock = (data || []).filter(p => p.stock_quantity <= p.min_stock_alert);
+
+        return new Response(JSON.stringify({
+          products: data,
+          summary: { totalProducts: data?.length || 0, totalValue, lowStockCount: lowStock.length }
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (reportType === "customers") {
+        const { data, error } = await supabase
+          .from("shop_customers")
+          .select("*")
+          .eq("user_id", userId)
+          .order("total_purchases", { ascending: false });
+
+        if (error) throw error;
+
+        const totalDue = (data || []).reduce((sum, c) => sum + Number(c.total_due || 0), 0);
+        const totalPurchases = (data || []).reduce((sum, c) => sum + Number(c.total_purchases || 0), 0);
+
+        return new Response(JSON.stringify({
+          customers: data,
+          summary: { totalCustomers: data?.length || 0, totalDue, totalPurchases }
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (reportType === "products") {
+        // Product performance report
+        const { data: saleItems, error } = await supabase
+          .from("shop_sale_items")
+          .select(`
+            product_id,
+            product_name,
+            quantity,
+            total,
+            profit,
+            sale:shop_sales!inner(user_id, sale_date)
+          `)
+          .eq("sale.user_id", userId);
+
+        if (error) throw error;
+
+        // Aggregate by product
+        const productMap: Record<string, { name: string; quantity: number; revenue: number; profit: number }> = {};
+        (saleItems || []).forEach((item) => {
+          const key = item.product_id || item.product_name;
+          if (!productMap[key]) {
+            productMap[key] = { name: item.product_name, quantity: 0, revenue: 0, profit: 0 };
+          }
+          productMap[key].quantity += item.quantity;
+          productMap[key].revenue += Number(item.total);
+          productMap[key].profit += Number(item.profit || 0);
+        });
+
+        const products = Object.values(productMap).sort((a, b) => b.revenue - a.revenue);
+
+        return new Response(JSON.stringify({
+          products,
+          summary: { 
+            totalProducts: products.length,
+            totalRevenue: products.reduce((sum, p) => sum + p.revenue, 0),
+            totalProfit: products.reduce((sum, p) => sum + p.profit, 0)
+          }
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    // ===== IMPORT PRODUCTS =====
+    if (resource === "import-products" && req.method === "POST") {
+      const { products } = await req.json();
+      const results = { success: 0, failed: 0, errors: [] as string[], suppliersCreated: 0 };
+
+      // Validate shop_id is provided
+      if (!shopId) {
+        return new Response(JSON.stringify({ error: "Shop ID is required" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Get existing categories for this user and shop
+      let categoriesQuery = supabase
+        .from("shop_categories")
+        .select("id, name")
+        .eq("user_id", userId);
+      if (shopId) categoriesQuery = categoriesQuery.eq("shop_id", shopId);
+      const { data: existingCategories } = await categoriesQuery;
+
+      const categoryMap = new Map<string, string>();
+      (existingCategories || []).forEach((cat) => {
+        categoryMap.set(cat.name.toLowerCase().trim(), cat.id);
+      });
+
+      // Get existing suppliers for this user and shop
+      let suppliersQuery = supabase
+        .from("shop_suppliers")
+        .select("id, name, phone")
+        .eq("user_id", userId);
+      if (shopId) suppliersQuery = suppliersQuery.eq("shop_id", shopId);
+      const { data: existingSuppliers } = await suppliersQuery;
+
+      const supplierMap = new Map<string, string>();
+      (existingSuppliers || []).forEach((sup) => {
+        supplierMap.set(sup.name.toLowerCase().trim(), sup.id);
+      });
+
+      for (const product of products) {
+        let categoryId = null;
+
+        // If product has a category name, find or create it
+        if (product.category && product.category.toString().trim()) {
+          const categoryName = product.category.toString().trim();
+          const categoryKey = categoryName.toLowerCase();
+
+          if (categoryMap.has(categoryKey)) {
+            categoryId = categoryMap.get(categoryKey);
+          } else {
+            // Create new category
+            const { data: newCategory, error: catError } = await supabase
+              .from("shop_categories")
+              .insert({ name: categoryName, user_id: userId, shop_id: shopId })
+              .select()
+              .single();
+
+            if (newCategory && !catError) {
+              categoryId = newCategory.id;
+              categoryMap.set(categoryKey, newCategory.id);
+            }
+          }
+        }
+
+        // If product has a supplier name, find or create it
+        if (product.supplier_name && product.supplier_name.toString().trim()) {
+          const supplierName = product.supplier_name.toString().trim();
+          const supplierKey = supplierName.toLowerCase();
+
+          if (!supplierMap.has(supplierKey)) {
+            // Create new supplier
+            const { data: newSupplier, error: supError } = await supabase
+              .from("shop_suppliers")
+              .insert({ 
+                name: supplierName, 
+                user_id: userId,
+                shop_id: shopId,
+                phone: product.supplier_contact || null,
+              })
+              .select()
+              .single();
+
+            if (newSupplier && !supError) {
+              supplierMap.set(supplierKey, newSupplier.id);
+              results.suppliersCreated++;
+            }
+          }
+        }
+
+        const { error } = await supabase
+          .from("shop_products")
+          .insert({
+            user_id: userId,
+            shop_id: shopId,
+            name: product.name,
+            sku: product.sku,
+            barcode: product.barcode,
+            brand: product.brand,
+            category_id: categoryId,
+            purchase_price: product.purchase_price || 0,
+            selling_price: product.selling_price || 0,
+            stock_quantity: product.stock_quantity || 0,
+            min_stock_alert: product.min_stock_alert || 5,
+            unit: product.unit || "pcs",
+            expiry_date: product.expiry_date || null,
+            supplier_name: product.supplier_name,
+            supplier_contact: product.supplier_contact,
+            description: product.description,
+          });
+
+        if (error) {
+          results.failed++;
+          results.errors.push(`${product.name}: ${error.message}`);
+        } else {
+          results.success++;
+        }
+      }
+
+      return new Response(JSON.stringify({ results }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ===== IMPORT PURCHASES =====
+    if (resource === "import-purchases" && req.method === "POST") {
+      const { purchases } = await req.json();
+      const results = { success: 0, failed: 0, errors: [] as string[] };
+
+      for (const purchase of purchases) {
+        try {
+          // Create the purchase record
+          const totalAmount = (purchase.items || []).reduce((sum: number, item: any) => sum + (item.total || 0), 0);
+          const paidAmount = purchase.paid_amount ?? totalAmount;
+          const dueAmount = totalAmount - paidAmount;
+
+          const { data: newPurchase, error: purchaseError } = await supabase
+            .from("shop_purchases")
+            .insert({
+              user_id: userId,
+              supplier_name: purchase.supplier_name || "",
+              supplier_contact: purchase.supplier_contact || "",
+              total_amount: totalAmount,
+              paid_amount: paidAmount,
+              due_amount: dueAmount,
+              payment_status: dueAmount > 0 ? "partial" : "paid",
+              notes: purchase.notes || "",
+            })
+            .select()
+            .single();
+
+          if (purchaseError) {
+            results.failed++;
+            results.errors.push(`Purchase: ${purchaseError.message}`);
+            continue;
+          }
+
+          // Insert purchase items and update stock
+          for (const item of purchase.items || []) {
+            // Check if product exists, create if not
+            let productId = item.product_id;
+
+            if (!productId && item.product_name) {
+              // Try to find by name
+              const { data: existingProduct } = await supabase
+                .from("shop_products")
+                .select("id")
+                .eq("user_id", userId)
+                .eq("name", item.product_name)
+                .maybeSingle();
+
+              if (existingProduct) {
+                productId = existingProduct.id;
+              } else {
+                // Create new product
+                const { data: newProduct } = await supabase
+                  .from("shop_products")
+                  .insert({
+                    user_id: userId,
+                    name: item.product_name,
+                    purchase_price: item.unit_price || 0,
+                    selling_price: item.selling_price || item.unit_price || 0,
+                    stock_quantity: 0,
+                  })
+                  .select()
+                  .single();
+
+                if (newProduct) {
+                  productId = newProduct.id;
+                }
+              }
+            }
+
+            // Insert purchase item
+            await supabase
+              .from("shop_purchase_items")
+              .insert({
+                purchase_id: newPurchase.id,
+                product_id: productId || null,
+                product_name: item.product_name,
+                quantity: item.quantity || 1,
+                unit_price: item.unit_price || 0,
+                total: item.total || (item.quantity || 1) * (item.unit_price || 0),
+                expiry_date: item.expiry_date || null,
+              });
+
+            // Update product stock
+            if (productId) {
+              const { data: product } = await supabase
+                .from("shop_products")
+                .select("stock_quantity, purchase_price")
+                .eq("id", productId)
+                .single();
+
+              if (product) {
+                await supabase
+                  .from("shop_products")
+                  .update({
+                    stock_quantity: (product.stock_quantity || 0) + (item.quantity || 1),
+                    purchase_price: item.unit_price || product.purchase_price,
+                    updated_at: new Date().toISOString(),
+                  })
+                  .eq("id", productId);
+              }
+            }
+          }
+
+          results.success++;
+        } catch (error: any) {
+          results.failed++;
+          results.errors.push(error.message || "Unknown error");
+        }
+      }
+
+      return new Response(JSON.stringify({ results }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ===== DUE COLLECTION =====
+    if (resource === "due-collection" && req.method === "POST") {
+      const { customer_id, amount, notes } = await req.json();
+
+      // Update customer due
+      const { data: customer } = await supabase
+        .from("shop_customers")
+        .select("total_due")
+        .eq("id", customer_id)
+        .single();
+
+      if (customer) {
+        await supabase
+          .from("shop_customers")
+          .update({ total_due: Math.max(0, Number(customer.total_due) - amount) })
+          .eq("id", customer_id);
+      }
+
+      // Create cash transaction
+      const { data, error } = await supabase
+        .from("shop_cash_transactions")
+        .insert({
+          user_id: userId,
+          type: "in",
+          source: "due_collection",
+          amount,
+          reference_id: customer_id,
+          reference_type: "customer",
+          notes: notes || "Due collection",
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return new Response(JSON.stringify({ transaction: data }), {
+        status: 201,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ===== DUE PAYMENT (to supplier) =====
+    if (resource === "due-payment" && req.method === "POST") {
+      const { supplier_id, amount, notes } = await req.json();
+
+      // Update supplier due
+      const { data: supplier } = await supabase
+        .from("shop_suppliers")
+        .select("total_due")
+        .eq("id", supplier_id)
+        .single();
+
+      if (supplier) {
+        await supabase
+          .from("shop_suppliers")
+          .update({ total_due: Math.max(0, Number(supplier.total_due) - amount) })
+          .eq("id", supplier_id);
+      }
+
+      // Create cash transaction
+      const { data, error } = await supabase
+        .from("shop_cash_transactions")
+        .insert({
+          user_id: userId,
+          type: "out",
+          source: "due_payment",
+          amount,
+          reference_id: supplier_id,
+          reference_type: "supplier",
+          notes: notes || "Due payment to supplier",
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return new Response(JSON.stringify({ transaction: data }), {
+        status: 201,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ===== SYNC SETTINGS =====
+    if (resource === "sync-settings") {
+      // First check if user has permission to sync
+      const { data: userData, error: userError } = await supabase
+        .from("users")
+        .select("can_sync_business")
+        .eq("id", userId)
+        .single();
+
+      if (userError) {
+        console.error("Error fetching user sync permission:", userError);
+      }
+
+      const canSync = userData?.can_sync_business === true;
+
+      if (req.method === "GET") {
+        const { data, error } = await supabase
+          .from("sync_settings")
+          .select("*")
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        if (error && error.code !== "PGRST116") throw error;
+        
+        return new Response(JSON.stringify({ 
+          settings: data || { sync_enabled: false, master_inventory: "offline" },
+          canSyncBusiness: canSync 
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (req.method === "PUT") {
+        // Check if user is allowed to sync
+        if (!canSync) {
+          return new Response(JSON.stringify({ 
+            error: "You do not have permission to enable business sync. Please contact admin.",
+            canSyncBusiness: false
+          }), {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const body = await req.json();
+        const syncWasEnabled = body.sync_enabled === true;
+        const syncIsDisabling = body.sync_enabled === false;
+        
+        // Get current sync settings to check if this is a fresh enable or disable
+        const { data: currentSettings } = await supabase
+          .from("sync_settings")
+          .select("sync_enabled")
+          .eq("user_id", userId)
+          .maybeSingle();
+        
+        const wasEnabled = currentSettings?.sync_enabled === true;
+        const wasDisabled = !currentSettings?.sync_enabled;
+        const isNowEnabling = wasDisabled && syncWasEnabled;
+        const isNowDisabling = wasEnabled && syncIsDisabling;
+        
+        // Upsert sync settings
+        const { data, error } = await supabase
+          .from("sync_settings")
+          .upsert({
+            user_id: userId,
+            sync_enabled: body.sync_enabled ?? false,
+            master_inventory: body.master_inventory ?? "offline",
+            updated_at: new Date().toISOString(),
+          }, { onConflict: "user_id" })
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        let syncStats = { offlineToOnline: 0, onlineToOffline: 0, stockUpdated: 0 };
+
+        // If sync is being enabled for the first time, merge all products
+        if (isNowEnabling) {
+          console.log("Sync enabled - merging products between online and offline...");
+          
+          // Get all offline shop products
+          const { data: offlineProducts, error: offlineErr } = await supabase
+            .from("shop_products")
+            .select("*")
+            .eq("user_id", userId)
+            .eq("is_active", true);
+          
+          if (offlineErr) {
+            console.error("Error fetching offline products:", offlineErr);
+          }
+          
+          // Get all online products
+          const { data: onlineProducts, error: onlineErr } = await supabase
+            .from("products")
+            .select("*")
+            .eq("user_id", userId)
+            .eq("is_active", true);
+          
+          if (onlineErr) {
+            console.error("Error fetching online products:", onlineErr);
+          }
+          
+          console.log(`Found ${offlineProducts?.length || 0} offline products and ${onlineProducts?.length || 0} online products`);
+          
+          // Create maps for quick lookup - match by NAME (normalized) as primary, SKU as secondary
+          const normalizeString = (str: string) => str?.toLowerCase().trim().replace(/\s+/g, ' ') || '';
+          
+          const onlineProductsByName = new Map<string, any>();
+          const onlineProductsBySku = new Map<string, any>();
+          (onlineProducts || []).forEach((p: any) => {
+            onlineProductsByName.set(normalizeString(p.name), p);
+            if (p.sku) onlineProductsBySku.set(p.sku.toLowerCase(), p);
+          });
+          
+          const offlineProductsByName = new Map<string, any>();
+          const offlineProductsBySku = new Map<string, any>();
+          (offlineProducts || []).forEach((p: any) => {
+            offlineProductsByName.set(normalizeString(p.name), p);
+            if (p.sku) offlineProductsBySku.set(p.sku.toLowerCase(), p);
+          });
+          
+          const processedOnlineIds = new Set<string>();
+          
+          // 1. Sync offline products to online
+          for (const offlineProduct of offlineProducts || []) {
+            const normalizedName = normalizeString(offlineProduct.name);
+            const sku = offlineProduct.sku?.toLowerCase();
+            
+            // Try to find matching online product by name OR sku
+            let matchingOnline = onlineProductsByName.get(normalizedName);
+            if (!matchingOnline && sku) {
+              matchingOnline = onlineProductsBySku.get(sku);
+            }
+            
+            if (matchingOnline) {
+              // Found a match - merge stock quantities
+              processedOnlineIds.add(matchingOnline.id);
+              const combinedStock = (offlineProduct.stock_quantity || 0) + (matchingOnline.stock_quantity || 0);
+              
+              // Use the online product's SKU as reference (or create one from name)
+              const linkSku = matchingOnline.sku || offlineProduct.sku || `sync-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+              
+              const { error: updateOnlineErr } = await supabase
+                .from("products")
+                .update({ 
+                  stock_quantity: combinedStock,
+                  sku: linkSku 
+                })
+                .eq("id", matchingOnline.id);
+              
+              if (updateOnlineErr) {
+                console.error("Error updating online product:", updateOnlineErr);
+              }
+              
+              const { error: updateOfflineErr } = await supabase
+                .from("shop_products")
+                .update({ 
+                  online_sku: linkSku,
+                  stock_quantity: combinedStock,
+                  sku: offlineProduct.sku || linkSku
+                })
+                .eq("id", offlineProduct.id);
+              
+              if (updateOfflineErr) {
+                console.error("Error updating offline product:", updateOfflineErr);
+              }
+              
+              if (!updateOnlineErr && !updateOfflineErr) {
+                syncStats.stockUpdated++;
+                console.log(`Merged product: ${offlineProduct.name}, combined stock: ${combinedStock}`);
+              }
+            } else {
+              // No match - create new online product from offline
+              const newSku = offlineProduct.sku || `sync-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+              
+              const { error: insertError } = await supabase
+                .from("products")
+                .insert({
+                  user_id: userId,
+                  name: offlineProduct.name,
+                  description: offlineProduct.description,
+                  price: offlineProduct.selling_price || 0,
+                  sku: newSku,
+                  stock_quantity: offlineProduct.stock_quantity || 0,
+                  category: null,
+                  brand: offlineProduct.brand,
+                  image_url: offlineProduct.image_url,
+                  is_active: true,
+                  currency: "BDT",
+                });
+              
+              if (insertError) {
+                console.error("Error creating online product:", insertError);
+              } else {
+                syncStats.offlineToOnline++;
+                // Update offline product with online_sku reference
+                await supabase
+                  .from("shop_products")
+                  .update({ 
+                    online_sku: newSku,
+                    sku: offlineProduct.sku || newSku
+                  })
+                  .eq("id", offlineProduct.id);
+                console.log(`Created online product from offline: ${offlineProduct.name}`);
+              }
+            }
+          }
+          
+          // 2. Sync remaining online products to offline (ones not already matched)
+          for (const onlineProduct of onlineProducts || []) {
+            if (processedOnlineIds.has(onlineProduct.id)) continue;
+            
+            const normalizedName = normalizeString(onlineProduct.name);
+            const sku = onlineProduct.sku?.toLowerCase();
+            
+            // Double check if it exists offline by name or sku
+            let existsOffline = offlineProductsByName.has(normalizedName);
+            if (!existsOffline && sku) {
+              existsOffline = offlineProductsBySku.has(sku);
+            }
+            
+            if (!existsOffline) {
+              // Create new offline product from online
+              const linkSku = onlineProduct.sku || `sync-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+              
+              const { error: insertError } = await supabase
+                .from("shop_products")
+                .insert({
+                  user_id: userId,
+                  name: onlineProduct.name,
+                  description: onlineProduct.description,
+                  selling_price: onlineProduct.price || 0,
+                  purchase_price: 0,
+                  sku: linkSku,
+                  online_sku: linkSku,
+                  stock_quantity: onlineProduct.stock_quantity || 0,
+                  brand: onlineProduct.brand,
+                  image_url: onlineProduct.image_url,
+                  is_active: true,
+                });
+              
+              if (insertError) {
+                console.error("Error creating offline product:", insertError);
+              } else {
+                syncStats.onlineToOffline++;
+                // Also update online product with SKU if it didn't have one
+                if (!onlineProduct.sku) {
+                  await supabase
+                    .from("products")
+                    .update({ sku: linkSku })
+                    .eq("id", onlineProduct.id);
+                }
+                console.log(`Created offline product from online: ${onlineProduct.name}`);
+              }
+            }
+          }
+          
+          console.log("Sync completed:", syncStats);
+          
+          // Log the sync event (only if sync happened)
+          try {
+            await supabase.from("sync_logs").insert({
+              user_id: userId,
+              event_type: "initial_sync",
+              source: "system",
+              payload: syncStats,
+              status: "success",
+            });
+          } catch (logErr) {
+            console.error("Error logging sync event:", logErr);
+          }
+        }
+
+        // If sync is being DISABLED, remove products that came from the other side
+        let unsyncStats = { offlineRemoved: 0, onlineRemoved: 0 };
+        if (isNowDisabling) {
+          console.log("Sync disabled - removing synced products...");
+          
+          // Find offline products that were synced FROM online (created during sync, have online_sku but no purchase history)
+          // These are products that exist in offline only because of sync
+          const { data: offlineProducts } = await supabase
+            .from("shop_products")
+            .select("id, name, online_sku, sku, created_at")
+            .eq("user_id", userId)
+            .not("online_sku", "is", null);
+          
+          // Find online products that were synced FROM offline (created during sync)
+          // These have SKU starting with 'sync-' which indicates they were created during sync
+          const { data: onlineProducts } = await supabase
+            .from("products")
+            .select("id, name, sku, created_at")
+            .eq("user_id", userId)
+            .like("sku", "sync-%");
+          
+          // Remove offline products that were created from online sync
+          // (products where online_sku exists and matches their own sku - created during sync)
+          for (const offlineProduct of offlineProducts || []) {
+            // Check if this was a product created FROM online (sku = online_sku means it was created during sync)
+            if (offlineProduct.sku === offlineProduct.online_sku && offlineProduct.sku?.startsWith("sync-")) {
+              await supabase
+                .from("shop_products")
+                .delete()
+                .eq("id", offlineProduct.id);
+              unsyncStats.offlineRemoved++;
+              console.log(`Removed offline product synced from online: ${offlineProduct.name}`);
+            } else {
+              // For other linked products, just clear the online_sku link
+              await supabase
+                .from("shop_products")
+                .update({ online_sku: null })
+                .eq("id", offlineProduct.id);
+            }
+          }
+          
+          // Remove online products that were created from offline sync (have sync- prefix)
+          for (const onlineProduct of onlineProducts || []) {
+            await supabase
+              .from("products")
+              .delete()
+              .eq("id", onlineProduct.id);
+            unsyncStats.onlineRemoved++;
+            console.log(`Removed online product synced from offline: ${onlineProduct.name}`);
+          }
+          
+          console.log("Unsync completed:", unsyncStats);
+          
+          // Log the unsync event
+          try {
+            await supabase.from("sync_logs").insert({
+              user_id: userId,
+              event_type: "sync_disabled",
+              source: "system",
+              payload: unsyncStats,
+              status: "success",
+            });
+          } catch (logErr) {
+            console.error("Error logging unsync event:", logErr);
+          }
+        }
+
+        // Log the sync settings change
+        try {
+          await supabase.from("sync_logs").insert({
+            user_id: userId,
+            event_type: "settings_changed",
+            source: "system",
+            payload: { sync_enabled: data.sync_enabled, master_inventory: data.master_inventory },
+            status: "success",
+          });
+        } catch (logErr) {
+          console.error("Error logging settings change:", logErr);
+        }
+
+        return new Response(JSON.stringify({ 
+          settings: data,
+          syncStats: isNowEnabling ? syncStats : null,
+          unsyncStats: isNowDisabling ? unsyncStats : null,
+          message: isNowEnabling ? "Products synced successfully" : isNowDisabling ? "Sync disabled, linked products removed" : "Settings updated"
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    // ===== INTERNAL SYNC ENDPOINTS =====
+    if (resource === "online-order-created") {
+      if (req.method === "POST") {
+        const body = await req.json();
+        
+        // Check if sync is enabled
+        const { data: syncSettings } = await supabase
+          .from("sync_settings")
+          .select("sync_enabled")
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        if (!syncSettings?.sync_enabled) {
+          return new Response(JSON.stringify({ message: "Sync is disabled", synced: false }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        // Log the event
+        await supabase.from("sync_logs").insert({
+          user_id: userId,
+          event_type: "online_order_created",
+          source: "online",
+          source_id: body.order_id,
+          payload: body,
+          status: "pending",
+        });
+
+        // Process each item - decrease offline stock
+        if (body.items && Array.isArray(body.items)) {
+          for (const item of body.items) {
+            if (item.sku) {
+              // Find matching offline product by online_sku
+              const { data: product } = await supabase
+                .from("shop_products")
+                .select("id, stock_quantity")
+                .eq("user_id", userId)
+                .eq("online_sku", item.sku)
+                .maybeSingle();
+
+              if (product) {
+                // Decrease stock
+                await supabase
+                  .from("shop_products")
+                  .update({ 
+                    stock_quantity: Math.max(0, product.stock_quantity - (item.quantity || 1)),
+                    updated_at: new Date().toISOString()
+                  })
+                  .eq("id", product.id);
+              }
+            }
+          }
+        }
+
+        return new Response(JSON.stringify({ message: "Order synced", synced: true }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    if (resource === "offline-sale-created") {
+      if (req.method === "POST") {
+        const body = await req.json();
+        
+        // Check if sync is enabled
+        const { data: syncSettings } = await supabase
+          .from("sync_settings")
+          .select("sync_enabled")
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        if (!syncSettings?.sync_enabled) {
+          return new Response(JSON.stringify({ message: "Sync is disabled", synced: false }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        // Log the event for future processing
+        await supabase.from("sync_logs").insert({
+          user_id: userId,
+          event_type: "offline_sale_created",
+          source: "offline",
+          source_id: body.sale_id,
+          payload: body,
+          status: "success",
+        });
+
+        return new Response(JSON.stringify({ message: "Sale logged for sync", synced: true }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    if (resource === "inventory-updated") {
+      if (req.method === "POST") {
+        const body = await req.json();
+        
+        // Log the inventory change
+        await supabase.from("sync_logs").insert({
+          user_id: userId,
+          event_type: "inventory_updated",
+          source: body.source || "manual",
+          source_id: body.product_id,
+          payload: body,
+          status: "success",
+        });
+
+        return new Response(JSON.stringify({ message: "Inventory update logged" }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    // ===== UNIFIED DASHBOARD DATA =====
+    if (resource === "unified-dashboard") {
+      if (req.method === "GET") {
+        // Get sync status
+        const { data: syncSettings } = await supabase
+          .from("sync_settings")
+          .select("sync_enabled")
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        // Get offline dashboard data
+        const today = new Date().toISOString().split("T")[0];
+        
+        const { data: todaySales } = await supabase
+          .from("shop_sales")
+          .select("total, total_profit")
+          .eq("user_id", userId)
+          .gte("sale_date", today);
+
+        const { count: totalProducts } = await supabase
+          .from("shop_products")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", userId)
+          .eq("is_active", true);
+
+        const { data: lowStock } = await supabase
+          .from("shop_products")
+          .select("id, name, stock_quantity, min_stock_alert")
+          .eq("user_id", userId)
+          .eq("is_active", true);
+
+        const lowStockProducts = (lowStock || []).filter(
+          (p) => p.stock_quantity <= p.min_stock_alert
+        );
+
+        const offlineTodaySales = (todaySales || []).reduce((sum, s) => sum + Number(s.total), 0);
+        const offlineTodayProfit = (todaySales || []).reduce((sum, s) => sum + Number(s.total_profit || 0), 0);
+
+        return new Response(JSON.stringify({
+          syncEnabled: syncSettings?.sync_enabled || false,
+          offline: {
+            todaySales: offlineTodaySales,
+            todayProfit: offlineTodayProfit,
+            totalProducts: totalProducts || 0,
+            lowStockCount: lowStockProducts.length,
+          },
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    // ===== RETURNS =====
+    if (resource === "returns") {
+      if (req.method === "POST") {
+        const { sale_id, items, refund_amount, refund_method, reason, notes } = await req.json();
+        console.log("Processing return:", { sale_id, items, refund_amount, reason });
+
+        // Get the original sale
+        const { data: sale, error: saleError } = await supabase
+          .from("shop_sales")
+          .select("*, items:shop_sale_items(*)")
+          .eq("id", sale_id)
+          .eq("user_id", userId)
+          .single();
+
+        if (saleError || !sale) {
+          console.error("Sale not found:", saleError);
+          return new Response(JSON.stringify({ error: "Sale not found" }), {
+            status: 404,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        // Get settings for return invoice prefix
+        const { data: settings } = await supabase
+          .from("shop_settings")
+          .select("invoice_prefix")
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        const prefix = settings?.invoice_prefix || "INV";
+
+        // Generate return invoice number
+        const { count: returnCount } = await supabase
+          .from("shop_stock_adjustments")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", userId)
+          .eq("type", "return");
+
+        const returnInvoice = `RET-${prefix}-${String((returnCount || 0) + 1).padStart(6, "0")}`;
+
+        // Process each returned item
+        let totalRefund = 0;
+        const returnedItems = [];
+
+        for (const returnItem of items) {
+          const originalItem = sale.items.find((i: any) => i.product_id === returnItem.product_id);
+          if (!originalItem) continue;
+
+          const returnQuantity = Math.min(returnItem.quantity, originalItem.quantity);
+          const itemRefund = returnQuantity * originalItem.unit_price;
+          totalRefund += itemRefund;
+
+          // Restore stock
+          if (returnItem.product_id) {
+            const { data: product } = await supabase
+              .from("shop_products")
+              .select("stock_quantity, name")
+              .eq("id", returnItem.product_id)
+              .single();
+
+            if (product) {
+              await supabase
+                .from("shop_products")
+                .update({ 
+                  stock_quantity: product.stock_quantity + returnQuantity,
+                  updated_at: new Date().toISOString()
+                })
+                .eq("id", returnItem.product_id);
+
+              // Create stock adjustment record for return
+              await supabase.from("shop_stock_adjustments").insert({
+                user_id: userId,
+                product_id: returnItem.product_id,
+                product_name: product.name,
+                type: "return",
+                quantity: returnQuantity,
+                reason: reason || "Customer return",
+                notes: `Return from sale ${sale.invoice_number}. ${notes || ""}`,
+                cost_impact: -itemRefund,
+              });
+
+              returnedItems.push({
+                product_name: product.name,
+                quantity: returnQuantity,
+                refund: itemRefund,
+              });
+            }
+          }
+        }
+
+        // Use provided refund amount or calculated total
+        const finalRefund = refund_amount || totalRefund;
+
+        // Create cash out transaction for refund
+        if (finalRefund > 0) {
+          await supabase.from("shop_cash_transactions").insert({
+            user_id: userId,
+            type: "out",
+            source: "return",
+            amount: finalRefund,
+            reference_id: sale_id,
+            reference_type: "return",
+            notes: `Refund for ${sale.invoice_number}. ${reason || ""}`,
+          });
+        }
+
+        console.log("Return processed successfully:", { returnInvoice, finalRefund, returnedItems });
+
+        return new Response(JSON.stringify({
+          success: true,
+          return_invoice: returnInvoice,
+          refund_amount: finalRefund,
+          returned_items: returnedItems,
+          original_sale: sale.invoice_number,
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // GET returns history
+      if (req.method === "GET") {
+        const { data: returns } = await supabase
+          .from("shop_stock_adjustments")
+          .select("*")
+          .eq("user_id", userId)
+          .eq("type", "return")
+          .order("created_at", { ascending: false });
+
+        return new Response(JSON.stringify({ returns: returns || [] }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    // ===== TRASH BIN =====
+    if (resource === "trash") {
+      if (req.method === "GET") {
+        const table = url.searchParams.get("table");
+        
+        let query = supabase
+          .from("shop_trash")
+          .select("*")
+          .eq("user_id", userId)
+          .is("restored_at", null)
+          .is("permanently_deleted_at", null)
+          .order("deleted_at", { ascending: false });
+
+        if (table) query = query.eq("original_table", table);
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        return new Response(JSON.stringify({ trash: data }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Restore from trash / permanent delete (passcode-protected)
+      if (req.method === "POST") {
+        const body = await req.json().catch(() => ({} as any));
+        const id = body.id as string | undefined;
+        const ids = (Array.isArray(body.ids) ? body.ids : undefined) as string[] | undefined;
+        const action = body.action as string | undefined;
+        const passcode = body.passcode as string | undefined;
+
+        if (action === "restore") {
+          const { data: trashItem, error: fetchError } = await supabase
+            .from("shop_trash")
+            .select("*")
+            .eq("id", id)
+            .eq("user_id", userId)
+            .single();
+
+          if (fetchError || !trashItem) {
+            return new Response(JSON.stringify({ error: "Trash item not found" }), {
+              status: 404,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+
+          const { original_table, original_id, data: originalData } = trashItem;
+          console.log(`Restoring ${original_table} with id ${original_id}`);
+
+          try {
+            // ===== RESTORE PRODUCTS =====
+            if (original_table === "shop_products") {
+              const productData = { ...originalData };
+              delete productData.category; // Remove joined data
+              
+              const { error: restoreError } = await supabase
+                .from("shop_products")
+                .insert(productData);
+
+              if (restoreError) throw restoreError;
+              console.log(`Product ${original_id} restored`);
+            }
+
+            // ===== RESTORE CUSTOMERS =====
+            if (original_table === "shop_customers") {
+              const { error: restoreError } = await supabase
+                .from("shop_customers")
+                .insert(originalData);
+
+              if (restoreError) throw restoreError;
+
+              // Re-link sales to customer
+              await supabase
+                .from("shop_sales")
+                .update({ customer_id: original_id })
+                .eq("user_id", userId)
+                .is("customer_id", null);
+
+              console.log(`Customer ${original_id} restored`);
+            }
+
+            // ===== RESTORE SUPPLIERS =====
+            if (original_table === "shop_suppliers") {
+              const { error: restoreError } = await supabase
+                .from("shop_suppliers")
+                .insert(originalData);
+
+              if (restoreError) throw restoreError;
+
+              // Re-link purchases to supplier
+              await supabase
+                .from("shop_purchases")
+                .update({ supplier_id: original_id })
+                .eq("user_id", userId)
+                .is("supplier_id", null);
+
+              console.log(`Supplier ${original_id} restored`);
+            }
+
+            // ===== RESTORE SALES =====
+            if (original_table === "shop_sales") {
+              const saleData = { ...originalData };
+              const saleItems = saleData.items || [];
+              delete saleData.items;
+              delete saleData.customer; // Remove joined data
+
+              const { data: restoredSale, error: restoreError } = await supabase
+                .from("shop_sales")
+                .insert(saleData)
+                .select()
+                .single();
+
+              if (restoreError) throw restoreError;
+
+              // Restore sale items
+              for (const item of saleItems) {
+                const itemData = { ...item };
+                itemData.sale_id = restoredSale.id;
+                delete itemData.id; // Generate new id
+                
+                await supabase.from("shop_sale_items").insert(itemData);
+
+                // Deduct stock again
+                if (item.product_id) {
+                  const { data: product } = await supabase
+                    .from("shop_products")
+                    .select("stock_quantity")
+                    .eq("id", item.product_id)
+                    .maybeSingle();
+
+                  if (product) {
+                    await supabase
+                      .from("shop_products")
+                      .update({
+                        stock_quantity: Math.max(0, product.stock_quantity - item.quantity),
+                      })
+                      .eq("id", item.product_id);
+                  }
+                }
+              }
+
+              // Restore customer totals
+              if (saleData.customer_id) {
+                const { data: customer } = await supabase
+                  .from("shop_customers")
+                  .select("total_purchases, total_due")
+                  .eq("id", saleData.customer_id)
+                  .maybeSingle();
+
+                if (customer) {
+                  await supabase
+                    .from("shop_customers")
+                    .update({
+                      total_purchases: Number(customer.total_purchases) + Number(saleData.total),
+                      total_due: Number(customer.total_due) + Number(saleData.due_amount || 0),
+                    })
+                    .eq("id", saleData.customer_id);
+                }
+              }
+
+              // Restore cash transaction
+              if (saleData.paid_amount > 0) {
+                await supabase.from("shop_cash_transactions").insert({
+                  user_id: userId,
+                  type: "in",
+                  source: "sale",
+                  amount: saleData.paid_amount,
+                  reference_id: restoredSale.id,
+                  reference_type: "sale",
+                  notes: `Restored sale ${saleData.invoice_number}`,
+                });
+              }
+
+              console.log(`Sale ${original_id} restored with ${saleItems.length} items`);
+            }
+
+            // ===== RESTORE PURCHASES =====
+            if (original_table === "shop_purchases") {
+              const purchaseData = originalData.purchase || originalData;
+              const purchaseItems = originalData.items || purchaseData.items || [];
+              delete purchaseData.items;
+              delete purchaseData.supplier; // Remove joined data
+
+              const { data: restoredPurchase, error: restoreError } = await supabase
+                .from("shop_purchases")
+                .insert(purchaseData)
+                .select()
+                .single();
+
+              if (restoreError) throw restoreError;
+
+              // Restore purchase items
+              for (const item of purchaseItems) {
+                const itemData = { ...item };
+                itemData.purchase_id = restoredPurchase.id;
+                delete itemData.id; // Generate new id
+                
+                await supabase.from("shop_purchase_items").insert(itemData);
+
+                // Add stock back
+                if (item.product_id) {
+                  const { data: product } = await supabase
+                    .from("shop_products")
+                    .select("stock_quantity")
+                    .eq("id", item.product_id)
+                    .maybeSingle();
+
+                  if (product) {
+                    await supabase
+                      .from("shop_products")
+                      .update({
+                        stock_quantity: product.stock_quantity + item.quantity,
+                      })
+                      .eq("id", item.product_id);
+                  }
+                }
+              }
+
+              // Restore supplier totals
+              if (purchaseData.supplier_id) {
+                const { data: supplier } = await supabase
+                  .from("shop_suppliers")
+                  .select("total_purchases, total_due")
+                  .eq("id", purchaseData.supplier_id)
+                  .maybeSingle();
+
+                if (supplier) {
+                  await supabase
+                    .from("shop_suppliers")
+                    .update({
+                      total_purchases: Number(supplier.total_purchases) + Number(purchaseData.total_amount),
+                      total_due: Number(supplier.total_due) + Number(purchaseData.due_amount || 0),
+                    })
+                    .eq("id", purchaseData.supplier_id);
+                }
+              }
+
+              // Restore cash transaction
+              if (purchaseData.paid_amount > 0) {
+                await supabase.from("shop_cash_transactions").insert({
+                  user_id: userId,
+                  type: "out",
+                  source: "purchase",
+                  amount: purchaseData.paid_amount,
+                  reference_id: restoredPurchase.id,
+                  reference_type: "purchase",
+                  notes: `Restored purchase from ${purchaseData.supplier_name || "Supplier"}`,
+                });
+              }
+
+              console.log(`Purchase ${original_id} restored with ${purchaseItems.length} items`);
+            }
+
+            // ===== RESTORE EXPENSES =====
+            if (original_table === "shop_expenses") {
+              const { error: restoreError } = await supabase
+                .from("shop_expenses")
+                .insert(originalData);
+
+              if (restoreError) throw restoreError;
+
+              // Restore cash transaction
+              await supabase.from("shop_cash_transactions").insert({
+                user_id: userId,
+                shop_id: originalData.shop_id,
+                type: "out",
+                source: "expense",
+                amount: originalData.amount,
+                reference_id: original_id,
+                reference_type: "expense",
+                notes: `${originalData.category}: ${originalData.description || "Restored expense"}`,
+              });
+
+              console.log(`Expense ${original_id} restored`);
+            }
+
+            // ===== RESTORE STAFF =====
+            if (original_table === "shop_staff_users") {
+              const { error: restoreError } = await supabase
+                .from("shop_staff_users")
+                .insert(originalData);
+
+              if (restoreError) throw restoreError;
+              console.log(`Staff ${original_id} restored`);
+            }
+
+            // ===== RESTORE CATEGORIES =====
+            if (original_table === "shop_categories") {
+              const { error: restoreError } = await supabase
+                .from("shop_categories")
+                .insert(originalData);
+
+              if (restoreError) throw restoreError;
+              console.log(`Category ${original_id} restored`);
+            }
+
+            // ===== RESTORE STOCK ADJUSTMENTS =====
+            if (original_table === "shop_stock_adjustments") {
+              const { error: restoreError } = await supabase
+                .from("shop_stock_adjustments")
+                .insert(originalData);
+
+              if (restoreError) throw restoreError;
+
+              // Re-apply stock adjustment
+              if (originalData.product_id) {
+                const { data: product } = await supabase
+                  .from("shop_products")
+                  .select("stock_quantity")
+                  .eq("id", originalData.product_id)
+                  .maybeSingle();
+
+                if (product) {
+                  const isIncrease = ["manual_increase", "return"].includes(originalData.type);
+                  const newStock = isIncrease
+                    ? product.stock_quantity + originalData.quantity
+                    : Math.max(0, product.stock_quantity - originalData.quantity);
+
+                  await supabase
+                    .from("shop_products")
+                    .update({ stock_quantity: newStock })
+                    .eq("id", originalData.product_id);
+                }
+              }
+
+              console.log(`Stock adjustment ${original_id} restored`);
+            }
+
+            // Mark as restored
+            await supabase
+              .from("shop_trash")
+              .update({ restored_at: new Date().toISOString() })
+              .eq("id", id);
+
+            return new Response(JSON.stringify({ message: "Item restored successfully" }), {
+              status: 200,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          } catch (restoreErr: any) {
+            console.error("Restore failed:", restoreErr);
+            return new Response(JSON.stringify({ error: restoreErr.message || "Restore failed" }), {
+              status: 500,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+        }
+
+        if (action === "permanent_delete") {
+          const targetIds: string[] = Array.isArray(ids) ? ids : id ? [id] : [];
+
+          if (targetIds.length === 0) {
+            return new Response(JSON.stringify({ error: "Missing trash item id(s)" }), {
+              status: 400,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+
+          // Check if user has passcode set
+          const { data: settingsData, error: settingsError } = await supabase
+            .from("shop_settings")
+            .select("trash_passcode_hash")
+            .eq("user_id", userId)
+            .maybeSingle();
+
+          if (settingsError) throw settingsError;
+
+          if (settingsData?.trash_passcode_hash) {
+            if (!passcode) {
+              return new Response(
+                JSON.stringify({
+                  error: "Passcode required for instant delete",
+                  requires_passcode: true,
+                }),
+                {
+                  status: 403,
+                  headers: { ...corsHeaders, "Content-Type": "application/json" },
+                }
+              );
+            }
+
+            // Verify passcode
+            const encoder = new TextEncoder();
+            const data = encoder.encode(passcode);
+            const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            const hashHex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+
+            if (hashHex !== settingsData.trash_passcode_hash) {
+              return new Response(JSON.stringify({ error: "Invalid passcode", requires_passcode: true }), {
+                status: 401,
+                headers: { ...corsHeaders, "Content-Type": "application/json" },
+              });
+            }
+          }
+
+          const { data: deletedRows, error: deleteError } = await supabase
+            .from("shop_trash")
+            .delete()
+            .in("id", targetIds)
+            .eq("user_id", userId)
+            .is("restored_at", null)
+            .select("id");
+
+          if (deleteError) throw deleteError;
+
+          return new Response(
+            JSON.stringify({
+              message: "Item(s) permanently deleted",
+              deletedCount: deletedRows?.length || 0,
+              deletedIds: deletedRows?.map((r: any) => r.id) || [],
+            }),
+            {
+              status: 200,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            }
+          );
+        }
+      }
+
+      // Empty trash (backwards compatible)
+      if (req.method === "DELETE") {
+        await supabase
+          .from("shop_trash")
+          .update({ permanently_deleted_at: new Date().toISOString() })
+          .eq("user_id", userId)
+          .is("restored_at", null)
+          .is("permanently_deleted_at", null);
+
+        return new Response(JSON.stringify({ message: "Trash emptied" }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    // ===== PURCHASE PAYMENTS =====
+    if (resource === "purchase-payments") {
+      if (req.method === "GET") {
+        const purchaseId = url.searchParams.get("purchaseId");
+        
+        let query = supabase
+          .from("shop_purchase_payments")
+          .select("*")
+          .eq("user_id", userId)
+          .order("payment_date", { ascending: false });
+
+        if (purchaseId) query = query.eq("purchase_id", purchaseId);
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        return new Response(JSON.stringify({ payments: data }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    // ===== PRODUCT HISTORY =====
+    if (resource === "product-history") {
+      if (req.method === "GET") {
+        const from = url.searchParams.get("from");
+        const to = url.searchParams.get("to");
+        
+        let query = supabase
+          .from("shop_product_history")
+          .select("*")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false });
+        
+        if (shopId) query = query.eq("shop_id", shopId);
+        if (from) query = query.gte("created_at", from);
+        if (to) query = query.lte("created_at", to);
+        
+        const { data, error } = await query;
+        if (error) throw error;
+        
+        // Group by date for summary
+        const groupedByDate: Record<string, { count: number; products: any[] }> = {};
+        (data || []).forEach((item: any) => {
+          const date = item.created_at.split("T")[0];
+          if (!groupedByDate[date]) {
+            groupedByDate[date] = { count: 0, products: [] };
+          }
+          groupedByDate[date].count += 1;
+          groupedByDate[date].products.push(item);
+        });
+        
+        const summary = Object.entries(groupedByDate)
+          .map(([date, data]) => ({ date, ...data }))
+          .sort((a, b) => b.date.localeCompare(a.date));
+        
+        return new Response(JSON.stringify({ history: data, summary }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      
+      if (req.method === "DELETE") {
+        // Clear all product history
+        let deleteQuery = supabase
+          .from("shop_product_history")
+          .delete()
+          .eq("user_id", userId);
+        
+        if (shopId) deleteQuery = deleteQuery.eq("shop_id", shopId);
+        
+        const { error } = await deleteQuery;
+        if (error) throw error;
+        
+        return new Response(JSON.stringify({ message: "Product history cleared" }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    // ===== GENERATE BARCODES (for products without barcode) =====
+    if (resource === "generate-barcodes") {
+      if (req.method === "POST") {
+        // Get all products without valid barcodes (null, empty, or "N/A")
+        let query = supabase
+          .from("shop_products")
+          .select("id, name")
+          .eq("user_id", userId);
+        
+        if (shopId) query = query.eq("shop_id", shopId);
+        
+        const { data: allProducts, error: fetchError } = await query;
+        if (fetchError) throw fetchError;
+        
+        // Filter products without valid barcodes
+        const productsWithoutBarcode = (allProducts || []).filter(p => {
+          const barcode = (p as any).barcode;
+          return !barcode || barcode === "" || barcode === "N/A" || barcode.trim() === "";
+        });
+        
+        if (productsWithoutBarcode.length === 0) {
+          return new Response(JSON.stringify({ 
+            message: "All products already have barcodes",
+            generated: 0 
+          }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        
+        // Get count of products WITH valid barcodes (for sequence)
+        const productsWithBarcode = (allProducts || []).filter(p => {
+          const barcode = (p as any).barcode;
+          return barcode && barcode !== "" && barcode !== "N/A" && barcode.trim() !== "";
+        });
+        let sequence = productsWithBarcode.length + 1;
+        
+        // Generate UNIQUE barcodes for each product using UUID suffix
+        const updates: { id: string; barcode: string }[] = [];
+        const usedBarcodes = new Set<string>();
+        
+        for (const product of productsWithoutBarcode) {
+          let barcode: string;
+          let attempts = 0;
+          
+          // Generate unique barcode (use product ID to ensure uniqueness)
+          do {
+            const uniqueSuffix = product.id.replace(/-/g, "").slice(0, 5);
+            const prefix = "890";
+            const shopPart = (shopId || userId).replace(/-/g, "").slice(-4).padStart(4, "0").replace(/[^0-9]/g, "0");
+            const seqPart = String(sequence + attempts).padStart(5, "0");
+            const baseCode = prefix + shopPart + seqPart;
+            
+            // Calculate EAN-13 check digit
+            let sum = 0;
+            for (let i = 0; i < 12; i++) {
+              const digit = parseInt(baseCode[i] || "0");
+              sum += digit * (i % 2 === 0 ? 1 : 3);
+            }
+            const checkDigit = (10 - (sum % 10)) % 10;
+            barcode = baseCode + checkDigit;
+            attempts++;
+          } while (usedBarcodes.has(barcode) && attempts < 100);
+          
+          usedBarcodes.add(barcode);
+          sequence++;
+          updates.push({ id: product.id, barcode });
+        }
+        
+        // Update products with new barcodes
+        let updatedCount = 0;
+        for (const update of updates) {
+          const { error } = await supabase
+            .from("shop_products")
+            .update({ barcode: update.barcode, updated_at: new Date().toISOString() })
+            .eq("id", update.id)
+            .eq("user_id", userId);
+          
+          if (!error) updatedCount++;
+        }
+        
+        return new Response(JSON.stringify({ 
+          message: `Generated barcodes for ${updatedCount} products`,
+          generated: updatedCount,
+          total: productsWithoutBarcode.length
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    return new Response(JSON.stringify({ error: "Not found" }), {
+      status: 404,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+
+  } catch (error: unknown) {
+    console.error("Offline shop error:", error);
+    const message = error instanceof Error ? error.message : "Internal server error";
+    return new Response(JSON.stringify({ error: message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+});
