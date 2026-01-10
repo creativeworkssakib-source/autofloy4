@@ -16,7 +16,7 @@ export type Database = {
     Tables: {
       appearance_settings: {
         Row: {
-          created_at: string
+          created_at: string | null
           custom_css: string | null
           dark_mode_enabled: boolean | null
           favicon_url: string | null
@@ -25,10 +25,10 @@ export type Database = {
           logo_url: string | null
           primary_color: string | null
           secondary_color: string | null
-          updated_at: string
+          updated_at: string | null
         }
         Insert: {
-          created_at?: string
+          created_at?: string | null
           custom_css?: string | null
           dark_mode_enabled?: boolean | null
           favicon_url?: string | null
@@ -37,10 +37,10 @@ export type Database = {
           logo_url?: string | null
           primary_color?: string | null
           secondary_color?: string | null
-          updated_at?: string
+          updated_at?: string | null
         }
         Update: {
-          created_at?: string
+          created_at?: string | null
           custom_css?: string | null
           dark_mode_enabled?: boolean | null
           favicon_url?: string | null
@@ -49,7 +49,7 @@ export type Database = {
           logo_url?: string | null
           primary_color?: string | null
           secondary_color?: string | null
-          updated_at?: string
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -169,7 +169,7 @@ export type Database = {
       }
       seo_settings: {
         Row: {
-          created_at: string
+          created_at: string | null
           facebook_pixel_id: string | null
           google_analytics_id: string | null
           google_tag_manager_id: string | null
@@ -180,10 +180,10 @@ export type Database = {
           og_image: string | null
           robots_txt: string | null
           sitemap_enabled: boolean | null
-          updated_at: string
+          updated_at: string | null
         }
         Insert: {
-          created_at?: string
+          created_at?: string | null
           facebook_pixel_id?: string | null
           google_analytics_id?: string | null
           google_tag_manager_id?: string | null
@@ -194,10 +194,10 @@ export type Database = {
           og_image?: string | null
           robots_txt?: string | null
           sitemap_enabled?: boolean | null
-          updated_at?: string
+          updated_at?: string | null
         }
         Update: {
-          created_at?: string
+          created_at?: string | null
           facebook_pixel_id?: string | null
           google_analytics_id?: string | null
           google_tag_manager_id?: string | null
@@ -208,7 +208,7 @@ export type Database = {
           og_image?: string | null
           robots_txt?: string | null
           sitemap_enabled?: boolean | null
-          updated_at?: string
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -1589,52 +1589,121 @@ export type Database = {
       }
       site_settings: {
         Row: {
-          address: string | null
-          contact_email: string | null
-          contact_phone: string | null
-          created_at: string
-          footer_text: string | null
+          about_us: string | null
+          billing_email: string | null
+          city: string | null
+          company_address: string | null
+          company_name: string | null
+          copyright_text: string | null
+          country: string | null
+          created_at: string | null
+          demo_video_enabled: boolean | null
+          demo_video_type: string | null
+          demo_video_upload_url: string | null
+          demo_video_youtube_url: string | null
+          facebook_url: string | null
+          favicon_url: string | null
           id: string
-          maintenance_mode: boolean | null
-          site_name: string | null
-          site_tagline: string | null
-          social_facebook: string | null
-          social_instagram: string | null
-          social_linkedin: string | null
-          social_twitter: string | null
-          updated_at: string
+          instagram_url: string | null
+          legal_contact_email: string | null
+          linkedin_url: string | null
+          logo_url: string | null
+          phone_number: string | null
+          platform_sms_api_key: string | null
+          platform_sms_enabled: boolean | null
+          platform_sms_provider: string | null
+          platform_sms_sender_id: string | null
+          postal_code: string | null
+          sms_limit_business: number | null
+          sms_limit_lifetime: number | null
+          sms_limit_professional: number | null
+          sms_limit_starter: number | null
+          sms_limit_trial: number | null
+          state: string | null
+          support_email: string | null
+          tagline: string | null
+          twitter_url: string | null
+          updated_at: string | null
+          website_url: string | null
+          youtube_url: string | null
         }
         Insert: {
-          address?: string | null
-          contact_email?: string | null
-          contact_phone?: string | null
-          created_at?: string
-          footer_text?: string | null
+          about_us?: string | null
+          billing_email?: string | null
+          city?: string | null
+          company_address?: string | null
+          company_name?: string | null
+          copyright_text?: string | null
+          country?: string | null
+          created_at?: string | null
+          demo_video_enabled?: boolean | null
+          demo_video_type?: string | null
+          demo_video_upload_url?: string | null
+          demo_video_youtube_url?: string | null
+          facebook_url?: string | null
+          favicon_url?: string | null
           id?: string
-          maintenance_mode?: boolean | null
-          site_name?: string | null
-          site_tagline?: string | null
-          social_facebook?: string | null
-          social_instagram?: string | null
-          social_linkedin?: string | null
-          social_twitter?: string | null
-          updated_at?: string
+          instagram_url?: string | null
+          legal_contact_email?: string | null
+          linkedin_url?: string | null
+          logo_url?: string | null
+          phone_number?: string | null
+          platform_sms_api_key?: string | null
+          platform_sms_enabled?: boolean | null
+          platform_sms_provider?: string | null
+          platform_sms_sender_id?: string | null
+          postal_code?: string | null
+          sms_limit_business?: number | null
+          sms_limit_lifetime?: number | null
+          sms_limit_professional?: number | null
+          sms_limit_starter?: number | null
+          sms_limit_trial?: number | null
+          state?: string | null
+          support_email?: string | null
+          tagline?: string | null
+          twitter_url?: string | null
+          updated_at?: string | null
+          website_url?: string | null
+          youtube_url?: string | null
         }
         Update: {
-          address?: string | null
-          contact_email?: string | null
-          contact_phone?: string | null
-          created_at?: string
-          footer_text?: string | null
+          about_us?: string | null
+          billing_email?: string | null
+          city?: string | null
+          company_address?: string | null
+          company_name?: string | null
+          copyright_text?: string | null
+          country?: string | null
+          created_at?: string | null
+          demo_video_enabled?: boolean | null
+          demo_video_type?: string | null
+          demo_video_upload_url?: string | null
+          demo_video_youtube_url?: string | null
+          facebook_url?: string | null
+          favicon_url?: string | null
           id?: string
-          maintenance_mode?: boolean | null
-          site_name?: string | null
-          site_tagline?: string | null
-          social_facebook?: string | null
-          social_instagram?: string | null
-          social_linkedin?: string | null
-          social_twitter?: string | null
-          updated_at?: string
+          instagram_url?: string | null
+          legal_contact_email?: string | null
+          linkedin_url?: string | null
+          logo_url?: string | null
+          phone_number?: string | null
+          platform_sms_api_key?: string | null
+          platform_sms_enabled?: boolean | null
+          platform_sms_provider?: string | null
+          platform_sms_sender_id?: string | null
+          postal_code?: string | null
+          sms_limit_business?: number | null
+          sms_limit_lifetime?: number | null
+          sms_limit_professional?: number | null
+          sms_limit_starter?: number | null
+          sms_limit_trial?: number | null
+          state?: string | null
+          support_email?: string | null
+          tagline?: string | null
+          twitter_url?: string | null
+          updated_at?: string | null
+          website_url?: string | null
+          youtube_url?: string | null
         }
         Relationships: []
       }
@@ -1723,7 +1792,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      is_admin: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
       [_ in never]: never
