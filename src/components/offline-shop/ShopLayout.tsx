@@ -73,6 +73,7 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
     { name: t("shop.reports"), href: "/offline-shop/reports", icon: BarChart3 },
     { name: language === "bn" ? "ফলোআপ SMS" : "Followup SMS", href: "/offline-shop/followup-sms", icon: MessageSquareMore },
     { name: language === "bn" ? "ট্র্যাশ বিন" : "Trash Bin", href: "/offline-shop/trash", icon: Trash2 },
+    { name: language === "bn" ? "সেটিংস" : "Settings", href: "/offline-shop/settings", icon: Settings },
   ];
 
   const handleLogout = () => {
