@@ -31,6 +31,7 @@ export interface PurchasedProduct {
   barcode?: string;
   brand?: string;
   category_id?: string;
+  custom_category?: string;
   description?: string;
   unit?: string;
   min_stock_alert?: number;
@@ -68,6 +69,7 @@ const AddToStockModal = ({ isOpen, onClose, products, onSuccess }: AddToStockMod
         barcode: p.barcode || "",
         brand: p.brand || "",
         category_id: p.category_id || "",
+        custom_category: p.custom_category || "",
         description: p.description || "",
         unit: p.unit || "pcs",
         min_stock_alert: p.min_stock_alert ?? 5,
@@ -171,6 +173,24 @@ const AddToStockModal = ({ isOpen, onClose, products, onSuccess }: AddToStockMod
 
       for (const product of toAdd) {
         try {
+          let categoryId = product.category_id;
+
+          // If "others" is selected, create new category first
+          if (product.category_id === "others" && product.custom_category?.trim()) {
+            try {
+              const result = await offlineShopService.createCategory({ name: product.custom_category.trim() });
+              categoryId = result.category?.id || null;
+              // Reload categories
+              const categoriesRes = await offlineShopService.getCategories();
+              setCategories(categoriesRes.categories || []);
+            } catch (error) {
+              console.error("Failed to create category:", error);
+              categoryId = null;
+            }
+          } else if (product.category_id === "others") {
+            categoryId = null;
+          }
+
           await offlineShopService.createProduct({
             name: product.name,
             sku: product.sku || "",
@@ -184,7 +204,7 @@ const AddToStockModal = ({ isOpen, onClose, products, onSuccess }: AddToStockMod
             min_stock_alert: product.min_stock_alert || 5,
             supplier_name: product.supplier_name || "",
             expiry_date: product.expiry_date || null,
-            category_id: product.category_id || null,
+            category_id: categoryId || null,
             is_active: true,
           });
           successCount++;
@@ -373,7 +393,12 @@ const AddToStockModal = ({ isOpen, onClose, products, onSuccess }: AddToStockMod
                               <Label className="text-xs">{language === "bn" ? "ক্যাটাগরি" : "Category"}</Label>
                               <Select
                                 value={product.category_id || ""}
-                                onValueChange={(value) => updateProduct(index, "category_id", value)}
+                                onValueChange={(value) => {
+                                  updateProduct(index, "category_id", value);
+                                  if (value !== "others") {
+                                    updateProduct(index, "custom_category", "");
+                                  }
+                                }}
                               >
                                 <SelectTrigger className="mt-1">
                                   <SelectValue placeholder={language === "bn" ? "নির্বাচন করুন" : "Select"} />
@@ -382,8 +407,19 @@ const AddToStockModal = ({ isOpen, onClose, products, onSuccess }: AddToStockMod
                                   {categories.map((cat) => (
                                     <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
                                   ))}
+                                  <SelectItem value="others">
+                                    {language === "bn" ? "অন্যান্য (নতুন)" : "Others (New)"}
+                                  </SelectItem>
                                 </SelectContent>
                               </Select>
+                              {product.category_id === "others" && (
+                                <Input
+                                  placeholder={language === "bn" ? "নতুন ক্যাটাগরির নাম" : "New category name"}
+                                  value={product.custom_category || ""}
+                                  onChange={(e) => updateProduct(index, "custom_category", e.target.value)}
+                                  className="mt-2"
+                                />
+                              )}
                             </div>
                             <div>
                               <Label className="text-xs">{language === "bn" ? "ব্র্যান্ড" : "Brand"}</Label>
