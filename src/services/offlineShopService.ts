@@ -807,7 +807,7 @@ class OfflineShopService {
   }
 
   async deleteScannerDevice(deviceId: string) {
-    return this.request<{ message: string }>(`scanner-devices?device_id=${deviceId}`, { method: "DELETE" });
+    return this.request<{ message: string }>("scanner-devices", { method: "DELETE" }, { device_id: deviceId });
   }
 
   async disconnectScannerDevice(deviceId: string) {
