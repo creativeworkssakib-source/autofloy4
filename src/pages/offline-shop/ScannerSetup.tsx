@@ -317,83 +317,107 @@ const ScannerSetup = () => {
     }
   }, [activeDeviceId, updateDeviceStats]);
 
-  // Real-time USB device detection via WebHID API
+  // Manual connect button - creates a keyboard-mode scanner device
+  const manualConnectScanner = useCallback(async () => {
+    setIsDetecting(true);
+    setConnectionStatus('checking');
+    
+    try {
+      const deviceName = language === 'bn' 
+        ? 'USB বারকোড স্ক্যানার' 
+        : 'USB Barcode Scanner';
+      
+      const device = await registerScannerDevice(deviceName, 'keyboard');
+      
+      if (device) {
+        setScannerConnected(true);
+        setConnectionStatus('connected');
+        setIsTestMode(true);
+        toast.success(
+          language === 'bn' 
+            ? '✓ স্ক্যানার সংযুক্ত! এখন যেকোনো প্রোডাক্ট স্ক্যান করুন।'
+            : '✓ Scanner connected! Now scan any product.'
+        );
+      }
+    } catch (error) {
+      console.error('Manual connect error:', error);
+      toast.error(language === 'bn' ? 'সংযোগ ব্যর্থ' : 'Connection failed');
+    } finally {
+      setIsDetecting(false);
+    }
+  }, [language, registerScannerDevice]);
+
+  // Check for USB devices (fallback, no WebHID dependency)
   const checkUSBDevices = useCallback(async () => {
     setIsDetecting(true);
     setConnectionStatus('checking');
     
     try {
-      if ('hid' in navigator) {
-        const devices = await (navigator as any).hid.getDevices();
-        const scannerVendorIds = [0x05e0, 0x0c2e, 0x1504, 0x1eab, 0x05f9];
-        const scannerDevices = devices.filter((device: any) => 
-          scannerVendorIds.includes(device.vendorId)
+      // Check if we have any active device saved
+      const activeDevice = savedDevices.find(d => d.is_active);
+      if (activeDevice) {
+        setScannerConnected(true);
+        setConnectionStatus('connected');
+        setActiveDeviceId(activeDevice.id);
+        toast.success(
+          language === 'bn' 
+            ? `✓ ${activeDevice.device_name} সক্রিয় আছে`
+            : `✓ ${activeDevice.device_name} is active`
         );
-        
-        if (scannerDevices.length > 0) {
-          for (const d of scannerDevices) {
-            const deviceName = d.productName || (language === 'bn' ? 'USB স্ক্যানার' : 'USB Scanner');
-            await registerScannerDevice(deviceName, 'usb', String(d.vendorId), String(d.productId));
-          }
-          setScannerConnected(true);
-          setConnectionStatus('connected');
-          toast.success(language === 'bn' ? 'USB স্ক্যানার পাওয়া গেছে!' : 'USB scanner found!');
-        }
+      } else {
+        setConnectionStatus('waiting');
+        toast.info(
+          language === 'bn'
+            ? 'কোনো সক্রিয় স্ক্যানার নেই। "কানেক্ট করুন" বাটনে ক্লিক করুন।'
+            : 'No active scanner. Click "Connect" button.'
+        );
       }
-      
-      setTimeout(() => {
-        if (!scannerConnected) {
-          setConnectionStatus('waiting');
-        }
-        setIsDetecting(false);
-      }, 2000);
-      
     } catch (error) {
-      console.log('USB detection fallback to keyboard mode');
+      console.error('USB check error:', error);
       setConnectionStatus('waiting');
+    } finally {
       setIsDetecting(false);
     }
-  }, [language, scannerConnected, registerScannerDevice]);
+  }, [language, savedDevices]);
 
-  // Request WebHID permission to connect a new scanner
-  const requestScannerConnection = useCallback(async () => {
+  // Try WebHID if available (optional, may fail in iframe)
+  const tryWebHIDConnection = useCallback(async () => {
+    if (!('hid' in navigator)) {
+      toast.info(
+        language === 'bn'
+          ? 'WebHID সাপোর্টেড নয়। "কানেক্ট করুন" বাটন ব্যবহার করুন।'
+          : 'WebHID not supported. Use "Connect" button instead.'
+      );
+      return;
+    }
+    
     setIsDetecting(true);
     setConnectionStatus('checking');
     
     try {
-      if ('hid' in navigator) {
-        // Request user to select a HID device
-        const devices = await (navigator as any).hid.requestDevice({
-          filters: [] // Allow user to select any HID device
-        });
-        
-        if (devices && devices.length > 0) {
-          for (const d of devices) {
-            const deviceName = d.productName || (language === 'bn' ? 'USB স্ক্যানার' : 'USB Scanner');
-            await registerScannerDevice(deviceName, 'usb', String(d.vendorId), String(d.productId));
-          }
-          setScannerConnected(true);
-          setConnectionStatus('connected');
-          toast.success(language === 'bn' ? '✓ স্ক্যানার সফলভাবে সংযুক্ত!' : '✓ Scanner connected successfully!');
-        } else {
-          setConnectionStatus('waiting');
-          toast.info(language === 'bn' ? 'কোনো ডিভাইস নির্বাচন করা হয়নি' : 'No device selected');
+      const devices = await (navigator as any).hid.requestDevice({
+        filters: []
+      });
+      
+      if (devices && devices.length > 0) {
+        for (const d of devices) {
+          const deviceName = d.productName || (language === 'bn' ? 'USB স্ক্যানার' : 'USB Scanner');
+          await registerScannerDevice(deviceName, 'usb', String(d.vendorId), String(d.productId));
         }
+        setScannerConnected(true);
+        setConnectionStatus('connected');
+        toast.success(language === 'bn' ? '✓ স্ক্যানার সংযুক্ত!' : '✓ Scanner connected!');
       } else {
-        // WebHID not supported, fall back to keyboard mode
-        toast.info(
-          language === 'bn' 
-            ? 'আপনার ব্রাউজার WebHID সাপোর্ট করে না। কীবোর্ড মোডে স্ক্যান করুন।'
-            : 'Your browser doesn\'t support WebHID. Please scan in keyboard mode.'
-        );
+        toast.info(language === 'bn' ? 'কোনো ডিভাইস নির্বাচন করা হয়নি' : 'No device selected');
         setConnectionStatus('waiting');
       }
     } catch (error: any) {
-      if (error.name === 'NotAllowedError') {
-        toast.warning(language === 'bn' ? 'অনুমতি প্রত্যাখ্যাত' : 'Permission denied');
-      } else {
-        console.log('WebHID connection fallback to keyboard mode', error);
-      }
+      console.log('WebHID failed, using keyboard mode:', error.message);
+      toast.info(
+        language === 'bn'
+          ? 'WebHID কাজ করছে না। "কানেক্ট করুন" বাটন ব্যবহার করুন।'
+          : 'WebHID unavailable. Use "Connect" button instead.'
+      );
       setConnectionStatus('waiting');
     } finally {
       setIsDetecting(false);
@@ -403,6 +427,13 @@ const ScannerSetup = () => {
   // Reconnect a saved inactive device
   const reconnectDevice = useCallback(async (device: ScannerDevice) => {
     try {
+      // First deactivate all devices
+      for (const d of savedDevices) {
+        if (d.is_active && d.id !== device.id) {
+          await offlineShopService.updateScannerDevice(d.id, { is_active: false });
+        }
+      }
+      
       await offlineShopService.updateScannerDevice(device.id, {
         is_active: true,
         last_connected_at: new Date().toISOString(),
@@ -420,17 +451,29 @@ const ScannerSetup = () => {
       
       toast.success(
         language === 'bn' 
-          ? `✓ ${device.device_name} পুনঃসংযুক্ত` 
-          : `✓ ${device.device_name} reconnected`
+          ? `✓ ${device.device_name} সক্রিয় করা হয়েছে` 
+          : `✓ ${device.device_name} activated`
       );
     } catch (error) {
       toast.error(language === 'bn' ? 'সংযোগ ব্যর্থ' : 'Connection failed');
     }
-  }, [language]);
+  }, [language, savedDevices]);
 
+  // Auto-check for active device on load
   useEffect(() => {
-    checkUSBDevices();
-  }, []);
+    const checkActive = () => {
+      const activeDevice = savedDevices.find(d => d.is_active);
+      if (activeDevice) {
+        setActiveDeviceId(activeDevice.id);
+        setScannerConnected(true);
+        setConnectionStatus('connected');
+      }
+    };
+    
+    if (!isLoading && savedDevices.length > 0) {
+      checkActive();
+    }
+  }, [isLoading, savedDevices]);
 
   // USB Scanner listener
   useEffect(() => {
@@ -740,31 +783,34 @@ const ScannerSetup = () => {
                   {language === 'bn' ? 'সংযোগ অপশন' : 'Connection Options'}
                 </h4>
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {/* Option 1: WebHID Connect */}
-                  <div className="p-4 bg-card rounded-lg border hover:border-primary transition-colors">
+                  {/* Option 1: Manual Connect (Primary - Always Works) */}
+                  <div className="p-4 bg-card rounded-lg border-2 border-primary hover:border-primary transition-colors relative">
+                    <Badge className="absolute -top-2 -right-2 bg-green-600 text-xs">
+                      {language === 'bn' ? 'সেরা' : 'Best'}
+                    </Badge>
                     <div className="flex items-start gap-3">
                       <div className="p-2 rounded-full bg-primary/10 text-primary">
                         <Plug className="h-5 w-5" />
                       </div>
                       <div className="flex-1">
                         <h5 className="font-medium text-sm mb-1">
-                          {language === 'bn' ? 'USB ডিভাইস নির্বাচন করুন' : 'Select USB Device'}
+                          {language === 'bn' ? 'এখনই কানেক্ট করুন' : 'Connect Now'}
                         </h5>
                         <p className="text-xs text-muted-foreground mb-3">
                           {language === 'bn' 
-                            ? 'আপনার USB স্ক্যানার ম্যানুয়ালি সিলেক্ট করুন'
-                            : 'Manually select your USB scanner from the list'}
+                            ? 'USB স্ক্যানার লাগান এবং এই বাটনে ক্লিক করুন'
+                            : 'Plug in your USB scanner and click this button'}
                         </p>
                         <Button 
                           size="sm" 
-                          onClick={requestScannerConnection}
+                          onClick={manualConnectScanner}
                           disabled={isDetecting}
-                          className="w-full"
+                          className="w-full bg-primary hover:bg-primary/90"
                         >
                           {isDetecting ? (
-                            <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> {language === 'bn' ? 'খোঁজা হচ্ছে...' : 'Searching...'}</>
+                            <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> {language === 'bn' ? 'সংযুক্ত হচ্ছে...' : 'Connecting...'}</>
                           ) : (
-                            <><Plug className="h-4 w-4 mr-2" /> {language === 'bn' ? 'কানেক্ট করুন' : 'Connect Device'}</>
+                            <><Plug className="h-4 w-4 mr-2" /> {language === 'bn' ? 'কানেক্ট করুন' : 'Connect'}</>
                           )}
                         </Button>
                       </div>
