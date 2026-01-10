@@ -1997,6 +1997,7 @@ export type Database = {
       }
       shop_products: {
         Row: {
+          average_cost: number | null
           barcode: string | null
           brand: string | null
           category_id: string | null
@@ -2023,6 +2024,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          average_cost?: number | null
           barcode?: string | null
           brand?: string | null
           category_id?: string | null
@@ -2049,6 +2051,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          average_cost?: number | null
           barcode?: string | null
           brand?: string | null
           category_id?: string | null
@@ -2760,6 +2763,89 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shop_stock_batches: {
+        Row: {
+          batch_date: string
+          created_at: string
+          expiry_date: string | null
+          id: string
+          is_initial_batch: boolean | null
+          notes: string | null
+          product_id: string
+          purchase_id: string | null
+          purchase_item_id: string | null
+          quantity: number
+          remaining_quantity: number
+          shop_id: string | null
+          unit_cost: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          batch_date?: string
+          created_at?: string
+          expiry_date?: string | null
+          id?: string
+          is_initial_batch?: boolean | null
+          notes?: string | null
+          product_id: string
+          purchase_id?: string | null
+          purchase_item_id?: string | null
+          quantity?: number
+          remaining_quantity?: number
+          shop_id?: string | null
+          unit_cost?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          batch_date?: string
+          created_at?: string
+          expiry_date?: string | null
+          id?: string
+          is_initial_batch?: boolean | null
+          notes?: string | null
+          product_id?: string
+          purchase_id?: string | null
+          purchase_item_id?: string | null
+          quantity?: number
+          remaining_quantity?: number
+          shop_id?: string | null
+          unit_cost?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shop_stock_batches_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "shop_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shop_stock_batches_purchase_id_fkey"
+            columns: ["purchase_id"]
+            isOneToOne: false
+            referencedRelation: "shop_purchases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shop_stock_batches_purchase_item_id_fkey"
+            columns: ["purchase_item_id"]
+            isOneToOne: false
+            referencedRelation: "shop_purchase_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shop_stock_batches_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "shops"
             referencedColumns: ["id"]
           },
         ]
