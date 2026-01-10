@@ -49,6 +49,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import ShopLayout from "@/components/offline-shop/ShopLayout";
+import AddToStockModal, { PurchasedProduct } from "@/components/offline-shop/AddToStockModal";
 import { offlineShopService } from "@/services/offlineShopService";
 import { useLanguage } from "@/contexts/LanguageContext";
 
@@ -220,27 +221,7 @@ const ShopSuppliers = () => {
 
   // Add to stock modal state
   const [isAddToStockModalOpen, setIsAddToStockModalOpen] = useState(false);
-  const [allPurchasedProducts, setAllPurchasedProducts] = useState<{
-    name: string; 
-    quantity: number; 
-    unit_price: number; 
-    selling_price: number; 
-    supplier_name: string; 
-    purchase_date: string; 
-    product_id?: string;
-    // Editable fields
-    sku?: string;
-    barcode?: string;
-    brand?: string;
-    category?: string;
-    description?: string;
-    unit?: string;
-    min_stock_alert?: number;
-    expiry_date?: string;
-  }[]>([]);
-  const [selectedProductsToAdd, setSelectedProductsToAdd] = useState<string[]>([]);
-  const [isAddingToStock, setIsAddingToStock] = useState(false);
-  const [editingStockProduct, setEditingStockProduct] = useState<number | null>(null);
+  const [productsToAddToStock, setProductsToAddToStock] = useState<PurchasedProduct[]>([]);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -600,10 +581,10 @@ const ShopSuppliers = () => {
     });
   };
 
-  // Load all purchased products from all suppliers
+  // Load all purchased products from all suppliers for Add to Stock
   const loadAllPurchasedProducts = async () => {
     try {
-      const allProducts: typeof allPurchasedProducts = [];
+      const allProducts: PurchasedProduct[] = [];
       
       for (const supplier of suppliers) {
         const result = await offlineShopService.getSupplier(supplier.id);
@@ -612,156 +593,40 @@ const ShopSuppliers = () => {
         purchases.forEach((purchase: Purchase) => {
           if (purchase.items) {
             purchase.items.forEach((item) => {
-              // Check if this product already exists in allProducts (aggregate by name)
-              const existing = allProducts.find(p => p.name.toLowerCase() === item.product_name.toLowerCase());
-              if (existing) {
-                existing.quantity += Number(item.quantity);
-              } else {
-                allProducts.push({
-                  name: item.product_name,
-                  quantity: Number(item.quantity),
-                  unit_price: Number(item.unit_price || 0),
-                  selling_price: Number((item as any).selling_price || item.unit_price * 1.2),
-                  supplier_name: supplier.name,
-                  purchase_date: purchase.purchase_date,
-                  product_id: item.product_id || undefined,
-                  // Default values for editable fields
-                  sku: "",
-                  barcode: "",
-                  brand: "",
-                  category: "",
-                  description: "",
-                  unit: "pcs",
-                  min_stock_alert: 5,
-                  expiry_date: "",
-                });
+              // Only include items without product_id (not yet in stock)
+              if (!item.product_id) {
+                // Check if this product already exists in allProducts (aggregate by name)
+                const existing = allProducts.find(p => p.name.toLowerCase() === item.product_name.toLowerCase());
+                if (existing) {
+                  existing.quantity += Number(item.quantity);
+                } else {
+                  allProducts.push({
+                    name: item.product_name,
+                    quantity: Number(item.quantity),
+                    unit_price: Number(item.unit_price || 0),
+                    selling_price: Number((item as any).selling_price || item.unit_price * 1.2),
+                    supplier_name: supplier.name,
+                    purchase_date: purchase.purchase_date,
+                    unit: "pcs",
+                    min_stock_alert: 5,
+                  });
+                }
               }
             });
           }
         });
       }
       
-      setAllPurchasedProducts(allProducts);
+      setProductsToAddToStock(allProducts);
     } catch (error) {
       console.error("Error loading purchased products:", error);
     }
   };
 
-  // Update product field
-  const updateProductField = (index: number, field: string, value: any) => {
-    setAllPurchasedProducts(prev => prev.map((p, i) => 
-      i === index ? { ...p, [field]: value } : p
-    ));
-  };
-
   // Handle opening the Add to Stock modal
   const handleOpenAddToStockModal = async () => {
-    setIsAddToStockModalOpen(true);
-    setSelectedProductsToAdd([]);
     await loadAllPurchasedProducts();
-  };
-
-  // Toggle product selection for adding to stock
-  const toggleProductSelection = (productName: string) => {
-    setSelectedProductsToAdd(prev => 
-      prev.includes(productName) 
-        ? prev.filter(p => p !== productName)
-        : [...prev, productName]
-    );
-  };
-
-  // Select all products
-  const selectAllProducts = () => {
-    if (selectedProductsToAdd.length === allPurchasedProducts.length) {
-      setSelectedProductsToAdd([]);
-    } else {
-      setSelectedProductsToAdd(allPurchasedProducts.map(p => p.name));
-    }
-  };
-
-  // Add selected products to stock
-  const handleAddToStock = async () => {
-    if (selectedProductsToAdd.length === 0) {
-      toast.error(language === "bn" ? "কমপক্ষে একটি প্রোডাক্ট নির্বাচন করুন" : "Please select at least one product");
-      return;
-    }
-
-    const productsToAdd = allPurchasedProducts.filter(p => selectedProductsToAdd.includes(p.name));
-    
-    // Validate required fields for each selected product
-    const invalidProducts: string[] = [];
-    for (const product of productsToAdd) {
-      if (!product.name?.trim()) {
-        invalidProducts.push(language === "bn" ? "(নাম নেই)" : "(no name)");
-      } else if (!product.selling_price || product.selling_price <= 0) {
-        invalidProducts.push(product.name);
-      } else if (!product.unit_price || product.unit_price <= 0) {
-        invalidProducts.push(product.name);
-      }
-    }
-    
-    if (invalidProducts.length > 0) {
-      toast.error(
-        language === "bn" 
-          ? `এই প্রোডাক্টগুলোর বিক্রয় মূল্য বা ক্রয় মূল্য দেওয়া হয়নি: ${invalidProducts.slice(0, 3).join(", ")}${invalidProducts.length > 3 ? '...' : ''}`
-          : `Missing selling or purchase price for: ${invalidProducts.slice(0, 3).join(", ")}${invalidProducts.length > 3 ? '...' : ''}`
-      );
-      return;
-    }
-
-    setIsAddingToStock(true);
-    try {
-      let successCount = 0;
-      let failCount = 0;
-
-      for (const product of productsToAdd) {
-        try {
-          await offlineShopService.createProduct({
-            name: product.name,
-            sku: product.sku || "",
-            barcode: product.barcode || "",
-            brand: product.brand || "",
-            description: product.description || "",
-            unit: product.unit || "pcs",
-            purchase_price: product.unit_price,
-            selling_price: product.selling_price,
-            stock_quantity: product.quantity,
-            min_stock_alert: product.min_stock_alert || 5,
-            supplier_name: product.supplier_name,
-            expiry_date: product.expiry_date || null,
-            category_id: null, // Will be set if category name matches
-            is_active: true,
-          });
-          successCount++;
-        } catch (error) {
-          console.error(`Failed to add product ${product.name}:`, error);
-          failCount++;
-        }
-      }
-
-      if (successCount > 0) {
-        toast.success(
-          language === "bn"
-            ? `${successCount}টি প্রোডাক্ট Products & Stock পেজে যোগ হয়েছে!`
-            : `${successCount} products added to Products & Stock!`
-        );
-      }
-      if (failCount > 0) {
-        toast.warning(
-          language === "bn"
-            ? `${failCount}টি প্রোডাক্ট যোগ করা যায়নি`
-            : `${failCount} products failed to add`
-        );
-      }
-
-      setIsAddToStockModalOpen(false);
-      setSelectedProductsToAdd([]);
-      setEditingStockProduct(null);
-    } catch (error) {
-      toast.error(language === "bn" ? "প্রোডাক্ট যোগ করতে সমস্যা হয়েছে" : "Failed to add products");
-    } finally {
-      setIsAddingToStock(false);
-    }
+    setIsAddToStockModalOpen(true);
   };
 
   const getBusinessTypeLabel = (type: string) => {
@@ -1930,294 +1795,12 @@ const ShopSuppliers = () => {
       </Dialog>
 
       {/* Add to Stock Modal */}
-      <Dialog open={isAddToStockModalOpen} onOpenChange={(open) => {
-        setIsAddToStockModalOpen(open);
-        if (!open) setEditingStockProduct(null);
-      }}>
-        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
-          <DialogHeader className="flex-shrink-0">
-            <DialogTitle className="flex items-center gap-2">
-              <PackagePlus className="h-5 w-5" />
-              {language === "bn" ? "স্টকে প্রোডাক্ট যোগ করুন" : "Add Products to Stock"}
-            </DialogTitle>
-            <DialogDescription>
-              {language === "bn" 
-                ? "সাপ্লায়ারদের কাছ থেকে কেনা প্রোডাক্ট সরাসরি Products & Stock পেজে যোগ করুন। এডিট করতে প্রোডাক্টে ক্লিক করুন।" 
-                : "Add products purchased from suppliers directly to Products & Stock page. Click on a product to edit details."}
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="flex-1 overflow-hidden flex flex-col min-h-0">
-            {allPurchasedProducts.length === 0 ? (
-              <div className="text-center py-8">
-                <Package className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
-                <p className="text-muted-foreground">
-                  {language === "bn" 
-                    ? "কোনো সাপ্লায়ারের কাছ থেকে এখনো প্রোডাক্ট কেনা হয়নি" 
-                    : "No products purchased from suppliers yet"}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {language === "bn" 
-                    ? "প্রথমে সাপ্লায়ার যোগ করুন এবং প্রোডাক্ট কিনুন" 
-                    : "Add a supplier and make purchases first"}
-                </p>
-              </div>
-            ) : (
-              <>
-                <div className="flex items-center justify-between flex-shrink-0 pb-2">
-                  <div className="flex items-center gap-2">
-                    <Checkbox 
-                      checked={selectedProductsToAdd.length === allPurchasedProducts.length}
-                      onCheckedChange={selectAllProducts}
-                    />
-                    <span className="text-sm font-medium">
-                      {language === "bn" ? "সব নির্বাচন করুন" : "Select All"}
-                    </span>
-                  </div>
-                  <Badge variant="secondary">
-                    {selectedProductsToAdd.length} / {allPurchasedProducts.length} {language === "bn" ? "নির্বাচিত" : "selected"}
-                  </Badge>
-                </div>
-
-                <ScrollArea className="h-[50vh] border rounded-lg">
-                  <div className="p-2 space-y-2 pb-4">
-                    {allPurchasedProducts.map((product, index) => {
-                      const hasValidPrices = product.selling_price > 0 && product.unit_price > 0;
-                      const isSelected = selectedProductsToAdd.includes(product.name);
-                      
-                      return (
-                        <div 
-                          key={index}
-                          className={`p-3 rounded-lg border transition-colors ${
-                            isSelected 
-                              ? hasValidPrices 
-                                ? 'bg-primary/10 border-primary' 
-                                : 'bg-amber-50 dark:bg-amber-950/30 border-amber-400'
-                              : 'hover:bg-muted/50'
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <Checkbox 
-                              checked={isSelected}
-                              onCheckedChange={() => toggleProductSelection(product.name)}
-                            />
-                            <div 
-                              className="flex-1 cursor-pointer"
-                              onClick={() => setEditingStockProduct(editingStockProduct === index ? null : index)}
-                            >
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                  <p className="font-medium">{product.name}</p>
-                                  {isSelected && !hasValidPrices && (
-                                    <Badge variant="outline" className="text-xs border-amber-400 text-amber-600 bg-amber-100 dark:bg-amber-900/30">
-                                      <AlertTriangle className="h-3 w-3 mr-1" />
-                                      {language === "bn" ? "তথ্য দিন" : "Needs Info"}
-                                    </Badge>
-                                  )}
-                                  {isSelected && hasValidPrices && (
-                                    <Badge variant="outline" className="text-xs border-green-400 text-green-600 bg-green-100 dark:bg-green-900/30">
-                                      <Check className="h-3 w-3 mr-1" />
-                                      {language === "bn" ? "প্রস্তুত" : "Ready"}
-                                    </Badge>
-                                  )}
-                                </div>
-                                <Button variant="ghost" size="sm" className="h-6 px-2">
-                                  <Pencil className="h-3 w-3 mr-1" />
-                                  {language === "bn" ? "এডিট" : "Edit"}
-                                </Button>
-                              </div>
-                              <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1">
-                                <span className="flex items-center gap-1">
-                                  <Truck className="h-3 w-3" />
-                                  {product.supplier_name}
-                                </span>
-                                <span>
-                                  {language === "bn" ? "পরিমাণ:" : "Qty:"} {product.quantity}
-                                </span>
-                                <span className={product.unit_price > 0 ? "" : "text-amber-600 font-medium"}>
-                                  {language === "bn" ? "ক্রয়:" : "Cost:"} {product.unit_price > 0 ? formatCurrency(product.unit_price) : (language === "bn" ? "দরকার" : "Required")}
-                                </span>
-                                <span className={product.selling_price > 0 ? "" : "text-amber-600 font-medium"}>
-                                  {language === "bn" ? "বিক্রয়:" : "Sell:"} {product.selling_price > 0 ? formatCurrency(product.selling_price) : (language === "bn" ? "দরকার" : "Required")}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-
-                        {/* Expanded Edit Form */}
-                        {editingStockProduct === index && (
-                          <div className="mt-4 pt-4 border-t grid grid-cols-2 md:grid-cols-4 gap-3">
-                            <div>
-                              <Label className="text-xs">{language === "bn" ? "প্রোডাক্ট নাম *" : "Product Name *"}</Label>
-                              <Input
-                                value={product.name}
-                                onChange={(e) => updateProductField(index, 'name', e.target.value)}
-                                className="h-8 text-sm"
-                              />
-                            </div>
-                            <div>
-                              <Label className="text-xs">SKU</Label>
-                              <Input
-                                value={product.sku || ""}
-                                onChange={(e) => updateProductField(index, 'sku', e.target.value)}
-                                placeholder="SKU-001"
-                                className="h-8 text-sm"
-                              />
-                            </div>
-                            <div>
-                              <Label className="text-xs">{language === "bn" ? "বারকোড" : "Barcode"}</Label>
-                              <Input
-                                value={product.barcode || ""}
-                                onChange={(e) => updateProductField(index, 'barcode', e.target.value)}
-                                placeholder="1234567890"
-                                className="h-8 text-sm"
-                              />
-                            </div>
-                            <div>
-                              <Label className="text-xs">{language === "bn" ? "ব্র্যান্ড" : "Brand"}</Label>
-                              <Input
-                                value={product.brand || ""}
-                                onChange={(e) => updateProductField(index, 'brand', e.target.value)}
-                                className="h-8 text-sm"
-                              />
-                            </div>
-                            <div>
-                              <Label className="text-xs">{language === "bn" ? "ক্যাটাগরি" : "Category"}</Label>
-                              <Input
-                                value={product.category || ""}
-                                onChange={(e) => updateProductField(index, 'category', e.target.value)}
-                                className="h-8 text-sm"
-                              />
-                            </div>
-                            <div>
-                              <Label className="text-xs">{language === "bn" ? "ইউনিট" : "Unit"}</Label>
-                              <Select
-                                value={product.unit || "pcs"}
-                                onValueChange={(value) => updateProductField(index, 'unit', value)}
-                              >
-                                <SelectTrigger className="h-8 text-sm">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="pcs">pcs</SelectItem>
-                                  <SelectItem value="kg">kg</SelectItem>
-                                  <SelectItem value="ltr">ltr</SelectItem>
-                                  <SelectItem value="box">box</SelectItem>
-                                  <SelectItem value="pack">pack</SelectItem>
-                                  <SelectItem value="dozen">dozen</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div>
-                              <Label className="text-xs">{language === "bn" ? "ক্রয় মূল্য *" : "Purchase Price *"}</Label>
-                              <Input
-                                type="number"
-                                value={product.unit_price}
-                                onChange={(e) => updateProductField(index, 'unit_price', parseFloat(e.target.value) || 0)}
-                                className="h-8 text-sm"
-                              />
-                            </div>
-                            <div>
-                              <Label className="text-xs">{language === "bn" ? "বিক্রয় মূল্য *" : "Selling Price *"}</Label>
-                              <Input
-                                type="number"
-                                value={product.selling_price}
-                                onChange={(e) => updateProductField(index, 'selling_price', parseFloat(e.target.value) || 0)}
-                                className="h-8 text-sm"
-                              />
-                            </div>
-                            <div>
-                              <Label className="text-xs">{language === "bn" ? "স্টক পরিমাণ *" : "Stock Qty *"}</Label>
-                              <Input
-                                type="number"
-                                value={product.quantity}
-                                onChange={(e) => updateProductField(index, 'quantity', parseInt(e.target.value) || 0)}
-                                className="h-8 text-sm"
-                              />
-                            </div>
-                            <div>
-                              <Label className="text-xs">{language === "bn" ? "মিনিমাম স্টক" : "Min Stock Alert"}</Label>
-                              <Input
-                                type="number"
-                                value={product.min_stock_alert || 5}
-                                onChange={(e) => updateProductField(index, 'min_stock_alert', parseInt(e.target.value) || 5)}
-                                className="h-8 text-sm"
-                              />
-                            </div>
-                            <div>
-                              <Label className="text-xs">{language === "bn" ? "সাপ্লায়ার" : "Supplier"}</Label>
-                              <Input
-                                value={product.supplier_name}
-                                onChange={(e) => updateProductField(index, 'supplier_name', e.target.value)}
-                                className="h-8 text-sm"
-                              />
-                            </div>
-                            <div>
-                              <Label className="text-xs">{language === "bn" ? "মেয়াদ উত্তীর্ণ" : "Expiry Date"}</Label>
-                              <Input
-                                type="date"
-                                value={product.expiry_date || ""}
-                                onChange={(e) => updateProductField(index, 'expiry_date', e.target.value)}
-                                className="h-8 text-sm"
-                              />
-                            </div>
-                            <div className="col-span-2 md:col-span-4">
-                              <Label className="text-xs">{language === "bn" ? "বিবরণ" : "Description"}</Label>
-                              <Textarea
-                                value={product.description || ""}
-                                onChange={(e) => updateProductField(index, 'description', e.target.value)}
-                                rows={2}
-                                className="text-sm"
-                              />
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                      );
-                    })}
-                  </div>
-                </ScrollArea>
-
-                <div className="flex items-start gap-2 text-xs text-muted-foreground bg-blue-50 dark:bg-blue-950/30 p-3 rounded-lg flex-shrink-0 mt-2">
-                  <Info className="h-4 w-4 mt-0.5 shrink-0" />
-                  <p>
-                    {language === "bn" 
-                      ? "প্রোডাক্টে ক্লিক করে সব তথ্য এডিট করতে পারবেন। * চিহ্নিত ফিল্ডগুলো আবশ্যক।" 
-                      : "Click on a product to edit all details. Fields marked with * are required."}
-                  </p>
-                </div>
-              </>
-            )}
-          </div>
-
-          <DialogFooter className="gap-2 flex-shrink-0">
-            <Button variant="outline" onClick={() => {
-              setIsAddToStockModalOpen(false);
-              setEditingStockProduct(null);
-            }}>
-              {language === "bn" ? "বন্ধ করুন" : "Close"}
-            </Button>
-            {allPurchasedProducts.length > 0 && (
-              <Button 
-                onClick={handleAddToStock} 
-                disabled={selectedProductsToAdd.length === 0 || isAddingToStock}
-              >
-                {isAddingToStock ? (
-                  <>
-                    <span className="animate-spin mr-2">⏳</span>
-                    {language === "bn" ? "যোগ হচ্ছে..." : "Adding..."}
-                  </>
-                ) : (
-                  <>
-                    <PackagePlus className="h-4 w-4 mr-2" />
-                    {language === "bn" ? `${selectedProductsToAdd.length}টি যোগ করুন` : `Add ${selectedProductsToAdd.length} Products`}
-                  </>
-                )}
-              </Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <AddToStockModal
+        isOpen={isAddToStockModalOpen}
+        onClose={() => setIsAddToStockModalOpen(false)}
+        products={productsToAddToStock}
+        onSuccess={loadData}
+      />
 
       <DeleteConfirmDialog
         open={deleteDialogOpen}
