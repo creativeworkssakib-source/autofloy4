@@ -356,44 +356,39 @@ const ShopPurchases = () => {
         }
       }
 
-      // First, create new products for items marked as new
-      const newProducts = items.filter((item) => item.isNew && item.product_name);
-
-      for (const item of newProducts) {
-        try {
-          const result = await offlineShopService.createProduct({
-            name: item.product_name,
-            purchase_price: item.unit_price,
-            selling_price: item.selling_price,
-            stock_quantity: 0, // Will be updated by purchase
-          });
-
-          // Update item with new product id
-          const idx = items.findIndex((i) => i === item);
-          if (idx !== -1 && result.product) {
-            items[idx].product_id = result.product.id;
-          }
-        } catch (error) {
-          console.error("Error creating product:", error);
-        }
-      }
+      // NOTE: Do NOT auto-create products for new items
+      // Products should be manually added via "Add to Stock" with full details
+      // Just save purchase record with product_name (without product_id)
 
       await offlineShopService.createPurchase({
         supplier_id: ensuredSupplierId,
         supplier_name: ensuredSupplierName,
         supplier_contact: ensuredSupplierContact,
         items: items.map((item) => ({
-          product_id: item.product_id || undefined,
+          // Only include product_id if selecting an existing product (not new)
+          product_id: !item.isNew && item.product_id ? item.product_id : undefined,
           product_name: item.product_name,
           quantity: item.quantity,
           unit_price: item.unit_price,
+          selling_price: item.selling_price, // Store selling price for later stock addition
           total: item.total,
           expiry_date: item.expiry_date,
         })),
         paid_amount: paidAmount || total,
         notes,
       });
-      toast.success(t("shop.purchaseComplete"));
+      
+      const hasNewItems = items.some(item => item.isNew);
+      if (hasNewItems) {
+        toast.success(
+          language === "bn" 
+            ? "ক্রয় সম্পন্ন! নতুন প্রোডাক্টগুলো স্টকে যোগ করতে 'স্টকে যোগ করুন' বাটন ব্যবহার করুন"
+            : "Purchase complete! Use 'Add to Stock' to add new products to stock"
+        );
+      } else {
+        toast.success(t("shop.purchaseComplete"));
+      }
+      
       setIsModalOpen(false);
       resetForm();
       loadData();

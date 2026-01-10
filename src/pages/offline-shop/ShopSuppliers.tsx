@@ -686,9 +686,31 @@ const ShopSuppliers = () => {
       return;
     }
 
+    const productsToAdd = allPurchasedProducts.filter(p => selectedProductsToAdd.includes(p.name));
+    
+    // Validate required fields for each selected product
+    const invalidProducts: string[] = [];
+    for (const product of productsToAdd) {
+      if (!product.name?.trim()) {
+        invalidProducts.push(language === "bn" ? "(নাম নেই)" : "(no name)");
+      } else if (!product.selling_price || product.selling_price <= 0) {
+        invalidProducts.push(product.name);
+      } else if (!product.unit_price || product.unit_price <= 0) {
+        invalidProducts.push(product.name);
+      }
+    }
+    
+    if (invalidProducts.length > 0) {
+      toast.error(
+        language === "bn" 
+          ? `এই প্রোডাক্টগুলোর বিক্রয় মূল্য বা ক্রয় মূল্য দেওয়া হয়নি: ${invalidProducts.slice(0, 3).join(", ")}${invalidProducts.length > 3 ? '...' : ''}`
+          : `Missing selling or purchase price for: ${invalidProducts.slice(0, 3).join(", ")}${invalidProducts.length > 3 ? '...' : ''}`
+      );
+      return;
+    }
+
     setIsAddingToStock(true);
     try {
-      const productsToAdd = allPurchasedProducts.filter(p => selectedProductsToAdd.includes(p.name));
       let successCount = 0;
       let failCount = 0;
 
@@ -702,11 +724,12 @@ const ShopSuppliers = () => {
             description: product.description || "",
             unit: product.unit || "pcs",
             purchase_price: product.unit_price,
-            selling_price: product.selling_price || product.unit_price * 1.2,
+            selling_price: product.selling_price,
             stock_quantity: product.quantity,
             min_stock_alert: product.min_stock_alert || 5,
             supplier_name: product.supplier_name,
             expiry_date: product.expiry_date || null,
+            category_id: null, // Will be set if category name matches
             is_active: true,
           });
           successCount++;
@@ -1958,48 +1981,68 @@ const ShopSuppliers = () => {
 
                 <ScrollArea className="h-[50vh] border rounded-lg">
                   <div className="p-2 space-y-2 pb-4">
-                    {allPurchasedProducts.map((product, index) => (
-                      <div 
-                        key={index}
-                        className={`p-3 rounded-lg border transition-colors ${
-                          selectedProductsToAdd.includes(product.name) 
-                            ? 'bg-primary/10 border-primary' 
-                            : 'hover:bg-muted/50'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <Checkbox 
-                            checked={selectedProductsToAdd.includes(product.name)}
-                            onCheckedChange={() => toggleProductSelection(product.name)}
-                          />
-                          <div 
-                            className="flex-1 cursor-pointer"
-                            onClick={() => setEditingStockProduct(editingStockProduct === index ? null : index)}
-                          >
-                            <div className="flex items-center justify-between">
-                              <p className="font-medium">{product.name}</p>
-                              <Button variant="ghost" size="sm" className="h-6 px-2">
-                                <Pencil className="h-3 w-3 mr-1" />
-                                {language === "bn" ? "এডিট" : "Edit"}
-                              </Button>
-                            </div>
-                            <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1">
-                              <span className="flex items-center gap-1">
-                                <Truck className="h-3 w-3" />
-                                {product.supplier_name}
-                              </span>
-                              <span>
-                                {language === "bn" ? "পরিমাণ:" : "Qty:"} {product.quantity}
-                              </span>
-                              <span>
-                                {language === "bn" ? "ক্রয়:" : "Cost:"} {formatCurrency(product.unit_price)}
-                              </span>
-                              <span>
-                                {language === "bn" ? "বিক্রয়:" : "Sell:"} {formatCurrency(product.selling_price)}
-                              </span>
+                    {allPurchasedProducts.map((product, index) => {
+                      const hasValidPrices = product.selling_price > 0 && product.unit_price > 0;
+                      const isSelected = selectedProductsToAdd.includes(product.name);
+                      
+                      return (
+                        <div 
+                          key={index}
+                          className={`p-3 rounded-lg border transition-colors ${
+                            isSelected 
+                              ? hasValidPrices 
+                                ? 'bg-primary/10 border-primary' 
+                                : 'bg-amber-50 dark:bg-amber-950/30 border-amber-400'
+                              : 'hover:bg-muted/50'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <Checkbox 
+                              checked={isSelected}
+                              onCheckedChange={() => toggleProductSelection(product.name)}
+                            />
+                            <div 
+                              className="flex-1 cursor-pointer"
+                              onClick={() => setEditingStockProduct(editingStockProduct === index ? null : index)}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <p className="font-medium">{product.name}</p>
+                                  {isSelected && !hasValidPrices && (
+                                    <Badge variant="outline" className="text-xs border-amber-400 text-amber-600 bg-amber-100 dark:bg-amber-900/30">
+                                      <AlertTriangle className="h-3 w-3 mr-1" />
+                                      {language === "bn" ? "তথ্য দিন" : "Needs Info"}
+                                    </Badge>
+                                  )}
+                                  {isSelected && hasValidPrices && (
+                                    <Badge variant="outline" className="text-xs border-green-400 text-green-600 bg-green-100 dark:bg-green-900/30">
+                                      <Check className="h-3 w-3 mr-1" />
+                                      {language === "bn" ? "প্রস্তুত" : "Ready"}
+                                    </Badge>
+                                  )}
+                                </div>
+                                <Button variant="ghost" size="sm" className="h-6 px-2">
+                                  <Pencil className="h-3 w-3 mr-1" />
+                                  {language === "bn" ? "এডিট" : "Edit"}
+                                </Button>
+                              </div>
+                              <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1">
+                                <span className="flex items-center gap-1">
+                                  <Truck className="h-3 w-3" />
+                                  {product.supplier_name}
+                                </span>
+                                <span>
+                                  {language === "bn" ? "পরিমাণ:" : "Qty:"} {product.quantity}
+                                </span>
+                                <span className={product.unit_price > 0 ? "" : "text-amber-600 font-medium"}>
+                                  {language === "bn" ? "ক্রয়:" : "Cost:"} {product.unit_price > 0 ? formatCurrency(product.unit_price) : (language === "bn" ? "দরকার" : "Required")}
+                                </span>
+                                <span className={product.selling_price > 0 ? "" : "text-amber-600 font-medium"}>
+                                  {language === "bn" ? "বিক্রয়:" : "Sell:"} {product.selling_price > 0 ? formatCurrency(product.selling_price) : (language === "bn" ? "দরকার" : "Required")}
+                                </span>
+                              </div>
                             </div>
                           </div>
-                        </div>
 
                         {/* Expanded Edit Form */}
                         {editingStockProduct === index && (
@@ -2130,7 +2173,8 @@ const ShopSuppliers = () => {
                           </div>
                         )}
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </ScrollArea>
 
