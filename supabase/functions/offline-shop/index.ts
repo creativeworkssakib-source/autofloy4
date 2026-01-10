@@ -5274,6 +5274,99 @@ serve(async (req) => {
       }
     }
 
+    // ===== SCANNER LOGS =====
+    if (resource === "scanner-logs") {
+      if (req.method === "GET") {
+        const limit = parseInt(url.searchParams.get("limit") || "50");
+        const productId = url.searchParams.get("product_id");
+        
+        let query = supabase
+          .from("shop_scanner_logs")
+          .select("*")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false })
+          .limit(limit);
+        
+        if (shopId) query = query.eq("shop_id", shopId);
+        if (productId) query = query.eq("product_id", productId);
+        
+        const { data, error } = await query;
+        if (error) throw error;
+        
+        // Get stats
+        let statsQuery = supabase
+          .from("shop_scanner_logs")
+          .select("id, is_matched, scan_speed", { count: "exact" })
+          .eq("user_id", userId);
+        
+        if (shopId) statsQuery = statsQuery.eq("shop_id", shopId);
+        
+        const { data: allLogs, count } = await statsQuery;
+        
+        const totalScans = count || 0;
+        const matchedScans = (allLogs || []).filter((l: any) => l.is_matched).length;
+        const avgSpeed = (allLogs || []).reduce((sum: number, l: any) => sum + (l.scan_speed || 0), 0) / Math.max(1, allLogs?.length || 1);
+        
+        return new Response(JSON.stringify({ 
+          logs: data,
+          stats: {
+            totalScans,
+            matchedScans,
+            unmatchedScans: totalScans - matchedScans,
+            avgSpeed: Math.round(avgSpeed),
+            matchRate: totalScans > 0 ? Math.round((matchedScans / totalScans) * 100) : 0
+          }
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      
+      if (req.method === "POST") {
+        const body = await req.json();
+        
+        const { data: log, error } = await supabase
+          .from("shop_scanner_logs")
+          .insert({
+            user_id: userId,
+            shop_id: shopId || null,
+            barcode: body.barcode,
+            product_id: body.product_id || null,
+            product_name: body.product_name || null,
+            scan_type: body.scan_type || "usb",
+            is_matched: body.is_matched ?? false,
+            scan_speed: body.scan_speed || null,
+          })
+          .select()
+          .single();
+        
+        if (error) throw error;
+        
+        return new Response(JSON.stringify({ log }), {
+          status: 201,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      
+      if (req.method === "DELETE") {
+        // Clear all scanner logs
+        let deleteQuery = supabase
+          .from("shop_scanner_logs")
+          .delete()
+          .eq("user_id", userId);
+        
+        if (shopId) deleteQuery = deleteQuery.eq("shop_id", shopId);
+        
+        const { error } = await deleteQuery;
+        if (error) throw error;
+        
+        return new Response(JSON.stringify({ message: "Scanner logs cleared" }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     return new Response(JSON.stringify({ error: "Not found" }), {
       status: 404,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

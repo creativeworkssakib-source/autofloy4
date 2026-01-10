@@ -2541,6 +2541,60 @@ export type Database = {
           },
         ]
       }
+      shop_scanner_logs: {
+        Row: {
+          barcode: string
+          created_at: string | null
+          id: string
+          is_matched: boolean | null
+          product_id: string | null
+          product_name: string | null
+          scan_speed: number | null
+          scan_type: string | null
+          shop_id: string | null
+          user_id: string
+        }
+        Insert: {
+          barcode: string
+          created_at?: string | null
+          id?: string
+          is_matched?: boolean | null
+          product_id?: string | null
+          product_name?: string | null
+          scan_speed?: number | null
+          scan_type?: string | null
+          shop_id?: string | null
+          user_id: string
+        }
+        Update: {
+          barcode?: string
+          created_at?: string | null
+          id?: string
+          is_matched?: boolean | null
+          product_id?: string | null
+          product_name?: string | null
+          scan_speed?: number | null
+          scan_type?: string | null
+          shop_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shop_scanner_logs_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "shop_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shop_scanner_logs_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "shops"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       shop_settings: {
         Row: {
           created_at: string | null
@@ -2556,6 +2610,9 @@ export type Database = {
           logo_url: string | null
           opening_cash_balance: number | null
           opening_date: string | null
+          scanner_config: Json | null
+          scanner_last_connected_at: string | null
+          scanner_total_scans: number | null
           shop_address: string | null
           shop_email: string | null
           shop_id: string | null
@@ -2584,6 +2641,9 @@ export type Database = {
           logo_url?: string | null
           opening_cash_balance?: number | null
           opening_date?: string | null
+          scanner_config?: Json | null
+          scanner_last_connected_at?: string | null
+          scanner_total_scans?: number | null
           shop_address?: string | null
           shop_email?: string | null
           shop_id?: string | null
@@ -2612,6 +2672,9 @@ export type Database = {
           logo_url?: string | null
           opening_cash_balance?: number | null
           opening_date?: string | null
+          scanner_config?: Json | null
+          scanner_last_connected_at?: string | null
+          scanner_total_scans?: number | null
           shop_address?: string | null
           shop_email?: string | null
           shop_id?: string | null
@@ -3756,6 +3819,10 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      increment_scanner_scans: {
+        Args: { p_shop_id?: string; p_user_id: string }
+        Returns: undefined
       }
     }
     Enums: {
