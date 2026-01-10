@@ -15,7 +15,10 @@ import {
   WifiOff,
   Loader2,
   Trash2,
-  BarChart3
+  BarChart3,
+  Power,
+  Edit2,
+  Save
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -23,17 +26,10 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import ShopLayout from "@/components/offline-shop/ShopLayout";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { offlineShopService } from "@/services/offlineShopService";
+import { offlineShopService, ScannerDevice } from "@/services/offlineShopService";
 import { useShop } from "@/contexts/ShopContext";
 import { cn } from "@/lib/utils";
-
-interface ScannerDevice {
-  id: string;
-  name: string;
-  type: 'usb' | 'keyboard' | 'camera';
-  connected: boolean;
-  lastActivity?: Date;
-}
+import { Input } from "@/components/ui/input";
 
 interface ScannerStats {
   totalScans: number;
@@ -61,12 +57,17 @@ const ScannerSetup = () => {
   const [lastScannedCode, setLastScannedCode] = useState<string | null>(null);
   const [scannerConnected, setScannerConnected] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
-  const [detectedDevices, setDetectedDevices] = useState<ScannerDevice[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'disconnected' | 'waiting'>('waiting');
   const [testResults, setTestResults] = useState<{ code: string; product: string | null; time: Date }[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [scanSpeed, setScanSpeed] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Real database-backed devices
+  const [savedDevices, setSavedDevices] = useState<ScannerDevice[]>([]);
+  const [activeDeviceId, setActiveDeviceId] = useState<string | null>(null);
+  const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null);
+  const [editingDeviceName, setEditingDeviceName] = useState("");
   
   // Real data from database
   const [scannerStats, setScannerStats] = useState<ScannerStats>({
@@ -82,19 +83,29 @@ const ScannerSetup = () => {
   const lastKeyTimeRef = useRef<number>(0);
   const scanTimesRef = useRef<number[]>([]);
 
-  // Load products and scanner stats
+  // Load products, devices, and scanner stats
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
       try {
-        const [productsRes, logsRes] = await Promise.all([
+        const [productsRes, logsRes, devicesRes] = await Promise.all([
           offlineShopService.getProducts(),
           offlineShopService.getScannerLogs(10),
+          offlineShopService.getScannerDevices(),
         ]);
         
         setProducts(productsRes.products || []);
         setScannerStats(logsRes.stats);
         setRecentLogs(logsRes.logs || []);
+        setSavedDevices(devicesRes.devices || []);
+        
+        // Check if any device is active
+        const activeDevice = devicesRes.devices?.find((d: ScannerDevice) => d.is_active);
+        if (activeDevice) {
+          setActiveDeviceId(activeDevice.id);
+          setScannerConnected(true);
+          setConnectionStatus('connected');
+        }
       } catch (error) {
         console.error("Load data error:", error);
       } finally {
@@ -106,6 +117,155 @@ const ScannerSetup = () => {
       loadData();
     }
   }, [currentShop?.id]);
+
+  // Register or update scanner device in database
+  const registerScannerDevice = useCallback(async (
+    deviceName: string,
+    deviceType: string = 'keyboard',
+    vendorId?: string,
+    productId?: string
+  ) => {
+    try {
+      const result = await offlineShopService.registerScannerDevice({
+        device_name: deviceName,
+        device_type: deviceType,
+        vendor_id: vendorId,
+        product_id: productId,
+      });
+      
+      setSavedDevices(prev => {
+        const existing = prev.find(d => d.id === result.device.id);
+        if (existing) {
+          return prev.map(d => d.id === result.device.id ? result.device : d);
+        }
+        return [result.device, ...prev];
+      });
+      
+      setActiveDeviceId(result.device.id);
+      setScannerConnected(true);
+      setConnectionStatus('connected');
+      
+      if (result.isNew) {
+        toast.success(
+          language === 'bn' 
+            ? `✓ নতুন স্ক্যানার সংযুক্ত: ${deviceName}` 
+            : `✓ New scanner connected: ${deviceName}`
+        );
+      } else {
+        toast.success(
+          language === 'bn' 
+            ? `✓ স্ক্যানার পুনঃসংযুক্ত: ${deviceName}` 
+            : `✓ Scanner reconnected: ${deviceName}`
+        );
+      }
+      
+      return result.device;
+    } catch (error) {
+      console.error("Failed to register scanner:", error);
+      toast.error(language === 'bn' ? 'স্ক্যানার সংরক্ষণ ব্যর্থ' : 'Failed to save scanner');
+      return null;
+    }
+  }, [language]);
+
+  // Update device scan stats
+  const updateDeviceStats = useCallback(async (deviceId: string, speed: number) => {
+    try {
+      const device = savedDevices.find(d => d.id === deviceId);
+      if (!device) return;
+      
+      const newTotalScans = device.total_scans + 1;
+      const newAvgSpeed = Math.round(
+        ((device.avg_scan_speed * device.total_scans) + speed) / newTotalScans
+      );
+      
+      await offlineShopService.updateScannerDevice(deviceId, {
+        total_scans: newTotalScans,
+        avg_scan_speed: newAvgSpeed,
+        last_connected_at: new Date().toISOString(),
+      });
+      
+      setSavedDevices(prev => prev.map(d => 
+        d.id === deviceId 
+          ? { ...d, total_scans: newTotalScans, avg_scan_speed: newAvgSpeed, last_connected_at: new Date().toISOString() } 
+          : d
+      ));
+    } catch (error) {
+      console.error("Failed to update device stats:", error);
+    }
+  }, [savedDevices]);
+
+  // Disconnect device
+  const disconnectDevice = useCallback(async (deviceId: string) => {
+    try {
+      await offlineShopService.disconnectScannerDevice(deviceId);
+      setSavedDevices(prev => prev.map(d => 
+        d.id === deviceId ? { ...d, is_active: false } : d
+      ));
+      
+      if (activeDeviceId === deviceId) {
+        setActiveDeviceId(null);
+        setScannerConnected(false);
+        setConnectionStatus('waiting');
+      }
+      
+      toast.success(language === 'bn' ? 'স্ক্যানার বিচ্ছিন্ন' : 'Scanner disconnected');
+    } catch (error) {
+      toast.error(language === 'bn' ? 'বিচ্ছিন্ন করতে ব্যর্থ' : 'Failed to disconnect');
+    }
+  }, [activeDeviceId, language]);
+
+  // Delete device
+  const deleteDevice = useCallback(async (deviceId: string) => {
+    try {
+      await offlineShopService.deleteScannerDevice(deviceId);
+      setSavedDevices(prev => prev.filter(d => d.id !== deviceId));
+      
+      if (activeDeviceId === deviceId) {
+        setActiveDeviceId(null);
+        setScannerConnected(false);
+        setConnectionStatus('waiting');
+      }
+      
+      toast.success(language === 'bn' ? 'স্ক্যানার মুছে ফেলা হয়েছে' : 'Scanner deleted');
+    } catch (error) {
+      toast.error(language === 'bn' ? 'মুছতে ব্যর্থ' : 'Failed to delete');
+    }
+  }, [activeDeviceId, language]);
+
+  // Rename device
+  const saveDeviceName = useCallback(async () => {
+    if (!editingDeviceId || !editingDeviceName.trim()) return;
+    
+    try {
+      await offlineShopService.updateScannerDevice(editingDeviceId, {
+        device_name: editingDeviceName.trim(),
+      });
+      
+      setSavedDevices(prev => prev.map(d => 
+        d.id === editingDeviceId ? { ...d, device_name: editingDeviceName.trim() } : d
+      ));
+      
+      setEditingDeviceId(null);
+      setEditingDeviceName("");
+      toast.success(language === 'bn' ? 'নাম সংরক্ষিত' : 'Name saved');
+    } catch (error) {
+      toast.error(language === 'bn' ? 'সংরক্ষণ ব্যর্থ' : 'Failed to save');
+    }
+  }, [editingDeviceId, editingDeviceName, language]);
+
+  // Detect scanner from input pattern
+  const detectScannerFromInput = useCallback(async (scannedCode: string, inputSpeed: number) => {
+    const isScannerInput = inputSpeed > 30;
+    
+    if (isScannerInput) {
+      const deviceName = language === 'bn' ? 'USB বারকোড স্ক্যানার (HID)' : 'USB Barcode Scanner (HID)';
+      const device = await registerScannerDevice(deviceName, 'keyboard');
+      
+      if (device) {
+        setActiveDeviceId(device.id);
+      }
+    }
+  }, [language, registerScannerDevice]);
 
   // Log scan to database
   const logScanToDatabase = useCallback(async (
@@ -144,44 +304,17 @@ const ScannerSetup = () => {
         scan_speed: speed,
         created_at: new Date().toISOString(),
       }, ...prev.slice(0, 9)]);
+      
+      // Update active device stats
+      if (activeDeviceId) {
+        updateDeviceStats(activeDeviceId, speed);
+      }
     } catch (error) {
       console.error("Failed to log scan:", error);
     }
-  }, []);
+  }, [activeDeviceId, updateDeviceStats]);
 
-  // Detect USB devices using keyboard input patterns
-  const detectScannerFromInput = useCallback((scannedCode: string, inputSpeed: number) => {
-    const isScannerInput = inputSpeed > 30;
-    
-    if (isScannerInput && !scannerConnected) {
-      setScannerConnected(true);
-      setConnectionStatus('connected');
-      
-      setDetectedDevices(prev => {
-        const exists = prev.some(d => d.type === 'keyboard');
-        if (exists) return prev;
-        return [...prev, {
-          id: 'usb-hid-scanner',
-          name: language === 'bn' ? 'USB বারকোড স্ক্যানার (HID)' : 'USB Barcode Scanner (HID)',
-          type: 'keyboard',
-          connected: true,
-          lastActivity: new Date()
-        }];
-      });
-      
-      toast.success(
-        language === 'bn' 
-          ? '✓ USB স্ক্যানার সনাক্ত হয়েছে!' 
-          : '✓ USB Scanner Detected!'
-      );
-    }
-    
-    setDetectedDevices(prev => 
-      prev.map(d => d.type === 'keyboard' ? { ...d, lastActivity: new Date() } : d)
-    );
-  }, [scannerConnected, language]);
-
-  // Real-time USB device detection
+  // Real-time USB device detection via WebHID API
   const checkUSBDevices = useCallback(async () => {
     setIsDetecting(true);
     setConnectionStatus('checking');
@@ -195,12 +328,10 @@ const ScannerSetup = () => {
         );
         
         if (scannerDevices.length > 0) {
-          setDetectedDevices(scannerDevices.map((d: any) => ({
-            id: `${d.vendorId}-${d.productId}`,
-            name: d.productName || (language === 'bn' ? 'USB স্ক্যানার' : 'USB Scanner'),
-            type: 'usb' as const,
-            connected: true
-          })));
+          for (const d of scannerDevices) {
+            const deviceName = d.productName || (language === 'bn' ? 'USB স্ক্যানার' : 'USB Scanner');
+            await registerScannerDevice(deviceName, 'usb', String(d.vendorId), String(d.productId));
+          }
           setScannerConnected(true);
           setConnectionStatus('connected');
           toast.success(language === 'bn' ? 'USB স্ক্যানার পাওয়া গেছে!' : 'USB scanner found!');
@@ -219,7 +350,7 @@ const ScannerSetup = () => {
       setConnectionStatus('waiting');
       setIsDetecting(false);
     }
-  }, [language, scannerConnected]);
+  }, [language, scannerConnected, registerScannerDevice]);
 
   useEffect(() => {
     checkUSBDevices();
@@ -293,22 +424,24 @@ const ScannerSetup = () => {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isTestMode, products, language, detectScannerFromInput, logScanToDatabase]);
 
-  // Monitor connection
+  // Monitor active device
   useEffect(() => {
-    if (!scannerConnected) return;
+    if (!scannerConnected || !activeDeviceId) return;
     
     const interval = setInterval(() => {
-      const lastDevice = detectedDevices.find(d => d.lastActivity);
-      if (lastDevice?.lastActivity) {
-        const inactiveTime = Date.now() - lastDevice.lastActivity.getTime();
-        if (inactiveTime > 30000) {
-          setConnectionStatus('connected');
+      const activeDevice = savedDevices.find(d => d.id === activeDeviceId);
+      if (activeDevice?.last_connected_at) {
+        const inactiveTime = Date.now() - new Date(activeDevice.last_connected_at).getTime();
+        // If inactive for more than 5 minutes, mark as disconnected
+        if (inactiveTime > 300000) {
+          setConnectionStatus('waiting');
+          setScannerConnected(false);
         }
       }
-    }, 5000);
+    }, 30000);
     
     return () => clearInterval(interval);
-  }, [scannerConnected, detectedDevices]);
+  }, [scannerConnected, activeDeviceId, savedDevices]);
 
   const clearLogs = async () => {
     try {
@@ -523,31 +656,116 @@ const ScannerSetup = () => {
               </div>
             </div>
             
-            {/* Detected Devices */}
-            {detectedDevices.length > 0 && (
+            {/* Saved Devices from Database */}
+            {savedDevices.length > 0 && (
               <div className="mt-4 pt-4 border-t">
-                <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
                   <Usb className="h-4 w-4" />
-                  {language === 'bn' ? 'সনাক্তকৃত ডিভাইস' : 'Detected Devices'}
+                  {language === 'bn' ? 'সংরক্ষিত স্ক্যানার ডিভাইস' : 'Saved Scanner Devices'}
                 </h4>
-                <div className="flex flex-wrap gap-2">
-                  {detectedDevices.map(device => (
-                    <Badge 
-                      key={device.id} 
-                      variant="outline" 
+                <div className="space-y-2">
+                  {savedDevices.map(device => (
+                    <div 
+                      key={device.id}
                       className={cn(
-                        "py-1.5 px-3",
-                        device.connected && "border-green-500 text-green-700 dark:text-green-400"
+                        "flex items-center justify-between p-3 rounded-lg border transition-colors",
+                        device.is_active && device.id === activeDeviceId
+                          ? "bg-green-50 dark:bg-green-950/30 border-green-300 dark:border-green-700"
+                          : "bg-card border-border"
                       )}
                     >
-                      <CheckCircle2 className="h-3 w-3 mr-1.5" />
-                      {device.name}
-                      {device.lastActivity && (
-                        <span className="ml-2 text-xs opacity-70">
-                          {device.lastActivity.toLocaleTimeString()}
-                        </span>
-                      )}
-                    </Badge>
+                      <div className="flex items-center gap-3">
+                        <div className={cn(
+                          "p-2 rounded-full",
+                          device.is_active && device.id === activeDeviceId
+                            ? "bg-green-100 dark:bg-green-900"
+                            : "bg-muted"
+                        )}>
+                          {device.is_active && device.id === activeDeviceId ? (
+                            <CheckCircle2 className="h-4 w-4 text-green-600" />
+                          ) : (
+                            <Usb className="h-4 w-4 text-muted-foreground" />
+                          )}
+                        </div>
+                        <div>
+                          {editingDeviceId === device.id ? (
+                            <div className="flex items-center gap-2">
+                              <Input
+                                value={editingDeviceName}
+                                onChange={(e) => setEditingDeviceName(e.target.value)}
+                                className="h-7 text-sm w-48"
+                                autoFocus
+                              />
+                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={saveDeviceName}>
+                                <Save className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <p className="font-medium text-sm">{device.device_name}</p>
+                          )}
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <span>{device.total_scans} {language === 'bn' ? 'স্ক্যান' : 'scans'}</span>
+                            {device.avg_scan_speed > 0 && (
+                              <>
+                                <span>•</span>
+                                <span>{Math.round(device.avg_scan_speed)} {language === 'bn' ? 'অক্ষর/সে' : 'c/s'}</span>
+                              </>
+                            )}
+                            {device.last_connected_at && (
+                              <>
+                                <span>•</span>
+                                <span>
+                                  {language === 'bn' ? 'সর্বশেষ:' : 'Last:'} {new Date(device.last_connected_at).toLocaleString()}
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Badge 
+                          variant={device.is_active && device.id === activeDeviceId ? "default" : "secondary"}
+                          className={cn(
+                            "text-xs",
+                            device.is_active && device.id === activeDeviceId && "bg-green-600"
+                          )}
+                        >
+                          {device.is_active && device.id === activeDeviceId
+                            ? (language === 'bn' ? 'সক্রিয়' : 'Active')
+                            : (language === 'bn' ? 'নিষ্ক্রিয়' : 'Inactive')}
+                        </Badge>
+                        <Button 
+                          size="sm" 
+                          variant="ghost" 
+                          className="h-7 w-7 p-0"
+                          onClick={() => {
+                            setEditingDeviceId(device.id);
+                            setEditingDeviceName(device.device_name);
+                          }}
+                        >
+                          <Edit2 className="h-3 w-3" />
+                        </Button>
+                        {device.is_active && device.id === activeDeviceId ? (
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            className="h-7 w-7 p-0 text-orange-600 hover:text-orange-700"
+                            onClick={() => disconnectDevice(device.id)}
+                          >
+                            <Power className="h-3 w-3" />
+                          </Button>
+                        ) : (
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                            onClick={() => deleteDevice(device.id)}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>
