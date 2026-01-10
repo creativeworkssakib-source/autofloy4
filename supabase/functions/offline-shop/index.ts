@@ -4780,6 +4780,75 @@ serve(async (req) => {
       }
     }
 
+    // ===== PENDING STOCK ITEMS (purchase items without product_id) =====
+    if (resource === "pending-stock-items") {
+      if (req.method === "GET") {
+        // Get all purchase items that don't have a product_id (not yet added to stock)
+        // This is much more efficient than looping through each supplier
+        let query = supabase
+          .from("shop_purchase_items")
+          .select(`
+            id,
+            product_name,
+            quantity,
+            unit_price,
+            expiry_date,
+            purchase:shop_purchases!inner(
+              id,
+              purchase_date,
+              supplier_name,
+              shop_id,
+              user_id
+            )
+          `)
+          .is("product_id", null);
+        
+        // Filter by user and shop through the purchase relation
+        const { data: items, error } = await query;
+        
+        if (error) throw error;
+        
+        // Filter by user_id and shop_id, aggregate by product name
+        // Note: purchase is returned as an object (not array) when using !inner with single match
+        const filtered = (items || []).filter((item: any) => {
+          const purchase = item.purchase;
+          if (!purchase) return false;
+          if (purchase.user_id !== userId) return false;
+          if (shopId && purchase.shop_id !== shopId) return false;
+          return true;
+        });
+        
+        // Aggregate by product name (case-insensitive)
+        const aggregated: Record<string, any> = {};
+        for (const item of filtered) {
+          const key = (item.product_name || "").toLowerCase();
+          const purchase = item.purchase as any;
+          if (aggregated[key]) {
+            aggregated[key].quantity += Number(item.quantity);
+          } else {
+            aggregated[key] = {
+              name: item.product_name,
+              quantity: Number(item.quantity),
+              unit_price: Number(item.unit_price || 0),
+              selling_price: Number(item.unit_price || 0) * 1.2,
+              supplier_name: purchase?.supplier_name || "",
+              purchase_date: purchase?.purchase_date,
+              expiry_date: item.expiry_date,
+              unit: "pcs",
+              min_stock_alert: 5,
+            };
+          }
+        }
+        
+        const pendingItems = Object.values(aggregated);
+        
+        return new Response(JSON.stringify({ items: pendingItems }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     return new Response(JSON.stringify({ error: "Not found" }), {
       status: 404,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

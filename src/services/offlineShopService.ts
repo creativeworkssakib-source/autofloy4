@@ -152,6 +152,11 @@ class OfflineShopService {
     return this.request<{ supplier: any; purchases: any[] }>("suppliers", {}, { id });
   }
 
+  // Get all pending stock items (purchase items without product_id) efficiently
+  async getPendingStockItems() {
+    return this.request<{ items: any[] }>("pending-stock-items");
+  }
+
   async getSupplierProfile(id: string) {
     return this.request<{ 
       supplier: any; 
