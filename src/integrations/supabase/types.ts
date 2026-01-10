@@ -2541,6 +2541,72 @@ export type Database = {
           },
         ]
       }
+      shop_scanner_devices: {
+        Row: {
+          avg_scan_speed: number | null
+          created_at: string
+          device_name: string
+          device_type: string
+          id: string
+          is_active: boolean | null
+          last_connected_at: string | null
+          product_id: string | null
+          settings: Json | null
+          shop_id: string | null
+          total_scans: number | null
+          updated_at: string
+          user_id: string
+          vendor_id: string | null
+        }
+        Insert: {
+          avg_scan_speed?: number | null
+          created_at?: string
+          device_name: string
+          device_type?: string
+          id?: string
+          is_active?: boolean | null
+          last_connected_at?: string | null
+          product_id?: string | null
+          settings?: Json | null
+          shop_id?: string | null
+          total_scans?: number | null
+          updated_at?: string
+          user_id: string
+          vendor_id?: string | null
+        }
+        Update: {
+          avg_scan_speed?: number | null
+          created_at?: string
+          device_name?: string
+          device_type?: string
+          id?: string
+          is_active?: boolean | null
+          last_connected_at?: string | null
+          product_id?: string | null
+          settings?: Json | null
+          shop_id?: string | null
+          total_scans?: number | null
+          updated_at?: string
+          user_id?: string
+          vendor_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shop_scanner_devices_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "shops"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shop_scanner_devices_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       shop_scanner_logs: {
         Row: {
           barcode: string

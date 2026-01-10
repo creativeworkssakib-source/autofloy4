@@ -774,12 +774,70 @@ class OfflineShopService {
     return this.request<{ message: string }>("scanner-logs", { method: "DELETE" });
   }
 
+  // Scanner Devices
+  async getScannerDevices() {
+    return this.request<{ devices: ScannerDevice[] }>("scanner-devices");
+  }
+
+  async registerScannerDevice(data: {
+    device_name: string;
+    device_type?: string;
+    vendor_id?: string;
+    product_id?: string;
+    settings?: Record<string, any>;
+  }) {
+    return this.request<{ device: ScannerDevice; isNew: boolean }>("scanner-devices", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateScannerDevice(deviceId: string, data: {
+    device_name?: string;
+    is_active?: boolean;
+    settings?: Record<string, any>;
+    last_connected_at?: string;
+    total_scans?: number;
+    avg_scan_speed?: number;
+  }) {
+    return this.request<{ device: ScannerDevice }>("scanner-devices", {
+      method: "PUT",
+      body: JSON.stringify({ id: deviceId, ...data }),
+    });
+  }
+
+  async deleteScannerDevice(deviceId: string) {
+    return this.request<{ message: string }>(`scanner-devices?device_id=${deviceId}`, { method: "DELETE" });
+  }
+
+  async disconnectScannerDevice(deviceId: string) {
+    return this.updateScannerDevice(deviceId, { is_active: false });
+  }
+
   // Search product by barcode
   async getProductByBarcode(barcode: string): Promise<{ product: any | null }> {
     const { products } = await this.getProducts();
     const product = products.find((p: any) => p.barcode === barcode);
     return { product: product || null };
   }
+}
+
+// Scanner Device interface
+export interface ScannerDevice {
+  id: string;
+  user_id: string;
+  shop_id: string | null;
+  device_name: string;
+  device_type: string;
+  vendor_id: string | null;
+  product_id: string | null;
+  is_active: boolean;
+  last_connected_at: string | null;
+  total_scans: number;
+  avg_scan_speed: number;
+  settings: Record<string, any>;
+  created_at: string;
+  updated_at: string;
 }
 
 export const offlineShopService = new OfflineShopService();

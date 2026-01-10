@@ -5274,6 +5274,167 @@ serve(async (req) => {
       }
     }
 
+    // ===== SCANNER DEVICES =====
+    if (resource === "scanner-devices") {
+      if (req.method === "GET") {
+        let query = supabase
+          .from("shop_scanner_devices")
+          .select("*")
+          .eq("user_id", userId)
+          .order("last_connected_at", { ascending: false, nullsFirst: false });
+        
+        if (shopId) query = query.eq("shop_id", shopId);
+        
+        const { data, error } = await query;
+        if (error) throw error;
+        
+        return new Response(JSON.stringify({ devices: data || [] }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      
+      if (req.method === "POST") {
+        const body = await req.json();
+        
+        // Check if device already exists (by vendor_id + product_id or device_name)
+        let existingQuery = supabase
+          .from("shop_scanner_devices")
+          .select("*")
+          .eq("user_id", userId);
+        
+        if (shopId) existingQuery = existingQuery.eq("shop_id", shopId);
+        
+        if (body.vendor_id && body.product_id) {
+          existingQuery = existingQuery
+            .eq("vendor_id", body.vendor_id)
+            .eq("product_id", body.product_id);
+        } else {
+          existingQuery = existingQuery.eq("device_name", body.device_name);
+        }
+        
+        const { data: existing } = await existingQuery.maybeSingle();
+        
+        if (existing) {
+          // Update existing device
+          const { data: updated, error } = await supabase
+            .from("shop_scanner_devices")
+            .update({
+              is_active: true,
+              last_connected_at: new Date().toISOString(),
+              device_name: body.device_name || existing.device_name,
+              settings: body.settings || existing.settings,
+            })
+            .eq("id", existing.id)
+            .select()
+            .single();
+          
+          if (error) throw error;
+          
+          return new Response(JSON.stringify({ device: updated, isNew: false }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        
+        // Create new device
+        const { data: device, error } = await supabase
+          .from("shop_scanner_devices")
+          .insert({
+            user_id: userId,
+            shop_id: shopId || null,
+            device_name: body.device_name,
+            device_type: body.device_type || "keyboard",
+            vendor_id: body.vendor_id || null,
+            product_id: body.product_id || null,
+            is_active: true,
+            last_connected_at: new Date().toISOString(),
+            settings: body.settings || {},
+          })
+          .select()
+          .single();
+        
+        if (error) throw error;
+        
+        return new Response(JSON.stringify({ device, isNew: true }), {
+          status: 201,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      
+      if (req.method === "PUT" || req.method === "PATCH") {
+        const body = await req.json();
+        const deviceId = url.searchParams.get("device_id") || body.id;
+        
+        if (!deviceId) {
+          return new Response(JSON.stringify({ error: "Device ID required" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        
+        const updateData: any = {};
+        if (body.device_name !== undefined) updateData.device_name = body.device_name;
+        if (body.is_active !== undefined) updateData.is_active = body.is_active;
+        if (body.settings !== undefined) updateData.settings = body.settings;
+        if (body.last_connected_at !== undefined) updateData.last_connected_at = body.last_connected_at;
+        if (body.total_scans !== undefined) updateData.total_scans = body.total_scans;
+        if (body.avg_scan_speed !== undefined) updateData.avg_scan_speed = body.avg_scan_speed;
+        
+        const { data: device, error } = await supabase
+          .from("shop_scanner_devices")
+          .update(updateData)
+          .eq("id", deviceId)
+          .eq("user_id", userId)
+          .select()
+          .single();
+        
+        if (error) throw error;
+        
+        return new Response(JSON.stringify({ device }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      
+      if (req.method === "DELETE") {
+        const deviceId = url.searchParams.get("device_id");
+        
+        if (deviceId) {
+          // Delete specific device
+          const { error } = await supabase
+            .from("shop_scanner_devices")
+            .delete()
+            .eq("id", deviceId)
+            .eq("user_id", userId);
+          
+          if (error) throw error;
+          
+          return new Response(JSON.stringify({ message: "Device deleted" }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        } else {
+          // Delete all inactive devices
+          let deleteQuery = supabase
+            .from("shop_scanner_devices")
+            .delete()
+            .eq("user_id", userId)
+            .eq("is_active", false);
+          
+          if (shopId) deleteQuery = deleteQuery.eq("shop_id", shopId);
+          
+          const { error } = await deleteQuery;
+          if (error) throw error;
+          
+          return new Response(JSON.stringify({ message: "Inactive devices deleted" }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
+    }
+
     // ===== SCANNER LOGS =====
     if (resource === "scanner-logs") {
       if (req.method === "GET") {
