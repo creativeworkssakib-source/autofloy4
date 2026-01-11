@@ -436,6 +436,7 @@ export interface PaymentRequest {
   amount: number;
   currency: string;
   payment_method: string;
+  payment_method_account: string | null;
   transaction_id: string | null;
   screenshot_url: string | null;
   status: string;
@@ -495,6 +496,25 @@ export async function updatePaymentRequest(
     }
 
     return response.json();
+  } catch (error) {
+    if (error instanceof TypeError && error.message === "Failed to fetch") {
+      throw new Error("Network error - please check your connection");
+    }
+    throw error;
+  }
+}
+
+export async function deletePaymentRequest(requestId: string): Promise<void> {
+  try {
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/admin/payment-requests/${requestId}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: "Failed to delete payment request" }));
+      throw new Error(error.error || "Failed to delete payment request");
+    }
   } catch (error) {
     if (error instanceof TypeError && error.message === "Failed to fetch") {
       throw new Error("Network error - please check your connection");

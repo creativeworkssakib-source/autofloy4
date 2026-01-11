@@ -222,6 +222,7 @@ const Checkout = () => {
           amount: plan?.priceNumeric || 0,
           currency: "BDT",
           payment_method: selectedMethod?.name || "Unknown",
+          payment_method_account: selectedMethod?.account_number || null,
           transaction_id: formData.transactionId || null,
           screenshot_url: screenshotUrl,
           status: "pending",
