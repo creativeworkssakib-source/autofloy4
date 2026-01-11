@@ -79,6 +79,7 @@ const ShopPriceCalculator = lazy(() => import("./pages/offline-shop/ShopPriceCal
 const ShopLoans = lazy(() => import("./pages/offline-shop/ShopLoans"));
 const ShopCashRegister = lazy(() => import("./pages/offline-shop/ShopCashRegister"));
 const InvoiceSettings = lazy(() => import("./pages/offline-shop/InvoiceSettings"));
+const OfflineTestPage = lazy(() => import("./pages/offline-shop/OfflineTestPage"));
 // Admin pages
 const AdminLogin = lazy(() => import("./pages/admin/AdminLogin"));
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
@@ -334,6 +335,11 @@ const App = () => (
                   <Route path="/offline-shop/invoice-settings" element={
                     <ProtectedRoute>
                       <InvoiceSettings />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/offline-shop/test" element={
+                    <ProtectedRoute>
+                      <OfflineTestPage />
                     </ProtectedRoute>
                   } />
                   
