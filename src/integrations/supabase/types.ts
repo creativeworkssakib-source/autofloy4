@@ -53,6 +53,93 @@ export type Database = {
         }
         Relationships: []
       }
+      auth_rate_limits: {
+        Row: {
+          attempt_count: number | null
+          created_at: string
+          endpoint: string
+          id: string
+          identifier: string
+          locked_until: string | null
+          window_start: string | null
+        }
+        Insert: {
+          attempt_count?: number | null
+          created_at?: string
+          endpoint: string
+          id?: string
+          identifier: string
+          locked_until?: string | null
+          window_start?: string | null
+        }
+        Update: {
+          attempt_count?: number | null
+          created_at?: string
+          endpoint?: string
+          id?: string
+          identifier?: string
+          locked_until?: string | null
+          window_start?: string | null
+        }
+        Relationships: []
+      }
+      email_usage_history: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          last_plan: string | null
+          trial_used: boolean | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          last_plan?: string | null
+          trial_used?: boolean | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          last_plan?: string | null
+          trial_used?: boolean | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      outgoing_events: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          payload: Json | null
+          processed_at: string | null
+          status: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          payload?: Json | null
+          processed_at?: string | null
+          status?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          payload?: Json | null
+          processed_at?: string | null
+          status?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       payment_requests: {
         Row: {
           admin_notes: string | null
@@ -1743,14 +1830,17 @@ export type Database = {
           display_name: string | null
           email: string
           email_verified: boolean
+          has_used_trial: boolean | null
           id: string
           is_trial_active: boolean
+          password_hash: string | null
           phone: string | null
           phone_verified: boolean
           subscription_ends_at: string | null
           subscription_plan: string
           subscription_started_at: string | null
           trial_end_date: string | null
+          trial_started_at: string | null
           updated_at: string
         }
         Insert: {
@@ -1759,14 +1849,17 @@ export type Database = {
           display_name?: string | null
           email: string
           email_verified?: boolean
+          has_used_trial?: boolean | null
           id?: string
           is_trial_active?: boolean
+          password_hash?: string | null
           phone?: string | null
           phone_verified?: boolean
           subscription_ends_at?: string | null
           subscription_plan?: string
           subscription_started_at?: string | null
           trial_end_date?: string | null
+          trial_started_at?: string | null
           updated_at?: string
         }
         Update: {
@@ -1775,14 +1868,17 @@ export type Database = {
           display_name?: string | null
           email?: string
           email_verified?: boolean
+          has_used_trial?: boolean | null
           id?: string
           is_trial_active?: boolean
+          password_hash?: string | null
           phone?: string | null
           phone_verified?: boolean
           subscription_ends_at?: string | null
           subscription_plan?: string
           subscription_started_at?: string | null
           trial_end_date?: string | null
+          trial_started_at?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -1792,6 +1888,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_email_use_trial: {
+        Args: { p_email: string }
+        Returns: {
+          can_use_trial: boolean
+          is_returning_user: boolean
+          last_plan: string
+        }[]
+      }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
