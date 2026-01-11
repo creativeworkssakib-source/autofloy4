@@ -93,6 +93,7 @@ const AdminAppearance = lazy(() => import("./pages/admin/AdminAppearance"));
 const AdminSEO = lazy(() => import("./pages/admin/AdminSEO"));
 const AdminEmailTemplates = lazy(() => import("./pages/admin/AdminEmailTemplates"));
 const AdminApiIntegrations = lazy(() => import("./pages/admin/AdminApiIntegrations"));
+const AdminPaymentRequests = lazy(() => import("./pages/admin/AdminPaymentRequests"));
 
 
 // Loading fallback component
@@ -393,6 +394,11 @@ const App = () => (
                   <Route path="/admin/api-integrations" element={
                     <AdminProtectedRoute>
                       <AdminApiIntegrations />
+                    </AdminProtectedRoute>
+                  } />
+                  <Route path="/admin/payment-requests" element={
+                    <AdminProtectedRoute>
+                      <AdminPaymentRequests />
                     </AdminProtectedRoute>
                   } />
                   

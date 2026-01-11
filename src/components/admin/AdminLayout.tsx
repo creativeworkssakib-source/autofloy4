@@ -43,6 +43,7 @@ const navItems = [
   { name: "Users", href: "/admin/users", icon: Users },
   { name: "User Settings", href: "/admin/user-settings", icon: Settings },
   { name: "Subscriptions", href: "/admin/subscriptions", icon: CreditCard },
+  { name: "Payment Requests", href: "/admin/payment-requests", icon: DollarSign },
   { name: "Content Pages", href: "/admin/content-pages", icon: FileText },
   { name: "Blog Posts", href: "/admin/blog-posts", icon: BookOpen },
   { name: "Pricing Plans", href: "/admin/pricing-plans", icon: DollarSign },
