@@ -39,7 +39,33 @@ interface ShopContextType {
 const ShopContext = createContext<ShopContextType | undefined>(undefined);
 
 const CURRENT_SHOP_KEY = "autofloy_current_shop_id";
+const CACHED_SHOPS_KEY = "autofloy_cached_shops";
 const SHOP_API_URL = "https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1/offline-shop/shops";
+
+// Check if online
+const isOnline = () => typeof navigator !== 'undefined' && navigator.onLine;
+
+// Get cached shops from localStorage
+const getCachedShops = (): { shops: Shop[]; limits: ShopLimits | null } => {
+  try {
+    const cached = localStorage.getItem(CACHED_SHOPS_KEY);
+    if (cached) {
+      return JSON.parse(cached);
+    }
+  } catch (e) {
+    console.error('[ShopContext] Failed to parse cached shops:', e);
+  }
+  return { shops: [], limits: null };
+};
+
+// Save shops to localStorage
+const cacheShops = (shops: Shop[], limits: ShopLimits | null) => {
+  try {
+    localStorage.setItem(CACHED_SHOPS_KEY, JSON.stringify({ shops, limits }));
+  } catch (e) {
+    console.error('[ShopContext] Failed to cache shops:', e);
+  }
+};
 
 export function ShopProvider({ children }: { children: ReactNode }) {
   const [shops, setShops] = useState<Shop[]>([]);
@@ -50,7 +76,42 @@ export function ShopProvider({ children }: { children: ReactNode }) {
   const fetchShops = useCallback(async () => {
     try {
       const token = authService.getToken();
+      
+      // OFFLINE MODE: Use cached shops
+      if (!isOnline()) {
+        console.log('[ShopContext] Offline - using cached shops');
+        const { shops: cachedShops, limits: cachedLimits } = getCachedShops();
+        
+        if (cachedShops.length > 0) {
+          setShops(cachedShops);
+          setShopLimits(cachedLimits);
+          
+          // Restore last selected shop
+          const savedShopId = localStorage.getItem(CURRENT_SHOP_KEY);
+          const savedShop = cachedShops.find(s => s.id === savedShopId);
+          const defaultShop = cachedShops.find(s => s.is_default) || cachedShops[0];
+          
+          if (savedShop && savedShop.is_active) {
+            setCurrentShop(savedShop);
+          } else if (defaultShop) {
+            setCurrentShop(defaultShop);
+          }
+        }
+        setIsLoading(false);
+        return;
+      }
+      
+      // No token - can't fetch
       if (!token) {
+        // Try cached shops anyway
+        const { shops: cachedShops, limits: cachedLimits } = getCachedShops();
+        if (cachedShops.length > 0) {
+          setShops(cachedShops);
+          setShopLimits(cachedLimits);
+          const savedShopId = localStorage.getItem(CURRENT_SHOP_KEY);
+          const savedShop = cachedShops.find(s => s.id === savedShopId);
+          if (savedShop) setCurrentShop(savedShop);
+        }
         setIsLoading(false);
         return;
       }
@@ -70,6 +131,9 @@ export function ShopProvider({ children }: { children: ReactNode }) {
         
         setShops(shopList);
         setShopLimits(limits);
+        
+        // Cache for offline use
+        cacheShops(shopList, limits);
 
         // Restore last selected shop or select default
         const savedShopId = localStorage.getItem(CURRENT_SHOP_KEY);
@@ -82,9 +146,30 @@ export function ShopProvider({ children }: { children: ReactNode }) {
           setCurrentShop(defaultShop);
           localStorage.setItem(CURRENT_SHOP_KEY, defaultShop.id);
         }
+      } else {
+        // API failed - try cached shops
+        const { shops: cachedShops, limits: cachedLimits } = getCachedShops();
+        if (cachedShops.length > 0) {
+          console.log('[ShopContext] API failed, using cached shops');
+          setShops(cachedShops);
+          setShopLimits(cachedLimits);
+          const savedShopId = localStorage.getItem(CURRENT_SHOP_KEY);
+          const savedShop = cachedShops.find(s => s.id === savedShopId);
+          if (savedShop) setCurrentShop(savedShop);
+        }
       }
     } catch (error) {
       console.error("Failed to fetch shops:", error);
+      // Try cached shops on error
+      const { shops: cachedShops, limits: cachedLimits } = getCachedShops();
+      if (cachedShops.length > 0) {
+        console.log('[ShopContext] Error fetching, using cached shops');
+        setShops(cachedShops);
+        setShopLimits(cachedLimits);
+        const savedShopId = localStorage.getItem(CURRENT_SHOP_KEY);
+        const savedShop = cachedShops.find(s => s.id === savedShopId);
+        if (savedShop) setCurrentShop(savedShop);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -103,6 +188,12 @@ export function ShopProvider({ children }: { children: ReactNode }) {
   }, [shops]);
 
   const createShop = useCallback(async (data: Partial<Shop>): Promise<Shop | null> => {
+    // Require online for creating shops
+    if (!isOnline()) {
+      toast.error("শপ তৈরি করতে ইন্টারনেট সংযোগ প্রয়োজন");
+      return null;
+    }
+    
     try {
       const token = authService.getToken();
       if (!token) return null;
@@ -140,6 +231,12 @@ export function ShopProvider({ children }: { children: ReactNode }) {
   }, [fetchShops, shopLimits]);
 
   const updateShop = useCallback(async (id: string, data: Partial<Shop>): Promise<Shop | null> => {
+    // Require online for updating shops
+    if (!isOnline()) {
+      toast.error("শপ আপডেট করতে ইন্টারনেট সংযোগ প্রয়োজন");
+      return null;
+    }
+    
     try {
       const token = authService.getToken();
       if (!token) return null;
@@ -171,6 +268,12 @@ export function ShopProvider({ children }: { children: ReactNode }) {
   }, [fetchShops]);
 
   const deleteShop = useCallback(async (id: string, cascade: boolean = true): Promise<boolean> => {
+    // Require online for deleting shops
+    if (!isOnline()) {
+      toast.error("শপ মুছতে ইন্টারনেট সংযোগ প্রয়োজন");
+      return false;
+    }
+    
     try {
       const token = authService.getToken();
       if (!token) return false;
