@@ -47,6 +47,7 @@ import { useSyncSettings } from "@/hooks/useSyncSettings";
 import { useOfflineShopTrial } from "@/hooks/useOfflineShopTrial";
 import OfflineTrialBanner from "./OfflineTrialBanner";
 import OfflineTrialExpiredOverlay from "./OfflineTrialExpiredOverlay";
+import { FeatureDisabledOverlay } from "@/components/FeatureDisabledOverlay";
 
 interface ShopLayoutProps {
   children: ReactNode;
@@ -62,16 +63,8 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
   const { isTrialUser, isOfflineTrialExpired } = useOfflineShopTrial();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Check if offline shop is disabled - redirect to online dashboard or business selector
-  useEffect(() => {
-    if (settings.offline_shop_enabled === false) {
-      if (settings.online_business_enabled !== false) {
-        navigate("/dashboard");
-      } else {
-        navigate("/business");
-      }
-    }
-  }, [settings.offline_shop_enabled, settings.online_business_enabled, navigate]);
+  // Check if offline shop is disabled by admin
+  const isOfflineShopDisabled = settings.offline_shop_enabled === false;
 
   const navigation = [
     { name: t("shop.overview"), href: "/offline-shop", icon: LayoutDashboard },
@@ -267,6 +260,11 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
             
             {children}
           </main>
+          
+          {/* Show frozen overlay if feature is disabled by admin */}
+          {isOfflineShopDisabled && (
+            <FeatureDisabledOverlay featureName={language === "bn" ? "অফলাইন শপ সিস্টেম" : "Offline Shop System"} />
+          )}
         </div>
       </div>
     </>

@@ -1,46 +1,34 @@
-import { AlertTriangle, Lock } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { useNavigate } from "react-router-dom";
+import { Lock } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface FeatureDisabledOverlayProps {
   featureName: string;
-  description?: string;
 }
 
-export const FeatureDisabledOverlay = ({ 
-  featureName, 
-  description = "This feature is currently disabled by the administrator." 
-}: FeatureDisabledOverlayProps) => {
-  const navigate = useNavigate();
+export const FeatureDisabledOverlay = ({ featureName }: FeatureDisabledOverlayProps) => {
+  const { language } = useLanguage();
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/95 backdrop-blur-sm">
-      <div className="max-w-md text-center p-8 space-y-6">
-        <div className="flex justify-center">
-          <div className="p-4 rounded-full bg-destructive/10">
-            <Lock className="w-12 h-12 text-destructive" />
+    <div className="fixed inset-0 z-[100] pointer-events-auto">
+      {/* Blur + Grey overlay that blocks interactions */}
+      <div className="absolute inset-0 bg-background/60 backdrop-blur-[2px]" />
+      
+      {/* Watermark in center */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div className="flex flex-col items-center gap-4 text-center px-4">
+          <div className="w-20 h-20 rounded-full bg-muted/80 border-2 border-muted-foreground/20 flex items-center justify-center">
+            <Lock className="h-10 w-10 text-muted-foreground/60" />
           </div>
-        </div>
-        
-        <div className="space-y-2">
-          <h1 className="text-2xl font-bold text-foreground">{featureName} Unavailable</h1>
-          <p className="text-muted-foreground">{description}</p>
-        </div>
-
-        <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
-          <p className="text-sm text-left text-yellow-700 dark:text-yellow-400">
-            The administrator has temporarily disabled this feature. Please check back later or contact support for more information.
-          </p>
-        </div>
-
-        <div className="flex justify-center gap-3">
-          <Button variant="outline" onClick={() => navigate(-1)}>
-            Go Back
-          </Button>
-          <Button onClick={() => navigate("/")}>
-            Go to Home
-          </Button>
+          <div className="space-y-2">
+            <h2 className="text-2xl sm:text-3xl font-bold text-muted-foreground/70">
+              {featureName}
+            </h2>
+            <p className="text-lg sm:text-xl text-muted-foreground/50 max-w-md">
+              {language === "bn" 
+                ? "এই ফিচারটি বর্তমানে অনুপলব্ধ"
+                : "This feature is currently unavailable"}
+            </p>
+          </div>
         </div>
       </div>
     </div>

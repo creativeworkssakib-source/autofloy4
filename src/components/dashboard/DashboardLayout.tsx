@@ -42,6 +42,7 @@ import { SyncStatusBadge } from "./SyncStatusBadge";
 import { useSyncSettings } from "@/hooks/useSyncSettings";
 import { checkAdminRole } from "@/services/adminService";
 import Footer from "@/components/layout/Footer";
+import { FeatureDisabledOverlay } from "@/components/FeatureDisabledOverlay";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -104,16 +105,8 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     return location.pathname.startsWith(path);
   };
 
-  // Check if online business is disabled - redirect to offline shop or business selector
-  useEffect(() => {
-    if (settings.online_business_enabled === false) {
-      if (settings.offline_shop_enabled !== false) {
-        navigate("/offline-shop");
-      } else {
-        navigate("/business");
-      }
-    }
-  }, [settings.online_business_enabled, settings.offline_shop_enabled, navigate]);
+  // Check if online business is disabled
+  const isOnlineBusinessDisabled = settings.online_business_enabled === false;
 
   return (
     <div className="min-h-screen bg-muted/30">
@@ -345,6 +338,11 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
         {/* Footer */}
         <Footer />
       </main>
+      
+      {/* Show frozen overlay if feature is disabled by admin */}
+      {isOnlineBusinessDisabled && (
+        <FeatureDisabledOverlay featureName={language === "bn" ? "অনলাইন বিজনেস" : "Online Business"} />
+      )}
     </div>
   );
 };
