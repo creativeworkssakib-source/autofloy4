@@ -23,17 +23,19 @@ import { syncManager } from '@/services/syncManager';
 import { cn } from '@/lib/utils';
 
 interface OfflineExpiredModalProps {
+  open?: boolean;
   onDismiss?: () => void;
 }
 
-export function OfflineExpiredModal({ onDismiss }: OfflineExpiredModalProps) {
+export function OfflineExpiredModal({ open, onDismiss }: OfflineExpiredModalProps) {
   const { isOnline, refreshStatus, getTimeSinceOnline } = useOnlineStatus();
   const { isExpired, totalDays } = useOfflineGracePeriod();
   const { t, language } = useLanguage();
   const [isChecking, setIsChecking] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   
-  const isOpen = isExpired && !isOnline;
+  // Use prop if provided, otherwise use internal logic
+  const isOpen = open !== undefined ? open : (isExpired && !isOnline);
   
   const handleCheckConnection = async () => {
     setIsChecking(true);
@@ -68,13 +70,10 @@ export function OfflineExpiredModal({ onDismiss }: OfflineExpiredModalProps) {
             <WifiOff className="h-8 w-8 text-destructive" />
           </div>
           <DialogTitle className="text-xl">
-            {language === 'bn' ? 'অফলাইন সময়সীমা শেষ' : 'Offline Period Expired'}
+            {t('offline.periodExpired')}
           </DialogTitle>
           <DialogDescription className="text-center">
-            {language === 'bn' 
-              ? `আপনি ${totalDays} দিনের বেশি সময় ধরে অফলাইন আছেন। কিছু ফিচার সীমাবদ্ধ করা হয়েছে।`
-              : `You've been offline for more than ${totalDays} days. Some features have been restricted.`
-            }
+            {t('offline.periodExpiredDesc').replace('{days}', String(totalDays))}
           </DialogDescription>
         </DialogHeader>
         
@@ -86,10 +85,10 @@ export function OfflineExpiredModal({ onDismiss }: OfflineExpiredModalProps) {
                 <Calendar className="h-5 w-5 text-muted-foreground" />
                 <div>
                   <p className="text-sm font-medium">
-                    {language === 'bn' ? 'শেষ অনলাইন' : 'Last Online'}
+                    {t('offline.lastOnline')}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {timeSinceOnline || (language === 'bn' ? 'অজানা' : 'Unknown')}
+                    {timeSinceOnline || t('offline.unknown')}
                   </p>
                 </div>
               </div>
@@ -100,13 +99,13 @@ export function OfflineExpiredModal({ onDismiss }: OfflineExpiredModalProps) {
           <div className="space-y-2">
             <p className="text-sm font-medium flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 text-yellow-500" />
-              {language === 'bn' ? 'সীমাবদ্ধ ফিচার:' : 'Restricted Features:'}
+              {t('offline.restrictedFeatures')}:
             </p>
             <ul className="text-sm text-muted-foreground space-y-1 ml-6">
-              <li>• {language === 'bn' ? 'রিপোর্ট দেখা' : 'View Reports'}</li>
-              <li>• {language === 'bn' ? 'নতুন ক্রয়' : 'New Purchases'}</li>
-              <li>• {language === 'bn' ? 'লোন ম্যানেজমেন্ট' : 'Loan Management'}</li>
-              <li>• {language === 'bn' ? 'স্টাফ ম্যানেজমেন্ট' : 'Staff Management'}</li>
+              <li>• {t('offline.viewReports')}</li>
+              <li>• {t('offline.newPurchases')}</li>
+              <li>• {t('offline.loanManagement')}</li>
+              <li>• {t('offline.staffManagement')}</li>
             </ul>
           </div>
           
@@ -114,12 +113,12 @@ export function OfflineExpiredModal({ onDismiss }: OfflineExpiredModalProps) {
           <div className="space-y-2">
             <p className="text-sm font-medium flex items-center gap-2">
               <Shield className="h-4 w-4 text-green-500" />
-              {language === 'bn' ? 'ব্যবহারযোগ্য ফিচার:' : 'Available Features:'}
+              {t('offline.availableFeatures')}:
             </p>
             <ul className="text-sm text-muted-foreground space-y-1 ml-6">
-              <li>• {language === 'bn' ? 'পণ্য দেখুন' : 'View Products'}</li>
-              <li>• {language === 'bn' ? 'বিক্রয় করুন' : 'Make Sales'}</li>
-              <li>• {language === 'bn' ? 'কাস্টমার তালিকা' : 'Customer List'}</li>
+              <li>• {t('offline.viewProducts')}</li>
+              <li>• {t('offline.makeSales')}</li>
+              <li>• {t('offline.customerList')}</li>
             </ul>
           </div>
         </div>
@@ -132,10 +131,10 @@ export function OfflineExpiredModal({ onDismiss }: OfflineExpiredModalProps) {
           >
             <RefreshCw className={cn('h-4 w-4 mr-2', (isChecking || isSyncing) && 'animate-spin')} />
             {isChecking 
-              ? (language === 'bn' ? 'চেক করা হচ্ছে...' : 'Checking...')
+              ? t('offline.checking')
               : isSyncing
-                ? (language === 'bn' ? 'সিংক হচ্ছে...' : 'Syncing...')
-                : (language === 'bn' ? 'কানেকশন চেক করুন' : 'Check Connection')
+                ? t('offline.syncing')
+                : t('offline.checkConnection')
             }
           </Button>
           
@@ -144,7 +143,7 @@ export function OfflineExpiredModal({ onDismiss }: OfflineExpiredModalProps) {
             onClick={onDismiss}
             className="w-full"
           >
-            {language === 'bn' ? 'সীমিত মোডে চালিয়ে যান' : 'Continue in Limited Mode'}
+            {t('offline.continueInLimitedMode')}
           </Button>
         </div>
       </DialogContent>

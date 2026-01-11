@@ -311,7 +311,10 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
         <FloatingSyncIndicator />
         
         {/* Offline Expired Modal */}
-        <OfflineExpiredModal onDismiss={() => setShowOfflineExpiredModal(false)} />
+        <OfflineExpiredModal 
+          open={showOfflineExpiredModal} 
+          onDismiss={() => setShowOfflineExpiredModal(false)} 
+        />
       </div>
     </>
   );

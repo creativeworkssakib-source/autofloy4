@@ -28,7 +28,7 @@ export function SyncProgressIndicator({
         <CheckCircle2 className="h-4 w-4" />
         {showLabel && (
           <span className="text-sm">
-            {language === 'bn' ? 'সব আপডেট হয়েছে' : 'All synced'}
+            {t('offline.allSynced')}
           </span>
         )}
       </div>
@@ -41,7 +41,7 @@ export function SyncProgressIndicator({
         <AlertCircle className="h-4 w-4" />
         {showLabel && (
           <span className="text-sm">
-            {language === 'bn' ? 'সিংক ব্যর্থ' : 'Sync failed'}
+            {t('offline.syncFailed')}
           </span>
         )}
       </div>
@@ -55,7 +55,7 @@ export function SyncProgressIndicator({
           <Loader2 className="h-4 w-4 animate-spin text-primary" />
           {showLabel && (
             <span className="text-sm text-muted-foreground">
-              {language === 'bn' ? 'সিংক হচ্ছে' : 'Syncing'}... {progress}%
+              {t('offline.syncing')}... {progress}%
             </span>
           )}
         </div>
@@ -70,7 +70,7 @@ export function SyncProgressIndicator({
       <CloudOff className="h-4 w-4" />
       {showLabel && (
         <span className="text-sm">
-          {pendingCount} {language === 'bn' ? 'পেন্ডিং' : 'pending'}
+          {pendingCount} {t('offline.pending')}
         </span>
       )}
     </div>
