@@ -7,6 +7,7 @@
 import { Cloud, CloudOff, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { useSyncStatus } from '@/hooks/useOfflineData';
+import { useIsOnline } from '@/hooks/useOnlineStatus';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
 
@@ -20,6 +21,7 @@ export function SyncProgressIndicator({
   showLabel = true 
 }: SyncProgressIndicatorProps) {
   const { isSyncing, progress, lastError, pendingCount } = useSyncStatus();
+  const isOnline = useIsOnline();
   const { t, language } = useLanguage();
   
   if (!isSyncing && pendingCount === 0 && !lastError) {
@@ -64,13 +66,27 @@ export function SyncProgressIndicator({
     );
   }
   
-  // Has pending items but not syncing
+  // Has pending items but not syncing - only show if offline
+  if (!isOnline && pendingCount > 0) {
+    return (
+      <div className={cn('flex items-center gap-2 text-yellow-500', className)}>
+        <CloudOff className="h-4 w-4" />
+        {showLabel && (
+          <span className="text-sm">
+            {pendingCount} {t('offline.pending')}
+          </span>
+        )}
+      </div>
+    );
+  }
+  
+  // Online and synced (or no pending items)
   return (
-    <div className={cn('flex items-center gap-2 text-yellow-500', className)}>
-      <CloudOff className="h-4 w-4" />
+    <div className={cn('flex items-center gap-2 text-green-500', className)}>
+      <CheckCircle2 className="h-4 w-4" />
       {showLabel && (
         <span className="text-sm">
-          {pendingCount} {t('offline.pending')}
+          {t('offline.allSynced')}
         </span>
       )}
     </div>

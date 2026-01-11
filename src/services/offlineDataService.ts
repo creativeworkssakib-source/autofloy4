@@ -212,7 +212,10 @@ class OfflineDataService {
     await offlineDB.updateProductStock(id, quantityChange);
     const product = await offlineDB.getProductById(id);
     if (product) {
-      await syncQueue.add('update', 'products', id, product);
+      // Only add to sync queue if offline - online updates happen through sale/purchase
+      if (!this.isOnline()) {
+        await syncQueue.add('update', 'products', id, product);
+      }
     }
   }
   
