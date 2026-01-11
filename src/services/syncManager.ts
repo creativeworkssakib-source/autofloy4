@@ -12,6 +12,23 @@ import { offlineShopService } from './offlineShopService';
 const MAX_RETRIES = 3;
 const SYNC_BATCH_SIZE = 10;
 
+// Fields that are only for local storage, should never be sent to server
+const LOCAL_ONLY_FIELDS = [
+  '_locallyCreated',
+  '_locallyModified', 
+  '_locallyDeleted',
+  'custom_category', // This is a frontend-only field
+] as const;
+
+// Helper to strip local-only fields before sending to server
+function stripLocalFields<T extends Record<string, unknown>>(data: T): T {
+  const cleaned = { ...data };
+  for (const field of LOCAL_ONLY_FIELDS) {
+    delete (cleaned as Record<string, unknown>)[field];
+  }
+  return cleaned;
+}
+
 type SyncListener = (status: SyncStatus) => void;
 
 export interface SyncStatus {
@@ -211,12 +228,13 @@ class SyncManager {
   // =============== TABLE-SPECIFIC SYNC ===============
   
   private async syncProduct(operation: SyncOperation, data: any): Promise<void> {
+    const cleanData = stripLocalFields(data);
     switch (operation) {
       case 'create':
-        await offlineShopService.createProduct(data);
+        await offlineShopService.createProduct(cleanData);
         break;
       case 'update':
-        await offlineShopService.updateProduct(data);
+        await offlineShopService.updateProduct(cleanData);
         break;
       case 'delete':
         await offlineShopService.deleteProduct(data.id);
@@ -225,9 +243,10 @@ class SyncManager {
   }
   
   private async syncCategory(operation: SyncOperation, data: any): Promise<void> {
+    const cleanData = stripLocalFields(data);
     switch (operation) {
       case 'create':
-        await offlineShopService.createCategory(data);
+        await offlineShopService.createCategory(cleanData);
         break;
       case 'delete':
         await offlineShopService.deleteCategory(data.id);
@@ -237,12 +256,13 @@ class SyncManager {
   }
   
   private async syncCustomer(operation: SyncOperation, data: any): Promise<void> {
+    const cleanData = stripLocalFields(data);
     switch (operation) {
       case 'create':
-        await offlineShopService.createCustomer(data);
+        await offlineShopService.createCustomer(cleanData);
         break;
       case 'update':
-        await offlineShopService.updateCustomer(data);
+        await offlineShopService.updateCustomer(cleanData);
         break;
       case 'delete':
         await offlineShopService.deleteCustomer(data.id);
@@ -251,12 +271,13 @@ class SyncManager {
   }
   
   private async syncSupplier(operation: SyncOperation, data: any): Promise<void> {
+    const cleanData = stripLocalFields(data);
     switch (operation) {
       case 'create':
-        await offlineShopService.createSupplier(data);
+        await offlineShopService.createSupplier(cleanData);
         break;
       case 'update':
-        await offlineShopService.updateSupplier(data);
+        await offlineShopService.updateSupplier(cleanData);
         break;
       case 'delete':
         await offlineShopService.deleteSupplier(data.id);
@@ -265,12 +286,13 @@ class SyncManager {
   }
   
   private async syncSale(operation: SyncOperation, data: any): Promise<void> {
+    const cleanData = stripLocalFields(data);
     switch (operation) {
       case 'create':
-        await offlineShopService.createSale(data);
+        await offlineShopService.createSale(cleanData);
         break;
       case 'update':
-        await offlineShopService.updateSale(data.id, data);
+        await offlineShopService.updateSale(data.id, cleanData);
         break;
       case 'delete':
         await offlineShopService.deleteSale(data.id);
@@ -279,9 +301,10 @@ class SyncManager {
   }
   
   private async syncPurchase(operation: SyncOperation, data: any): Promise<void> {
+    const cleanData = stripLocalFields(data);
     switch (operation) {
       case 'create':
-        await offlineShopService.createPurchase(data);
+        await offlineShopService.createPurchase(cleanData);
         break;
       case 'delete':
         await offlineShopService.deletePurchase(data.id);
@@ -290,12 +313,13 @@ class SyncManager {
   }
   
   private async syncExpense(operation: SyncOperation, data: any): Promise<void> {
+    const cleanData = stripLocalFields(data);
     switch (operation) {
       case 'create':
-        await offlineShopService.createExpense(data);
+        await offlineShopService.createExpense(cleanData);
         break;
       case 'update':
-        await offlineShopService.updateExpense(data);
+        await offlineShopService.updateExpense(cleanData);
         break;
       case 'delete':
         await offlineShopService.deleteExpense(data.id);
@@ -304,14 +328,16 @@ class SyncManager {
   }
   
   private async syncCashTransaction(operation: SyncOperation, data: any): Promise<void> {
+    const cleanData = stripLocalFields(data);
     if (operation === 'create') {
-      await offlineShopService.createCashTransaction(data);
+      await offlineShopService.createCashTransaction(cleanData);
     }
   }
   
   private async syncStockAdjustment(operation: SyncOperation, data: any): Promise<void> {
+    const cleanData = stripLocalFields(data);
     if (operation === 'create') {
-      await offlineShopService.createAdjustment(data);
+      await offlineShopService.createAdjustment(cleanData);
     }
   }
   
