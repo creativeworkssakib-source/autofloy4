@@ -21,6 +21,7 @@ import {
   MessageSquareMore,
   Scan,
   Landmark,
+  Calculator,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
@@ -60,6 +61,7 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
 
   const navigation = [
     { name: t("shop.overview"), href: "/offline-shop", icon: LayoutDashboard },
+    { name: language === "bn" ? "ক্যাশ রেজিস্টার" : "Cash Register", href: "/offline-shop/cash-register", icon: Calculator },
     { name: t("shop.productsStock"), href: "/offline-shop/products", icon: Package },
     { name: t("shop.purchasesBuyImport"), href: "/offline-shop/purchases", icon: PackagePlus },
     { name: language === "bn" ? "স্ক্যানার সেটআপ" : "Scanner Setup", href: "/offline-shop/scanner-setup", icon: Scan },
