@@ -2,35 +2,56 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    
+    <!-- Favicons -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="apple-touch-icon" href="/favicon.svg" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" href="/pwa-192x192.png" />
+    <link rel="mask-icon" href="/favicon.svg" color="#6366f1" />
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#6366f1" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="AutoFloy" />
+    <meta name="application-name" content="AutoFloy Shop" />
+    <meta name="msapplication-TileColor" content="#6366f1" />
+    <meta name="msapplication-tap-highlight" content="no" />
+    <meta name="format-detection" content="telephone=no" />
+    
+    <!-- Primary Meta Tags -->
     <title>AutoFloy - Complete Business Automation Platform</title>
     <meta name="description" content="Complete business solution - AI-powered Facebook automation for online sellers AND powerful POS system for offline shops. Start free today.">
     <meta name="author" content="AutoFloy" />
+    <meta name="keywords" content="POS, point of sale, offline shop, inventory management, Bangladesh, বাংলাদেশ, দোকান, ইনভেন্টরি" />
 
-    
-    
+    <!-- Open Graph / Social -->
     <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://autofloy.com" />
+    <meta property="og:title" content="AutoFloy - Complete Business Automation Platform" />
+    <meta property="og:description" content="Complete business solution - AI-powered Facebook automation for online sellers AND powerful POS system for offline shops. Start free today." />
     <meta property="og:image" content="/og-image.png" />
 
+    <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@AutoFloy" />
+    <meta name="twitter:title" content="AutoFloy - Complete Business Automation Platform" />
+    <meta name="twitter:description" content="Complete business solution - AI-powered Facebook automation for online sellers AND powerful POS system for offline shops. Start free today." />
     <meta name="twitter:image" content="/og-image.png" />
 
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
-  
-  
-  
-  <meta property="og:title" content="AutoFloy - Complete Business Automation Platform">
-  <meta name="twitter:title" content="AutoFloy - Complete Business Automation Platform">
-  <meta property="og:description" content="Complete business solution - AI-powered Facebook automation for online sellers AND powerful POS system for offline shops. Start free today.">
-  <meta name="twitter:description" content="Complete business solution - AI-powered Facebook automation for online sellers AND powerful POS system for offline shops. Start free today.">
-</head>
-
+    <!-- Capacitor Support -->
+    <script>
+      // Detect if running in Capacitor
+      window.isCapacitor = typeof window.Capacitor !== 'undefined';
+    </script>
+  </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>

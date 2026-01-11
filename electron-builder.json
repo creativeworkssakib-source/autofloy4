@@ -1,0 +1,54 @@
+{
+  "productName": "AutoFloy Shop",
+  "appId": "com.autofloy.shop",
+  "copyright": "Copyright © 2024 AutoFloy",
+  "directories": {
+    "output": "release",
+    "buildResources": "build-resources"
+  },
+  "files": [
+    "dist/**/*",
+    "electron/**/*",
+    "public/**/*"
+  ],
+  "extraMetadata": {
+    "main": "electron/main.js"
+  },
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": ["x64"]
+      },
+      {
+        "target": "portable",
+        "arch": ["x64"]
+      }
+    ],
+    "icon": "public/favicon.ico",
+    "publisherName": "AutoFloy"
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "installerIcon": "public/favicon.ico",
+    "uninstallerIcon": "public/favicon.ico",
+    "installerHeaderIcon": "public/favicon.ico",
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "AutoFloy Shop"
+  },
+  "portable": {
+    "artifactName": "AutoFloy-Shop-Portable-${version}.exe"
+  },
+  "linux": {
+    "target": ["AppImage", "deb"],
+    "icon": "public/pwa-512x512.png",
+    "category": "Office"
+  },
+  "mac": {
+    "target": ["dmg"],
+    "icon": "public/pwa-512x512.png",
+    "category": "public.app-category.business"
+  }
+}
