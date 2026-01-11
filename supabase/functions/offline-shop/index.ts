@@ -3171,12 +3171,12 @@ serve(async (req) => {
             updateQuery = updateQuery.eq("shop_id", shopId);
           }
           
-          ({ data, error } = await updateQuery.select().single());
+          ({ data, error } = await updateQuery.select(settingsColumns).single());
         } else {
-          ({ data, error } = await supabase
+        ({ data, error } = await supabase
             .from("shop_settings")
             .insert({ ...body, user_id: userId, shop_id: shopId })
-            .select()
+            .select(settingsColumns)
             .single());
         }
 
