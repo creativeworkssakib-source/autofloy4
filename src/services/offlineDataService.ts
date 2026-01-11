@@ -1,0 +1,917 @@
+/**
+ * Offline-First Data Service
+ * 
+ * This service provides offline-first data access pattern:
+ * 1. Always read from local IndexedDB first
+ * 2. If online, sync with server in background
+ * 3. All writes go to local first, then queue for server sync
+ */
+
+import { offlineDB, ShopProduct, ShopCategory, ShopCustomer, ShopSupplier, ShopSale, ShopSaleItem, ShopPurchase, ShopExpense, ShopCashTransaction, ShopStockAdjustment, ShopReturn, ShopStockBatch, ShopSettings, ShopDailyCashRegister, ShopLoan, ShopStaff, SyncMetadata } from '@/lib/offlineDB';
+import { syncQueue, SyncTable } from '@/lib/syncQueue';
+import { generateOfflineId, generateInvoiceNumber, calculateSaleTotals } from '@/lib/offlineUtils';
+import { offlineShopService } from './offlineShopService';
+
+const CURRENT_SHOP_KEY = 'autofloy_current_shop_id';
+
+class OfflineDataService {
+  private initialized = false;
+  private shopId: string | null = null;
+  private userId: string | null = null;
+  
+  // =============== INITIALIZATION ===============
+  
+  async init(): Promise<void> {
+    if (this.initialized) return;
+    await offlineDB.init();
+    this.shopId = localStorage.getItem(CURRENT_SHOP_KEY);
+    this.initialized = true;
+  }
+  
+  setShopId(shopId: string): void {
+    this.shopId = shopId;
+    localStorage.setItem(CURRENT_SHOP_KEY, shopId);
+  }
+  
+  setUserId(userId: string): void {
+    this.userId = userId;
+  }
+  
+  getShopId(): string | null {
+    return this.shopId || localStorage.getItem(CURRENT_SHOP_KEY);
+  }
+  
+  private ensureShopId(): string {
+    const shopId = this.getShopId();
+    if (!shopId) throw new Error('Shop ID not set');
+    return shopId;
+  }
+  
+  isOnline(): boolean {
+    return navigator.onLine;
+  }
+  
+  // =============== PRODUCTS ===============
+  
+  async getProducts(): Promise<{ products: ShopProduct[]; fromCache: boolean }> {
+    await this.init();
+    const shopId = this.ensureShopId();
+    
+    // Always get from local first
+    const localProducts = await offlineDB.getProducts(shopId);
+    
+    // If online, sync in background
+    if (this.isOnline()) {
+      this.syncProductsInBackground(shopId);
+    }
+    
+    return { products: localProducts, fromCache: true };
+  }
+  
+  private async syncProductsInBackground(shopId: string): Promise<void> {
+    try {
+      const { products } = await offlineShopService.getProducts();
+      // Update local cache with server data
+      for (const product of products) {
+        const localProduct = await offlineDB.getProductById(product.id);
+        // Only update if not locally modified
+        if (!localProduct?._locallyModified && !localProduct?._locallyCreated) {
+          await offlineDB.saveProduct({
+            ...product,
+            shop_id: shopId,
+            user_id: this.userId || '',
+            _locallyModified: false,
+            _locallyCreated: false,
+            _locallyDeleted: false,
+          } as ShopProduct);
+        }
+      }
+    } catch (error) {
+      console.error('Background sync failed for products:', error);
+    }
+  }
+  
+  async getProductById(id: string): Promise<ShopProduct | undefined> {
+    await this.init();
+    return offlineDB.getProductById(id);
+  }
+  
+  async getProductByBarcode(barcode: string): Promise<ShopProduct | undefined> {
+    await this.init();
+    const shopId = this.ensureShopId();
+    return offlineDB.getProductByBarcode(barcode, shopId);
+  }
+  
+  async createProduct(productData: Partial<ShopProduct>): Promise<{ product: ShopProduct; offline: boolean }> {
+    await this.init();
+    const shopId = this.ensureShopId();
+    const now = new Date().toISOString();
+    
+    const product: ShopProduct = {
+      id: generateOfflineId(),
+      shop_id: shopId,
+      user_id: this.userId || '',
+      name: productData.name || '',
+      sku: productData.sku,
+      barcode: productData.barcode,
+      category_id: productData.category_id,
+      category_name: productData.category_name,
+      description: productData.description,
+      purchase_price: productData.purchase_price || 0,
+      selling_price: productData.selling_price || 0,
+      stock_quantity: productData.stock_quantity || 0,
+      min_stock_alert: productData.min_stock_alert,
+      unit: productData.unit,
+      image_url: productData.image_url,
+      expiry_date: productData.expiry_date,
+      is_active: productData.is_active ?? true,
+      created_at: now,
+      updated_at: now,
+      _locallyCreated: true,
+      _locallyModified: false,
+      _locallyDeleted: false,
+    };
+    
+    await offlineDB.saveProduct(product);
+    await syncQueue.add('create', 'products', product.id, product);
+    
+    // If online, try to sync immediately
+    if (this.isOnline()) {
+      try {
+        const { product: serverProduct } = await offlineShopService.createProduct(productData);
+        // Update local with server ID and clear flags
+        const updatedProduct = {
+          ...product,
+          id: serverProduct.id,
+          _locallyCreated: false,
+        };
+        await offlineDB.deleteProduct(product.id);
+        await offlineDB.saveProduct(updatedProduct as ShopProduct);
+        await syncQueue.markSynced(product.id);
+        return { product: updatedProduct as ShopProduct, offline: false };
+      } catch (error) {
+        console.error('Failed to sync product to server:', error);
+      }
+    }
+    
+    return { product, offline: true };
+  }
+  
+  async updateProduct(productData: Partial<ShopProduct> & { id: string }): Promise<{ product: ShopProduct; offline: boolean }> {
+    await this.init();
+    const existing = await offlineDB.getProductById(productData.id);
+    if (!existing) throw new Error('Product not found');
+    
+    const updated: ShopProduct = {
+      ...existing,
+      ...productData,
+      updated_at: new Date().toISOString(),
+      _locallyModified: true,
+    };
+    
+    await offlineDB.saveProduct(updated);
+    await syncQueue.add('update', 'products', updated.id, updated);
+    
+    if (this.isOnline()) {
+      try {
+        await offlineShopService.updateProduct(productData);
+        updated._locallyModified = false;
+        await offlineDB.saveProduct(updated);
+        return { product: updated, offline: false };
+      } catch (error) {
+        console.error('Failed to sync product update:', error);
+      }
+    }
+    
+    return { product: updated, offline: true };
+  }
+  
+  async deleteProduct(id: string): Promise<{ offline: boolean }> {
+    await this.init();
+    await offlineDB.deleteProduct(id);
+    await syncQueue.add('delete', 'products', id, { id });
+    
+    if (this.isOnline()) {
+      try {
+        await offlineShopService.deleteProduct(id);
+        return { offline: false };
+      } catch (error) {
+        console.error('Failed to sync product deletion:', error);
+      }
+    }
+    
+    return { offline: true };
+  }
+  
+  async updateProductStock(id: string, quantityChange: number): Promise<void> {
+    await this.init();
+    await offlineDB.updateProductStock(id, quantityChange);
+    const product = await offlineDB.getProductById(id);
+    if (product) {
+      await syncQueue.add('update', 'products', id, product);
+    }
+  }
+  
+  // =============== CATEGORIES ===============
+  
+  async getCategories(): Promise<{ categories: ShopCategory[]; fromCache: boolean }> {
+    await this.init();
+    const shopId = this.ensureShopId();
+    const categories = await offlineDB.getCategories(shopId);
+    
+    if (this.isOnline()) {
+      this.syncCategoriesInBackground(shopId);
+    }
+    
+    return { categories, fromCache: true };
+  }
+  
+  private async syncCategoriesInBackground(shopId: string): Promise<void> {
+    try {
+      const { categories } = await offlineShopService.getCategories();
+      for (const cat of categories) {
+        const local = await offlineDB.getCategories(shopId);
+        const existing = local.find(c => c.id === cat.id);
+        if (!existing?._locallyModified && !existing?._locallyCreated) {
+          await offlineDB.saveCategory({
+            ...cat,
+            shop_id: shopId,
+            user_id: this.userId || '',
+            _locallyModified: false,
+            _locallyCreated: false,
+            _locallyDeleted: false,
+          } as ShopCategory);
+        }
+      }
+    } catch (error) {
+      console.error('Background sync failed for categories:', error);
+    }
+  }
+  
+  async createCategory(data: { name: string; description?: string }): Promise<{ category: ShopCategory; offline: boolean }> {
+    await this.init();
+    const shopId = this.ensureShopId();
+    const now = new Date().toISOString();
+    
+    const category: ShopCategory = {
+      id: generateOfflineId(),
+      shop_id: shopId,
+      user_id: this.userId || '',
+      name: data.name,
+      description: data.description,
+      created_at: now,
+      _locallyCreated: true,
+      _locallyModified: false,
+      _locallyDeleted: false,
+    };
+    
+    await offlineDB.saveCategory(category);
+    await syncQueue.add('create', 'categories', category.id, category);
+    
+    if (this.isOnline()) {
+      try {
+        const { category: serverCat } = await offlineShopService.createCategory(data);
+        const updated = { ...category, id: serverCat.id, _locallyCreated: false };
+        await offlineDB.deleteCategory(category.id);
+        await offlineDB.saveCategory(updated as ShopCategory);
+        return { category: updated as ShopCategory, offline: false };
+      } catch (error) {
+        console.error('Failed to sync category:', error);
+      }
+    }
+    
+    return { category, offline: true };
+  }
+  
+  // =============== CUSTOMERS ===============
+  
+  async getCustomers(): Promise<{ customers: ShopCustomer[]; fromCache: boolean }> {
+    await this.init();
+    const shopId = this.ensureShopId();
+    const customers = await offlineDB.getCustomers(shopId);
+    
+    if (this.isOnline()) {
+      this.syncCustomersInBackground(shopId);
+    }
+    
+    return { customers, fromCache: true };
+  }
+  
+  private async syncCustomersInBackground(shopId: string): Promise<void> {
+    try {
+      const { customers } = await offlineShopService.getCustomers();
+      for (const cust of customers) {
+        const existing = await offlineDB.getCustomerById(cust.id);
+        if (!existing?._locallyModified && !existing?._locallyCreated) {
+          await offlineDB.saveCustomer({
+            ...cust,
+            shop_id: shopId,
+            user_id: this.userId || '',
+            _locallyModified: false,
+            _locallyCreated: false,
+            _locallyDeleted: false,
+          } as ShopCustomer);
+        }
+      }
+    } catch (error) {
+      console.error('Background sync failed for customers:', error);
+    }
+  }
+  
+  async getCustomerById(id: string): Promise<ShopCustomer | undefined> {
+    await this.init();
+    return offlineDB.getCustomerById(id);
+  }
+  
+  async createCustomer(data: Partial<ShopCustomer>): Promise<{ customer: ShopCustomer; offline: boolean }> {
+    await this.init();
+    const shopId = this.ensureShopId();
+    const now = new Date().toISOString();
+    
+    const customer: ShopCustomer = {
+      id: generateOfflineId(),
+      shop_id: shopId,
+      user_id: this.userId || '',
+      name: data.name || '',
+      phone: data.phone,
+      email: data.email,
+      address: data.address,
+      notes: data.notes,
+      total_purchases: 0,
+      total_due: data.opening_balance || 0,
+      opening_balance: data.opening_balance || 0,
+      created_at: now,
+      updated_at: now,
+      _locallyCreated: true,
+      _locallyModified: false,
+      _locallyDeleted: false,
+    };
+    
+    await offlineDB.saveCustomer(customer);
+    await syncQueue.add('create', 'customers', customer.id, customer);
+    
+    if (this.isOnline()) {
+      try {
+        const { customer: serverCust } = await offlineShopService.createCustomer(data);
+        const updated = { ...customer, id: serverCust.id, _locallyCreated: false };
+        await offlineDB.deleteCustomer(customer.id);
+        await offlineDB.saveCustomer(updated as ShopCustomer);
+        return { customer: updated as ShopCustomer, offline: false };
+      } catch (error) {
+        console.error('Failed to sync customer:', error);
+      }
+    }
+    
+    return { customer, offline: true };
+  }
+  
+  async updateCustomer(data: Partial<ShopCustomer> & { id: string }): Promise<{ customer: ShopCustomer; offline: boolean }> {
+    await this.init();
+    const existing = await offlineDB.getCustomerById(data.id);
+    if (!existing) throw new Error('Customer not found');
+    
+    const updated: ShopCustomer = {
+      ...existing,
+      ...data,
+      updated_at: new Date().toISOString(),
+      _locallyModified: true,
+    };
+    
+    await offlineDB.saveCustomer(updated);
+    await syncQueue.add('update', 'customers', updated.id, updated);
+    
+    if (this.isOnline()) {
+      try {
+        await offlineShopService.updateCustomer(data);
+        updated._locallyModified = false;
+        await offlineDB.saveCustomer(updated);
+        return { customer: updated, offline: false };
+      } catch (error) {
+        console.error('Failed to sync customer update:', error);
+      }
+    }
+    
+    return { customer: updated, offline: true };
+  }
+  
+  async deleteCustomer(id: string): Promise<{ offline: boolean }> {
+    await this.init();
+    await offlineDB.deleteCustomer(id);
+    await syncQueue.add('delete', 'customers', id, { id });
+    
+    if (this.isOnline()) {
+      try {
+        await offlineShopService.deleteCustomer(id);
+        return { offline: false };
+      } catch (error) {
+        console.error('Failed to sync customer deletion:', error);
+      }
+    }
+    
+    return { offline: true };
+  }
+  
+  // =============== SUPPLIERS ===============
+  
+  async getSuppliers(): Promise<{ suppliers: ShopSupplier[]; fromCache: boolean }> {
+    await this.init();
+    const shopId = this.ensureShopId();
+    const suppliers = await offlineDB.getSuppliers(shopId);
+    
+    if (this.isOnline()) {
+      this.syncSuppliersInBackground(shopId);
+    }
+    
+    return { suppliers, fromCache: true };
+  }
+  
+  private async syncSuppliersInBackground(shopId: string): Promise<void> {
+    try {
+      const { suppliers } = await offlineShopService.getSuppliers();
+      for (const supp of suppliers) {
+        const existing = await offlineDB.getSupplierById(supp.id);
+        if (!existing?._locallyModified && !existing?._locallyCreated) {
+          await offlineDB.saveSupplier({
+            ...supp,
+            shop_id: shopId,
+            user_id: this.userId || '',
+            _locallyModified: false,
+            _locallyCreated: false,
+            _locallyDeleted: false,
+          } as ShopSupplier);
+        }
+      }
+    } catch (error) {
+      console.error('Background sync failed for suppliers:', error);
+    }
+  }
+  
+  async createSupplier(data: Partial<ShopSupplier>): Promise<{ supplier: ShopSupplier; offline: boolean }> {
+    await this.init();
+    const shopId = this.ensureShopId();
+    const now = new Date().toISOString();
+    
+    const supplier: ShopSupplier = {
+      id: generateOfflineId(),
+      shop_id: shopId,
+      user_id: this.userId || '',
+      name: data.name || '',
+      phone: data.phone,
+      email: data.email,
+      address: data.address,
+      company_name: data.company_name,
+      notes: data.notes,
+      total_purchases: 0,
+      total_due: data.opening_balance || 0,
+      opening_balance: data.opening_balance || 0,
+      created_at: now,
+      updated_at: now,
+      _locallyCreated: true,
+      _locallyModified: false,
+      _locallyDeleted: false,
+    };
+    
+    await offlineDB.saveSupplier(supplier);
+    await syncQueue.add('create', 'suppliers', supplier.id, supplier);
+    
+    if (this.isOnline()) {
+      try {
+        const { supplier: serverSupp } = await offlineShopService.createSupplier(data);
+        const updated = { ...supplier, id: serverSupp.id, _locallyCreated: false };
+        await offlineDB.deleteSupplier(supplier.id);
+        await offlineDB.saveSupplier(updated as ShopSupplier);
+        return { supplier: updated as ShopSupplier, offline: false };
+      } catch (error) {
+        console.error('Failed to sync supplier:', error);
+      }
+    }
+    
+    return { supplier, offline: true };
+  }
+  
+  // =============== SALES ===============
+  
+  async getSales(startDate?: string, endDate?: string): Promise<{ sales: ShopSale[]; fromCache: boolean }> {
+    await this.init();
+    const shopId = this.ensureShopId();
+    const sales = await offlineDB.getSales(shopId, startDate, endDate);
+    
+    if (this.isOnline()) {
+      this.syncSalesInBackground(shopId);
+    }
+    
+    return { sales, fromCache: true };
+  }
+  
+  private async syncSalesInBackground(shopId: string): Promise<void> {
+    try {
+      const { sales } = await offlineShopService.getSales();
+      for (const sale of sales) {
+        const existing = await offlineDB.getSaleById(sale.id);
+        if (!existing?._locallyModified && !existing?._locallyCreated) {
+          await offlineDB.saveSale({
+            ...sale,
+            shop_id: shopId,
+            user_id: this.userId || '',
+            _locallyModified: false,
+            _locallyCreated: false,
+            _locallyDeleted: false,
+          } as ShopSale);
+        }
+      }
+    } catch (error) {
+      console.error('Background sync failed for sales:', error);
+    }
+  }
+  
+  async getSaleById(id: string): Promise<ShopSale | undefined> {
+    await this.init();
+    return offlineDB.getSaleById(id);
+  }
+  
+  async createSale(saleData: {
+    customer_id?: string;
+    customer_name?: string;
+    customer_phone?: string;
+    items: Array<{
+      product_id?: string;
+      product_name: string;
+      quantity: number;
+      unit_price: number;
+      purchase_price?: number;
+      discount?: number;
+      total: number;
+    }>;
+    discount?: number;
+    discount_type?: 'fixed' | 'percentage';
+    tax?: number;
+    paid_amount?: number;
+    payment_method?: string;
+    notes?: string;
+  }): Promise<{ sale: ShopSale; invoice_number: string; offline: boolean }> {
+    await this.init();
+    const shopId = this.ensureShopId();
+    const now = new Date().toISOString();
+    
+    // Calculate totals
+    const subtotal = saleData.items.reduce((sum, item) => sum + item.total, 0);
+    const discountAmount = saleData.discount || 0;
+    const taxAmount = saleData.tax || 0;
+    const total = subtotal - discountAmount + taxAmount;
+    const paidAmount = saleData.paid_amount || 0;
+    const dueAmount = total - paidAmount;
+    
+    const invoiceNumber = generateInvoiceNumber('INV', shopId);
+    
+    const saleItems: ShopSaleItem[] = saleData.items.map((item, index) => ({
+      id: generateOfflineId(),
+      sale_id: '', // Will be set after sale creation
+      product_id: item.product_id || '',
+      product_name: item.product_name,
+      quantity: item.quantity,
+      unit_price: item.unit_price,
+      discount: item.discount || 0,
+      total: item.total,
+      created_at: now,
+    }));
+    
+    const sale: ShopSale = {
+      id: generateOfflineId(),
+      shop_id: shopId,
+      user_id: this.userId || '',
+      invoice_number: invoiceNumber,
+      customer_id: saleData.customer_id,
+      customer_name: saleData.customer_name,
+      customer_phone: saleData.customer_phone,
+      subtotal,
+      discount: discountAmount,
+      discount_type: saleData.discount_type || 'fixed',
+      tax: taxAmount,
+      total,
+      paid_amount: paidAmount,
+      due_amount: dueAmount,
+      payment_method: saleData.payment_method || 'cash',
+      payment_status: dueAmount === 0 ? 'paid' : paidAmount > 0 ? 'partial' : 'due',
+      notes: saleData.notes,
+      sale_date: now.split('T')[0],
+      created_at: now,
+      updated_at: now,
+      items: saleItems.map(item => ({ ...item, sale_id: '' })),
+      _locallyCreated: true,
+      _locallyModified: false,
+      _locallyDeleted: false,
+    };
+    
+    // Update sale_id in items
+    sale.items = saleItems.map(item => ({ ...item, sale_id: sale.id }));
+    
+    // Update product stock
+    for (const item of saleData.items) {
+      if (item.product_id) {
+        await this.updateProductStock(item.product_id, -item.quantity);
+      }
+    }
+    
+    // Update customer due if applicable
+    if (saleData.customer_id && dueAmount > 0) {
+      await offlineDB.updateCustomerDue(saleData.customer_id, dueAmount);
+    }
+    
+    await offlineDB.saveSale(sale);
+    await syncQueue.add('create', 'sales', sale.id, sale);
+    
+    if (this.isOnline()) {
+      try {
+        const { sale: serverSale, invoice_number: serverInvoice } = await offlineShopService.createSale(saleData);
+        const updated = { 
+          ...sale, 
+          id: serverSale.id, 
+          invoice_number: serverInvoice,
+          _locallyCreated: false 
+        };
+        await offlineDB.deleteSale(sale.id);
+        await offlineDB.saveSale(updated as ShopSale);
+        return { sale: updated as ShopSale, invoice_number: serverInvoice, offline: false };
+      } catch (error) {
+        console.error('Failed to sync sale:', error);
+      }
+    }
+    
+    return { sale, invoice_number: invoiceNumber, offline: true };
+  }
+  
+  // =============== EXPENSES ===============
+  
+  async getExpenses(startDate?: string, endDate?: string): Promise<{ expenses: ShopExpense[]; fromCache: boolean }> {
+    await this.init();
+    const shopId = this.ensureShopId();
+    const expenses = await offlineDB.getExpenses(shopId, startDate, endDate);
+    
+    if (this.isOnline()) {
+      this.syncExpensesInBackground(shopId);
+    }
+    
+    return { expenses, fromCache: true };
+  }
+  
+  private async syncExpensesInBackground(shopId: string): Promise<void> {
+    try {
+      const { expenses } = await offlineShopService.getExpenses();
+      for (const exp of expenses) {
+        const allExpenses = await offlineDB.getExpenses(shopId);
+        const existing = allExpenses.find(e => e.id === exp.id);
+        if (!existing?._locallyModified && !existing?._locallyCreated) {
+          await offlineDB.saveExpense({
+            ...exp,
+            shop_id: shopId,
+            user_id: this.userId || '',
+            _locallyModified: false,
+            _locallyCreated: false,
+            _locallyDeleted: false,
+          } as ShopExpense);
+        }
+      }
+    } catch (error) {
+      console.error('Background sync failed for expenses:', error);
+    }
+  }
+  
+  async createExpense(data: {
+    category: string;
+    description?: string;
+    amount: number;
+    expense_date?: string;
+    payment_method?: string;
+    notes?: string;
+  }): Promise<{ expense: ShopExpense; offline: boolean }> {
+    await this.init();
+    const shopId = this.ensureShopId();
+    const now = new Date().toISOString();
+    
+    const expense: ShopExpense = {
+      id: generateOfflineId(),
+      shop_id: shopId,
+      user_id: this.userId || '',
+      category: data.category,
+      description: data.description,
+      amount: data.amount,
+      payment_method: data.payment_method || 'cash',
+      expense_date: data.expense_date || now.split('T')[0],
+      notes: data.notes,
+      created_at: now,
+      updated_at: now,
+      _locallyCreated: true,
+      _locallyModified: false,
+      _locallyDeleted: false,
+    };
+    
+    await offlineDB.saveExpense(expense);
+    await syncQueue.add('create', 'expenses', expense.id, expense);
+    
+    if (this.isOnline()) {
+      try {
+        const { expense: serverExp } = await offlineShopService.createExpense(data);
+        const updated = { ...expense, id: serverExp.id, _locallyCreated: false };
+        await offlineDB.deleteExpense(expense.id);
+        await offlineDB.saveExpense(updated as ShopExpense);
+        return { expense: updated as ShopExpense, offline: false };
+      } catch (error) {
+        console.error('Failed to sync expense:', error);
+      }
+    }
+    
+    return { expense, offline: true };
+  }
+  
+  // =============== CASH TRANSACTIONS ===============
+  
+  async getCashTransactions(startDate?: string, endDate?: string): Promise<{ 
+    transactions: ShopCashTransaction[]; 
+    balance: number; 
+    cashIn: number; 
+    cashOut: number;
+    fromCache: boolean 
+  }> {
+    await this.init();
+    const shopId = this.ensureShopId();
+    const transactions = await offlineDB.getCashTransactions(shopId, startDate, endDate);
+    
+    let cashIn = 0;
+    let cashOut = 0;
+    
+    for (const t of transactions) {
+      if (t.type === 'in') {
+        cashIn += t.amount;
+      } else {
+        cashOut += t.amount;
+      }
+    }
+    
+    const balance = cashIn - cashOut;
+    
+    if (this.isOnline()) {
+      // Background sync
+      this.syncCashTransactionsInBackground(shopId);
+    }
+    
+    return { transactions, balance, cashIn, cashOut, fromCache: true };
+  }
+  
+  private async syncCashTransactionsInBackground(shopId: string): Promise<void> {
+    try {
+      const { transactions } = await offlineShopService.getCashTransactions();
+      for (const tx of transactions) {
+        const allTx = await offlineDB.getCashTransactions(shopId);
+        const existing = allTx.find(t => t.id === tx.id);
+        if (!existing?._locallyModified && !existing?._locallyCreated) {
+          await offlineDB.saveCashTransaction({
+            ...tx,
+            shop_id: shopId,
+            user_id: this.userId || '',
+            _locallyModified: false,
+            _locallyCreated: false,
+            _locallyDeleted: false,
+          } as ShopCashTransaction);
+        }
+      }
+    } catch (error) {
+      console.error('Background sync failed for cash transactions:', error);
+    }
+  }
+  
+  async createCashTransaction(data: {
+    type: 'in' | 'out';
+    source: string;
+    amount: number;
+    notes?: string;
+  }): Promise<{ transaction: ShopCashTransaction; offline: boolean }> {
+    await this.init();
+    const shopId = this.ensureShopId();
+    const now = new Date().toISOString();
+    
+    const transaction: ShopCashTransaction = {
+      id: generateOfflineId(),
+      shop_id: shopId,
+      user_id: this.userId || '',
+      type: data.type,
+      source: data.source,
+      amount: data.amount,
+      notes: data.notes,
+      transaction_date: now.split('T')[0],
+      created_at: now,
+      _locallyCreated: true,
+      _locallyModified: false,
+      _locallyDeleted: false,
+    };
+    
+    await offlineDB.saveCashTransaction(transaction);
+    await syncQueue.add('create', 'cashTransactions', transaction.id, transaction);
+    
+    if (this.isOnline()) {
+      try {
+        const { transaction: serverTx } = await offlineShopService.createCashTransaction(data);
+        const updated = { ...transaction, id: serverTx.id, _locallyCreated: false };
+        await offlineDB.deleteCashTransaction(transaction.id);
+        await offlineDB.saveCashTransaction(updated as ShopCashTransaction);
+        return { transaction: updated as ShopCashTransaction, offline: false };
+      } catch (error) {
+        console.error('Failed to sync cash transaction:', error);
+      }
+    }
+    
+    return { transaction, offline: true };
+  }
+  
+  // =============== SETTINGS ===============
+  
+  async getSettings(): Promise<{ settings: ShopSettings | undefined; fromCache: boolean }> {
+    await this.init();
+    const shopId = this.ensureShopId();
+    const settings = await offlineDB.getSettings(shopId);
+    
+    if (this.isOnline()) {
+      this.syncSettingsInBackground(shopId);
+    }
+    
+    return { settings, fromCache: true };
+  }
+  
+  private async syncSettingsInBackground(shopId: string): Promise<void> {
+    try {
+      const { settings } = await offlineShopService.getSettings();
+      if (settings) {
+        await offlineDB.saveSettings({
+          ...settings,
+          shop_id: shopId,
+          user_id: this.userId || '',
+        } as ShopSettings);
+      }
+    } catch (error) {
+      console.error('Background sync failed for settings:', error);
+    }
+  }
+  
+  // =============== SYNC STATUS ===============
+  
+  async getPendingSyncCount(): Promise<number> {
+    await this.init();
+    return syncQueue.getPendingCount();
+  }
+  
+  async getSyncSummary(): Promise<{
+    total: number;
+    byTable: Record<string, number>;
+    byOperation: Record<string, number>;
+    failedCount: number;
+  }> {
+    await this.init();
+    return syncQueue.getSummary();
+  }
+  
+  async getSyncMetadata(): Promise<SyncMetadata | undefined> {
+    await this.init();
+    const shopId = this.ensureShopId();
+    return offlineDB.getSyncMetadata(shopId);
+  }
+  
+  async updateSyncMetadata(data: Partial<SyncMetadata>): Promise<void> {
+    await this.init();
+    const shopId = this.ensureShopId();
+    const existing = await offlineDB.getSyncMetadata(shopId);
+    
+    const metadata: SyncMetadata = {
+      id: existing?.id || generateOfflineId(),
+      shopId,
+      userId: this.userId || '',
+      lastSyncTimestamp: data.lastSyncTimestamp ?? existing?.lastSyncTimestamp ?? Date.now(),
+      lastOnlineCheck: data.lastOnlineCheck ?? existing?.lastOnlineCheck ?? Date.now(),
+      subscriptionPlan: data.subscriptionPlan ?? existing?.subscriptionPlan ?? 'free',
+      subscriptionEndsAt: data.subscriptionEndsAt ?? existing?.subscriptionEndsAt ?? '',
+      isSubscriptionValid: data.isSubscriptionValid ?? existing?.isSubscriptionValid ?? false,
+      pendingSyncCount: data.pendingSyncCount ?? existing?.pendingSyncCount ?? 0,
+    };
+    
+    await offlineDB.saveSyncMetadata(metadata);
+  }
+  
+  // =============== DATA MANAGEMENT ===============
+  
+  async clearAllLocalData(): Promise<void> {
+    await this.init();
+    await offlineDB.clearAllData();
+  }
+  
+  async clearShopLocalData(): Promise<void> {
+    await this.init();
+    const shopId = this.ensureShopId();
+    await offlineDB.clearShopData(shopId);
+  }
+  
+  async getLocalDataSize(): Promise<{ tables: Record<string, number>; total: number }> {
+    await this.init();
+    return offlineDB.getDataSize();
+  }
+}
+
+// Export singleton instance
+export const offlineDataService = new OfflineDataService();

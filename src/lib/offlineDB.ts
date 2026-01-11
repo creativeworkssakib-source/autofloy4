@@ -1166,13 +1166,98 @@ class OfflineDB {
     // Clear products
     const products = await db.getAllFromIndex('products', 'by-shop', shopId);
     const productTx = db.transaction('products', 'readwrite');
-    for (const p of products) {
-      await productTx.store.delete(p.id);
-    }
+    for (const p of products) await productTx.store.delete(p.id);
     await productTx.done;
     
-    // Repeat for other stores...
-    // This is simplified - in production, you'd do all stores
+    // Clear categories
+    const categories = await db.getAllFromIndex('categories', 'by-shop', shopId);
+    const catTx = db.transaction('categories', 'readwrite');
+    for (const c of categories) await catTx.store.delete(c.id);
+    await catTx.done;
+    
+    // Clear customers
+    const customers = await db.getAllFromIndex('customers', 'by-shop', shopId);
+    const custTx = db.transaction('customers', 'readwrite');
+    for (const c of customers) await custTx.store.delete(c.id);
+    await custTx.done;
+    
+    // Clear suppliers
+    const suppliers = await db.getAllFromIndex('suppliers', 'by-shop', shopId);
+    const suppTx = db.transaction('suppliers', 'readwrite');
+    for (const s of suppliers) await suppTx.store.delete(s.id);
+    await suppTx.done;
+    
+    // Clear sales
+    const sales = await db.getAllFromIndex('sales', 'by-shop', shopId);
+    const salesTx = db.transaction('sales', 'readwrite');
+    for (const s of sales) await salesTx.store.delete(s.id);
+    await salesTx.done;
+    
+    // Clear purchases
+    const purchases = await db.getAllFromIndex('purchases', 'by-shop', shopId);
+    const purchTx = db.transaction('purchases', 'readwrite');
+    for (const p of purchases) await purchTx.store.delete(p.id);
+    await purchTx.done;
+    
+    // Clear expenses
+    const expenses = await db.getAllFromIndex('expenses', 'by-shop', shopId);
+    const expTx = db.transaction('expenses', 'readwrite');
+    for (const e of expenses) await expTx.store.delete(e.id);
+    await expTx.done;
+    
+    // Clear cash transactions
+    const cashTrans = await db.getAllFromIndex('cashTransactions', 'by-shop', shopId);
+    const cashTx = db.transaction('cashTransactions', 'readwrite');
+    for (const c of cashTrans) await cashTx.store.delete(c.id);
+    await cashTx.done;
+    
+    // Clear stock adjustments
+    const adjustments = await db.getAllFromIndex('stockAdjustments', 'by-shop', shopId);
+    const adjTx = db.transaction('stockAdjustments', 'readwrite');
+    for (const a of adjustments) await adjTx.store.delete(a.id);
+    await adjTx.done;
+    
+    // Clear returns
+    const returns = await db.getAllFromIndex('returns', 'by-shop', shopId);
+    const retTx = db.transaction('returns', 'readwrite');
+    for (const r of returns) await retTx.store.delete(r.id);
+    await retTx.done;
+    
+    // Clear stock batches
+    const batches = await db.getAllFromIndex('stockBatches', 'by-shop', shopId);
+    const batchTx = db.transaction('stockBatches', 'readwrite');
+    for (const b of batches) await batchTx.store.delete(b.id);
+    await batchTx.done;
+    
+    // Clear settings
+    const settings = await db.getAllFromIndex('settings', 'by-shop', shopId);
+    const setTx = db.transaction('settings', 'readwrite');
+    for (const s of settings) await setTx.store.delete(s.id);
+    await setTx.done;
+    
+    // Clear daily cash register
+    const registers = await db.getAllFromIndex('dailyCashRegister', 'by-shop', shopId);
+    const regTx = db.transaction('dailyCashRegister', 'readwrite');
+    for (const r of registers) await regTx.store.delete(r.id);
+    await regTx.done;
+    
+    // Clear loans
+    const loans = await db.getAllFromIndex('loans', 'by-shop', shopId);
+    const loanTx = db.transaction('loans', 'readwrite');
+    for (const l of loans) await loanTx.store.delete(l.id);
+    await loanTx.done;
+    
+    // Clear staff
+    const staff = await db.getAllFromIndex('staff', 'by-shop', shopId);
+    const staffTx = db.transaction('staff', 'readwrite');
+    for (const s of staff) await staffTx.store.delete(s.id);
+    await staffTx.done;
+    
+    // Clear sync metadata for this shop
+    const syncMeta = await db.getAllFromIndex('syncMetadata', 'by-shop', shopId);
+    const syncTx = db.transaction('syncMetadata', 'readwrite');
+    for (const m of syncMeta) await syncTx.store.delete(m.id);
+    await syncTx.done;
   }
 
   async getDataSize(): Promise<{ tables: Record<string, number>; total: number }> {
