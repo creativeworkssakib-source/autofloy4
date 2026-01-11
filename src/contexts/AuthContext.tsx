@@ -75,12 +75,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const mappedUser = mapServiceUser(serviceUser);
           setUser(mappedUser);
           localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(mappedUser));
-        } catch {
-          // Token invalid, clear auth state
+        } catch (error) {
+          // Token invalid or user not found, clear auth state
+          console.log("Auth init failed, clearing session:", error);
           authService.logout();
+          setUser(null);
           localStorage.removeItem(CURRENT_USER_KEY);
         }
       } else {
+        setUser(null);
         localStorage.removeItem(CURRENT_USER_KEY);
       }
       setIsLoading(false);
