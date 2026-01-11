@@ -24,6 +24,8 @@ interface InvoiceSettings {
   logo_url: string;
   currency: string;
   invoice_prefix: string;
+  tax_rate: number;
+  invoice_format: 'simple' | 'better';
   receipt_size: '80mm' | '58mm' | 'a4';
   receipt_font_size: 'small' | 'medium' | 'large';
   show_logo_on_receipt: boolean;
@@ -45,6 +47,8 @@ const defaultSettings: InvoiceSettings = {
   logo_url: '',
   currency: '৳',
   invoice_prefix: 'INV',
+  tax_rate: 0,
+  invoice_format: 'simple',
   receipt_size: '80mm',
   receipt_font_size: 'small',
   show_logo_on_receipt: true,
@@ -120,6 +124,8 @@ const InvoiceSettings = () => {
         logo_url: settings.logo_url,
         currency: settings.currency,
         invoice_prefix: settings.invoice_prefix,
+        tax_rate: settings.tax_rate,
+        invoice_format: settings.invoice_format,
         receipt_size: settings.receipt_size,
         receipt_font_size: settings.receipt_font_size,
         show_logo_on_receipt: settings.show_logo_on_receipt,
@@ -283,6 +289,19 @@ const InvoiceSettings = () => {
                         />
                       </div>
                     </div>
+
+                    <div className="space-y-2">
+                      <Label>{language === 'bn' ? 'ট্যাক্স রেট (%)' : 'Tax Rate (%)'}</Label>
+                      <Input
+                        type="number"
+                        value={settings.tax_rate}
+                        onChange={(e) => updateSetting('tax_rate', parseFloat(e.target.value) || 0)}
+                        placeholder="0"
+                        min="0"
+                        max="100"
+                        step="0.01"
+                      />
+                    </div>
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -301,6 +320,57 @@ const InvoiceSettings = () => {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
+                    {/* Invoice Format Selection */}
+                    <div className="space-y-3">
+                      <Label>{language === 'bn' ? 'ইনভয়েস ফরম্যাট' : 'Invoice Format'}</Label>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div 
+                          className={`border-2 rounded-lg p-4 cursor-pointer transition-all ${
+                            settings.invoice_format === "simple" 
+                              ? "border-primary bg-primary/5" 
+                              : "border-muted hover:border-muted-foreground/50"
+                          }`}
+                          onClick={() => updateSetting('invoice_format', 'simple')}
+                        >
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                              settings.invoice_format === "simple" ? "border-primary" : "border-muted-foreground/50"
+                            }`}>
+                              {settings.invoice_format === "simple" && (
+                                <div className="w-2 h-2 rounded-full bg-primary" />
+                              )}
+                            </div>
+                            <span className="font-medium">{language === 'bn' ? 'সিম্পল ইনভয়েস' : 'Simple Invoice'}</span>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {language === 'bn' ? 'সাধারণ মিনিমাল ডিজাইন' : 'Clean minimal design with basic info'}
+                          </p>
+                        </div>
+                        <div 
+                          className={`border-2 rounded-lg p-4 cursor-pointer transition-all ${
+                            settings.invoice_format === "better" 
+                              ? "border-primary bg-primary/5" 
+                              : "border-muted hover:border-muted-foreground/50"
+                          }`}
+                          onClick={() => updateSetting('invoice_format', 'better')}
+                        >
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                              settings.invoice_format === "better" ? "border-primary" : "border-muted-foreground/50"
+                            }`}>
+                              {settings.invoice_format === "better" && (
+                                <div className="w-2 h-2 rounded-full bg-primary" />
+                              )}
+                            </div>
+                            <span className="font-medium">{language === 'bn' ? 'বেটার ইনভয়েস' : 'Better Invoice'}</span>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {language === 'bn' ? 'প্রফেশনাল ডিজাইন ডার্ক হেডার সহ' : 'Professional design with dark header & orange accents'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
                     <div className="space-y-2">
                       <Label>{language === 'bn' ? 'রিসিপ্ট সাইজ' : 'Receipt Size'}</Label>
                       <Select 
