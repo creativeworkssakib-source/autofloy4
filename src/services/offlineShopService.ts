@@ -3,6 +3,45 @@ import { authService } from "./authService";
 const SUPABASE_URL = "https://klkrzfwvrmffqkmkyqrh.supabase.co";
 const CURRENT_SHOP_KEY = "autofloy_current_shop_id";
 
+// Offline cache keys
+const CACHE_KEYS = {
+  products: "autofloy_cache_products",
+  categories: "autofloy_cache_categories",
+  customers: "autofloy_cache_customers",
+  suppliers: "autofloy_cache_suppliers",
+  sales: "autofloy_cache_sales",
+  expenses: "autofloy_cache_expenses",
+  cash: "autofloy_cache_cash",
+  settings: "autofloy_cache_settings",
+  dashboard: "autofloy_cache_dashboard",
+};
+
+// Check if online
+const isOnline = () => typeof navigator !== 'undefined' && navigator.onLine;
+
+// Get cached data
+const getCached = <T>(key: string): T | null => {
+  try {
+    const cached = localStorage.getItem(key);
+    if (cached) {
+      const data = JSON.parse(cached);
+      return data;
+    }
+  } catch (e) {
+    console.error(`[OfflineShopService] Failed to get cache for ${key}:`, e);
+  }
+  return null;
+};
+
+// Save to cache
+const setCache = <T>(key: string, data: T): void => {
+  try {
+    localStorage.setItem(key, JSON.stringify(data));
+  } catch (e) {
+    console.error(`[OfflineShopService] Failed to set cache for ${key}:`, e);
+  }
+};
+
 class OfflineShopService {
   private getShopId(): string | null {
     return localStorage.getItem(CURRENT_SHOP_KEY);
@@ -11,8 +50,21 @@ class OfflineShopService {
   private async request<T>(
     resource: string,
     options: RequestInit = {},
-    queryParams?: Record<string, string>
+    queryParams?: Record<string, string>,
+    cacheKey?: string
   ): Promise<T> {
+    // If offline, try to return cached data for GET requests
+    if (!isOnline()) {
+      if ((!options.method || options.method === 'GET') && cacheKey) {
+        const cached = getCached<T>(cacheKey);
+        if (cached !== null) {
+          console.log(`[OfflineShopService] Returning cached data for ${resource}`);
+          return cached;
+        }
+      }
+      throw new Error("অফলাইন মোডে এই কাজ করা যাবে না। ইন্টারনেট সংযোগ প্রয়োজন।");
+    }
+    
     const token = authService.getToken();
     if (!token) {
       throw new Error("Unauthorized");
@@ -46,12 +98,17 @@ class OfflineShopService {
       throw new Error(data.error || "Request failed");
     }
 
+    // Cache GET responses
+    if ((!options.method || options.method === 'GET') && cacheKey) {
+      setCache(cacheKey, data);
+    }
+
     return data;
   }
 
   // Dashboard
   async getDashboard(range: "today" | "week" | "month" = "today") {
-    return this.request<any>("dashboard", {}, { range });
+    return this.request<any>("dashboard", {}, { range }, CACHE_KEYS.dashboard);
   }
 
   // Growth Insights
@@ -61,7 +118,7 @@ class OfflineShopService {
 
   // Products
   async getProducts() {
-    return this.request<{ products: any[] }>("products");
+    return this.request<{ products: any[] }>("products", {}, undefined, CACHE_KEYS.products);
   }
 
   async createProduct(product: any) {
@@ -94,7 +151,7 @@ class OfflineShopService {
 
   // Categories
   async getCategories() {
-    return this.request<{ categories: any[] }>("categories");
+    return this.request<{ categories: any[] }>("categories", {}, undefined, CACHE_KEYS.categories);
   }
 
   async createCategory(category: { name: string; description?: string }) {
@@ -113,7 +170,7 @@ class OfflineShopService {
 
   // Customers
   async getCustomers() {
-    return this.request<{ customers: any[] }>("customers");
+    return this.request<{ customers: any[] }>("customers", {}, undefined, CACHE_KEYS.customers);
   }
 
   async getCustomer(id: string) {
@@ -150,7 +207,7 @@ class OfflineShopService {
 
   // Suppliers
   async getSuppliers() {
-    return this.request<{ suppliers: any[] }>("suppliers");
+    return this.request<{ suppliers: any[] }>("suppliers", {}, undefined, CACHE_KEYS.suppliers);
   }
 
   async getSupplier(id: string) {
@@ -248,7 +305,9 @@ class OfflineShopService {
     if (params?.endDate) queryParams.endDate = params.endDate;
     if (params?.customerId) queryParams.customerId = params.customerId;
     if (params?.paymentStatus) queryParams.paymentStatus = params.paymentStatus;
-    return this.request<{ sales: any[] }>("sales", {}, queryParams);
+    // Only cache if no filters applied
+    const cacheKey = Object.keys(queryParams).length === 0 ? CACHE_KEYS.sales : undefined;
+    return this.request<{ sales: any[] }>("sales", {}, queryParams, cacheKey);
   }
 
   async createSale(sale: {
@@ -377,7 +436,8 @@ class OfflineShopService {
     if (params?.startDate) queryParams.startDate = params.startDate;
     if (params?.endDate) queryParams.endDate = params.endDate;
     if (params?.category) queryParams.category = params.category;
-    return this.request<{ expenses: any[] }>("expenses", {}, queryParams);
+    const cacheKey = Object.keys(queryParams).length === 0 ? CACHE_KEYS.expenses : undefined;
+    return this.request<{ expenses: any[] }>("expenses", {}, queryParams, cacheKey);
   }
 
   async createExpense(expense: {
@@ -450,7 +510,8 @@ class OfflineShopService {
     if (params?.startDate) queryParams.startDate = params.startDate;
     if (params?.endDate) queryParams.endDate = params.endDate;
     if (params?.source) queryParams.source = params.source;
-    return this.request<{ transactions: any[]; balance: number; cashIn: number; cashOut: number }>("cash", {}, queryParams);
+    const cacheKey = Object.keys(queryParams).length === 0 ? CACHE_KEYS.cash : undefined;
+    return this.request<{ transactions: any[]; balance: number; cashIn: number; cashOut: number }>("cash", {}, queryParams, cacheKey);
   }
 
   async createCashTransaction(transaction: {
@@ -538,7 +599,7 @@ class OfflineShopService {
 
   // Shop Settings
   async getSettings() {
-    return this.request<{ settings: any & { has_trash_passcode?: boolean } }>("settings");
+    return this.request<{ settings: any & { has_trash_passcode?: boolean } }>("settings", {}, undefined, CACHE_KEYS.settings);
   }
 
   async saveSettings(settings: any) {
