@@ -11,7 +11,6 @@ import {
   Package,
   ArrowRight,
   Save,
-  FileText,
   Upload,
   ImageIcon,
   X,
@@ -150,11 +149,7 @@ const SyncSettings = () => {
     shop_phone: "",
     shop_email: "",
     currency: "BDT",
-    tax_rate: 0,
-    invoice_prefix: "INV",
-    invoice_footer: "",
     logo_url: "",
-    terms_and_conditions: "",
     // SMS Settings
     due_reminder_sms_template: "প্রিয় {customer_name}, আপনার কাছে {shop_name} এ মোট {due_amount} টাকা বাকি আছে। আপনি {total_purchases}টি কেনাকাটায় {product_list} কিনেছেন। প্রথম বাকি {oldest_due_date} তারিখে ({days_overdue} দিন আগে)। বিস্তারিত: {purchase_details}। যোগাযোগ: {phone}। অনুগ্রহ করে পরিশোধ করুন।",
     sms_api_key: "",
@@ -175,11 +170,7 @@ const SyncSettings = () => {
           shop_phone: result.settings.shop_phone || "",
           shop_email: result.settings.shop_email || "",
           currency: result.settings.currency || "BDT",
-          tax_rate: result.settings.tax_rate || 0,
-          invoice_prefix: result.settings.invoice_prefix || "INV",
-          invoice_footer: result.settings.invoice_footer || "",
           logo_url: result.settings.logo_url || "",
-          terms_and_conditions: result.settings.terms_and_conditions || "",
           // SMS Settings
           due_reminder_sms_template: result.settings.due_reminder_sms_template || "প্রিয় {customer_name}, আপনার কাছে {shop_name} এ মোট {due_amount} টাকা বাকি আছে। আপনি {total_purchases}টি কেনাকাটায় {product_list} কিনেছেন। প্রথম বাকি {oldest_due_date} তারিখে ({days_overdue} দিন আগে)। বিস্তারিত: {purchase_details}। যোগাযোগ: {phone}। অনুগ্রহ করে পরিশোধ করুন।",
           sms_api_key: result.settings.sms_api_key || "",
@@ -362,16 +353,11 @@ const SyncSettings = () => {
         </div>
 
         <Tabs defaultValue="shop-info" className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="shop-info" className="flex items-center gap-2">
               <Store className="w-4 h-4" />
               <span className="hidden sm:inline">{t("shop.shopInfo")}</span>
               <span className="sm:hidden">Shop</span>
-            </TabsTrigger>
-            <TabsTrigger value="invoice" className="flex items-center gap-2">
-              <FileText className="w-4 h-4" />
-              <span className="hidden sm:inline">{t("shop.invoiceSettings")}</span>
-              <span className="sm:hidden">Invoice</span>
             </TabsTrigger>
             <TabsTrigger value="sms" className="flex items-center gap-2">
               <MessageSquare className="w-4 h-4" />
@@ -497,69 +483,6 @@ const SyncSettings = () => {
           </TabsContent>
 
           {/* Invoice Tab */}
-          <TabsContent value="invoice" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
-                  {t("shop.invoiceSettings")}
-                </CardTitle>
-                <CardDescription>{t("shop.invoiceSettingsDesc")}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {isLoadingShop ? (
-                  <p className="text-muted-foreground">{t("common.loading")}</p>
-                ) : (
-                  <>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>{t("shop.invoicePrefix")}</Label>
-                        <Input
-                          value={shopSettings.invoice_prefix}
-                          onChange={(e) => setShopSettings({ ...shopSettings, invoice_prefix: e.target.value })}
-                          placeholder="INV"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>{t("shop.taxRate")}</Label>
-                        <Input
-                          type="number"
-                          value={shopSettings.tax_rate}
-                          onChange={(e) => setShopSettings({ ...shopSettings, tax_rate: parseFloat(e.target.value) || 0 })}
-                          placeholder="0"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>{t("shop.invoiceFooter")}</Label>
-                      <Input
-                        value={shopSettings.invoice_footer}
-                        onChange={(e) => setShopSettings({ ...shopSettings, invoice_footer: e.target.value })}
-                        placeholder={t("shop.invoiceFooterPlaceholder")}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>{t("shop.termsAndConditions")}</Label>
-                      <Textarea
-                        value={shopSettings.terms_and_conditions}
-                        onChange={(e) => setShopSettings({ ...shopSettings, terms_and_conditions: e.target.value })}
-                        placeholder={t("shop.termsAndConditionsPlaceholder")}
-                        rows={3}
-                      />
-                    </div>
-
-                    <Button onClick={handleSaveShopSettings} disabled={isSavingShop} className="w-full">
-                      <Save className="h-4 w-4 mr-2" />
-                      {isSavingShop ? t("shop.saving") : t("common.save")}
-                    </Button>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
 
           {/* SMS Settings Tab */}
           <TabsContent value="sms" className="space-y-4">
