@@ -307,7 +307,7 @@ export function validateCustomer(customer: Partial<ShopCustomer>): ValidationRes
     errors.push('Invalid phone number format');
   }
   
-  if (customer.email && !/^[^\\s@]+@[^\\s@]+\.[^\\s@]+$/.test(customer.email)) {
+  if (customer.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customer.email)) {
     errors.push('Invalid email format');
   }
   
@@ -331,7 +331,7 @@ export function validateSupplier(supplier: Partial<ShopSupplier>): ValidationRes
     errors.push('Invalid phone number format');
   }
   
-  if (supplier.email && !/^[^\\s@]+@[^\\s@]+\.[^\\s@]+$/.test(supplier.email)) {
+  if (supplier.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(supplier.email)) {
     errors.push('Invalid email format');
   }
   
