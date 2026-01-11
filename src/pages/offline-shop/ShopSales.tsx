@@ -916,44 +916,54 @@ const ShopSales = () => {
 
       {/* View/Print Invoice Modal - Uses Thermal Receipt Preview from Invoice Settings */}
       <Dialog open={!!viewingSale} onOpenChange={() => setViewingSale(null)}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-6">
+        <DialogContent className="max-w-4xl max-h-[95vh] overflow-hidden p-4">
           {viewingSale && (
-            <div className="space-y-4">
-              <ThermalReceiptPreview
-                sale={{
-                  invoice_number: viewingSale.invoice_number,
-                  sale_date: viewingSale.sale_date,
-                  items: viewingSale.items || [],
-                  subtotal: Number(viewingSale.subtotal),
-                  discount: Number(viewingSale.discount),
-                  tax: Number(viewingSale.tax),
-                  total: Number(viewingSale.total),
-                  paid_amount: Number(viewingSale.paid_amount),
-                  due_amount: Number(viewingSale.due_amount),
-                  payment_method: viewingSale.payment_method,
-                }}
-                shopSettings={{
-                  shop_name: shopSettings?.shop_name || '',
-                  shop_address: shopSettings?.shop_address || '',
-                  shop_phone: shopSettings?.shop_phone || '',
-                  shop_email: shopSettings?.shop_email || '',
-                  currency: shopSettings?.currency || 'BDT',
-                  logo_url: shopSettings?.logo_url,
-                  receipt_size: (shopSettings as any)?.receipt_size || '80mm',
-                  receipt_font_size: (shopSettings as any)?.receipt_font_size || 'small',
-                  show_logo_on_receipt: (shopSettings as any)?.show_logo_on_receipt ?? true,
-                  thank_you_message: (shopSettings as any)?.thank_you_message || (language === 'bn' ? 'ধন্যবাদ! আবার আসবেন' : 'Thank you! Please Come Again'),
-                  show_tax_on_receipt: (shopSettings as any)?.show_tax_on_receipt ?? true,
-                  show_payment_method: (shopSettings as any)?.show_payment_method ?? true,
-                  receipt_header_text: (shopSettings as any)?.receipt_header_text,
-                  receipt_footer_text: (shopSettings as any)?.receipt_footer_text,
-                  tax_rate: shopSettings?.tax_rate,
-                  invoice_format: shopSettings?.invoice_format,
-                }}
-                customerInfo={getCustomerInfo(viewingSale)}
-                t={t}
-                previewScale={2}
-              />
+            <div className="space-y-3">
+              <div className="text-xs text-muted-foreground text-center">
+                🖱️ Scroll to zoom • Drag to move
+              </div>
+              <div 
+                className="overflow-auto border rounded-lg bg-muted/30 cursor-grab active:cursor-grabbing"
+                style={{ maxHeight: 'calc(95vh - 120px)' }}
+              >
+                <div className="p-4 min-w-max">
+                  <ThermalReceiptPreview
+                    sale={{
+                      invoice_number: viewingSale.invoice_number,
+                      sale_date: viewingSale.sale_date,
+                      items: viewingSale.items || [],
+                      subtotal: Number(viewingSale.subtotal),
+                      discount: Number(viewingSale.discount),
+                      tax: Number(viewingSale.tax),
+                      total: Number(viewingSale.total),
+                      paid_amount: Number(viewingSale.paid_amount),
+                      due_amount: Number(viewingSale.due_amount),
+                      payment_method: viewingSale.payment_method,
+                    }}
+                    shopSettings={{
+                      shop_name: shopSettings?.shop_name || '',
+                      shop_address: shopSettings?.shop_address || '',
+                      shop_phone: shopSettings?.shop_phone || '',
+                      shop_email: shopSettings?.shop_email || '',
+                      currency: shopSettings?.currency || 'BDT',
+                      logo_url: shopSettings?.logo_url,
+                      receipt_size: (shopSettings as any)?.receipt_size || '80mm',
+                      receipt_font_size: (shopSettings as any)?.receipt_font_size || 'small',
+                      show_logo_on_receipt: (shopSettings as any)?.show_logo_on_receipt ?? true,
+                      thank_you_message: (shopSettings as any)?.thank_you_message || (language === 'bn' ? 'ধন্যবাদ! আবার আসবেন' : 'Thank you! Please Come Again'),
+                      show_tax_on_receipt: (shopSettings as any)?.show_tax_on_receipt ?? true,
+                      show_payment_method: (shopSettings as any)?.show_payment_method ?? true,
+                      receipt_header_text: (shopSettings as any)?.receipt_header_text,
+                      receipt_footer_text: (shopSettings as any)?.receipt_footer_text,
+                      tax_rate: shopSettings?.tax_rate,
+                      invoice_format: shopSettings?.invoice_format,
+                    }}
+                    customerInfo={getCustomerInfo(viewingSale)}
+                    t={t}
+                    previewScale={2.5}
+                  />
+                </div>
+              </div>
 
               <div className="flex justify-end gap-2 pt-2 border-t">
                 <Button variant="outline" size="sm" onClick={() => setViewingSale(null)}>
