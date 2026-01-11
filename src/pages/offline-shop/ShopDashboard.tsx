@@ -173,7 +173,8 @@ const ShopDashboard = () => {
                   {language === "bn" ? "অফলাইন" : "Offline"}
                 </Badge>
               )}
-              {pendingCount > 0 && (
+              {/* Only show pending badge when offline and there are pending items */}
+              {!isOnline && pendingCount > 0 && (
                 <Badge variant="secondary" className="flex items-center gap-1">
                   <Cloud className="h-3 w-3" />
                   {pendingCount} {language === "bn" ? "পেন্ডিং" : "pending"}
@@ -182,16 +183,23 @@ const ShopDashboard = () => {
             </div>
           </div>
           <div className="flex gap-2">
-            {pendingCount > 0 && isOnline && (
+            {/* Show sync button only when offline items need to sync after coming online */}
+            {pendingCount > 0 && isOnline && !isSyncing && (
               <Button 
                 variant="outline" 
                 onClick={() => triggerSync()} 
                 disabled={isSyncing}
                 size="sm"
               >
-                <Cloud className={`h-4 w-4 mr-2 ${isSyncing ? 'animate-pulse' : ''}`} />
+                <Cloud className="h-4 w-4 mr-2" />
                 {language === "bn" ? "সিংক করুন" : "Sync Now"}
               </Button>
+            )}
+            {isSyncing && (
+              <Badge variant="outline" className="flex items-center gap-1">
+                <Cloud className="h-3 w-3 animate-pulse" />
+                {language === "bn" ? "সিংক হচ্ছে..." : "Syncing..."}
+              </Badge>
             )}
             <Button variant="outline" onClick={loadDashboard} disabled={isLoading} size="sm" className="sm:size-default">
               <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />

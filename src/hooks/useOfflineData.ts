@@ -49,6 +49,11 @@ export function useSyncStatus() {
         // Start auto sync in background (every 30 seconds when online)
         syncManager.startAutoSync(30000);
         
+        // If online, immediately trigger a sync to clear any pending items
+        if (navigator.onLine) {
+          syncManager.sync().catch(() => {});
+        }
+        
         // Subscribe with safe setter
         unsubscribe = syncManager.subscribe(safeSetStatus);
         
