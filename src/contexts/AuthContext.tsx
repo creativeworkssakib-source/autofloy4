@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, ReactNode, useRef } from "react";
 import { authService, User as ServiceUser } from "@/services/authService";
 import { 
   cacheAuthForOffline, 
@@ -66,6 +66,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isOfflineMode, setIsOfflineMode] = useState(!isOnline());
   const [offlineAuthDaysRemaining, setOfflineAuthDaysRemaining] = useState(0);
+  
+  // Use ref to prevent multiple initializations
+  const isInitializedRef = useRef(false);
 
   const refreshUser = async () => {
     if (authService.isAuthenticated()) {
@@ -91,6 +94,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    // Prevent double initialization in strict mode
+    if (isInitializedRef.current) return;
+    isInitializedRef.current = true;
+    
     // Initialize offline auth system
     initOfflineAuth();
     
@@ -110,22 +117,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsOfflineMode(true);
       
       // When going offline, ensure we have user from offline cache
-      if (!user && hasValidOfflineAuth()) {
-        const offlineAuth = getCachedAuth();
-        if (offlineAuth && offlineAuth.user) {
-          const offlineUser: User = {
-            id: offlineAuth.user.id,
-            email: offlineAuth.user.email,
-            name: offlineAuth.user.name,
-            phone: offlineAuth.user.phone,
-            emailVerified: true,
-            subscriptionPlan: offlineAuth.user.subscriptionPlan,
-            avatarUrl: offlineAuth.user.avatarUrl,
-            createdAt: new Date().toISOString(),
-          };
-          setUser(offlineUser);
-          setOfflineAuthDaysRemaining(getOfflineAuthRemainingDays());
-        }
+      const offlineAuth = getCachedAuth();
+      if (offlineAuth && offlineAuth.user) {
+        const offlineUser: User = {
+          id: offlineAuth.user.id,
+          email: offlineAuth.user.email,
+          name: offlineAuth.user.name,
+          phone: offlineAuth.user.phone,
+          emailVerified: true,
+          subscriptionPlan: offlineAuth.user.subscriptionPlan,
+          avatarUrl: offlineAuth.user.avatarUrl,
+          createdAt: new Date().toISOString(),
+        };
+        setUser(offlineUser);
+        setOfflineAuthDaysRemaining(getOfflineAuthRemainingDays());
       }
     };
     
@@ -203,6 +208,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // Load cached user immediately
           const parsedUser = JSON.parse(cachedUser) as User;
           setUser(parsedUser);
+          setIsLoading(false); // Show UI immediately with cached data
           
           // Refresh user data in background
           try {
@@ -238,14 +244,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               if (authToken) {
                 cacheAuthForOffline(authToken, mappedUser);
               }
+              setIsLoading(false);
             } catch {
               authService.logout();
               clearOfflineAuth();
               setUser(null);
               localStorage.removeItem(CURRENT_USER_KEY);
+              setIsLoading(false);
             }
           } else {
             setUser(null);
+            setIsLoading(false);
           }
         }
       } else if (hasToken) {
@@ -261,12 +270,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             cacheAuthForOffline(authToken, mappedUser);
             setOfflineAuthDaysRemaining(getOfflineAuthRemainingDays());
           }
+          setIsLoading(false);
         } catch (error) {
           console.log("Auth init failed, clearing session:", error);
           authService.logout();
           clearOfflineAuth();
           setUser(null);
           localStorage.removeItem(CURRENT_USER_KEY);
+          setIsLoading(false);
         }
       } else if (offlineAuth && offlineAuth.user && offlineAuth.token) {
         // No token but we have valid offline auth - use it
@@ -289,13 +300,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (offlineAuth.token) {
           localStorage.setItem('autofloy_token', offlineAuth.token);
         }
+        setIsLoading(false);
       } else {
         // No token and no offline auth
         setUser(null);
         localStorage.removeItem(CURRENT_USER_KEY);
+        setIsLoading(false);
       }
-      
-      setIsLoading(false);
     };
     
     initAuth();
@@ -304,7 +315,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, [user]);
+  }, []); // Empty dependency array - run once only
 
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     // Require online for login
