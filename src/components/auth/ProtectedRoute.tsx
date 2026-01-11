@@ -2,7 +2,8 @@ import { ReactNode, useEffect, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
-import { Loader2, WifiOff } from "lucide-react";
+import { hasValidOfflineAuth, getCachedAuth, getOfflineAuthRemainingDays } from "@/lib/offlineAuth";
+import { Loader2, WifiOff, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface ProtectedRouteProps {
@@ -10,32 +11,26 @@ interface ProtectedRouteProps {
   requireEmailVerification?: boolean;
 }
 
-const CACHED_USER_KEY = "autofloy_current_user";
-const CACHED_AUTH_TOKEN_KEY = "autofloy_auth_token";
-
 const ProtectedRoute = ({ children, requireEmailVerification = true }: ProtectedRouteProps) => {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, isOfflineMode } = useAuth();
   const location = useLocation();
   const isOnline = useOnlineStatus();
-  const [cachedUser, setCachedUser] = useState<any>(null);
-  const [checkingCache, setCheckingCache] = useState(true);
+  const [offlineAuthValid, setOfflineAuthValid] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
 
   useEffect(() => {
-    // Check for cached user data for offline support
-    try {
-      const cached = localStorage.getItem(CACHED_USER_KEY);
-      const token = localStorage.getItem(CACHED_AUTH_TOKEN_KEY);
-      if (cached && token) {
-        setCachedUser(JSON.parse(cached));
-      }
-    } catch (e) {
-      console.error("Failed to parse cached user:", e);
-    }
-    setCheckingCache(false);
+    // Check for valid offline auth (7-day cache)
+    const checkOfflineAuth = () => {
+      const hasValidAuth = hasValidOfflineAuth();
+      setOfflineAuthValid(hasValidAuth);
+      setCheckingAuth(false);
+    };
+    
+    checkOfflineAuth();
   }, []);
 
   // Loading state
-  if (isLoading || checkingCache) {
+  if (isLoading || checkingAuth) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -43,7 +38,7 @@ const ProtectedRoute = ({ children, requireEmailVerification = true }: Protected
     );
   }
 
-  // Online mode - use normal auth
+  // ONLINE MODE - use normal auth
   if (isOnline) {
     if (!user) {
       return <Navigate to="/login" state={{ from: location }} replace />;
@@ -56,30 +51,58 @@ const ProtectedRoute = ({ children, requireEmailVerification = true }: Protected
     return <>{children}</>;
   }
 
-  // Offline mode - check cached user
+  // OFFLINE MODE - check for valid offline auth (7-day cache)
   if (!isOnline) {
-    // If we have cached user, allow access
-    if (cachedUser || user) {
+    // If user is authenticated from context (loaded from cache)
+    if (user) {
+      return <>{children}</>;
+    }
+    
+    // If we have valid offline auth cache
+    if (offlineAuthValid) {
       return <>{children}</>;
     }
 
-    // No cached user in offline mode
+    // No valid offline auth - show offline login required message
+    const daysRemaining = getOfflineAuthRemainingDays();
+    
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
-        <WifiOff className="w-16 h-16 text-muted-foreground mb-4" />
-        <h1 className="text-xl font-semibold text-foreground mb-2">
-          অফলাইন মোড
-        </h1>
-        <p className="text-muted-foreground text-center max-w-md mb-4">
-          প্রথমবার ব্যবহার করতে ইন্টারনেট সংযোগ প্রয়োজন। 
-          লগইন করার পর অ্যাপ অফলাইনেও কাজ করবে।
-        </p>
-        <Button 
-          variant="outline" 
-          onClick={() => window.location.reload()}
-        >
-          পুনরায় চেষ্টা করুন
-        </Button>
+        <div className="max-w-md text-center">
+          <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-muted flex items-center justify-center">
+            <WifiOff className="w-10 h-10 text-muted-foreground" />
+          </div>
+          
+          <h1 className="text-2xl font-bold text-foreground mb-3">
+            অফলাইন মোড
+          </h1>
+          
+          <p className="text-muted-foreground mb-6">
+            {daysRemaining > 0 
+              ? `আপনার অফলাইন সেশন ${daysRemaining} দিন পরে শেষ হবে।`
+              : "লগইন করতে ইন্টারনেট সংযোগ প্রয়োজন। একবার লগইন করলে ৭ দিন পর্যন্ত অফলাইনে ব্যবহার করতে পারবেন।"
+            }
+          </p>
+          
+          <div className="flex items-center justify-center gap-2 p-4 bg-muted/50 rounded-lg mb-6">
+            <Clock className="w-5 h-5 text-primary" />
+            <span className="text-sm">
+              অফলাইন সেশন মেয়াদ: <strong>৭ দিন</strong>
+            </span>
+          </div>
+          
+          <Button 
+            variant="outline" 
+            onClick={() => window.location.reload()}
+            className="w-full"
+          >
+            পুনরায় চেষ্টা করুন
+          </Button>
+          
+          <p className="text-sm text-muted-foreground mt-4">
+            ইন্টারনেট সংযোগ হলে স্বয়ংক্রিয়ভাবে লগইন পেজ দেখাবে।
+          </p>
+        </div>
       </div>
     );
   }

@@ -1,69 +1,121 @@
 /**
  * Offline Auth Wrapper
  * 
- * Handles authentication for offline mode
- * When offline, uses cached user data from localStorage
+ * Handles authentication for offline mode.
+ * Users who logged in within the last 7 days can use the app offline.
+ * Logout requires internet to log back in.
  */
 
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { useOnlineStatus } from "@/hooks/useOnlineStatus";
-import { Loader2, WifiOff } from "lucide-react";
-
-const CACHED_USER_KEY = "autofloy_current_user";
-const CACHED_AUTH_TOKEN_KEY = "autofloy_auth_token";
+import { Loader2, WifiOff, LogIn, Clock } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useNavigate } from "react-router-dom";
+import { hasValidOfflineAuth, getOfflineAuthRemainingDays } from "@/lib/offlineAuth";
 
 interface OfflineAuthWrapperProps {
   children: ReactNode;
 }
 
 export function OfflineAuthWrapper({ children }: OfflineAuthWrapperProps) {
-  const { isLoading } = useAuth();
-  const isOnline = useOnlineStatus();
-  const [offlineReady, setOfflineReady] = useState(false);
+  const { user, isLoading, isOfflineMode, offlineAuthDaysRemaining } = useAuth();
+  const navigate = useNavigate();
 
-  useEffect(() => {
-    // Check if we have cached auth data
-    const cachedUser = localStorage.getItem(CACHED_USER_KEY);
-    const cachedToken = localStorage.getItem(CACHED_AUTH_TOKEN_KEY);
-    
-    if (cachedUser && cachedToken) {
-      setOfflineReady(true);
-    }
-  }, []);
-
-  // If online, use normal auth flow
-  if (isOnline) {
-    if (isLoading) {
-      return (
-        <div className="min-h-screen flex items-center justify-center bg-background">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-        </div>
-      );
-    }
-    return <>{children}</>;
-  }
-
-  // If offline but we have cached data, proceed
-  if (!isOnline && offlineReady) {
-    return <>{children}</>;
-  }
-
-  // If offline and no cached data, show offline message
-  if (!isOnline && !offlineReady) {
+  // Show loading state
+  if (isLoading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
-        <WifiOff className="w-16 h-16 text-muted-foreground mb-4" />
-        <h1 className="text-xl font-semibold text-foreground mb-2">
-          আপনি অফলাইনে আছেন
-        </h1>
-        <p className="text-muted-foreground text-center max-w-md">
-          প্রথমবার ব্যবহার করার জন্য ইন্টারনেট সংযোগ প্রয়োজন। 
-          লগইন করার পর অ্যাপ অফলাইনেও কাজ করবে।
-        </p>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background">
+        <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
+        <p className="text-muted-foreground">লোড হচ্ছে...</p>
       </div>
     );
   }
 
-  return <>{children}</>;
+  // If user is authenticated (online or offline), allow access
+  if (user) {
+    return <>{children}</>;
+  }
+
+  // Check if there's valid offline auth but user object is not set yet
+  if (hasValidOfflineAuth()) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background">
+        <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
+        <p className="text-muted-foreground">অফলাইন সেশন লোড হচ্ছে...</p>
+      </div>
+    );
+  }
+
+  // If offline and no valid auth, show offline message
+  if (isOfflineMode) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
+        <div className="max-w-md text-center">
+          <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-muted flex items-center justify-center">
+            <WifiOff className="w-10 h-10 text-muted-foreground" />
+          </div>
+          
+          <h1 className="text-2xl font-bold text-foreground mb-3">
+            আপনি অফলাইনে আছেন
+          </h1>
+          
+          <p className="text-muted-foreground mb-6">
+            লগইন করতে ইন্টারনেট সংযোগ প্রয়োজন। একবার লগইন করলে ৭ দিন পর্যন্ত অফলাইনে ব্যবহার করতে পারবেন।
+          </p>
+          
+          <div className="flex items-center justify-center gap-2 p-4 bg-muted/50 rounded-lg mb-6">
+            <Clock className="w-5 h-5 text-primary" />
+            <span className="text-sm">
+              অফলাইন সেশন মেয়াদ: <strong>৭ দিন</strong>
+            </span>
+          </div>
+          
+          <p className="text-sm text-muted-foreground">
+            ইন্টারনেট সংযোগ হলে স্বয়ংক্রিয়ভাবে লগইন পেজ দেখাবে।
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Online but not authenticated - show login prompt
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
+      <div className="max-w-md text-center">
+        <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-primary/10 flex items-center justify-center">
+          <LogIn className="w-10 h-10 text-primary" />
+        </div>
+        
+        <h1 className="text-2xl font-bold text-foreground mb-3">
+          লগইন করুন
+        </h1>
+        
+        <p className="text-muted-foreground mb-6">
+          অ্যাপ ব্যবহার করতে প্রথমে লগইন করুন। একবার লগইন করলে ৭ দিন পর্যন্ত অফলাইনেও ব্যবহার করতে পারবেন।
+        </p>
+        
+        <Button onClick={() => navigate("/login")} size="lg" className="w-full">
+          <LogIn className="w-5 h-5 mr-2" />
+          লগইন করুন
+        </Button>
+        
+        <p className="text-sm text-muted-foreground mt-4">
+          অ্যাকাউন্ট নেই? <button onClick={() => navigate("/signup")} className="text-primary hover:underline">সাইন আপ করুন</button>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Hook to check offline auth status
+ */
+export function useOfflineAuthStatus() {
+  const { isOfflineMode, offlineAuthDaysRemaining } = useAuth();
+  
+  return {
+    isOffline: isOfflineMode,
+    daysRemaining: offlineAuthDaysRemaining,
+    hasValidAuth: hasValidOfflineAuth(),
+  };
 }
