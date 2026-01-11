@@ -598,6 +598,101 @@ export function useOfflineDueCustomers() {
   };
 }
 
+// =============== DAILY CASH REGISTER ===============
+
+export function useOfflineCashRegister() {
+  const [registers, setRegisters] = useState<any[]>([]);
+  const [todayRegister, setTodayRegister] = useState<any>(null);
+  const [hasOpenRegister, setHasOpenRegister] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [fromCache, setFromCache] = useState(false);
+  const isOnline = useOnlineStatus();
+  const { currentShop } = useShop();
+
+  const refetch = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await offlineDataService.getCashRegisters();
+      setRegisters(result.registers || []);
+      setTodayRegister(result.todayRegister || null);
+      setHasOpenRegister(result.hasOpenRegister || false);
+      setFromCache(result.fromCache);
+    } catch (error) {
+      console.error('Failed to fetch cash registers:', error);
+      // Fallback to API
+      try {
+        const result = await offlineShopService.getCashRegisters({});
+        setRegisters(result.registers || []);
+        setTodayRegister(result.todayRegister || null);
+        setHasOpenRegister(result.hasOpenRegister || false);
+        setFromCache(false);
+      } catch (e) {
+        setRegisters([]);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [currentShop?.id]);
+
+  useEffect(() => {
+    refetch();
+  }, [refetch]);
+
+  const openRegister = useCallback(async (openingCash: number, notes?: string) => {
+    try {
+      const result = await offlineDataService.openCashRegister(openingCash, notes);
+      await refetch();
+      return result;
+    } catch (error) {
+      throw error;
+    }
+  }, [refetch]);
+
+  const closeRegister = useCallback(async (closingCash: number, notes?: string) => {
+    try {
+      const result = await offlineDataService.closeCashRegister(closingCash, notes);
+      await refetch();
+      return result;
+    } catch (error) {
+      throw error;
+    }
+  }, [refetch]);
+
+  const addQuickExpense = useCallback(async (amount: number, description?: string) => {
+    try {
+      const result = await offlineDataService.addQuickExpense(amount, description);
+      await refetch();
+      return result;
+    } catch (error) {
+      throw error;
+    }
+  }, [refetch]);
+
+  const deleteQuickExpense = useCallback(async (expenseId: string) => {
+    try {
+      await offlineDataService.deleteQuickExpense(expenseId);
+      await refetch();
+      return { offline: true };
+    } catch (error) {
+      throw error;
+    }
+  }, [refetch]);
+
+  return {
+    registers,
+    todayRegister,
+    hasOpenRegister,
+    loading,
+    fromCache,
+    isOnline,
+    refetch,
+    openRegister,
+    closeRegister,
+    addQuickExpense,
+    deleteQuickExpense,
+  };
+}
+
 // =============== TRASH ===============
 
 export function useOfflineTrash(table?: string) {
@@ -661,5 +756,41 @@ export function useOfflineTrash(table?: string) {
     restoreItem,
     permanentDelete,
     emptyTrash,
+  };
+}
+
+// =============== PRODUCTS (for price calculator) ===============
+
+export function useOfflineProductsSimple() {
+  const [products, setProducts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [fromCache, setFromCache] = useState(false);
+  const isOnline = useOnlineStatus();
+  const { currentShop } = useShop();
+
+  const refetch = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await offlineDataService.getProducts();
+      setProducts(result.products || []);
+      setFromCache(result.fromCache);
+    } catch (error) {
+      console.error('Failed to fetch products:', error);
+      setProducts([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [currentShop?.id]);
+
+  useEffect(() => {
+    refetch();
+  }, [refetch]);
+
+  return {
+    products,
+    loading,
+    fromCache,
+    isOnline,
+    refetch,
   };
 }

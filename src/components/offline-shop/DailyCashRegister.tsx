@@ -1,8 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { useShop } from "@/contexts/ShopContext";
-import { offlineShopService } from "@/services/offlineShopService";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useOfflineCashRegister } from "@/hooks/useOfflineShopData";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,6 +32,8 @@ import {
   Trash2,
   Coffee,
   X,
+  WifiOff,
+  Wifi,
 } from "lucide-react";
 
 interface CashRegister {
@@ -66,8 +66,19 @@ interface QuickExpense {
 
 export function DailyCashRegister() {
   const { language } = useLanguage();
-  const { currentShop } = useShop();
-  const queryClient = useQueryClient();
+  const {
+    registers,
+    todayRegister,
+    hasOpenRegister,
+    loading: isLoading,
+    fromCache,
+    isOnline,
+    refetch,
+    openRegister,
+    closeRegister,
+    addQuickExpense,
+    deleteQuickExpense,
+  } = useOfflineCashRegister();
   
   const [showOpenModal, setShowOpenModal] = useState(false);
   const [showCloseModal, setShowCloseModal] = useState(false);
@@ -79,30 +90,6 @@ export function DailyCashRegister() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [quickExpenseAmount, setQuickExpenseAmount] = useState("");
   const [quickExpenseDescription, setQuickExpenseDescription] = useState("");
-
-  // Use React Query for seamless background refetching
-  const { data, isLoading, refetch } = useQuery({
-    queryKey: ["cash-register", currentShop?.id],
-    queryFn: async () => {
-      if (!currentShop) return null;
-      return offlineShopService.getCashRegisters({
-        startDate: format(subDays(new Date(), 30), "yyyy-MM-dd"),
-      });
-    },
-    enabled: !!currentShop,
-    refetchInterval: (query) => {
-      // Auto-refresh every 30 seconds only when register is open
-      // This happens in background without showing loading
-      const data = query.state.data;
-      return data?.hasOpenRegister ? 30000 : false;
-    },
-    staleTime: 10000, // Consider data fresh for 10 seconds
-    refetchOnWindowFocus: true,
-  });
-
-  const registers = data?.registers || [];
-  const todayRegister = data?.todayRegister || null;
-  const hasOpenRegister = data?.hasOpenRegister || false;
   
   // Get suggested opening cash from last closed register
   const suggestedOpening = registers.find((r: CashRegister) => r.status === "closed")?.closing_cash || 0;
@@ -165,12 +152,11 @@ export function DailyCashRegister() {
     
     setIsSubmitting(true);
     try {
-      const result = await offlineShopService.openCashRegister(parseFloat(openingCash), notes);
+      const result = await openRegister(parseFloat(openingCash), notes);
       toast.success(result.message);
       setShowOpenModal(false);
       setOpeningCash("");
       setNotes("");
-      refetch();
     } catch (error: any) {
       toast.error(error.message || "Failed to open register");
     } finally {
@@ -186,12 +172,11 @@ export function DailyCashRegister() {
     
     setIsSubmitting(true);
     try {
-      const result = await offlineShopService.closeCashRegister(parseFloat(closingCash), notes);
+      const result = await closeRegister(parseFloat(closingCash), notes);
       toast.success(result.message);
       setShowCloseModal(false);
       setClosingCash("");
       setNotes("");
-      refetch();
     } catch (error: any) {
       toast.error(error.message || "Failed to close register");
     } finally {
@@ -207,12 +192,11 @@ export function DailyCashRegister() {
     
     setIsSubmitting(true);
     try {
-      await offlineShopService.addQuickExpense(parseFloat(quickExpenseAmount), quickExpenseDescription);
+      await addQuickExpense(parseFloat(quickExpenseAmount), quickExpenseDescription);
       toast.success(language === "bn" ? "খরচ যোগ হয়েছে" : "Expense added");
       setQuickExpenseAmount("");
       setQuickExpenseDescription("");
       setShowQuickExpenseModal(false);
-      refetch();
     } catch (error: any) {
       toast.error(error.message || "Failed to add expense");
     } finally {
@@ -222,9 +206,8 @@ export function DailyCashRegister() {
 
   const handleDeleteQuickExpense = async (expenseId: string) => {
     try {
-      await offlineShopService.deleteQuickExpense(expenseId);
+      await deleteQuickExpense(expenseId);
       toast.success(language === "bn" ? "খরচ মুছে ফেলা হয়েছে" : "Expense deleted");
-      refetch();
     } catch (error: any) {
       toast.error(error.message || "Failed to delete expense");
     }
@@ -273,6 +256,12 @@ export function DailyCashRegister() {
                     <Badge variant="secondary" className="bg-muted text-muted-foreground">
                       <AlertCircle className="h-3 w-3 mr-1" />
                       {t.shopClosed}
+                    </Badge>
+                  )}
+                  {!isOnline && (
+                    <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/30">
+                      <WifiOff className="h-3 w-3 mr-1" />
+                      {language === "bn" ? "অফলাইন" : "Offline"}
                     </Badge>
                   )}
                 </CardTitle>
