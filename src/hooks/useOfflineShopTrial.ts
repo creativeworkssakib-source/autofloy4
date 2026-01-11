@@ -1,9 +1,11 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { differenceInDays, differenceInHours, differenceInMinutes, addDays, parseISO, isPast } from "date-fns";
+import { useOnlineStatus } from "./useOnlineStatus";
 
 const OFFLINE_TRIAL_KEY = "autofloy_offline_trial_start";
 const OFFLINE_TRIAL_DAYS = 7;
+const OFFLINE_GRACE_PERIOD_DAYS = 7;
 
 interface OfflineTrialStatus {
   isTrialUser: boolean;
@@ -141,5 +143,41 @@ export function useOfflineShopTrial(): OfflineTrialStatus {
     hoursRemaining: trialStatus.hoursRemaining,
     minutesRemaining: trialStatus.minutesRemaining,
     startOfflineTrial,
+  };
+}
+
+/**
+ * Simple hook to check if offline mode is expired (7+ days offline)
+ */
+export function useOfflineExpired(): boolean {
+  const { hasBeenOfflineForDays } = useOnlineStatus();
+  return hasBeenOfflineForDays(OFFLINE_GRACE_PERIOD_DAYS);
+}
+
+/**
+ * Hook to get days remaining in offline grace period
+ */
+export function useOfflineGracePeriod(): {
+  daysRemaining: number;
+  isExpired: boolean;
+  totalDays: number;
+} {
+  const { lastOnlineAt, isOnline } = useOnlineStatus();
+  
+  const daysRemaining = useMemo(() => {
+    if (isOnline) return OFFLINE_GRACE_PERIOD_DAYS;
+    if (!lastOnlineAt) return OFFLINE_GRACE_PERIOD_DAYS;
+    
+    const daysSinceOnline = Math.floor(
+      (Date.now() - lastOnlineAt.getTime()) / (1000 * 60 * 60 * 24)
+    );
+    
+    return Math.max(0, OFFLINE_GRACE_PERIOD_DAYS - daysSinceOnline);
+  }, [lastOnlineAt, isOnline]);
+  
+  return {
+    daysRemaining,
+    isExpired: daysRemaining === 0 && !isOnline,
+    totalDays: OFFLINE_GRACE_PERIOD_DAYS,
   };
 }

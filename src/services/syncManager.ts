@@ -224,6 +224,7 @@ class SyncManager {
       case 'delete':
         await offlineShopService.deleteCategory(data.id);
         break;
+      // Note: Category update not supported in current API
     }
   }
   

@@ -686,6 +686,9 @@ const en: Record<string, string> = {
   "offline.salesCount": "Sales",
   "offline.customersCount": "Customers",
   "offline.storageUsed": "Storage used",
+  "offline.savedLocally": "Saved locally",
+  "offline.online": "Online",
+  "offline.daysRemaining": "days remaining",
 };
 
 // Bangla translations
@@ -1364,6 +1367,9 @@ const bn: Record<string, string> = {
   "offline.salesCount": "বিক্রয়",
   "offline.customersCount": "কাস্টমার",
   "offline.storageUsed": "স্টোরেজ ব্যবহৃত",
+  "offline.savedLocally": "লোকালে সেভ হয়েছে",
+  "offline.online": "অনলাইন",
+  "offline.daysRemaining": "দিন বাকি",
 };
 
 const translations: Record<Language, Record<string, string>> = { en, bn };
