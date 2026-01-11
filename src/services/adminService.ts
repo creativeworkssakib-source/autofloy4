@@ -426,3 +426,88 @@ export async function resetTrashPasscode(email: string): Promise<{ success: bool
     throw error;
   }
 }
+
+// Payment Request Types and Functions
+export interface PaymentRequest {
+  id: string;
+  user_id: string;
+  plan_id: string;
+  plan_name: string;
+  amount: number;
+  currency: string;
+  payment_method: string;
+  transaction_id: string | null;
+  screenshot_url: string | null;
+  status: string;
+  admin_notes: string | null;
+  approved_by: string | null;
+  approved_at: string | null;
+  created_at: string;
+  updated_at: string;
+  user?: {
+    id: string;
+    email: string;
+    display_name: string | null;
+    phone: string | null;
+  };
+}
+
+export async function fetchPaymentRequests(
+  status?: string,
+  page = 1,
+  limit = 20
+): Promise<{ requests: PaymentRequest[]; total: number; page: number; totalPages: number }> {
+  const params = new URLSearchParams({
+    page: String(page),
+    limit: String(limit),
+    ...(status && status !== "all" && { status }),
+  });
+
+  const response = await fetch(`${SUPABASE_URL}/functions/v1/admin/payment-requests?${params}`, {
+    method: "GET",
+    headers: getAuthHeaders(),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: "Failed to fetch payment requests" }));
+    throw new Error(error.error || "Failed to fetch payment requests");
+  }
+
+  return response.json();
+}
+
+export async function approvePaymentRequest(
+  requestId: string,
+  notes?: string
+): Promise<{ success: boolean; message: string }> {
+  const response = await fetch(`${SUPABASE_URL}/functions/v1/admin/payment-requests/${requestId}/approve`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ notes }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: "Failed to approve payment request" }));
+    throw new Error(error.error || "Failed to approve payment request");
+  }
+
+  return response.json();
+}
+
+export async function rejectPaymentRequest(
+  requestId: string,
+  reason: string
+): Promise<{ success: boolean; message: string }> {
+  const response = await fetch(`${SUPABASE_URL}/functions/v1/admin/payment-requests/${requestId}/reject`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ reason }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: "Failed to reject payment request" }));
+    throw new Error(error.error || "Failed to reject payment request");
+  }
+
+  return response.json();
+}
