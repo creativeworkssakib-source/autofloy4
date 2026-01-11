@@ -9,6 +9,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useShop } from "@/contexts/ShopContext";
 import { supabase } from "@/integrations/supabase/client";
+import { authService } from "@/services/authService";
 import { toast } from "sonner";
 import { 
   MapPin, 
@@ -109,11 +110,17 @@ export function LeadScraperTab() {
     try {
       setProgress(30);
       
+      // Get user JWT token for proper authentication
+      const token = authService.getToken();
+      if (!token) {
+        throw new Error(language === "bn" ? "লগইন করুন" : "Please login first");
+      }
+      
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/lead-scraper`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           category: selectedCategory,
