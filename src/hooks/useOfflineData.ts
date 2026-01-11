@@ -46,6 +46,9 @@ export function useSyncStatus() {
         
         setIsDbReady(true);
         
+        // Start auto sync in background (every 30 seconds when online)
+        syncManager.startAutoSync(30000);
+        
         // Subscribe with safe setter
         unsubscribe = syncManager.subscribe(safeSetStatus);
         
@@ -76,6 +79,7 @@ export function useSyncStatus() {
       isMountedRef.current = false;
       if (unsubscribe) unsubscribe();
       if (interval) clearInterval(interval);
+      // Note: We don't stop auto sync on unmount as other components may need it
     };
   }, [safeSetStatus]);
   
@@ -546,18 +550,31 @@ export function useOfflineSettings() {
 
 export function usePendingSyncCount() {
   const [count, setCount] = useState(0);
+  const isMountedRef = useRef(true);
   
   useEffect(() => {
+    isMountedRef.current = true;
+    
     const updateCount = async () => {
-      const pendingCount = await offlineDataService.getPendingSyncCount();
-      setCount(pendingCount);
+      try {
+        const pendingCount = await offlineDataService.getPendingSyncCount();
+        if (isMountedRef.current) {
+          setCount(pendingCount);
+        }
+      } catch (error) {
+        // Silently fail if DB not ready
+        console.warn('Failed to get pending sync count:', error);
+      }
     };
     
     updateCount();
     
     // Update every 5 seconds
     const interval = setInterval(updateCount, 5000);
-    return () => clearInterval(interval);
+    return () => {
+      isMountedRef.current = false;
+      clearInterval(interval);
+    };
   }, []);
   
   return count;
