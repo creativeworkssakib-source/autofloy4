@@ -112,31 +112,40 @@ export type Database = {
       }
       notifications: {
         Row: {
+          body: string | null
           created_at: string
           id: string
           is_read: boolean | null
           link: string | null
           message: string | null
+          metadata: Json | null
+          notification_type: string | null
           title: string
           type: string | null
           user_id: string
         }
         Insert: {
+          body?: string | null
           created_at?: string
           id?: string
           is_read?: boolean | null
           link?: string | null
           message?: string | null
+          metadata?: Json | null
+          notification_type?: string | null
           title: string
           type?: string | null
           user_id: string
         }
         Update: {
+          body?: string | null
           created_at?: string
           id?: string
           is_read?: boolean | null
           link?: string | null
           message?: string | null
+          metadata?: Json | null
+          notification_type?: string | null
           title?: string
           type?: string | null
           user_id?: string
@@ -1867,11 +1876,16 @@ export type Database = {
       user_settings: {
         Row: {
           created_at: string
+          daily_digest: boolean | null
+          default_tone: string | null
           email_notifications: boolean | null
           id: string
           language: string | null
           notifications_enabled: boolean | null
+          push_notifications: boolean | null
+          response_language: string | null
           sms_notifications: boolean | null
+          sound_alerts: boolean | null
           sound_enabled: boolean | null
           theme: string | null
           trash_passcode: string | null
@@ -1880,11 +1894,16 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          daily_digest?: boolean | null
+          default_tone?: string | null
           email_notifications?: boolean | null
           id?: string
           language?: string | null
           notifications_enabled?: boolean | null
+          push_notifications?: boolean | null
+          response_language?: string | null
           sms_notifications?: boolean | null
+          sound_alerts?: boolean | null
           sound_enabled?: boolean | null
           theme?: string | null
           trash_passcode?: string | null
@@ -1893,11 +1912,16 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          daily_digest?: boolean | null
+          default_tone?: string | null
           email_notifications?: boolean | null
           id?: string
           language?: string | null
           notifications_enabled?: boolean | null
+          push_notifications?: boolean | null
+          response_language?: string | null
           sms_notifications?: boolean | null
+          sound_alerts?: boolean | null
           sound_enabled?: boolean | null
           theme?: string | null
           trash_passcode?: string | null
@@ -1979,10 +2003,11 @@ export type Database = {
           attempts: number | null
           created_at: string
           email: string | null
+          email_otp: string
           expires_at: string
           id: string
-          otp_code: string
           phone: string | null
+          phone_otp: string | null
           type: string
           user_id: string | null
           verified: boolean | null
@@ -1991,10 +2016,11 @@ export type Database = {
           attempts?: number | null
           created_at?: string
           email?: string | null
+          email_otp: string
           expires_at: string
           id?: string
-          otp_code: string
           phone?: string | null
+          phone_otp?: string | null
           type?: string
           user_id?: string | null
           verified?: boolean | null
@@ -2003,10 +2029,11 @@ export type Database = {
           attempts?: number | null
           created_at?: string
           email?: string | null
+          email_otp?: string
           expires_at?: string
           id?: string
-          otp_code?: string
           phone?: string | null
+          phone_otp?: string | null
           type?: string
           user_id?: string | null
           verified?: boolean | null
