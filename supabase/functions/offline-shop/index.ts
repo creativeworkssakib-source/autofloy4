@@ -3082,18 +3082,8 @@ serve(async (req) => {
 
     // ===== SHOP SETTINGS =====
     if (resource === "settings") {
-      // Explicitly list columns to avoid schema cache issues
-      const settingsColumns = `
-        id, user_id, shop_id, shop_name, shop_address, shop_phone, shop_email, logo_url,
-        currency, tax_rate, invoice_prefix, invoice_footer, created_at, updated_at,
-        default_tax_rate, enable_online_sync, opening_date, opening_cash_balance,
-        data_retention_days, trash_passcode_hash, terms_and_conditions, invoice_format,
-        due_reminder_sms_template, sms_api_key, sms_sender_id, use_platform_sms,
-        scanner_config, scanner_last_connected_at, scanner_total_scans,
-        branch_name, receipt_size, receipt_font_size, show_logo_on_receipt,
-        thank_you_message, show_tax_on_receipt, show_payment_method,
-        receipt_header_text, receipt_footer_text
-      `;
+      // Explicitly list columns to avoid schema cache issues - using compact single line
+      const settingsColumns = "id,user_id,shop_id,shop_name,shop_address,shop_phone,shop_email,logo_url,currency,tax_rate,invoice_prefix,invoice_footer,created_at,updated_at,default_tax_rate,enable_online_sync,opening_date,opening_cash_balance,data_retention_days,trash_passcode_hash,terms_and_conditions,invoice_format,due_reminder_sms_template,sms_api_key,sms_sender_id,use_platform_sms,scanner_config,scanner_last_connected_at,scanner_total_scans,branch_name,receipt_size,receipt_font_size,show_logo_on_receipt,thank_you_message,show_tax_on_receipt,show_payment_method,receipt_header_text,receipt_footer_text";
       
       if (req.method === "GET") {
         // Get settings for specific shop or user default
