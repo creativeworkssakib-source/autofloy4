@@ -44,10 +44,12 @@ class SyncManager {
     this.listeners.forEach(listener => listener(status));
   }
   
+  private pendingCount = 0;
+  
   getStatus(): SyncStatus {
     return {
       isSyncing: this.isSyncing,
-      pendingCount: 0, // Will be updated async
+      pendingCount: this.pendingCount,
       lastSyncAt: this.lastSyncAt,
       lastError: this.lastError,
       progress: this.progress,
@@ -55,11 +57,16 @@ class SyncManager {
   }
   
   async getStatusWithCount(): Promise<SyncStatus> {
-    const pendingCount = await syncQueue.getPendingCount();
+    this.pendingCount = await syncQueue.getPendingCount();
     return {
       ...this.getStatus(),
-      pendingCount,
+      pendingCount: this.pendingCount,
     };
+  }
+  
+  async updatePendingCount(): Promise<void> {
+    this.pendingCount = await syncQueue.getPendingCount();
+    this.notifyListeners();
   }
   
   // =============== AUTO SYNC ===============
@@ -158,7 +165,8 @@ class SyncManager {
       failed++;
     } finally {
       this.isSyncing = false;
-      this.notifyListeners();
+      // Update pending count after sync
+      await this.updatePendingCount();
     }
     
     return { success: failed === 0, synced, failed };

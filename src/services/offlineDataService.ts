@@ -147,7 +147,8 @@ class OfflineDataService {
         };
         await offlineDB.deleteProduct(product.id);
         await offlineDB.saveProduct(updatedProduct as ShopProduct);
-        await syncQueue.markSynced(product.id);
+        // Clear from sync queue since we synced immediately
+        await syncQueue.clearSynced();
         return { product: updatedProduct as ShopProduct, offline: false };
       } catch (error) {
         console.error('Failed to sync product to server:', error);
