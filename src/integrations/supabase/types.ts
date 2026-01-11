@@ -1636,6 +1636,8 @@ export type Database = {
           id: string
           original_id: string
           original_table: string
+          permanently_deleted_at: string | null
+          restored_at: string | null
           shop_id: string | null
           user_id: string
         }
@@ -1645,6 +1647,8 @@ export type Database = {
           id?: string
           original_id: string
           original_table: string
+          permanently_deleted_at?: string | null
+          restored_at?: string | null
           shop_id?: string | null
           user_id: string
         }
@@ -1654,6 +1658,8 @@ export type Database = {
           id?: string
           original_id?: string
           original_table?: string
+          permanently_deleted_at?: string | null
+          restored_at?: string | null
           shop_id?: string | null
           user_id?: string
         }
