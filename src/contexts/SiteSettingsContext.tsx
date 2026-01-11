@@ -41,6 +41,9 @@ export interface SiteSettings {
   demo_video_youtube_url: string | null;
   demo_video_upload_url: string | null;
   demo_video_enabled: boolean | null;
+  // Business module toggles (admin can enable/disable globally)
+  online_business_enabled: boolean | null;
+  offline_shop_enabled: boolean | null;
   created_at: string;
   updated_at: string;
 }
@@ -84,6 +87,9 @@ const defaultSettings: SiteSettings = {
   demo_video_youtube_url: null,
   demo_video_upload_url: null,
   demo_video_enabled: false,
+  // Business module toggles
+  online_business_enabled: true,
+  offline_shop_enabled: true,
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
 };
@@ -154,6 +160,35 @@ export const SiteSettingsProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     fetchSettings();
+
+    // Set up real-time subscription for site_settings changes
+    const channel = supabase
+      .channel('site-settings-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'site_settings'
+        },
+        (payload) => {
+          console.log('[SiteSettings] Real-time update received:', payload);
+          // Clear cache and refetch on any change
+          cachedSettings = null;
+          cacheTimestamp = null;
+          if (payload.new) {
+            const newSettings = payload.new as unknown as SiteSettings;
+            setSettings(newSettings);
+            cachedSettings = newSettings;
+            cacheTimestamp = Date.now();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   // Helper to format copyright text with current year
