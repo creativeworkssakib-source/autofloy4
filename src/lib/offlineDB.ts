@@ -1162,11 +1162,8 @@ class OfflineDB {
 
   async markAsSynced(id: string): Promise<void> {
     const db = this.ensureDb();
-    const item = await db.get('syncQueue', id);
-    if (item) {
-      item.synced = true;
-      await db.put('syncQueue', item);
-    }
+    // Delete the synced item immediately to prevent queue growth
+    await db.delete('syncQueue', id);
   }
 
   async updateSyncQueueError(id: string, error: string): Promise<void> {

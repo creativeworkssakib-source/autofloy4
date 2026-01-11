@@ -154,8 +154,8 @@ class SyncManager {
         }
       }
       
-      // Clear synced items
-      await syncQueue.clearSynced();
+      // Items are now deleted immediately after sync via markAsSynced
+      // No need to call clearSynced anymore
       
       this.lastSyncAt = new Date();
       this.progress = 100;
