@@ -1,6 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { create } from "https://deno.land/x/djwt@v3.0.2/mod.ts";
+import { Resend } from "https://esm.sh/resend@2.0.0";
+import { getOTPEmailTemplate } from "../_shared/email-templates.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,6 +12,7 @@ const corsHeaders = {
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const jwtSecret = Deno.env.get("JWT_SECRET")!;
+const resendApiKey = Deno.env.get("RESEND_API_KEY")!;
 
 // Rate limiting constants
 const MAX_SIGNUPS_PER_IP_HOUR = 5;
@@ -45,6 +48,62 @@ async function hashPassword(password: string): Promise<string> {
   combined.set(hashArray, salt.length);
   
   return btoa(String.fromCharCode(...combined));
+}
+
+// Function to send verification OTP email
+async function sendVerificationEmail(
+  supabase: any,
+  userId: string,
+  email: string,
+  displayName?: string | null
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    // Generate 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000);
+
+    // Delete any existing email OTPs for this user
+    await supabase
+      .from("verification_otps")
+      .delete()
+      .eq("user_id", userId)
+      .eq("type", "email");
+
+    // Insert new OTP (expires in 10 minutes by default from table trigger)
+    const { error: insertError } = await supabase
+      .from("verification_otps")
+      .insert({
+        user_id: userId,
+        type: "email",
+        email_otp: otp,
+      });
+
+    if (insertError) {
+      console.error("Failed to insert OTP:", insertError);
+      return { success: false, error: "Failed to generate OTP" };
+    }
+
+    // Send email via Resend
+    const resend = new Resend(resendApiKey);
+    const emailHtml = getOTPEmailTemplate(otp, displayName || undefined);
+
+    const { error: emailError } = await resend.emails.send({
+      from: "AutoFloy <noreply@autofloy.com>",
+      to: [email],
+      subject: "🔐 Your AutoFloy Verification Code",
+      html: emailHtml,
+    });
+
+    if (emailError) {
+      console.error("Resend API error during signup:", JSON.stringify(emailError, null, 2));
+      return { success: false, error: emailError.message };
+    }
+
+    console.log(`Verification email sent to ${email} during signup`);
+    return { success: true };
+  } catch (error) {
+    console.error("Error sending verification email:", error);
+    return { success: false, error: String(error) };
+  }
 }
 
 serve(async (req) => {
@@ -288,6 +347,22 @@ serve(async (req) => {
 
     console.log(`User created: ${newUser.id.substring(0, 8)}...`);
 
+    // ===== AUTOMATICALLY SEND VERIFICATION EMAIL =====
+    // This ensures the user gets the verification code immediately upon signup
+    const emailResult = await sendVerificationEmail(
+      supabase,
+      newUser.id,
+      newUser.email,
+      newUser.display_name
+    );
+    
+    if (!emailResult.success) {
+      console.warn(`Failed to send verification email during signup: ${emailResult.error}`);
+      // Don't fail signup, user can request resend from verify page
+    } else {
+      console.log(`Verification email auto-sent to ${newUser.email}`);
+    }
+
     // Emit user.created and trial.started events to n8n webhook
     try {
       await supabase.from("outgoing_events").insert([
@@ -333,7 +408,11 @@ serve(async (req) => {
       // Don't fail signup if event emission fails
     }
 
-    return new Response(JSON.stringify({ token, user: userResponse }), {
+    return new Response(JSON.stringify({ 
+      token, 
+      user: userResponse,
+      verification_email_sent: emailResult.success 
+    }), {
       status: 201,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
