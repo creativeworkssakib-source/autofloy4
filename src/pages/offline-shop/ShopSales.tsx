@@ -16,6 +16,7 @@ import {
   SimpleInvoiceModal,
   BetterInvoiceModal
 } from "@/components/offline-shop/invoice-templates";
+import { generateThermalReceiptHTML, ThermalReceiptPreview } from "@/components/offline-shop/thermal-receipt-template";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   AlertDialog,
@@ -403,15 +404,24 @@ const ShopSales = () => {
         total: Number(viewingSale.total),
         paid_amount: Number(viewingSale.paid_amount),
         due_amount: Number(viewingSale.due_amount),
+        payment_method: viewingSale.payment_method,
       },
       shopSettings: shopSettings,
       customerInfo: customerInfo,
       t: t,
     };
 
-    const htmlContent = shopSettings?.invoice_format === 'better' 
-      ? generateBetterPrintHTML(invoiceData)
-      : generateSimplePrintHTML(invoiceData);
+    // Use thermal receipt for 80mm/58mm, otherwise use regular invoice templates
+    const receiptSize = (shopSettings as any)?.receipt_size || '80mm';
+    let htmlContent: string;
+    
+    if (receiptSize === '80mm' || receiptSize === '58mm') {
+      htmlContent = generateThermalReceiptHTML(invoiceData);
+    } else if (shopSettings?.invoice_format === 'better') {
+      htmlContent = generateBetterPrintHTML(invoiceData);
+    } else {
+      htmlContent = generateSimplePrintHTML(invoiceData);
+    }
     
     printWindow?.document.write(htmlContent);
     printWindow?.document.close();

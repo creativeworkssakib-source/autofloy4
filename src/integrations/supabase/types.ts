@@ -3056,6 +3056,7 @@ export type Database = {
       }
       shop_settings: {
         Row: {
+          branch_name: string | null
           created_at: string | null
           currency: string | null
           data_retention_days: number | null
@@ -3069,6 +3070,10 @@ export type Database = {
           logo_url: string | null
           opening_cash_balance: number | null
           opening_date: string | null
+          receipt_font_size: string | null
+          receipt_footer_text: string | null
+          receipt_header_text: string | null
+          receipt_size: string | null
           scanner_config: Json | null
           scanner_last_connected_at: string | null
           scanner_total_scans: number | null
@@ -3077,16 +3082,21 @@ export type Database = {
           shop_id: string | null
           shop_name: string
           shop_phone: string | null
+          show_logo_on_receipt: boolean | null
+          show_payment_method: boolean | null
+          show_tax_on_receipt: boolean | null
           sms_api_key: string | null
           sms_sender_id: string | null
           tax_rate: number | null
           terms_and_conditions: string | null
+          thank_you_message: string | null
           trash_passcode_hash: string | null
           updated_at: string | null
           use_platform_sms: boolean | null
           user_id: string
         }
         Insert: {
+          branch_name?: string | null
           created_at?: string | null
           currency?: string | null
           data_retention_days?: number | null
@@ -3100,6 +3110,10 @@ export type Database = {
           logo_url?: string | null
           opening_cash_balance?: number | null
           opening_date?: string | null
+          receipt_font_size?: string | null
+          receipt_footer_text?: string | null
+          receipt_header_text?: string | null
+          receipt_size?: string | null
           scanner_config?: Json | null
           scanner_last_connected_at?: string | null
           scanner_total_scans?: number | null
@@ -3108,16 +3122,21 @@ export type Database = {
           shop_id?: string | null
           shop_name?: string
           shop_phone?: string | null
+          show_logo_on_receipt?: boolean | null
+          show_payment_method?: boolean | null
+          show_tax_on_receipt?: boolean | null
           sms_api_key?: string | null
           sms_sender_id?: string | null
           tax_rate?: number | null
           terms_and_conditions?: string | null
+          thank_you_message?: string | null
           trash_passcode_hash?: string | null
           updated_at?: string | null
           use_platform_sms?: boolean | null
           user_id: string
         }
         Update: {
+          branch_name?: string | null
           created_at?: string | null
           currency?: string | null
           data_retention_days?: number | null
@@ -3131,6 +3150,10 @@ export type Database = {
           logo_url?: string | null
           opening_cash_balance?: number | null
           opening_date?: string | null
+          receipt_font_size?: string | null
+          receipt_footer_text?: string | null
+          receipt_header_text?: string | null
+          receipt_size?: string | null
           scanner_config?: Json | null
           scanner_last_connected_at?: string | null
           scanner_total_scans?: number | null
@@ -3139,10 +3162,14 @@ export type Database = {
           shop_id?: string | null
           shop_name?: string
           shop_phone?: string | null
+          show_logo_on_receipt?: boolean | null
+          show_payment_method?: boolean | null
+          show_tax_on_receipt?: boolean | null
           sms_api_key?: string | null
           sms_sender_id?: string | null
           tax_rate?: number | null
           terms_and_conditions?: string | null
+          thank_you_message?: string | null
           trash_passcode_hash?: string | null
           updated_at?: string | null
           use_platform_sms?: boolean | null

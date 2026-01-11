@@ -21,6 +21,7 @@ import {
   MessageSquareMore,
   Scan,
   Landmark,
+  Receipt,
   Calculator,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -76,6 +77,7 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
     { name: t("shop.reports"), href: "/offline-shop/reports", icon: BarChart3 },
     { name: language === "bn" ? "লোন / কিস্তি" : "Loans / EMI", href: "/offline-shop/loans", icon: Landmark },
     { name: language === "bn" ? "ফলোআপ SMS" : "Followup SMS", href: "/offline-shop/followup-sms", icon: MessageSquareMore },
+    { name: language === "bn" ? "ইনভয়েস সেটিংস" : "Invoice Settings", href: "/offline-shop/invoice-settings", icon: Receipt },
     { name: language === "bn" ? "ট্র্যাশ বিন" : "Trash Bin", href: "/offline-shop/trash", icon: Trash2 },
   ];
 
