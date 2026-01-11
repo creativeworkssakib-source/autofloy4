@@ -336,7 +336,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
         <div className="flex-1 p-4 sm:p-6 lg:p-8 relative">
           {/* Show frozen overlay if feature is disabled by admin */}
           {isOnlineBusinessDisabled && (
-            <FeatureDisabledOverlay featureName={language === "bn" ? "অনলাইন বিজনেস" : "Online Business"} />
+            <FeatureDisabledOverlay featureName={language === "bn" ? "অনলাইন বিজনেস" : "Online Business"} featureType="online" />
           )}
           {children}
         </div>
