@@ -426,3 +426,79 @@ export async function resetTrashPasscode(email: string): Promise<{ success: bool
     throw error;
   }
 }
+
+// Payment Requests
+export interface PaymentRequest {
+  id: string;
+  user_id: string;
+  plan_id: string;
+  plan_name: string;
+  amount: number;
+  currency: string;
+  payment_method: string;
+  transaction_id: string | null;
+  screenshot_url: string | null;
+  status: string;
+  admin_notes: string | null;
+  approved_at: string | null;
+  approved_by: string | null;
+  created_at: string;
+  updated_at: string;
+  user?: {
+    id: string;
+    display_name: string | null;
+    email: string;
+  };
+}
+
+export async function fetchPaymentRequests(
+  page = 1,
+  limit = 20,
+  search = "",
+  status = "all"
+): Promise<{ requests: PaymentRequest[]; total: number; page: number; totalPages: number }> {
+  const params = new URLSearchParams({
+    page: String(page),
+    limit: String(limit),
+    ...(search && { search }),
+    ...(status !== "all" && { status }),
+  });
+
+  const response = await fetch(`${SUPABASE_URL}/functions/v1/admin/payment-requests?${params}`, {
+    method: "GET",
+    headers: getAuthHeaders(),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to fetch payment requests");
+  }
+
+  return response.json();
+}
+
+export async function updatePaymentRequest(
+  requestId: string,
+  status: "approved" | "rejected",
+  adminNotes?: string
+): Promise<{ request: PaymentRequest }> {
+  try {
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/admin/payment-requests/${requestId}`, {
+      method: "PUT",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ status, admin_notes: adminNotes }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: "Failed to update payment request" }));
+      throw new Error(error.error || "Failed to update payment request");
+    }
+
+    return response.json();
+  } catch (error) {
+    if (error instanceof TypeError && error.message === "Failed to fetch") {
+      throw new Error("Network error - please check your connection");
+    }
+    throw error;
+  }
+}

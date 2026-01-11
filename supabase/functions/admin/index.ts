@@ -2180,6 +2180,208 @@ Deno.serve(async (req) => {
       );
     }
 
+    // GET /admin/payment-requests - Fetch payment requests with pagination
+    if (req.method === "GET" && path === "payment-requests") {
+      const page = parseInt(url.searchParams.get("page") || "1");
+      const limit = parseInt(url.searchParams.get("limit") || "20");
+      const search = url.searchParams.get("search") || "";
+      const statusFilter = url.searchParams.get("status") || "all";
+      const offset = (page - 1) * limit;
+
+      let query = supabase
+        .from("payment_requests")
+        .select("*", { count: "exact" });
+
+      if (statusFilter !== "all") {
+        query = query.eq("status", statusFilter);
+      }
+
+      if (search) {
+        query = query.or(`transaction_id.ilike.%${search}%`);
+      }
+
+      const { data: requests, count, error } = await query
+        .order("created_at", { ascending: false })
+        .range(offset, offset + limit - 1);
+
+      if (error) {
+        console.error("[Admin] Failed to fetch payment requests:", error);
+        return new Response(
+          JSON.stringify({ error: "Failed to fetch payment requests: " + error.message }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Fetch user details for each request
+      const userIds = [...new Set(requests?.map(r => r.user_id) || [])];
+      const { data: users } = await supabase
+        .from("users")
+        .select("id, display_name, email")
+        .in("id", userIds);
+
+      const usersMap = new Map(users?.map(u => [u.id, u]) || []);
+
+      const enrichedRequests = requests?.map(r => ({
+        ...r,
+        user: usersMap.get(r.user_id) || null,
+      }));
+
+      return new Response(
+        JSON.stringify({
+          requests: enrichedRequests,
+          total: count || 0,
+          page,
+          totalPages: Math.ceil((count || 0) / limit),
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // PUT /admin/payment-requests/:id - Approve or reject a payment request
+    if (req.method === "PUT" && path === "payment-requests" && subPath) {
+      const requestId = subPath;
+      const body = await req.json().catch(() => ({}));
+      const { status, admin_notes } = body;
+
+      if (!["approved", "rejected"].includes(status)) {
+        return new Response(
+          JSON.stringify({ error: "Status must be 'approved' or 'rejected'" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Get the payment request
+      const { data: request, error: fetchError } = await supabase
+        .from("payment_requests")
+        .select("*")
+        .eq("id", requestId)
+        .single();
+
+      if (fetchError || !request) {
+        return new Response(
+          JSON.stringify({ error: "Payment request not found" }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (request.status !== "pending") {
+        return new Response(
+          JSON.stringify({ error: "This request has already been processed" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Update the payment request
+      const { data: updatedRequest, error: updateError } = await supabase
+        .from("payment_requests")
+        .update({
+          status,
+          admin_notes: admin_notes || null,
+          approved_at: new Date().toISOString(),
+          approved_by: authResult.userId,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", requestId)
+        .select()
+        .single();
+
+      if (updateError) {
+        console.error("[Admin] Failed to update payment request:", updateError);
+        return new Response(
+          JSON.stringify({ error: "Failed to update payment request: " + updateError.message }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // If approved, update user's subscription
+      if (status === "approved") {
+        const now = new Date();
+        const endDate = new Date();
+        
+        // Set subscription end date based on plan
+        if (request.plan_name === "lifetime") {
+          endDate.setFullYear(endDate.getFullYear() + 100); // Lifetime = 100 years
+        } else {
+          endDate.setMonth(endDate.getMonth() + 1); // Monthly plans
+        }
+
+        // Update user subscription
+        await supabase
+          .from("users")
+          .update({
+            subscription_plan: request.plan_name,
+            is_trial_active: false,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", request.user_id);
+
+        // Create/update subscription record
+        await supabase
+          .from("subscriptions")
+          .upsert({
+            user_id: request.user_id,
+            plan: request.plan_name,
+            status: "active",
+            started_at: now.toISOString(),
+            ends_at: endDate.toISOString(),
+            amount: request.amount,
+          }, { onConflict: "user_id" });
+
+        // Get user email for notification
+        const { data: userData } = await supabase
+          .from("users")
+          .select("email, display_name")
+          .eq("id", request.user_id)
+          .single();
+
+        if (userData?.email) {
+          const companyName = await getCompanyName();
+          const html = getPlanPurchaseEmailTemplate(
+            userData.display_name || "User",
+            request.plan_name,
+            `${request.amount}`,
+            request.currency,
+            now.toISOString().split('T')[0],
+            endDate.toISOString().split('T')[0]
+          );
+          
+          try {
+            await resend.emails.send({
+              from: `${companyName} <noreply@autofloy.com>`,
+              to: [userData.email],
+              subject: `🎉 ${request.plan_name} Plan Activated!`,
+              html,
+            });
+          } catch (emailError) {
+            console.error("[Admin] Failed to send plan activation email:", emailError);
+          }
+        }
+
+        // Create notification for user
+        await supabase.from("notifications").insert({
+          user_id: request.user_id,
+          title: "Payment Approved!",
+          body: `Your ${request.plan_name} plan has been activated successfully.`,
+          notification_type: "subscription",
+        });
+      } else {
+        // If rejected, send notification
+        await supabase.from("notifications").insert({
+          user_id: request.user_id,
+          title: "Payment Request Update",
+          body: `Your payment request for ${request.plan_name} plan was not approved. ${admin_notes || "Please contact support for more details."}`,
+          notification_type: "subscription",
+        });
+      }
+
+      console.log(`[Admin Audit] User ${authResult.userId} ${status} payment request ${requestId}`);
+
+      return new Response(
+        JSON.stringify({ request: updatedRequest }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     return new Response(
       JSON.stringify({ error: "Not found" }),
       { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
