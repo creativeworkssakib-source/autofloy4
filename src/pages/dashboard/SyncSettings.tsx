@@ -155,7 +155,6 @@ const SyncSettings = () => {
     invoice_footer: "",
     logo_url: "",
     terms_and_conditions: "",
-    invoice_format: "simple" as "simple" | "better",
     // SMS Settings
     due_reminder_sms_template: "প্রিয় {customer_name}, আপনার কাছে {shop_name} এ মোট {due_amount} টাকা বাকি আছে। আপনি {total_purchases}টি কেনাকাটায় {product_list} কিনেছেন। প্রথম বাকি {oldest_due_date} তারিখে ({days_overdue} দিন আগে)। বিস্তারিত: {purchase_details}। যোগাযোগ: {phone}। অনুগ্রহ করে পরিশোধ করুন।",
     sms_api_key: "",
@@ -181,7 +180,6 @@ const SyncSettings = () => {
           invoice_footer: result.settings.invoice_footer || "",
           logo_url: result.settings.logo_url || "",
           terms_and_conditions: result.settings.terms_and_conditions || "",
-          invoice_format: result.settings.invoice_format || "simple",
           // SMS Settings
           due_reminder_sms_template: result.settings.due_reminder_sms_template || "প্রিয় {customer_name}, আপনার কাছে {shop_name} এ মোট {due_amount} টাকা বাকি আছে। আপনি {total_purchases}টি কেনাকাটায় {product_list} কিনেছেন। প্রথম বাকি {oldest_due_date} তারিখে ({days_overdue} দিন আগে)। বিস্তারিত: {purchase_details}। যোগাযোগ: {phone}। অনুগ্রহ করে পরিশোধ করুন।",
           sms_api_key: result.settings.sms_api_key || "",
@@ -513,52 +511,6 @@ const SyncSettings = () => {
                   <p className="text-muted-foreground">{t("common.loading")}</p>
                 ) : (
                   <>
-                    {/* Invoice Format Selection */}
-                    <div className="space-y-3">
-                      <Label>{t("shop.invoiceFormat")}</Label>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div 
-                          className={`border-2 rounded-lg p-4 cursor-pointer transition-all ${
-                            shopSettings.invoice_format === "simple" 
-                              ? "border-primary bg-primary/5" 
-                              : "border-muted hover:border-muted-foreground/50"
-                          }`}
-                          onClick={() => setShopSettings({ ...shopSettings, invoice_format: "simple" })}
-                        >
-                          <div className="flex items-center gap-2 mb-2">
-                            <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                              shopSettings.invoice_format === "simple" ? "border-primary" : "border-muted-foreground/50"
-                            }`}>
-                              {shopSettings.invoice_format === "simple" && (
-                                <div className="w-2 h-2 rounded-full bg-primary" />
-                              )}
-                            </div>
-                            <span className="font-medium">{t("shop.simpleInvoice")}</span>
-                          </div>
-                          <p className="text-xs text-muted-foreground">{t("shop.simpleInvoiceDesc")}</p>
-                        </div>
-                        <div 
-                          className={`border-2 rounded-lg p-4 cursor-pointer transition-all ${
-                            shopSettings.invoice_format === "better" 
-                              ? "border-primary bg-primary/5" 
-                              : "border-muted hover:border-muted-foreground/50"
-                          }`}
-                          onClick={() => setShopSettings({ ...shopSettings, invoice_format: "better" })}
-                        >
-                          <div className="flex items-center gap-2 mb-2">
-                            <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                              shopSettings.invoice_format === "better" ? "border-primary" : "border-muted-foreground/50"
-                            }`}>
-                              {shopSettings.invoice_format === "better" && (
-                                <div className="w-2 h-2 rounded-full bg-primary" />
-                              )}
-                            </div>
-                            <span className="font-medium">{t("shop.betterInvoice")}</span>
-                          </div>
-                          <p className="text-xs text-muted-foreground">{t("shop.betterInvoiceDesc")}</p>
-                        </div>
-                      </div>
-                    </div>
 
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
