@@ -866,6 +866,24 @@ class OfflineShopService {
       body: JSON.stringify({ id }),
     });
   }
+
+  // Quick Expenses (temporary daily expenses)
+  async getQuickExpenses(): Promise<{ expenses: any[]; total: number }> {
+    return this.request("quick-expenses", { method: "GET" });
+  }
+
+  async addQuickExpense(amount: number, description?: string): Promise<{ expense: any }> {
+    return this.request("quick-expenses", {
+      method: "POST",
+      body: JSON.stringify({ amount, description }),
+    });
+  }
+
+  async deleteQuickExpense(expenseId?: string): Promise<{ message: string }> {
+    const queryParams: Record<string, string> = {};
+    if (expenseId) queryParams.expense_id = expenseId;
+    return this.request("quick-expenses", { method: "DELETE" }, queryParams);
+  }
 }
 
 // Scanner Device interface

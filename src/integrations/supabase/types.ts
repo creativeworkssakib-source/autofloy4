@@ -2630,6 +2630,51 @@ export type Database = {
           },
         ]
       }
+      shop_quick_expenses: {
+        Row: {
+          amount: number
+          created_at: string
+          description: string | null
+          expense_date: string
+          id: string
+          shop_id: string | null
+          user_id: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          description?: string | null
+          expense_date?: string
+          id?: string
+          shop_id?: string | null
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          description?: string | null
+          expense_date?: string
+          id?: string
+          shop_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shop_quick_expenses_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "shops"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shop_quick_expenses_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       shop_returns: {
         Row: {
           created_at: string | null

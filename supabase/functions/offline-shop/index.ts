@@ -5709,7 +5709,99 @@ serve(async (req) => {
         
         // Get today's register or the specific date
         const today = dateParam || new Date().toISOString().split("T")[0];
-        const todayRegister = (data || []).find((r: any) => r.register_date === today);
+        let todayRegister = (data || []).find((r: any) => r.register_date === today);
+        
+        // If register is open, fetch LIVE data from actual transactions
+        if (todayRegister && todayRegister.status === "open") {
+          const todayStart = today + "T00:00:00";
+          const todayEnd = today + "T23:59:59";
+          
+          // Get today's sales from shop_sales
+          const { data: sales } = await supabase
+            .from("shop_sales")
+            .select("total, paid_amount, payment_method")
+            .eq("user_id", userId)
+            .eq("shop_id", shopId)
+            .gte("sale_date", todayStart)
+            .lte("sale_date", todayEnd);
+          
+          const totalSales = (sales || []).reduce((sum: number, s: any) => sum + Number(s.total || 0), 0);
+          const totalCashSales = (sales || []).filter((s: any) => s.payment_method === "cash")
+            .reduce((sum: number, s: any) => sum + Number(s.paid_amount || 0), 0);
+          
+          // Get today's due collections from cash transactions
+          const { data: dueCollections } = await supabase
+            .from("shop_cash_transactions")
+            .select("amount")
+            .eq("user_id", userId)
+            .eq("shop_id", shopId)
+            .eq("type", "in")
+            .eq("source", "due_collection")
+            .gte("transaction_date", todayStart)
+            .lte("transaction_date", todayEnd);
+          
+          const totalDueCollected = (dueCollections || []).reduce((sum: number, d: any) => sum + Number(d.amount || 0), 0);
+          
+          // Get today's expenses from shop_expenses
+          const { data: expenses } = await supabase
+            .from("shop_expenses")
+            .select("amount")
+            .eq("user_id", userId)
+            .eq("shop_id", shopId)
+            .gte("expense_date", todayStart)
+            .lte("expense_date", todayEnd);
+          
+          const totalExpenses = (expenses || []).reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
+          
+          // Get today's withdrawals from cash transactions
+          const { data: withdrawals } = await supabase
+            .from("shop_cash_transactions")
+            .select("amount")
+            .eq("user_id", userId)
+            .eq("shop_id", shopId)
+            .eq("type", "out")
+            .eq("source", "withdrawal")
+            .gte("transaction_date", todayStart)
+            .lte("transaction_date", todayEnd);
+          
+          const totalWithdrawals = (withdrawals || []).reduce((sum: number, w: any) => sum + Number(w.amount || 0), 0);
+          
+          // Get today's deposits from cash transactions
+          const { data: deposits } = await supabase
+            .from("shop_cash_transactions")
+            .select("amount")
+            .eq("user_id", userId)
+            .eq("shop_id", shopId)
+            .eq("type", "in")
+            .eq("source", "deposit")
+            .gte("transaction_date", todayStart)
+            .lte("transaction_date", todayEnd);
+          
+          const totalDeposits = (deposits || []).reduce((sum: number, d: any) => sum + Number(d.amount || 0), 0);
+          
+          // Get quick expenses (temporary daily expenses)
+          const { data: quickExpenses } = await supabase
+            .from("shop_quick_expenses")
+            .select("*")
+            .eq("user_id", userId)
+            .eq("shop_id", shopId)
+            .eq("expense_date", today);
+          
+          const totalQuickExpenses = (quickExpenses || []).reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
+          
+          // Merge live data into today's register
+          todayRegister = {
+            ...todayRegister,
+            total_sales: totalSales,
+            total_cash_sales: totalCashSales,
+            total_due_collected: totalDueCollected,
+            total_expenses: totalExpenses + totalQuickExpenses,
+            total_withdrawals: totalWithdrawals,
+            total_deposits: totalDeposits,
+            quick_expenses: quickExpenses || [],
+            total_quick_expenses: totalQuickExpenses,
+          };
+        }
         
         return new Response(JSON.stringify({ 
           registers: data, 
@@ -5872,8 +5964,19 @@ serve(async (req) => {
           
           const totalDeposits = (deposits || []).reduce((sum: number, d: any) => sum + Number(d.amount || 0), 0);
           
+          // Get quick expenses (temporary daily expenses)
+          const { data: quickExpenses } = await supabase
+            .from("shop_quick_expenses")
+            .select("amount")
+            .eq("user_id", userId)
+            .eq("shop_id", shopId)
+            .eq("expense_date", today);
+          
+          const totalQuickExpenses = (quickExpenses || []).reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
+          const allExpenses = totalExpenses + totalQuickExpenses;
+          
           // Calculate expected cash
-          const expectedCash = Number(todayReg.opening_cash) + totalCashSales + totalDueCollected + totalDeposits - totalExpenses - totalWithdrawals;
+          const expectedCash = Number(todayReg.opening_cash) + totalCashSales + totalDueCollected + totalDeposits - allExpenses - totalWithdrawals;
           const closingCash = body.closing_cash ?? expectedCash;
           const cashDifference = closingCash - expectedCash;
           
@@ -5888,7 +5991,7 @@ serve(async (req) => {
               total_card_sales: totalCardSales,
               total_mobile_sales: totalMobileSales,
               total_due_collected: totalDueCollected,
-              total_expenses: totalExpenses,
+              total_expenses: allExpenses,
               total_withdrawals: totalWithdrawals,
               total_deposits: totalDeposits,
               expected_cash: expectedCash,
@@ -5900,6 +6003,14 @@ serve(async (req) => {
             .eq("id", todayReg.id)
             .select()
             .single();
+          
+          // Delete quick expenses after closing (they are temporary)
+          await supabase
+            .from("shop_quick_expenses")
+            .delete()
+            .eq("user_id", userId)
+            .eq("shop_id", shopId)
+            .eq("expense_date", today);
           
           if (updateErr) throw updateErr;
           
@@ -5964,6 +6075,88 @@ serve(async (req) => {
         if (error) throw error;
         
         return new Response(JSON.stringify({ message: "Register deleted" }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    // ===== QUICK EXPENSES (Temporary Daily Expenses) =====
+    if (resource === "quick-expenses") {
+      const today = new Date().toISOString().split("T")[0];
+      
+      if (req.method === "GET") {
+        const { data, error } = await supabase
+          .from("shop_quick_expenses")
+          .select("*")
+          .eq("user_id", userId)
+          .eq("shop_id", shopId)
+          .eq("expense_date", today)
+          .order("created_at", { ascending: false });
+        
+        if (error) throw error;
+        
+        const total = (data || []).reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
+        
+        return new Response(JSON.stringify({ expenses: data || [], total }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      
+      if (req.method === "POST") {
+        const body = await req.json();
+        
+        if (!body.amount || body.amount <= 0) {
+          return new Response(JSON.stringify({ error: "Amount is required" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        
+        const { data, error } = await supabase
+          .from("shop_quick_expenses")
+          .insert({
+            user_id: userId,
+            shop_id: shopId,
+            amount: body.amount,
+            description: body.description || "",
+            expense_date: today,
+          })
+          .select()
+          .single();
+        
+        if (error) throw error;
+        
+        return new Response(JSON.stringify({ expense: data }), {
+          status: 201,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      
+      if (req.method === "DELETE") {
+        const expenseId = url.searchParams.get("expense_id");
+        
+        if (expenseId) {
+          // Delete specific expense
+          const { error } = await supabase
+            .from("shop_quick_expenses")
+            .delete()
+            .eq("id", expenseId)
+            .eq("user_id", userId);
+          
+          if (error) throw error;
+        } else {
+          // Delete all today's expenses
+          await supabase
+            .from("shop_quick_expenses")
+            .delete()
+            .eq("user_id", userId)
+            .eq("shop_id", shopId)
+            .eq("expense_date", today);
+        }
+        
+        return new Response(JSON.stringify({ message: "Expense deleted" }), {
           status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
