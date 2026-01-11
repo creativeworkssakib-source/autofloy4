@@ -9,33 +9,30 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { format, subDays } from "date-fns";
 import {
   Wallet,
-  DollarSign,
   TrendingUp,
   TrendingDown,
-  Clock,
   Calendar,
-  ArrowUpRight,
   ArrowDownRight,
+  ArrowUpRight,
   ShoppingCart,
-  CreditCard,
-  Smartphone,
   Receipt,
   History,
   Play,
   Square,
-  Edit3,
   Loader2,
   CheckCircle2,
   AlertCircle,
   Banknote,
   CircleDollarSign,
-  ChevronRight,
   BarChart3,
+  Plus,
+  Trash2,
+  Coffee,
+  X,
 } from "lucide-react";
 
 interface CashRegister {
@@ -47,8 +44,6 @@ interface CashRegister {
   closing_time: string | null;
   total_sales: number;
   total_cash_sales: number;
-  total_card_sales: number;
-  total_mobile_sales: number;
   total_due_collected: number;
   total_expenses: number;
   total_withdrawals: number;
@@ -57,6 +52,15 @@ interface CashRegister {
   cash_difference: number;
   notes: string | null;
   status: "open" | "closed";
+  quick_expenses?: QuickExpense[];
+  total_quick_expenses?: number;
+}
+
+interface QuickExpense {
+  id: string;
+  amount: number;
+  description: string;
+  created_at: string;
 }
 
 export function DailyCashRegister() {
@@ -69,12 +73,14 @@ export function DailyCashRegister() {
   const [showOpenModal, setShowOpenModal] = useState(false);
   const [showCloseModal, setShowCloseModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [showQuickExpenseModal, setShowQuickExpenseModal] = useState(false);
   const [openingCash, setOpeningCash] = useState("");
   const [closingCash, setClosingCash] = useState("");
   const [notes, setNotes] = useState("");
   const [suggestedOpening, setSuggestedOpening] = useState(0);
-  const [closeSummary, setCloseSummary] = useState<any>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [quickExpenseAmount, setQuickExpenseAmount] = useState("");
+  const [quickExpenseDescription, setQuickExpenseDescription] = useState("");
 
   const t = {
     title: language === "bn" ? "দৈনিক ক্যাশ রেজিস্টার" : "Daily Cash Register",
@@ -89,26 +95,17 @@ export function DailyCashRegister() {
     cashDifference: language === "bn" ? "তফাৎ" : "Difference",
     todaySales: language === "bn" ? "আজকের বিক্রি" : "Today's Sales",
     cashSales: language === "bn" ? "ক্যাশ বিক্রি" : "Cash Sales",
-    cardSales: language === "bn" ? "কার্ড বিক্রি" : "Card Sales",
-    mobileSales: language === "bn" ? "মোবাইল বিক্রি" : "Mobile Sales",
     dueCollected: language === "bn" ? "বাকি আদায়" : "Due Collected",
     expenses: language === "bn" ? "খরচ" : "Expenses",
-    withdrawals: language === "bn" ? "উত্তোলন" : "Withdrawals",
-    deposits: language === "bn" ? "জমা" : "Deposits",
     notes: language === "bn" ? "নোট" : "Notes",
     history: language === "bn" ? "ইতিহাস" : "History",
-    openedAt: language === "bn" ? "খোলা হয়েছে" : "Opened at",
-    closedAt: language === "bn" ? "বন্ধ হয়েছে" : "Closed at",
     suggestedFromYesterday: language === "bn" ? "গতকালের ক্লোজিং থেকে" : "From yesterday's closing",
     confirmOpen: language === "bn" ? "শপ খুলুন" : "Open Shop",
     confirmClose: language === "bn" ? "শপ বন্ধ করুন" : "Close Shop",
     cancel: language === "bn" ? "বাতিল" : "Cancel",
     noHistory: language === "bn" ? "কোনো ইতিহাস নেই" : "No history found",
-    overview: language === "bn" ? "সামগ্রিক দৃশ্য" : "Overview",
-    transactions: language === "bn" ? "লেনদেন" : "Transactions",
     cashIn: language === "bn" ? "ক্যাশ ইন" : "Cash In",
     cashOut: language === "bn" ? "ক্যাশ আউট" : "Cash Out",
-    netCash: language === "bn" ? "নেট ক্যাশ" : "Net Cash",
     currentBalance: language === "bn" ? "বর্তমান ব্যালেন্স" : "Current Balance",
     openShopFirst: language === "bn" ? "প্রথমে শপ খুলুন" : "Open shop first",
     enterOpeningAmount: language === "bn" ? "শুরুর টাকার পরিমাণ দিন" : "Enter opening cash amount",
@@ -118,6 +115,13 @@ export function DailyCashRegister() {
     excessIcon: language === "bn" ? "বেশি" : "Excess",
     shortIcon: language === "bn" ? "কম" : "Short",
     last7Days: language === "bn" ? "গত ৭ দিন" : "Last 7 Days",
+    quickExpense: language === "bn" ? "ছোট খরচ" : "Quick Expense",
+    quickExpenseTitle: language === "bn" ? "ছোট খরচ যোগ করুন" : "Add Quick Expense",
+    quickExpenseDesc: language === "bn" ? "চা-নাস্তা, ভিক্ষা, টুকটাক জিনিস - এসব ছোট খরচ। শপ বন্ধ করলে এগুলো মুছে যাবে।" : "Tea, snacks, donations, small items. These will be deleted when shop closes.",
+    amount: language === "bn" ? "টাকা" : "Amount",
+    description: language === "bn" ? "বিবরণ" : "Description",
+    add: language === "bn" ? "যোগ করুন" : "Add",
+    noQuickExpenses: language === "bn" ? "কোনো ছোট খরচ নেই" : "No quick expenses",
   };
 
   const formatCurrency = (amount: number) => {
@@ -155,6 +159,17 @@ export function DailyCashRegister() {
     loadData();
   }, [loadData]);
 
+  // Auto-refresh data every 30 seconds when register is open
+  useEffect(() => {
+    if (!hasOpenRegister) return;
+    
+    const interval = setInterval(() => {
+      loadData();
+    }, 30000);
+    
+    return () => clearInterval(interval);
+  }, [hasOpenRegister, loadData]);
+
   const handleOpenRegister = async () => {
     if (!openingCash && openingCash !== "0") {
       toast.error(t.enterOpeningAmount);
@@ -186,7 +201,6 @@ export function DailyCashRegister() {
     try {
       const result = await offlineShopService.closeCashRegister(parseFloat(closingCash), notes);
       toast.success(result.message);
-      setCloseSummary(result.summary);
       setShowCloseModal(false);
       setClosingCash("");
       setNotes("");
@@ -195,6 +209,37 @@ export function DailyCashRegister() {
       toast.error(error.message || "Failed to close register");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleAddQuickExpense = async () => {
+    if (!quickExpenseAmount || parseFloat(quickExpenseAmount) <= 0) {
+      toast.error(language === "bn" ? "টাকার পরিমাণ দিন" : "Enter amount");
+      return;
+    }
+    
+    setIsSubmitting(true);
+    try {
+      await offlineShopService.addQuickExpense(parseFloat(quickExpenseAmount), quickExpenseDescription);
+      toast.success(language === "bn" ? "খরচ যোগ হয়েছে" : "Expense added");
+      setQuickExpenseAmount("");
+      setQuickExpenseDescription("");
+      setShowQuickExpenseModal(false);
+      loadData();
+    } catch (error: any) {
+      toast.error(error.message || "Failed to add expense");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteQuickExpense = async (expenseId: string) => {
+    try {
+      await offlineShopService.deleteQuickExpense(expenseId);
+      toast.success(language === "bn" ? "খরচ মুছে ফেলা হয়েছে" : "Expense deleted");
+      loadData();
+    } catch (error: any) {
+      toast.error(error.message || "Failed to delete expense");
     }
   };
 
@@ -222,13 +267,13 @@ export function DailyCashRegister() {
     <>
       <Card className="border-primary/20 bg-gradient-to-br from-primary/5 via-background to-secondary/5 overflow-hidden">
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-3">
               <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-lg">
                 <Wallet className="h-6 w-6 text-primary-foreground" />
               </div>
               <div>
-                <CardTitle className="text-lg flex items-center gap-2">
+                <CardTitle className="text-lg flex items-center gap-2 flex-wrap">
                   {t.title}
                   {hasOpenRegister ? (
                     <Badge variant="default" className="bg-success/90 text-success-foreground">
@@ -245,7 +290,7 @@ export function DailyCashRegister() {
                 <CardDescription>{t.subtitle}</CardDescription>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Button
                 variant="outline"
                 size="sm"
@@ -363,9 +408,9 @@ export function DailyCashRegister() {
             </div>
           )}
 
-          {/* Today's Breakdown */}
+          {/* Today's Breakdown - Simplified */}
           {hasOpenRegister && todayRegister && (
-            <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50">
                 <ShoppingCart className="h-4 w-4 text-primary" />
                 <div>
@@ -378,20 +423,6 @@ export function DailyCashRegister() {
                 <div>
                   <div className="text-xs text-muted-foreground">{t.cashSales}</div>
                   <div className="font-semibold text-sm">{formatCurrency(Number(todayRegister.total_cash_sales || 0))}</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50">
-                <CreditCard className="h-4 w-4 text-blue-500" />
-                <div>
-                  <div className="text-xs text-muted-foreground">{t.cardSales}</div>
-                  <div className="font-semibold text-sm">{formatCurrency(Number(todayRegister.total_card_sales || 0))}</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50">
-                <Smartphone className="h-4 w-4 text-purple-500" />
-                <div>
-                  <div className="text-xs text-muted-foreground">{t.mobileSales}</div>
-                  <div className="font-semibold text-sm">{formatCurrency(Number(todayRegister.total_mobile_sales || 0))}</div>
                 </div>
               </div>
               <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50">
@@ -409,6 +440,57 @@ export function DailyCashRegister() {
                 </div>
               </div>
             </div>
+          )}
+
+          {/* Quick Expenses Section */}
+          {hasOpenRegister && todayRegister && (
+            <Card className="border-amber-500/20 bg-amber-500/5">
+              <CardHeader className="py-3 px-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Coffee className="h-4 w-4 text-amber-600" />
+                    <CardTitle className="text-sm">{t.quickExpense}</CardTitle>
+                    {Number(todayRegister.total_quick_expenses || 0) > 0 && (
+                      <Badge variant="secondary" className="text-xs">
+                        {formatCurrency(Number(todayRegister.total_quick_expenses || 0))}
+                      </Badge>
+                    )}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowQuickExpenseModal(true)}
+                    className="h-7 gap-1 text-xs"
+                  >
+                    <Plus className="h-3 w-3" />
+                    {t.add}
+                  </Button>
+                </div>
+              </CardHeader>
+              {todayRegister.quick_expenses && todayRegister.quick_expenses.length > 0 && (
+                <CardContent className="pt-0 px-4 pb-3">
+                  <div className="flex flex-wrap gap-2">
+                    {todayRegister.quick_expenses.map((expense) => (
+                      <div
+                        key={expense.id}
+                        className="flex items-center gap-2 px-2 py-1 rounded-full bg-background border text-xs"
+                      >
+                        <span className="font-medium">{formatCurrency(expense.amount)}</span>
+                        {expense.description && (
+                          <span className="text-muted-foreground">{expense.description}</span>
+                        )}
+                        <button
+                          onClick={() => handleDeleteQuickExpense(expense.id)}
+                          className="text-muted-foreground hover:text-destructive transition-colors"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              )}
+            </Card>
           )}
 
           {/* Prompt to open if not open */}
@@ -605,6 +687,56 @@ export function DailyCashRegister() {
             >
               {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Square className="h-4 w-4 mr-2" />}
               {t.confirmClose}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Quick Expense Modal */}
+      <Dialog open={showQuickExpenseModal} onOpenChange={setShowQuickExpenseModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Coffee className="h-5 w-5 text-amber-600" />
+              {t.quickExpenseTitle}
+            </DialogTitle>
+            <DialogDescription>
+              {t.quickExpenseDesc}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="quick-amount">{t.amount} (৳)</Label>
+              <Input
+                id="quick-amount"
+                type="number"
+                placeholder="0"
+                value={quickExpenseAmount}
+                onChange={(e) => setQuickExpenseAmount(e.target.value)}
+                className="text-lg font-semibold"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="quick-desc">{t.description}</Label>
+              <Input
+                id="quick-desc"
+                placeholder={language === "bn" ? "চা, নাস্তা, ভিক্ষা..." : "Tea, snacks, donation..."}
+                value={quickExpenseDescription}
+                onChange={(e) => setQuickExpenseDescription(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowQuickExpenseModal(false)}>
+              {t.cancel}
+            </Button>
+            <Button 
+              onClick={handleAddQuickExpense} 
+              disabled={isSubmitting}
+              className="bg-amber-600 hover:bg-amber-700"
+            >
+              {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
+              {t.add}
             </Button>
           </DialogFooter>
         </DialogContent>
