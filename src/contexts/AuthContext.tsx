@@ -96,6 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     // Listen for online/offline changes
     const handleOnline = () => {
+      console.log('[AuthContext] Online detected');
       setIsOfflineMode(false);
       // Refresh auth expiry when back online
       if (hasValidOfflineAuth()) {
@@ -105,6 +106,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
     
     const handleOffline = () => {
+      console.log('[AuthContext] Offline detected');
       setIsOfflineMode(true);
     };
     
@@ -117,17 +119,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const hasToken = authService.isAuthenticated();
       const offlineAuth = getCachedAuth();
       
+      console.log('[AuthContext] Init auth:', { 
+        isOnline: isOnline(), 
+        hasToken, 
+        hasCachedUser: !!cachedUser,
+        hasOfflineAuth: !!offlineAuth 
+      });
+      
       // OFFLINE MODE: Use cached auth if available
       if (!isOnline()) {
+        console.log('[AuthContext] Offline mode detected');
+        
+        // First try offline auth cache
         if (offlineAuth && offlineAuth.user) {
-          console.log('[AuthContext] Offline mode - using cached auth');
-          // Create a User object from cached data
+          console.log('[AuthContext] Using offline auth cache');
           const offlineUser: User = {
             id: offlineAuth.user.id,
             email: offlineAuth.user.email,
             name: offlineAuth.user.name,
             phone: offlineAuth.user.phone,
-            emailVerified: true, // Assume verified since they logged in before
+            emailVerified: true,
             subscriptionPlan: offlineAuth.user.subscriptionPlan,
             avatarUrl: offlineAuth.user.avatarUrl,
             createdAt: new Date().toISOString(),
@@ -136,12 +147,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setOfflineAuthDaysRemaining(getOfflineAuthRemainingDays());
           setIsLoading(false);
           return;
-        } else {
-          // No valid offline auth - user needs to go online
-          setUser(null);
-          setIsLoading(false);
-          return;
         }
+        
+        // Fallback: try regular cached user
+        if (cachedUser) {
+          try {
+            console.log('[AuthContext] Using regular cached user for offline');
+            const parsedUser = JSON.parse(cachedUser) as User;
+            setUser(parsedUser);
+            setIsLoading(false);
+            return;
+          } catch (e) {
+            console.error('[AuthContext] Failed to parse cached user:', e);
+          }
+        }
+        
+        // No valid offline auth - user needs to go online
+        console.log('[AuthContext] No offline auth available');
+        setUser(null);
+        setIsLoading(false);
+        return;
       }
       
       // ONLINE MODE: Normal auth flow
@@ -211,8 +236,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           localStorage.removeItem(CURRENT_USER_KEY);
         }
       } else if (!hasToken) {
+        // No token - but don't clear offline auth, it might be needed later
         setUser(null);
-        clearOfflineAuth();
         localStorage.removeItem(CURRENT_USER_KEY);
       }
       
