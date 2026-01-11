@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -42,27 +41,22 @@ import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { useShop } from "@/contexts/ShopContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { toast } from "sonner";
 import { format, differenceInDays } from "date-fns";
-import { bn } from "date-fns/locale";
+import { bn, enUS } from "date-fns/locale";
 import {
   Plus,
   Banknote,
   Building2,
   Users,
-  Calendar,
-  TrendingUp,
   AlertTriangle,
   CheckCircle2,
-  Clock,
   Trash2,
   Edit,
   Eye,
   CreditCard,
-  Percent,
   Receipt,
-  ArrowUpRight,
-  ArrowDownRight,
   Bell,
   Search,
 } from "lucide-react";
@@ -112,6 +106,7 @@ const API_BASE = import.meta.env.VITE_SUPABASE_URL;
 const ShopLoans = () => {
   const { currentShop: selectedShop } = useShop();
   const { user } = useAuth();
+  const { language } = useLanguage();
   const token = localStorage.getItem("autofloy_token");
   const [loans, setLoans] = useState<Loan[]>([]);
   const [stats, setStats] = useState<LoanStats | null>(null);
@@ -120,6 +115,7 @@ const ShopLoans = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [deleting, setDeleting] = useState(false);
 
   // Modal states
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -129,6 +125,87 @@ const ShopLoans = () => {
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
   const [loanPayments, setLoanPayments] = useState<Payment[]>([]);
   const [isEditing, setIsEditing] = useState(false);
+
+  // Translations
+  const t = {
+    title: language === "bn" ? "লোন / কিস্তি ম্যানেজমেন্ট" : "Loan / EMI Management",
+    totalLoan: language === "bn" ? "মোট লোন" : "Total Loan",
+    paid: language === "bn" ? "পরিশোধ" : "Paid",
+    remaining: language === "bn" ? "বাকি" : "Remaining",
+    monthlyEmi: language === "bn" ? "মাসিক কিস্তি" : "Monthly EMI",
+    overdueAlert: language === "bn" ? "টি কিস্তি বাকি পড়েছে!" : "installments overdue!",
+    upcomingAlert: language === "bn" ? "টি কিস্তি আসছে ৭ দিনের মধ্যে" : "installments due within 7 days",
+    loanList: language === "bn" ? "লোন তালিকা" : "Loan List",
+    newLoan: language === "bn" ? "নতুন লোন" : "New Loan",
+    editLoan: language === "bn" ? "লোন এডিট করুন" : "Edit Loan",
+    addLoan: language === "bn" ? "নতুন লোন যোগ করুন" : "Add New Loan",
+    lenderName: language === "bn" ? "ঋণদাতার নাম" : "Lender Name",
+    lenderType: language === "bn" ? "ঋণদাতার ধরন" : "Lender Type",
+    bank: language === "bn" ? "ব্যাংক" : "Bank",
+    ngo: language === "bn" ? "এনজিও" : "NGO",
+    personal: language === "bn" ? "ব্যক্তিগত" : "Personal",
+    other: language === "bn" ? "অন্যান্য" : "Other",
+    loanAmount: language === "bn" ? "লোনের পরিমাণ (৳)" : "Loan Amount (৳)",
+    interestRate: language === "bn" ? "সুদের হার (%)" : "Interest Rate (%)",
+    totalInstallments: language === "bn" ? "মোট কিস্তি সংখ্যা" : "Total Installments",
+    installmentAmount: language === "bn" ? "প্রতি কিস্তি (৳)" : "Per Installment (৳)",
+    autoCalculate: language === "bn" ? "অটো ক্যালকুলেট" : "Auto Calculate",
+    startDate: language === "bn" ? "শুরুর তারিখ" : "Start Date",
+    paymentDay: language === "bn" ? "পেমেন্ট দিন (মাসের)" : "Payment Day (of month)",
+    dayOfMonth: language === "bn" ? "তারিখ" : "day",
+    notes: language === "bn" ? "নোট" : "Notes",
+    additionalInfo: language === "bn" ? "অতিরিক্ত তথ্য..." : "Additional info...",
+    update: language === "bn" ? "আপডেট করুন" : "Update",
+    addLoanBtn: language === "bn" ? "লোন যোগ করুন" : "Add Loan",
+    searchLender: language === "bn" ? "ঋণদাতার নাম খুঁজুন..." : "Search lender name...",
+    status: language === "bn" ? "স্ট্যাটাস" : "Status",
+    all: language === "bn" ? "সব" : "All",
+    active: language === "bn" ? "সক্রিয়" : "Active",
+    completed: language === "bn" ? "সম্পন্ন" : "Completed",
+    defaulted: language === "bn" ? "বাকি" : "Defaulted",
+    loading: language === "bn" ? "লোড হচ্ছে..." : "Loading...",
+    noLoans: language === "bn" ? "কোন লোন নেই। নতুন লোন যোগ করুন।" : "No loans found. Add a new loan.",
+    lender: language === "bn" ? "ঋণদাতা" : "Lender",
+    loan: language === "bn" ? "লোন" : "Loan",
+    installment: language === "bn" ? "কিস্তি" : "Installment",
+    progress: language === "bn" ? "অগ্রগতি" : "Progress",
+    nextPayment: language === "bn" ? "পরের পেমেন্ট" : "Next Payment",
+    action: language === "bn" ? "অ্যাকশন" : "Action",
+    interest: language === "bn" ? "সুদ" : "Interest",
+    remainingAmount: language === "bn" ? "বাকি" : "Remaining",
+    daysOverdue: language === "bn" ? "দিন বাকি" : "days overdue",
+    daysLeft: language === "bn" ? "দিন বাকি" : "days left",
+    today: language === "bn" ? "আজকে" : "Today",
+    loanDetails: language === "bn" ? "লোনের বিস্তারিত" : "Loan Details",
+    paidAmount: language === "bn" ? "পরিশোধ করেছেন" : "Paid Amount",
+    perInstallment: language === "bn" ? "প্রতি কিস্তি" : "Per Installment",
+    installmentsDone: language === "bn" ? "কিস্তি সম্পন্ন" : "installments done",
+    paymentHistory: language === "bn" ? "পেমেন্ট হিস্টোরি" : "Payment History",
+    noPayments: language === "bn" ? "কোন পেমেন্ট নেই" : "No payments yet",
+    payInstallment: language === "bn" ? "কিস্তি পে করুন" : "Pay Installment",
+    installmentPayment: language === "bn" ? "কিস্তি পেমেন্ট" : "Installment Payment",
+    paymentAmount: language === "bn" ? "পেমেন্ট পরিমাণ (৳)" : "Payment Amount (৳)",
+    paymentDate: language === "bn" ? "পেমেন্ট তারিখ" : "Payment Date",
+    paymentMethod: language === "bn" ? "পেমেন্ট মাধ্যম" : "Payment Method",
+    cash: language === "bn" ? "নগদ" : "Cash",
+    bkash: language === "bn" ? "বিকাশ" : "bKash",
+    nagad: language === "bn" ? "নগদ মোবাইল" : "Nagad",
+    lateFee: language === "bn" ? "লেট ফি (৳)" : "Late Fee (৳)",
+    completePayment: language === "bn" ? "পেমেন্ট সম্পন্ন করুন" : "Complete Payment",
+    deleteLoan: language === "bn" ? "লোন ডিলিট করবেন?" : "Delete Loan?",
+    deleteConfirm: language === "bn" 
+      ? "এর লোন এবং সব পেমেন্ট হিস্টোরি মুছে যাবে। এই কাজটি ফেরত নেওয়া যাবে না।" 
+      : "'s loan and all payment history will be deleted. This action cannot be undone.",
+    cancel: language === "bn" ? "বাতিল" : "Cancel",
+    delete: language === "bn" ? "ডিলিট করুন" : "Delete",
+    loanUpdated: language === "bn" ? "লোন আপডেট হয়েছে" : "Loan updated",
+    loanAdded: language === "bn" ? "নতুন লোন যোগ হয়েছে" : "New loan added",
+    loanDeleted: language === "bn" ? "লোন ডিলিট হয়েছে" : "Loan deleted",
+    paymentSuccess: language === "bn" ? "পেমেন্ট সফল হয়েছে" : "Payment successful",
+    loanCompleted: language === "bn" ? "🎉 লোন সম্পূর্ণ পরিশোধ হয়েছে!" : "🎉 Loan fully paid!",
+    loadError: language === "bn" ? "লোন লোড করতে সমস্যা হয়েছে" : "Failed to load loans",
+    of: language === "bn" ? "/" : "of",
+  };
 
   // Form states
   const [formData, setFormData] = useState({
@@ -173,7 +250,7 @@ const ShopLoans = () => {
       setUpcomingLoans(data.upcoming || []);
       setOverdueLoans(data.overdue || []);
     } catch (error: any) {
-      toast.error(error.message || "লোন লোড করতে সমস্যা হয়েছে");
+      toast.error(error.message || t.loadError);
     } finally {
       setLoading(false);
     }
@@ -229,7 +306,7 @@ const ShopLoans = () => {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      toast.success(isEditing ? "লোন আপডেট হয়েছে" : "নতুন লোন যোগ হয়েছে");
+      toast.success(isEditing ? t.loanUpdated : t.loanAdded);
       setIsAddModalOpen(false);
       resetForm();
       fetchLoans();
@@ -264,9 +341,7 @@ const ShopLoans = () => {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      toast.success(
-        data.isCompleted ? "🎉 লোন সম্পূর্ণ পরিশোধ হয়েছে!" : "পেমেন্ট সফল হয়েছে"
-      );
+      toast.success(data.isCompleted ? t.loanCompleted : t.paymentSuccess);
       setIsPaymentModalOpen(false);
       setPaymentData({
         amount: "",
@@ -286,6 +361,7 @@ const ShopLoans = () => {
 
   const handleDelete = async () => {
     if (!token || !selectedLoan) return;
+    setDeleting(true);
 
     try {
       const res = await fetch(
@@ -296,17 +372,17 @@ const ShopLoans = () => {
         }
       );
 
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error);
-      }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Delete failed");
 
-      toast.success("লোন ডিলিট হয়েছে");
+      toast.success(t.loanDeleted);
       setIsDeleteDialogOpen(false);
       setSelectedLoan(null);
       fetchLoans();
     } catch (error: any) {
       toast.error(error.message);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -377,11 +453,11 @@ const ShopLoans = () => {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "active":
-        return <Badge className="bg-blue-500">সক্রিয়</Badge>;
+        return <Badge className="bg-blue-500">{t.active}</Badge>;
       case "completed":
-        return <Badge className="bg-green-500">সম্পন্ন</Badge>;
+        return <Badge className="bg-green-500">{t.completed}</Badge>;
       case "defaulted":
-        return <Badge variant="destructive">বাকি</Badge>;
+        return <Badge variant="destructive">{t.defaulted}</Badge>;
       default:
         return <Badge variant="secondary">{status}</Badge>;
     }
@@ -392,6 +468,14 @@ const ShopLoans = () => {
     const days = differenceInDays(new Date(date), new Date());
     if (days < 0) return { days: Math.abs(days), overdue: true };
     return { days, overdue: false };
+  };
+
+  const formatDate = (date: string) => {
+    return format(new Date(date), "d MMM", { locale: language === "bn" ? bn : enUS });
+  };
+
+  const formatDateFull = (date: string) => {
+    return format(new Date(date), "d MMM yyyy", { locale: language === "bn" ? bn : enUS });
   };
 
   const filteredLoans = loans.filter((loan) =>
@@ -409,7 +493,7 @@ const ShopLoans = () => {
                 <Banknote className="h-5 w-5 text-blue-500" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">মোট লোন</p>
+                <p className="text-xs text-muted-foreground">{t.totalLoan}</p>
                 <p className="text-lg font-bold">
                   ৳{stats?.totalLoans.toLocaleString() || 0}
                 </p>
@@ -425,7 +509,7 @@ const ShopLoans = () => {
                 <CheckCircle2 className="h-5 w-5 text-green-500" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">পরিশোধ</p>
+                <p className="text-xs text-muted-foreground">{t.paid}</p>
                 <p className="text-lg font-bold">
                   ৳{stats?.totalPaid.toLocaleString() || 0}
                 </p>
@@ -438,10 +522,10 @@ const ShopLoans = () => {
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-orange-500/20 rounded-lg">
-                <TrendingUp className="h-5 w-5 text-orange-500" />
+                <Receipt className="h-5 w-5 text-orange-500" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">বাকি</p>
+                <p className="text-xs text-muted-foreground">{t.remaining}</p>
                 <p className="text-lg font-bold">
                   ৳{stats?.totalRemaining.toLocaleString() || 0}
                 </p>
@@ -454,10 +538,10 @@ const ShopLoans = () => {
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-purple-500/20 rounded-lg">
-                <Receipt className="h-5 w-5 text-purple-500" />
+                <CreditCard className="h-5 w-5 text-purple-500" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">মাসিক কিস্তি</p>
+                <p className="text-xs text-muted-foreground">{t.monthlyEmi}</p>
                 <p className="text-lg font-bold">
                   ৳{stats?.monthlyEmi.toLocaleString() || 0}
                 </p>
@@ -475,7 +559,7 @@ const ShopLoans = () => {
               <AlertTriangle className="h-5 w-5 text-destructive" />
               <div>
                 <p className="font-medium text-destructive">
-                  {overdueLoans.length}টি কিস্তি বাকি পড়েছে!
+                  {overdueLoans.length}{t.overdueAlert}
                 </p>
                 <p className="text-sm text-muted-foreground">
                   {overdueLoans.map((l) => l.lender_name).join(", ")}
@@ -493,7 +577,7 @@ const ShopLoans = () => {
               <Bell className="h-5 w-5 text-yellow-500" />
               <div>
                 <p className="font-medium text-yellow-600 dark:text-yellow-400">
-                  {upcomingLoans.length}টি কিস্তি আসছে ৭ দিনের মধ্যে
+                  {upcomingLoans.length}{t.upcomingAlert}
                 </p>
                 <p className="text-sm text-muted-foreground">
                   {upcomingLoans.map((l) => l.lender_name).join(", ")}
@@ -507,7 +591,7 @@ const ShopLoans = () => {
       {/* Main Content */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-lg">লোন তালিকা</CardTitle>
+          <CardTitle className="text-lg">{t.loanList}</CardTitle>
           <Dialog open={isAddModalOpen} onOpenChange={(open) => {
             setIsAddModalOpen(open);
             if (!open) resetForm();
@@ -515,30 +599,30 @@ const ShopLoans = () => {
             <DialogTrigger asChild>
               <Button size="sm">
                 <Plus className="h-4 w-4 mr-2" />
-                নতুন লোন
+                {t.newLoan}
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-md">
               <DialogHeader>
                 <DialogTitle>
-                  {isEditing ? "লোন এডিট করুন" : "নতুন লোন যোগ করুন"}
+                  {isEditing ? t.editLoan : t.addLoan}
                 </DialogTitle>
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2">
-                    <Label>ঋণদাতার নাম *</Label>
+                    <Label>{t.lenderName} *</Label>
                     <Input
                       value={formData.lender_name}
                       onChange={(e) =>
                         setFormData({ ...formData, lender_name: e.target.value })
                       }
-                      placeholder="যেমন: BRAC, Grameen Bank"
+                      placeholder="BRAC, Grameen Bank..."
                       required
                     />
                   </div>
                   <div>
-                    <Label>ঋণদাতার ধরন</Label>
+                    <Label>{t.lenderType}</Label>
                     <Select
                       value={formData.lender_type}
                       onValueChange={(v) =>
@@ -549,15 +633,15 @@ const ShopLoans = () => {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="bank">ব্যাংক</SelectItem>
-                        <SelectItem value="ngo">এনজিও</SelectItem>
-                        <SelectItem value="personal">ব্যক্তিগত</SelectItem>
-                        <SelectItem value="other">অন্যান্য</SelectItem>
+                        <SelectItem value="bank">{t.bank}</SelectItem>
+                        <SelectItem value="ngo">{t.ngo}</SelectItem>
+                        <SelectItem value="personal">{t.personal}</SelectItem>
+                        <SelectItem value="other">{t.other}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div>
-                    <Label>লোনের পরিমাণ (৳) *</Label>
+                    <Label>{t.loanAmount} *</Label>
                     <Input
                       type="number"
                       value={formData.loan_amount}
@@ -569,7 +653,7 @@ const ShopLoans = () => {
                     />
                   </div>
                   <div>
-                    <Label>সুদের হার (%)</Label>
+                    <Label>{t.interestRate}</Label>
                     <Input
                       type="number"
                       step="0.01"
@@ -581,7 +665,7 @@ const ShopLoans = () => {
                     />
                   </div>
                   <div>
-                    <Label>মোট কিস্তি সংখ্যা *</Label>
+                    <Label>{t.totalInstallments} *</Label>
                     <Input
                       type="number"
                       value={formData.total_installments}
@@ -596,7 +680,7 @@ const ShopLoans = () => {
                     />
                   </div>
                   <div>
-                    <Label>প্রতি কিস্তি (৳)</Label>
+                    <Label>{t.installmentAmount}</Label>
                     <Input
                       type="number"
                       value={formData.installment_amount}
@@ -606,11 +690,11 @@ const ShopLoans = () => {
                           installment_amount: e.target.value,
                         })
                       }
-                      placeholder="অটো ক্যালকুলেট"
+                      placeholder={t.autoCalculate}
                     />
                   </div>
                   <div>
-                    <Label>শুরুর তারিখ</Label>
+                    <Label>{t.startDate}</Label>
                     <Input
                       type="date"
                       value={formData.start_date}
@@ -620,7 +704,7 @@ const ShopLoans = () => {
                     />
                   </div>
                   <div>
-                    <Label>পেমেন্ট দিন (মাসের)</Label>
+                    <Label>{t.paymentDay}</Label>
                     <Select
                       value={formData.payment_day}
                       onValueChange={(v) =>
@@ -633,26 +717,26 @@ const ShopLoans = () => {
                       <SelectContent>
                         {Array.from({ length: 28 }, (_, i) => (
                           <SelectItem key={i + 1} value={(i + 1).toString()}>
-                            {i + 1} তারিখ
+                            {i + 1} {t.dayOfMonth}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="col-span-2">
-                    <Label>নোট</Label>
+                    <Label>{t.notes}</Label>
                     <Textarea
                       value={formData.notes}
                       onChange={(e) =>
                         setFormData({ ...formData, notes: e.target.value })
                       }
-                      placeholder="অতিরিক্ত তথ্য..."
+                      placeholder={t.additionalInfo}
                       rows={2}
                     />
                   </div>
                 </div>
                 <Button type="submit" className="w-full">
-                  {isEditing ? "আপডেট করুন" : "লোন যোগ করুন"}
+                  {isEditing ? t.update : t.addLoanBtn}
                 </Button>
               </form>
             </DialogContent>
@@ -664,7 +748,7 @@ const ShopLoans = () => {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="ঋণদাতার নাম খুঁজুন..."
+                placeholder={t.searchLender}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9"
@@ -672,36 +756,36 @@ const ShopLoans = () => {
             </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="স্ট্যাটাস" />
+                <SelectValue placeholder={t.status} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">সব</SelectItem>
-                <SelectItem value="active">সক্রিয়</SelectItem>
-                <SelectItem value="completed">সম্পন্ন</SelectItem>
-                <SelectItem value="defaulted">বাকি</SelectItem>
+                <SelectItem value="all">{t.all}</SelectItem>
+                <SelectItem value="active">{t.active}</SelectItem>
+                <SelectItem value="completed">{t.completed}</SelectItem>
+                <SelectItem value="defaulted">{t.defaulted}</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           {/* Loans Table */}
           {loading ? (
-            <div className="text-center py-8 text-muted-foreground">লোড হচ্ছে...</div>
+            <div className="text-center py-8 text-muted-foreground">{t.loading}</div>
           ) : filteredLoans.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              কোন লোন নেই। নতুন লোন যোগ করুন।
+              {t.noLoans}
             </div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>ঋণদাতা</TableHead>
-                    <TableHead className="text-right">লোন</TableHead>
-                    <TableHead className="text-right">কিস্তি</TableHead>
-                    <TableHead className="text-center">অগ্রগতি</TableHead>
-                    <TableHead>পরের পেমেন্ট</TableHead>
-                    <TableHead>স্ট্যাটাস</TableHead>
-                    <TableHead className="text-right">অ্যাকশন</TableHead>
+                    <TableHead>{t.lender}</TableHead>
+                    <TableHead className="text-right">{t.loan}</TableHead>
+                    <TableHead className="text-right">{t.installment}</TableHead>
+                    <TableHead className="text-center">{t.progress}</TableHead>
+                    <TableHead>{t.nextPayment}</TableHead>
+                    <TableHead>{t.status}</TableHead>
+                    <TableHead className="text-right">{t.action}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -720,7 +804,7 @@ const ShopLoans = () => {
                             <div>
                               <p className="font-medium">{loan.lender_name}</p>
                               <p className="text-xs text-muted-foreground">
-                                {loan.interest_rate}% সুদ
+                                {loan.interest_rate}% {t.interest}
                               </p>
                             </div>
                           </div>
@@ -730,7 +814,7 @@ const ShopLoans = () => {
                             ৳{loan.loan_amount.toLocaleString()}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            বাকি: ৳{loan.remaining_amount.toLocaleString()}
+                            {t.remainingAmount}: ৳{loan.remaining_amount.toLocaleString()}
                           </p>
                         </TableCell>
                         <TableCell className="text-right">
@@ -753,9 +837,7 @@ const ShopLoans = () => {
                           {loan.next_payment_date ? (
                             <div>
                               <p className="text-sm">
-                                {format(new Date(loan.next_payment_date), "d MMM", {
-                                  locale: bn,
-                                })}
+                                {formatDate(loan.next_payment_date)}
                               </p>
                               {paymentInfo && (
                                 <p
@@ -768,10 +850,10 @@ const ShopLoans = () => {
                                   }`}
                                 >
                                   {paymentInfo.overdue
-                                    ? `${paymentInfo.days} দিন বাকি`
+                                    ? `${paymentInfo.days} ${t.daysOverdue}`
                                     : paymentInfo.days === 0
-                                    ? "আজকে"
-                                    : `${paymentInfo.days} দিন বাকি`}
+                                    ? t.today
+                                    : `${paymentInfo.days} ${t.daysLeft}`}
                                 </p>
                               )}
                             </div>
@@ -833,7 +915,7 @@ const ShopLoans = () => {
       <Dialog open={isViewModalOpen} onOpenChange={setIsViewModalOpen}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>লোনের বিস্তারিত</DialogTitle>
+            <DialogTitle>{t.loanDetails}</DialogTitle>
           </DialogHeader>
           {selectedLoan && (
             <div className="space-y-4">
@@ -841,10 +923,10 @@ const ShopLoans = () => {
                 <div className="p-3 bg-primary/10 rounded-lg">
                   {getLenderIcon(selectedLoan.lender_type)}
                 </div>
-                <div>
+                <div className="flex-1">
                   <h3 className="font-semibold text-lg">{selectedLoan.lender_name}</h3>
                   <p className="text-sm text-muted-foreground">
-                    {selectedLoan.interest_rate}% সুদে {selectedLoan.total_installments} কিস্তি
+                    {selectedLoan.interest_rate}% {t.interest} - {selectedLoan.total_installments} {t.installment}
                   </p>
                 </div>
                 {getStatusBadge(selectedLoan.status)}
@@ -852,25 +934,25 @@ const ShopLoans = () => {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-3 bg-muted/30 rounded-lg">
-                  <p className="text-xs text-muted-foreground">মোট লোন</p>
+                  <p className="text-xs text-muted-foreground">{t.totalLoan}</p>
                   <p className="font-semibold">
                     ৳{selectedLoan.loan_amount.toLocaleString()}
                   </p>
                 </div>
                 <div className="p-3 bg-muted/30 rounded-lg">
-                  <p className="text-xs text-muted-foreground">বাকি আছে</p>
+                  <p className="text-xs text-muted-foreground">{t.remaining}</p>
                   <p className="font-semibold text-orange-500">
                     ৳{selectedLoan.remaining_amount.toLocaleString()}
                   </p>
                 </div>
                 <div className="p-3 bg-muted/30 rounded-lg">
-                  <p className="text-xs text-muted-foreground">পরিশোধ করেছেন</p>
+                  <p className="text-xs text-muted-foreground">{t.paidAmount}</p>
                   <p className="font-semibold text-green-500">
                     ৳{selectedLoan.total_paid.toLocaleString()}
                   </p>
                 </div>
                 <div className="p-3 bg-muted/30 rounded-lg">
-                  <p className="text-xs text-muted-foreground">প্রতি কিস্তি</p>
+                  <p className="text-xs text-muted-foreground">{t.perInstallment}</p>
                   <p className="font-semibold">
                     ৳{selectedLoan.installment_amount.toLocaleString()}
                   </p>
@@ -886,17 +968,16 @@ const ShopLoans = () => {
                   className="h-3"
                 />
                 <p className="text-sm text-center mt-2">
-                  {selectedLoan.paid_installments}/{selectedLoan.total_installments} কিস্তি
-                  সম্পন্ন
+                  {selectedLoan.paid_installments}{t.of}{selectedLoan.total_installments} {t.installmentsDone}
                 </p>
               </div>
 
               {/* Payment History */}
               <div>
-                <h4 className="font-medium mb-2">পেমেন্ট হিস্টোরি</h4>
+                <h4 className="font-medium mb-2">{t.paymentHistory}</h4>
                 {loanPayments.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-4">
-                    কোন পেমেন্ট নেই
+                    {t.noPayments}
                   </p>
                 ) : (
                   <div className="space-y-2 max-h-48 overflow-y-auto">
@@ -914,15 +995,13 @@ const ShopLoans = () => {
                               ৳{payment.amount.toLocaleString()}
                             </p>
                             <p className="text-xs text-muted-foreground">
-                              কিস্তি #{payment.installment_number}
+                              {t.installment} #{payment.installment_number}
                             </p>
                           </div>
                         </div>
                         <div className="text-right">
                           <p className="text-sm">
-                            {format(new Date(payment.payment_date), "d MMM yyyy", {
-                              locale: bn,
-                            })}
+                            {formatDateFull(payment.payment_date)}
                           </p>
                           <p className="text-xs text-muted-foreground capitalize">
                             {payment.payment_method}
@@ -943,7 +1022,7 @@ const ShopLoans = () => {
                   }}
                 >
                   <CreditCard className="h-4 w-4 mr-2" />
-                  কিস্তি পে করুন
+                  {t.payInstallment}
                 </Button>
               )}
             </div>
@@ -955,20 +1034,19 @@ const ShopLoans = () => {
       <Dialog open={isPaymentModalOpen} onOpenChange={setIsPaymentModalOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>কিস্তি পেমেন্ট</DialogTitle>
+            <DialogTitle>{t.installmentPayment}</DialogTitle>
           </DialogHeader>
           {selectedLoan && (
             <form onSubmit={handlePayment} className="space-y-4">
               <div className="p-3 bg-muted/50 rounded-lg">
                 <p className="font-medium">{selectedLoan.lender_name}</p>
                 <p className="text-sm text-muted-foreground">
-                  কিস্তি #{selectedLoan.paid_installments + 1} of{" "}
-                  {selectedLoan.total_installments}
+                  {t.installment} #{selectedLoan.paid_installments + 1} {t.of} {selectedLoan.total_installments}
                 </p>
               </div>
 
               <div>
-                <Label>পেমেন্ট পরিমাণ (৳) *</Label>
+                <Label>{t.paymentAmount} *</Label>
                 <Input
                   type="number"
                   value={paymentData.amount}
@@ -980,7 +1058,7 @@ const ShopLoans = () => {
               </div>
 
               <div>
-                <Label>পেমেন্ট তারিখ</Label>
+                <Label>{t.paymentDate}</Label>
                 <Input
                   type="date"
                   value={paymentData.payment_date}
@@ -991,7 +1069,7 @@ const ShopLoans = () => {
               </div>
 
               <div>
-                <Label>পেমেন্ট মাধ্যম</Label>
+                <Label>{t.paymentMethod}</Label>
                 <Select
                   value={paymentData.payment_method}
                   onValueChange={(v) =>
@@ -1002,17 +1080,17 @@ const ShopLoans = () => {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="cash">নগদ</SelectItem>
-                    <SelectItem value="bank">ব্যাংক</SelectItem>
-                    <SelectItem value="bkash">বিকাশ</SelectItem>
-                    <SelectItem value="nagad">নগদ মোবাইল</SelectItem>
-                    <SelectItem value="other">অন্যান্য</SelectItem>
+                    <SelectItem value="cash">{t.cash}</SelectItem>
+                    <SelectItem value="bank">{t.bank}</SelectItem>
+                    <SelectItem value="bkash">{t.bkash}</SelectItem>
+                    <SelectItem value="nagad">{t.nagad}</SelectItem>
+                    <SelectItem value="other">{t.other}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div>
-                <Label>লেট ফি (৳)</Label>
+                <Label>{t.lateFee}</Label>
                 <Input
                   type="number"
                   value={paymentData.late_fee}
@@ -1024,20 +1102,20 @@ const ShopLoans = () => {
               </div>
 
               <div>
-                <Label>নোট</Label>
+                <Label>{t.notes}</Label>
                 <Textarea
                   value={paymentData.notes}
                   onChange={(e) =>
                     setPaymentData({ ...paymentData, notes: e.target.value })
                   }
-                  placeholder="অতিরিক্ত তথ্য..."
+                  placeholder={t.additionalInfo}
                   rows={2}
                 />
               </div>
 
               <Button type="submit" className="w-full">
                 <CheckCircle2 className="h-4 w-4 mr-2" />
-                পেমেন্ট সম্পন্ন করুন
+                {t.completePayment}
               </Button>
             </form>
           )}
@@ -1048,19 +1126,19 @@ const ShopLoans = () => {
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>লোন ডিলিট করবেন?</AlertDialogTitle>
+            <AlertDialogTitle>{t.deleteLoan}</AlertDialogTitle>
             <AlertDialogDescription>
-              {selectedLoan?.lender_name} এর লোন এবং সব পেমেন্ট হিস্টোরি মুছে যাবে।
-              এই কাজটি ফেরত নেওয়া যাবে না।
+              {selectedLoan?.lender_name} {t.deleteConfirm}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>বাতিল</AlertDialogCancel>
+            <AlertDialogCancel disabled={deleting}>{t.cancel}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
+              disabled={deleting}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              ডিলিট করুন
+              {deleting ? t.loading : t.delete}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
