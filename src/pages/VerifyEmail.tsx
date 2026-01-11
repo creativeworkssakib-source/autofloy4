@@ -48,6 +48,46 @@ const VerifyEmail = () => {
     }
   }, [otp, step]);
 
+  // Auto-verify when 6 digits are entered
+  useEffect(() => {
+    if (otp.length === 6 && !isLoading && !isVerified) {
+      handleVerifyAuto(otp);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [otp]);
+
+  const handleVerifyAuto = async (otpCode: string) => {
+    if (isLoading || isVerified) return;
+    
+    setIsLoading(true);
+    try {
+      await authService.verifyEmailOtp(otpCode);
+      await refreshUser();
+      setIsVerified(true);
+      setStep(3);
+      triggerConfetti();
+      
+      toast({
+        title: "🎉 Email Verified Successfully!",
+        description: "Welcome to your account. Redirecting...",
+      });
+      
+      setTimeout(() => {
+        navigate("/dashboard");
+      }, 2000);
+    } catch (error) {
+      console.error("verifyEmailOtp error:", error);
+      setOtp(""); // Clear OTP on error so user can try again
+      toast({
+        title: "Verification Failed",
+        description: error instanceof Error ? error.message : "Invalid or expired code. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const triggerConfetti = () => {
     const duration = 3000;
     const end = Date.now() + duration;
@@ -113,10 +153,7 @@ const VerifyEmail = () => {
   };
 
   const handleVerify = async () => {
-    console.log("handleVerify called, OTP:", otp, "Length:", otp.length);
-    
     if (otp.length !== 6) {
-      console.log("OTP length validation failed");
       toast({
         title: "Invalid Code",
         description: "Please enter the complete 6-digit verification code.",
@@ -124,35 +161,8 @@ const VerifyEmail = () => {
       });
       return;
     }
-
-    setIsLoading(true);
-    console.log("Calling verifyEmailOtp...");
-    try {
-      const result = await authService.verifyEmailOtp(otp);
-      console.log("verifyEmailOtp result:", result);
-      await refreshUser();
-      setIsVerified(true);
-      setStep(3);
-      triggerConfetti();
-      
-      toast({
-        title: "🎉 Email Verified Successfully!",
-        description: "Welcome to your account. Redirecting...",
-      });
-      
-      setTimeout(() => {
-        navigate("/dashboard");
-      }, 2500);
-    } catch (error) {
-      console.error("verifyEmailOtp error:", error);
-      toast({
-        title: "Verification Failed",
-        description: error instanceof Error ? error.message : "Invalid or expired code. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
+    // Use the auto-verify function
+    await handleVerifyAuto(otp);
   };
 
   // Send OTP on first mount
