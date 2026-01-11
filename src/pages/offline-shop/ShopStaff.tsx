@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Plus, MoreHorizontal, Pencil, Trash2, UserCog, Shield } from "lucide-react";
+import { useState } from "react";
+import { Plus, MoreHorizontal, Pencil, Trash2, UserCog, Shield, Wifi, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import ShopLayout from "@/components/offline-shop/ShopLayout";
-import { offlineShopService } from "@/services/offlineShopService";
+import { useOfflineStaff } from "@/hooks/useOfflineShopData";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 interface StaffUser {
@@ -43,8 +43,7 @@ interface StaffUser {
 
 const ShopStaff = () => {
   const { t } = useLanguage();
-  const [staff, setStaff] = useState<StaffUser[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { staff, loading: isLoading, isOnline, fromCache, refetch, createStaff, updateStaff, deleteStaff } = useOfflineStaff();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingStaff, setEditingStaff] = useState<StaffUser | null>(null);
 
@@ -79,33 +78,22 @@ const ShopStaff = () => {
     },
   });
 
-  const loadData = async () => {
-    setIsLoading(true);
-    try {
-      const result = await offlineShopService.getStaff();
-      setStaff(result.staff || []);
-    } catch (error) {
-      toast.error(t("shop.loadError"));
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => { loadData(); }, []);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       if (editingStaff) {
-        await offlineShopService.updateStaff({ id: editingStaff.id, ...formData });
-        toast.success(t("shop.staffUpdated"));
+        const result = await updateStaff({ id: editingStaff.id, ...formData });
+        toast.success(result.offline 
+          ? t("shop.staffUpdated") + " (অফলাইনে সংরক্ষিত)" 
+          : t("shop.staffUpdated"));
       } else {
-        await offlineShopService.createStaff(formData);
-        toast.success(t("shop.staffAdded"));
+        const result = await createStaff(formData);
+        toast.success(result.offline 
+          ? t("shop.staffAdded") + " (অফলাইনে সংরক্ষিত)" 
+          : t("shop.staffAdded"));
       }
       setIsModalOpen(false);
       resetForm();
-      loadData();
     } catch (error) {
       toast.error(t("shop.errorOccurred"));
     }
@@ -114,9 +102,10 @@ const ShopStaff = () => {
   const handleDelete = async (id: string) => {
     if (!confirm(t("shop.deleteConfirm"))) return;
     try {
-      await offlineShopService.deleteStaff(id);
-      toast.success(t("shop.staffMovedToTrash") || "Staff moved to trash");
-      loadData();
+      const result = await deleteStaff(id);
+      toast.success(result.offline 
+        ? (t("shop.staffMovedToTrash") || "Staff moved to trash") + " (অফলাইনে সংরক্ষিত)"
+        : (t("shop.staffMovedToTrash") || "Staff moved to trash"));
     } catch (error) {
       toast.error(t("shop.errorOccurred"));
     }
@@ -150,7 +139,15 @@ const ShopStaff = () => {
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className="text-3xl font-bold">{t("shop.staffTitle")}</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-3xl font-bold">{t("shop.staffTitle")}</h1>
+              {fromCache && (
+                <Badge variant="outline" className="flex items-center gap-1">
+                  {isOnline ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
+                  {isOnline ? "Syncing" : "Offline"}
+                </Badge>
+              )}
+            </div>
             <p className="text-muted-foreground">{t("shop.staffDesc")}</p>
           </div>
           <Button onClick={() => { resetForm(); setIsModalOpen(true); }}>

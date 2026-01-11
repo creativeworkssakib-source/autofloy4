@@ -641,6 +641,109 @@ class OfflineDataService {
     return { sale, invoice_number: invoiceNumber, offline: true };
   }
   
+  // =============== PURCHASES ===============
+  
+  async getPurchases(startDate?: string, endDate?: string): Promise<{ purchases: ShopPurchase[]; fromCache: boolean }> {
+    await this.init();
+    const shopId = this.ensureShopId();
+    const purchases = await offlineDB.getPurchases(shopId, startDate, endDate);
+    
+    if (this.isOnline()) {
+      this.syncPurchasesInBackground(shopId);
+    }
+    
+    return { purchases, fromCache: true };
+  }
+  
+  private async syncPurchasesInBackground(shopId: string): Promise<void> {
+    try {
+      const { purchases } = await offlineShopService.getPurchases();
+      for (const purchase of purchases) {
+        const existing = await offlineDB.getPurchaseById(purchase.id);
+        if (!existing?._locallyModified && !existing?._locallyCreated) {
+          await offlineDB.savePurchase({
+            ...purchase,
+            shop_id: shopId,
+            user_id: this.userId || '',
+            _locallyModified: false,
+            _locallyCreated: false,
+            _locallyDeleted: false,
+          } as ShopPurchase);
+        }
+      }
+    } catch (error) {
+      console.error('Background sync failed for purchases:', error);
+    }
+  }
+  
+  async createPurchase(data: any): Promise<{ purchase: ShopPurchase; offline: boolean }> {
+    await this.init();
+    const shopId = this.ensureShopId();
+    const now = new Date().toISOString();
+    
+    const purchase: ShopPurchase = {
+      id: generateOfflineId(),
+      shop_id: shopId,
+      user_id: this.userId || '',
+      invoice_number: data.invoice_number,
+      supplier_id: data.supplier_id,
+      supplier_name: data.supplier_name,
+      subtotal: data.items?.reduce((sum: number, i: any) => sum + (i.total || 0), 0) || 0,
+      discount: data.discount || 0,
+      tax: data.tax || 0,
+      total: data.items?.reduce((sum: number, i: any) => sum + (i.total || 0), 0) || 0,
+      paid_amount: data.paid_amount || 0,
+      due_amount: 0,
+      payment_method: data.payment_method || 'cash',
+      payment_status: 'paid',
+      notes: data.notes,
+      purchase_date: now.split('T')[0],
+      created_at: now,
+      updated_at: now,
+      items: data.items,
+      _locallyCreated: true,
+      _locallyModified: false,
+      _locallyDeleted: false,
+    };
+    
+    purchase.due_amount = purchase.total - purchase.paid_amount;
+    purchase.payment_status = purchase.due_amount === 0 ? 'paid' : purchase.paid_amount > 0 ? 'partial' : 'due';
+    
+    await offlineDB.savePurchase(purchase);
+    await syncQueue.add('create', 'purchases', purchase.id, purchase);
+    
+    if (this.isOnline()) {
+      try {
+        const { purchase: serverPurchase } = await offlineShopService.createPurchase(data);
+        const updated = { ...purchase, id: serverPurchase.id, _locallyCreated: false };
+        await offlineDB.deletePurchase(purchase.id);
+        await offlineDB.savePurchase(updated as ShopPurchase);
+        return { purchase: updated as ShopPurchase, offline: false };
+      } catch (error) {
+        console.error('Failed to sync purchase:', error);
+      }
+    }
+    
+    return { purchase, offline: true };
+  }
+  
+  async deletePurchase(id: string): Promise<{ offline: boolean }> {
+    await this.init();
+    await offlineDB.deletePurchase(id);
+    await syncQueue.add('delete', 'purchases', id, { id });
+    
+    if (this.isOnline()) {
+      try {
+        await offlineShopService.deletePurchase(id);
+        return { offline: false };
+      } catch (error) {
+        console.error('Failed to sync purchase deletion:', error);
+      }
+    }
+    
+    return { offline: true };
+  }
+  
   // =============== EXPENSES ===============
   
   async getExpenses(startDate?: string, endDate?: string): Promise<{ expenses: ShopExpense[]; fromCache: boolean }> {
@@ -722,6 +825,296 @@ class OfflineDataService {
     }
     
     return { expense, offline: true };
+  }
+  
+  async deleteExpense(id: string): Promise<{ offline: boolean }> {
+    await this.init();
+    await offlineDB.deleteExpense(id);
+    await syncQueue.add('delete', 'expenses', id, { id });
+    
+    if (this.isOnline()) {
+      try {
+        await offlineShopService.deleteExpense(id);
+        return { offline: false };
+      } catch (error) {
+        console.error('Failed to sync expense deletion:', error);
+      }
+    }
+    
+    return { offline: true };
+  }
+  
+  // =============== LOANS ===============
+  
+  async getLoans(): Promise<{ loans: ShopLoan[]; fromCache: boolean }> {
+    await this.init();
+    const shopId = this.ensureShopId();
+    const loans = await offlineDB.getLoans(shopId);
+    
+    if (this.isOnline()) {
+      this.syncLoansInBackground(shopId);
+    }
+    
+    return { loans, fromCache: true };
+  }
+  
+  private async syncLoansInBackground(shopId: string): Promise<void> {
+    try {
+      const token = localStorage.getItem("autofloy_token");
+      if (!token) return;
+      
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/shop-loans?shop_id=${shopId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const data = await response.json();
+      
+      for (const loan of data.loans || []) {
+        const existing = await offlineDB.getLoans(shopId);
+        const existingLoan = existing.find(l => l.id === loan.id);
+        if (!existingLoan?._locallyModified && !existingLoan?._locallyCreated) {
+          await offlineDB.saveLoan({
+            ...loan,
+            shop_id: shopId,
+            user_id: this.userId || '',
+            _locallyModified: false,
+            _locallyCreated: false,
+            _locallyDeleted: false,
+          } as ShopLoan);
+        }
+      }
+    } catch (error) {
+      console.error('Background sync failed for loans:', error);
+    }
+  }
+  
+  async createLoan(data: Partial<ShopLoan>): Promise<{ loan: ShopLoan; offline: boolean }> {
+    await this.init();
+    const shopId = this.ensureShopId();
+    const now = new Date().toISOString();
+    
+    const loan: ShopLoan = {
+      id: generateOfflineId(),
+      shop_id: shopId,
+      user_id: this.userId || '',
+      customer_id: data.customer_id,
+      customer_name: data.customer_name || '',
+      customer_phone: data.customer_phone,
+      loan_type: data.loan_type || 'given',
+      principal_amount: data.principal_amount || 0,
+      interest_rate: data.interest_rate || 0,
+      total_amount: data.total_amount || data.principal_amount || 0,
+      paid_amount: data.paid_amount || 0,
+      remaining_amount: data.remaining_amount || (data.total_amount || data.principal_amount || 0),
+      status: data.status || 'active',
+      loan_date: data.loan_date || now.split('T')[0],
+      due_date: data.due_date,
+      notes: data.notes,
+      created_at: now,
+      updated_at: now,
+      _locallyCreated: true,
+      _locallyModified: false,
+      _locallyDeleted: false,
+    };
+    
+    await offlineDB.saveLoan(loan);
+    await syncQueue.add('create', 'loans', loan.id, loan);
+    
+    return { loan, offline: true };
+  }
+  
+  async deleteLoan(id: string): Promise<{ offline: boolean }> {
+    await this.init();
+    await offlineDB.deleteLoan(id);
+    await syncQueue.add('delete', 'loans', id, { id });
+    return { offline: true };
+  }
+  
+  // =============== RETURNS ===============
+  
+  async getReturns(returnType?: 'sale' | 'purchase'): Promise<{ returns: ShopReturn[]; fromCache: boolean }> {
+    await this.init();
+    const shopId = this.ensureShopId();
+    const returns = await offlineDB.getReturns(shopId, returnType);
+    
+    if (this.isOnline()) {
+      this.syncReturnsInBackground(shopId);
+    }
+    
+    return { returns, fromCache: true };
+  }
+  
+  private async syncReturnsInBackground(shopId: string): Promise<void> {
+    try {
+      const token = localStorage.getItem("autofloy_token");
+      if (!token) return;
+      
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/shop-returns`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const data = await response.json();
+      
+      for (const ret of data.returns || []) {
+        const existing = await offlineDB.getReturns(shopId);
+        const existingRet = existing.find(r => r.id === ret.id);
+        if (!existingRet?._locallyModified && !existingRet?._locallyCreated) {
+          await offlineDB.saveReturn({
+            ...ret,
+            shop_id: shopId,
+            user_id: this.userId || '',
+            _locallyModified: false,
+            _locallyCreated: false,
+            _locallyDeleted: false,
+          } as ShopReturn);
+        }
+      }
+    } catch (error) {
+      console.error('Background sync failed for returns:', error);
+    }
+  }
+  
+  async createReturn(data: Partial<ShopReturn>): Promise<{ return: ShopReturn; offline: boolean }> {
+    await this.init();
+    const shopId = this.ensureShopId();
+    const now = new Date().toISOString();
+    
+    const returnItem: ShopReturn = {
+      id: generateOfflineId(),
+      shop_id: shopId,
+      user_id: this.userId || '',
+      return_type: data.return_type || 'sale',
+      reference_id: data.reference_id || '',
+      reference_invoice: data.reference_invoice,
+      product_id: data.product_id || '',
+      product_name: data.product_name || '',
+      quantity: data.quantity || 0,
+      unit_price: data.unit_price || 0,
+      total_amount: data.total_amount || 0,
+      reason: data.reason,
+      notes: data.notes,
+      return_date: data.return_date || now.split('T')[0],
+      created_at: now,
+      _locallyCreated: true,
+      _locallyModified: false,
+      _locallyDeleted: false,
+    };
+    
+    await offlineDB.saveReturn(returnItem);
+    await syncQueue.add('create', 'returns', returnItem.id, returnItem);
+    
+    return { return: returnItem, offline: true };
+  }
+  
+  // =============== STAFF ===============
+  
+  async getStaff(): Promise<{ staff: ShopStaff[]; fromCache: boolean }> {
+    await this.init();
+    const shopId = this.ensureShopId();
+    const staff = await offlineDB.getStaff(shopId);
+    
+    if (this.isOnline()) {
+      this.syncStaffInBackground(shopId);
+    }
+    
+    return { staff, fromCache: true };
+  }
+  
+  private async syncStaffInBackground(shopId: string): Promise<void> {
+    try {
+      const { staff } = await offlineShopService.getStaff();
+      for (const s of staff) {
+        const existing = await offlineDB.getStaff(shopId);
+        const existingStaff = existing.find(st => st.id === s.id);
+        if (!existingStaff?._locallyModified && !existingStaff?._locallyCreated) {
+          await offlineDB.saveStaff({
+            ...s,
+            shop_id: shopId,
+            user_id: this.userId || '',
+            _locallyModified: false,
+            _locallyCreated: false,
+            _locallyDeleted: false,
+          } as ShopStaff);
+        }
+      }
+    } catch (error) {
+      console.error('Background sync failed for staff:', error);
+    }
+  }
+  
+  async createStaff(data: Partial<ShopStaff>): Promise<{ staff: ShopStaff; offline: boolean }> {
+    await this.init();
+    const shopId = this.ensureShopId();
+    const now = new Date().toISOString();
+    
+    const staffMember: ShopStaff = {
+      id: generateOfflineId(),
+      shop_id: shopId,
+      user_id: this.userId || '',
+      name: data.name || '',
+      phone: data.phone,
+      email: data.email,
+      role: data.role || 'staff',
+      passcode: data.passcode,
+      is_active: data.is_active ?? true,
+      permissions: data.permissions,
+      created_at: now,
+      updated_at: now,
+      _locallyCreated: true,
+      _locallyModified: false,
+      _locallyDeleted: false,
+    };
+    
+    await offlineDB.saveStaff(staffMember);
+    await syncQueue.add('create', 'staff', staffMember.id, staffMember);
+    
+    if (this.isOnline()) {
+      try {
+        const result = await offlineShopService.createStaff({
+          name: data.name || '',
+          role: data.role || 'staff',
+          phone: data.phone,
+          email: data.email,
+          permissions: data.permissions,
+        });
+        const updated = { ...staffMember, id: result.staffUser?.id || staffMember.id, _locallyCreated: false };
+        await offlineDB.deleteStaff(staffMember.id);
+        await offlineDB.saveStaff(updated as ShopStaff);
+        return { staff: updated as ShopStaff, offline: false };
+      } catch (error) {
+        console.error('Failed to sync staff:', error);
+      }
+    }
+    
+    return { staff: staffMember, offline: true };
+  }
+  
+  async updateStaff(data: Partial<ShopStaff> & { id: string }): Promise<{ staff: ShopStaff; offline: boolean }> {
+    await this.init();
+    const shopId = this.ensureShopId();
+    const existing = await offlineDB.getStaff(shopId);
+    const staff = existing.find(s => s.id === data.id);
+    
+    if (!staff) throw new Error('Staff not found');
+    
+    const updated: ShopStaff = {
+      ...staff,
+      ...data,
+      updated_at: new Date().toISOString(),
+      _locallyModified: true,
+    };
+    
+    await offlineDB.saveStaff(updated);
+    await syncQueue.add('update', 'staff', updated.id, updated);
+    
+    return { staff: updated, offline: true };
+  }
+  
+  async deleteStaff(id: string): Promise<{ offline: boolean }> {
+    await this.init();
+    await offlineDB.deleteStaff(id);
+    await syncQueue.add('delete', 'staff', id, { id });
+    return { offline: true };
   }
   
   // =============== CASH TRANSACTIONS ===============
