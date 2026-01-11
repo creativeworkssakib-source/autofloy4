@@ -15,6 +15,8 @@ import {
   CheckCircle2,
   XCircle,
   RefreshCw,
+  Trash2,
+  Phone,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -35,6 +37,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
@@ -43,6 +55,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   fetchPaymentRequests,
   updatePaymentRequest,
+  deletePaymentRequest,
   PaymentRequest,
 } from "@/services/adminService";
 
@@ -56,10 +69,12 @@ const AdminPaymentRequests = () => {
   // Modal states
   const [viewModalOpen, setViewModalOpen] = useState(false);
   const [actionModalOpen, setActionModalOpen] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<PaymentRequest | null>(null);
   const [actionType, setActionType] = useState<"approve" | "reject">("approve");
   const [adminNotes, setAdminNotes] = useState("");
   const [isLiveUpdating, setIsLiveUpdating] = useState(false);
+  const [requestToDelete, setRequestToDelete] = useState<PaymentRequest | null>(null);
 
   // Debounce search
   const handleSearchChange = (value: string) => {
@@ -134,6 +149,19 @@ const AdminPaymentRequests = () => {
     },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (requestId: string) => deletePaymentRequest(requestId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-payment-requests"] });
+      toast.success("Payment request deleted");
+      setDeleteModalOpen(false);
+      setRequestToDelete(null);
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+
   const openViewModal = (request: PaymentRequest) => {
     setSelectedRequest(request);
     setViewModalOpen(true);
@@ -146,6 +174,11 @@ const AdminPaymentRequests = () => {
     setActionModalOpen(true);
   };
 
+  const openDeleteModal = (request: PaymentRequest) => {
+    setRequestToDelete(request);
+    setDeleteModalOpen(true);
+  };
+
   const handleAction = () => {
     if (!selectedRequest) return;
     updateMutation.mutate({
@@ -153,6 +186,11 @@ const AdminPaymentRequests = () => {
       status: actionType === "approve" ? "approved" : "rejected",
       notes: adminNotes,
     });
+  };
+
+  const handleDelete = () => {
+    if (!requestToDelete) return;
+    deleteMutation.mutate(requestToDelete.id);
   };
 
   const getStatusBadge = (status: string) => {
@@ -292,7 +330,15 @@ const AdminPaymentRequests = () => {
                       </span>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline">{request.payment_method}</Badge>
+                      <div>
+                        <Badge variant="outline">{request.payment_method}</Badge>
+                        {request.payment_method_account && (
+                          <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
+                            <Phone className="w-3 h-3" />
+                            <span className="font-mono">{request.payment_method_account}</span>
+                          </div>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>{getStatusBadge(request.status)}</TableCell>
                     <TableCell>
@@ -327,6 +373,14 @@ const AdminPaymentRequests = () => {
                             </Button>
                           </>
                         )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => openDeleteModal(request)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -412,6 +466,11 @@ const AdminPaymentRequests = () => {
                 <div>
                   <Label className="text-muted-foreground">Payment Method</Label>
                   <p className="font-medium">{selectedRequest.payment_method}</p>
+                  {selectedRequest.payment_method_account && (
+                    <p className="text-sm text-primary font-mono mt-1">
+                      {selectedRequest.payment_method_account}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <Label className="text-muted-foreground">Transaction ID</Label>
@@ -553,6 +612,46 @@ const AdminPaymentRequests = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Modal */}
+      <AlertDialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Payment Request</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this payment request? This action cannot be undone.
+              {requestToDelete && (
+                <div className="mt-3 p-3 rounded-lg bg-muted">
+                  <p className="text-sm">
+                    <strong>User:</strong> {requestToDelete.user?.email}
+                  </p>
+                  <p className="text-sm">
+                    <strong>Plan:</strong> {requestToDelete.plan_name}
+                  </p>
+                  <p className="text-sm">
+                    <strong>Amount:</strong> {requestToDelete.currency === "BDT" ? "৳" : "$"}{requestToDelete.amount.toLocaleString()}
+                  </p>
+                </div>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={deleteMutation.isPending}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              {deleteMutation.isPending ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Trash2 className="w-4 h-4 mr-2" />
+              )}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AdminLayout>
   );
 };

@@ -2298,34 +2298,50 @@ Deno.serve(async (req) => {
         const now = new Date();
         const endDate = new Date();
         
+        // Normalize plan name to lowercase for enum compatibility
+        const normalizedPlanName = (request.plan_name || "starter").toLowerCase();
+        console.log(`[Admin] Approving payment for plan: ${request.plan_name} -> ${normalizedPlanName}`);
+        
         // Set subscription end date based on plan
-        if (request.plan_name === "lifetime") {
+        if (normalizedPlanName === "lifetime") {
           endDate.setFullYear(endDate.getFullYear() + 100); // Lifetime = 100 years
         } else {
           endDate.setMonth(endDate.getMonth() + 1); // Monthly plans
         }
 
         // Update user subscription
-        await supabase
+        const { error: userUpdateError } = await supabase
           .from("users")
           .update({
-            subscription_plan: request.plan_name,
+            subscription_plan: normalizedPlanName,
             is_trial_active: false,
             updated_at: new Date().toISOString(),
           })
           .eq("id", request.user_id);
 
+        if (userUpdateError) {
+          console.error("[Admin] Failed to update user subscription_plan:", userUpdateError);
+        } else {
+          console.log(`[Admin] Successfully updated user ${request.user_id} to plan: ${normalizedPlanName}`);
+        }
+
         // Create/update subscription record
-        await supabase
+        const { error: subscriptionError } = await supabase
           .from("subscriptions")
           .upsert({
             user_id: request.user_id,
-            plan: request.plan_name,
+            plan: normalizedPlanName,
             status: "active",
             started_at: now.toISOString(),
             ends_at: endDate.toISOString(),
             amount: request.amount,
           }, { onConflict: "user_id" });
+
+        if (subscriptionError) {
+          console.error("[Admin] Failed to upsert subscription:", subscriptionError);
+        } else {
+          console.log(`[Admin] Successfully created/updated subscription for user ${request.user_id}`);
+        }
 
         // Get user email for notification
         const { data: userData } = await supabase
@@ -2378,6 +2394,46 @@ Deno.serve(async (req) => {
 
       return new Response(
         JSON.stringify({ request: updatedRequest }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // DELETE /admin/payment-requests/:id - Delete a payment request
+    if (req.method === "DELETE" && path === "payment-requests" && subPath) {
+      const requestId = subPath;
+      
+      // Check if request exists
+      const { data: existingRequest, error: fetchError } = await supabase
+        .from("payment_requests")
+        .select("id")
+        .eq("id", requestId)
+        .single();
+
+      if (fetchError || !existingRequest) {
+        return new Response(
+          JSON.stringify({ error: "Payment request not found" }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Delete the payment request
+      const { error: deleteError } = await supabase
+        .from("payment_requests")
+        .delete()
+        .eq("id", requestId);
+
+      if (deleteError) {
+        console.error("[Admin] Failed to delete payment request:", deleteError);
+        return new Response(
+          JSON.stringify({ error: "Failed to delete payment request: " + deleteError.message }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      console.log(`[Admin Audit] User ${authResult.userId} deleted payment request ${requestId}`);
+
+      return new Response(
+        JSON.stringify({ success: true }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
