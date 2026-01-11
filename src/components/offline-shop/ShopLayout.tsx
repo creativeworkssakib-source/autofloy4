@@ -53,6 +53,7 @@ import { OfflineExpiredModal } from "./OfflineExpiredModal";
 import { FloatingSyncIndicator } from "./SyncProgressIndicator";
 import { offlineDataService } from "@/services/offlineDataService";
 import { syncManager } from "@/services/syncManager";
+import { appUpdateService } from "@/services/appUpdateService";
 import { useShop } from "@/contexts/ShopContext";
 
 interface ShopLayoutProps {
@@ -85,14 +86,19 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
       if (currentShop?.id) {
         offlineDataService.setShopId(currentShop.id);
       }
-      // Start auto sync
-      syncManager.startAutoSync(30000); // Every 30 seconds
+      // Start auto sync (every 30 seconds)
+      syncManager.startAutoSync(30000);
+      
+      // Start auto update check (every 30 minutes)
+      // This ensures APK/EXE/PWA gets latest settings when admin makes changes
+      appUpdateService.startAutoCheck();
     };
     
     initOfflineService();
     
     return () => {
       syncManager.stopAutoSync();
+      appUpdateService.stopAutoCheck();
     };
   }, [user?.id, currentShop?.id]);
 

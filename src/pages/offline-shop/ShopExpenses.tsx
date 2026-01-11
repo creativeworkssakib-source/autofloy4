@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Plus, Wallet, Trash2, Calendar } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { Plus, Wallet, Trash2, Calendar, WifiOff, Cloud } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -16,13 +16,13 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import ShopLayout from "@/components/offline-shop/ShopLayout";
-import { offlineShopService } from "@/services/offlineShopService";
+import { useOfflineExpenses, useOfflineSettings } from "@/hooks/useOfflineData";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useShop } from "@/contexts/ShopContext";
 import { DeleteConfirmDialog } from "@/components/offline-shop/DeleteConfirmDialog";
 import DateRangeFilter, { DateRangePreset, DateRange, getDateRangeFromPreset } from "@/components/offline-shop/DateRangeFilter";
 import { isWithinInterval } from "date-fns";
-
+import { offlineShopService } from "@/services/offlineShopService";
 
 interface Expense {
   id: string;
@@ -37,8 +37,8 @@ interface Expense {
 const ShopExpenses = () => {
   const { t, language } = useLanguage();
   const { currentShop } = useShop();
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { expenses, loading: isLoading, fromCache, isOnline, refetch, createExpense } = useOfflineExpenses();
+  const { settings } = useOfflineSettings();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -47,7 +47,6 @@ const ShopExpenses = () => {
   // Date range filter state
   const [dateRange, setDateRange] = useState<DateRangePreset>('this_month');
   const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>();
-
 
   const expenseCategories = [
     { value: "ভাড়া", label: t("shop.rent") },
@@ -71,33 +70,22 @@ const ShopExpenses = () => {
     notes: "",
   });
 
-  const loadData = async () => {
-    setIsLoading(true);
-    try {
-      const result = await offlineShopService.getExpenses();
-      setExpenses(result.expenses || []);
-    } catch (error) {
-      toast.error(t("shop.loadError"));
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   useEffect(() => {
-    loadData();
-  }, [currentShop?.id]);
+    if (currentShop?.id) {
+      refetch();
+    }
+  }, [currentShop?.id, refetch]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await offlineShopService.createExpense({
+      await createExpense({
         ...formData,
         amount: parseFloat(formData.amount) || 0,
       });
       toast.success(t("shop.expenseAdded"));
       setIsModalOpen(false);
       resetForm();
-      loadData();
     } catch (error) {
       toast.error(t("shop.errorOccurred"));
     }
@@ -112,9 +100,10 @@ const ShopExpenses = () => {
     if (!deletingId) return;
     setIsDeleting(true);
     try {
+      // For delete we still use offlineShopService since it's not yet in offlineDataService
       await offlineShopService.deleteExpense(deletingId);
       toast.success(language === "bn" ? "খরচ ট্র্যাশে সরানো হয়েছে" : "Expense moved to trash");
-      loadData();
+      refetch();
       setDeleteDialogOpen(false);
       setDeletingId(null);
     } catch (error) {
@@ -136,16 +125,18 @@ const ShopExpenses = () => {
     });
   };
 
+  const currency = settings?.currency || "BDT";
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat(language === "bn" ? "bn-BD" : "en-US", {
       style: "currency",
-      currency: "BDT",
+      currency: currency,
       minimumFractionDigits: 0,
     }).format(amount);
   };
+
   // Filter expenses by date range
   const currentDateRange = getDateRangeFromPreset(dateRange, customDateRange);
-  const filteredExpenses = expenses.filter(expense => {
+  const filteredExpenses = (expenses as Expense[]).filter(expense => {
     const expenseDate = new Date(expense.expense_date);
     return isWithinInterval(expenseDate, { start: currentDateRange.from, end: currentDateRange.to });
   });
@@ -164,11 +155,19 @@ const ShopExpenses = () => {
       <div className="space-y-4 sm:space-y-6">
         <div className="flex flex-col gap-3 sm:gap-4">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold">{t("shop.expensesTitle")}</h1>
-              <p className="text-sm sm:text-base text-muted-foreground">
-                {t("shop.expensesDesc")} • {filteredExpenses.length} {language === "bn" ? "টি খরচ" : "expenses"}
-              </p>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-bold">{t("shop.expensesTitle")}</h1>
+                <p className="text-sm sm:text-base text-muted-foreground">
+                  {t("shop.expensesDesc")} • {filteredExpenses.length} {language === "bn" ? "টি খরচ" : "expenses"}
+                </p>
+              </div>
+              {fromCache && (
+                <Badge variant={isOnline ? "secondary" : "destructive"} className="flex items-center gap-1">
+                  {isOnline ? <Cloud className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
+                  {isOnline ? (language === "bn" ? "ক্যাশ" : "Cached") : (language === "bn" ? "অফলাইন" : "Offline")}
+                </Badge>
+              )}
             </div>
             <DateRangeFilter
               selectedRange={dateRange}
