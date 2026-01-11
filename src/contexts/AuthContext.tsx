@@ -29,6 +29,10 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const CURRENT_USER_KEY = "autofloy_current_user";
+const AUTH_TOKEN_KEY = "autofloy_auth_token";
+
+// Check if we're online
+const isOnline = () => typeof navigator !== 'undefined' && navigator.onLine;
 
 // Convert service user to context user format
 const mapServiceUser = (serviceUser: ServiceUser): User => ({
@@ -69,23 +73,66 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Check for existing session via token
     const initAuth = async () => {
-      if (authService.isAuthenticated()) {
+      // First, try to load from cache (for offline support)
+      const cachedUser = localStorage.getItem(CURRENT_USER_KEY);
+      const hasToken = authService.isAuthenticated();
+      
+      if (cachedUser && hasToken) {
+        try {
+          // Load cached user immediately
+          const parsedUser = JSON.parse(cachedUser) as User;
+          setUser(parsedUser);
+          
+          // If online, refresh user data in background
+          if (isOnline()) {
+            try {
+              const { user: serviceUser } = await authService.refreshUser();
+              const mappedUser = mapServiceUser(serviceUser);
+              setUser(mappedUser);
+              localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(mappedUser));
+            } catch (error) {
+              // If refresh fails but we have cached user, keep using it
+              console.log("Background refresh failed, using cached user:", error);
+            }
+          }
+        } catch (error) {
+          console.log("Cache parse failed:", error);
+          // If online, try to refresh from server
+          if (isOnline() && hasToken) {
+            try {
+              const { user: serviceUser } = await authService.refreshUser();
+              const mappedUser = mapServiceUser(serviceUser);
+              setUser(mappedUser);
+              localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(mappedUser));
+            } catch {
+              authService.logout();
+              setUser(null);
+              localStorage.removeItem(CURRENT_USER_KEY);
+            }
+          } else {
+            setUser(null);
+          }
+        }
+      } else if (hasToken && isOnline()) {
+        // No cache but has token - try to refresh
         try {
           const { user: serviceUser } = await authService.refreshUser();
           const mappedUser = mapServiceUser(serviceUser);
           setUser(mappedUser);
           localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(mappedUser));
         } catch (error) {
-          // Token invalid or user not found, clear auth state
           console.log("Auth init failed, clearing session:", error);
           authService.logout();
           setUser(null);
           localStorage.removeItem(CURRENT_USER_KEY);
         }
-      } else {
+      } else if (!hasToken) {
         setUser(null);
         localStorage.removeItem(CURRENT_USER_KEY);
       }
+      // If offline and no cache, user stays null but we don't clear token
+      // They can log in when back online
+      
       setIsLoading(false);
     };
     
