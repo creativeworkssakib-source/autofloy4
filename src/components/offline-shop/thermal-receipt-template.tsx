@@ -547,10 +547,15 @@ const generateA4InvoiceHTML = (data: ThermalReceiptData): string => {
 // ==================== REACT COMPONENTS FOR MODAL PREVIEW ====================
 import React from 'react';
 
-export const ThermalReceiptPreview: React.FC<ThermalReceiptData> = ({
+interface ThermalReceiptPreviewProps extends ThermalReceiptData {
+  previewScale?: number; // Scale factor for preview display (e.g., 1.5 = 150%)
+}
+
+export const ThermalReceiptPreview: React.FC<ThermalReceiptPreviewProps> = ({
   sale,
   shopSettings,
   customerInfo,
+  previewScale = 1,
 }) => {
   const currency = shopSettings?.currency || '৳';
   const receiptSize = shopSettings?.receipt_size || '80mm';
@@ -560,15 +565,22 @@ export const ThermalReceiptPreview: React.FC<ThermalReceiptData> = ({
   const thankYouMessage = shopSettings?.thank_you_message || 'Thank you for shopping with us!';
   const is58mm = receiptSize === '58mm';
 
-  const receiptWidthClass = is58mm ? 'w-[58mm]' : 'w-[80mm]';
+  // For preview, use scaled pixel widths instead of mm for better readability
+  // 80mm ≈ 302px, 58mm ≈ 219px at 96dpi - scale up for preview
+  const baseWidth = is58mm ? 220 : 300;
+  const scaledWidth = Math.round(baseWidth * previewScale);
+  
   const fontSizeClass = {
-    small: 'text-[8px]',
-    medium: 'text-[10px]',
-    large: 'text-[12px]',
+    small: previewScale >= 1.5 ? 'text-xs' : 'text-[8px]',
+    medium: previewScale >= 1.5 ? 'text-sm' : 'text-[10px]',
+    large: previewScale >= 1.5 ? 'text-base' : 'text-[12px]',
   }[shopSettings?.receipt_font_size || 'small'];
 
   return (
-    <div className={`${receiptWidthClass} mx-auto bg-white p-3 font-mono ${fontSizeClass} text-black border border-dashed border-gray-300`}>
+    <div 
+      className={`mx-auto bg-white p-4 font-mono ${fontSizeClass} text-black border border-dashed border-gray-300 shadow-sm`}
+      style={{ width: `${scaledWidth}px` }}
+    >
       {/* Header */}
       <div className="text-center mb-2">
         {showLogo && shopSettings?.logo_url && (
