@@ -65,7 +65,8 @@ class OfflineDataService {
       this.syncProductsInBackground(shopId);
     }
     
-    return { products: localProducts, fromCache: true };
+    // Only show "fromCache" if we're actually offline
+    return { products: localProducts, fromCache: !this.isOnline() };
   }
   
   private async syncProductsInBackground(shopId: string): Promise<void> {
@@ -147,8 +148,8 @@ class OfflineDataService {
         };
         await offlineDB.deleteProduct(product.id);
         await offlineDB.saveProduct(updatedProduct as ShopProduct);
-        // Clear from sync queue since we synced immediately
-        await syncQueue.clearSynced();
+        // Delete the pending sync queue item since we synced immediately
+        await syncQueue.deleteByRecordId('products', product.id);
         return { product: updatedProduct as ShopProduct, offline: false };
       } catch (error) {
         console.error('Failed to sync product to server:', error);
@@ -178,6 +179,7 @@ class OfflineDataService {
         await offlineShopService.updateProduct(productData);
         updated._locallyModified = false;
         await offlineDB.saveProduct(updated);
+        await syncQueue.deleteByRecordId('products', updated.id);
         return { product: updated, offline: false };
       } catch (error) {
         console.error('Failed to sync product update:', error);
@@ -195,6 +197,7 @@ class OfflineDataService {
     if (this.isOnline()) {
       try {
         await offlineShopService.deleteProduct(id);
+        await syncQueue.deleteByRecordId('products', id);
         return { offline: false };
       } catch (error) {
         console.error('Failed to sync product deletion:', error);
@@ -224,7 +227,7 @@ class OfflineDataService {
       this.syncCategoriesInBackground(shopId);
     }
     
-    return { categories, fromCache: true };
+    return { categories, fromCache: !this.isOnline() };
   }
   
   private async syncCategoriesInBackground(shopId: string): Promise<void> {
@@ -275,6 +278,7 @@ class OfflineDataService {
         const updated = { ...category, id: serverCat.id, _locallyCreated: false };
         await offlineDB.deleteCategory(category.id);
         await offlineDB.saveCategory(updated as ShopCategory);
+        await syncQueue.deleteByRecordId('categories', category.id);
         return { category: updated as ShopCategory, offline: false };
       } catch (error) {
         console.error('Failed to sync category:', error);
@@ -295,7 +299,7 @@ class OfflineDataService {
       this.syncCustomersInBackground(shopId);
     }
     
-    return { customers, fromCache: true };
+    return { customers, fromCache: !this.isOnline() };
   }
   
   private async syncCustomersInBackground(shopId: string): Promise<void> {
@@ -357,6 +361,7 @@ class OfflineDataService {
         const updated = { ...customer, id: serverCust.id, _locallyCreated: false };
         await offlineDB.deleteCustomer(customer.id);
         await offlineDB.saveCustomer(updated as ShopCustomer);
+        await syncQueue.deleteByRecordId('customers', customer.id);
         return { customer: updated as ShopCustomer, offline: false };
       } catch (error) {
         console.error('Failed to sync customer:', error);
@@ -386,6 +391,7 @@ class OfflineDataService {
         await offlineShopService.updateCustomer(data);
         updated._locallyModified = false;
         await offlineDB.saveCustomer(updated);
+        await syncQueue.deleteByRecordId('customers', updated.id);
         return { customer: updated, offline: false };
       } catch (error) {
         console.error('Failed to sync customer update:', error);
@@ -403,6 +409,7 @@ class OfflineDataService {
     if (this.isOnline()) {
       try {
         await offlineShopService.deleteCustomer(id);
+        await syncQueue.deleteByRecordId('customers', id);
         return { offline: false };
       } catch (error) {
         console.error('Failed to sync customer deletion:', error);
@@ -423,7 +430,7 @@ class OfflineDataService {
       this.syncSuppliersInBackground(shopId);
     }
     
-    return { suppliers, fromCache: true };
+    return { suppliers, fromCache: !this.isOnline() };
   }
   
   private async syncSuppliersInBackground(shopId: string): Promise<void> {
@@ -481,6 +488,7 @@ class OfflineDataService {
         const updated = { ...supplier, id: serverSupp.id, _locallyCreated: false };
         await offlineDB.deleteSupplier(supplier.id);
         await offlineDB.saveSupplier(updated as ShopSupplier);
+        await syncQueue.deleteByRecordId('suppliers', supplier.id);
         return { supplier: updated as ShopSupplier, offline: false };
       } catch (error) {
         console.error('Failed to sync supplier:', error);
@@ -501,7 +509,7 @@ class OfflineDataService {
       this.syncSalesInBackground(shopId);
     }
     
-    return { sales, fromCache: true };
+    return { sales, fromCache: !this.isOnline() };
   }
   
   private async syncSalesInBackground(shopId: string): Promise<void> {
@@ -632,6 +640,7 @@ class OfflineDataService {
         };
         await offlineDB.deleteSale(sale.id);
         await offlineDB.saveSale(updated as ShopSale);
+        await syncQueue.deleteByRecordId('sales', sale.id);
         return { sale: updated as ShopSale, invoice_number: serverInvoice, offline: false };
       } catch (error) {
         console.error('Failed to sync sale:', error);
@@ -652,7 +661,7 @@ class OfflineDataService {
       this.syncPurchasesInBackground(shopId);
     }
     
-    return { purchases, fromCache: true };
+    return { purchases, fromCache: !this.isOnline() };
   }
   
   private async syncPurchasesInBackground(shopId: string): Promise<void> {
@@ -718,6 +727,7 @@ class OfflineDataService {
         const updated = { ...purchase, id: serverPurchase.id, _locallyCreated: false };
         await offlineDB.deletePurchase(purchase.id);
         await offlineDB.savePurchase(updated as ShopPurchase);
+        await syncQueue.deleteByRecordId('purchases', purchase.id);
         return { purchase: updated as ShopPurchase, offline: false };
       } catch (error) {
         console.error('Failed to sync purchase:', error);
@@ -735,6 +745,7 @@ class OfflineDataService {
     if (this.isOnline()) {
       try {
         await offlineShopService.deletePurchase(id);
+        await syncQueue.deleteByRecordId('purchases', id);
         return { offline: false };
       } catch (error) {
         console.error('Failed to sync purchase deletion:', error);
@@ -755,7 +766,7 @@ class OfflineDataService {
       this.syncExpensesInBackground(shopId);
     }
     
-    return { expenses, fromCache: true };
+    return { expenses, fromCache: !this.isOnline() };
   }
   
   private async syncExpensesInBackground(shopId: string): Promise<void> {
@@ -818,6 +829,7 @@ class OfflineDataService {
         const updated = { ...expense, id: serverExp.id, _locallyCreated: false };
         await offlineDB.deleteExpense(expense.id);
         await offlineDB.saveExpense(updated as ShopExpense);
+        await syncQueue.deleteByRecordId('expenses', expense.id);
         return { expense: updated as ShopExpense, offline: false };
       } catch (error) {
         console.error('Failed to sync expense:', error);
@@ -835,6 +847,7 @@ class OfflineDataService {
     if (this.isOnline()) {
       try {
         await offlineShopService.deleteExpense(id);
+        await syncQueue.deleteByRecordId('expenses', id);
         return { offline: false };
       } catch (error) {
         console.error('Failed to sync expense deletion:', error);
@@ -855,7 +868,7 @@ class OfflineDataService {
       this.syncLoansInBackground(shopId);
     }
     
-    return { loans, fromCache: true };
+    return { loans, fromCache: !this.isOnline() };
   }
   
   private async syncLoansInBackground(shopId: string): Promise<void> {
@@ -941,7 +954,7 @@ class OfflineDataService {
       this.syncReturnsInBackground(shopId);
     }
     
-    return { returns, fromCache: true };
+    return { returns, fromCache: !this.isOnline() };
   }
   
   private async syncReturnsInBackground(shopId: string): Promise<void> {
@@ -1017,7 +1030,7 @@ class OfflineDataService {
       this.syncStaffInBackground(shopId);
     }
     
-    return { staff, fromCache: true };
+    return { staff, fromCache: !this.isOnline() };
   }
   
   private async syncStaffInBackground(shopId: string): Promise<void> {
@@ -1080,6 +1093,7 @@ class OfflineDataService {
         const updated = { ...staffMember, id: result.staffUser?.id || staffMember.id, _locallyCreated: false };
         await offlineDB.deleteStaff(staffMember.id);
         await offlineDB.saveStaff(updated as ShopStaff);
+        await syncQueue.deleteByRecordId('staff', staffMember.id);
         return { staff: updated as ShopStaff, offline: false };
       } catch (error) {
         console.error('Failed to sync staff:', error);
@@ -1148,7 +1162,7 @@ class OfflineDataService {
       this.syncCashTransactionsInBackground(shopId);
     }
     
-    return { transactions, balance, cashIn, cashOut, fromCache: true };
+    return { transactions, balance, cashIn, cashOut, fromCache: !this.isOnline() };
   }
   
   private async syncCashTransactionsInBackground(shopId: string): Promise<void> {
@@ -1207,6 +1221,7 @@ class OfflineDataService {
         const updated = { ...transaction, id: serverTx.id, _locallyCreated: false };
         await offlineDB.deleteCashTransaction(transaction.id);
         await offlineDB.saveCashTransaction(updated as ShopCashTransaction);
+        await syncQueue.deleteByRecordId('cashTransactions', transaction.id);
         return { transaction: updated as ShopCashTransaction, offline: false };
       } catch (error) {
         console.error('Failed to sync cash transaction:', error);
@@ -1240,7 +1255,7 @@ class OfflineDataService {
       registers,
       todayRegister,
       hasOpenRegister: !!openRegister,
-      fromCache: true,
+      fromCache: !this.isOnline(),
     };
   }
   
@@ -1302,6 +1317,7 @@ class OfflineDataService {
         const result = await offlineShopService.openCashRegister(openingCash, notes);
         const updatedRegister = { ...register, id: result.register?.id || register.id, _locallyCreated: false };
         await offlineDB.saveDailyCashRegister(updatedRegister as ShopDailyCashRegister);
+        await syncQueue.deleteByRecordId('dailyCashRegister', register.id);
         return { register: updatedRegister as ShopDailyCashRegister, offline: false, message: result.message };
       } catch (error) {
         console.error('Failed to sync open register:', error);
@@ -1340,6 +1356,7 @@ class OfflineDataService {
         const result = await offlineShopService.closeCashRegister(closingCash, notes);
         const synced = { ...updatedRegister, _locallyModified: false };
         await offlineDB.saveDailyCashRegister(synced as ShopDailyCashRegister);
+        await syncQueue.deleteByRecordId('dailyCashRegister', updatedRegister.id);
         return { register: synced as ShopDailyCashRegister, offline: false, message: result.message };
       } catch (error) {
         console.error('Failed to sync close register:', error);
@@ -1400,7 +1417,7 @@ class OfflineDataService {
       this.syncSettingsInBackground(shopId);
     }
     
-    return { settings, fromCache: true };
+    return { settings, fromCache: !this.isOnline() };
   }
   
   private async syncSettingsInBackground(shopId: string): Promise<void> {

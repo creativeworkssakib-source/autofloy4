@@ -1188,6 +1188,18 @@ class OfflineDB {
     await tx.done;
   }
 
+  async deleteSyncQueueByRecordId(table: string, recordId: string): Promise<void> {
+    const db = this.ensureDb();
+    const items = await db.getAll('syncQueue');
+    const tx = db.transaction('syncQueue', 'readwrite');
+    for (const item of items) {
+      if (item.table === table && item.recordId === recordId) {
+        await tx.store.delete(item.id);
+      }
+    }
+    await tx.done;
+  }
+
   async getSyncQueueCount(): Promise<number> {
     // Return 0 if database is not initialized yet
     if (!this.db) {
