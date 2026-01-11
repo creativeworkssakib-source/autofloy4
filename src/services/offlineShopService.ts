@@ -53,20 +53,31 @@ class OfflineShopService {
     queryParams?: Record<string, string>,
     cacheKey?: string
   ): Promise<T> {
+    const isGetRequest = !options.method || options.method === 'GET';
+    
     // If offline, try to return cached data for GET requests
     if (!isOnline()) {
-      if ((!options.method || options.method === 'GET') && cacheKey) {
+      if (isGetRequest && cacheKey) {
         const cached = getCached<T>(cacheKey);
         if (cached !== null) {
-          console.log(`[OfflineShopService] Returning cached data for ${resource}`);
+          console.log(`[OfflineShopService] Offline - returning cached data for ${resource}`);
           return cached;
         }
       }
+      // For non-GET requests or no cache, throw error
       throw new Error("অফলাইন মোডে এই কাজ করা যাবে না। ইন্টারনেট সংযোগ প্রয়োজন।");
     }
     
     const token = authService.getToken();
     if (!token) {
+      // If we have cached data, return it even without token
+      if (isGetRequest && cacheKey) {
+        const cached = getCached<T>(cacheKey);
+        if (cached !== null) {
+          console.log(`[OfflineShopService] No token - returning cached data for ${resource}`);
+          return cached;
+        }
+      }
       throw new Error("Unauthorized");
     }
 
@@ -82,28 +93,48 @@ class OfflineShopService {
       url += `?${params.toString()}`;
     }
 
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-        ...(shopId && { "X-Shop-Id": shopId }),
-        ...options.headers,
-      },
-    });
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          ...(shopId && { "X-Shop-Id": shopId }),
+          ...options.headers,
+        },
+      });
 
-    const data = await response.json();
+      const data = await response.json();
 
-    if (!response.ok) {
-      throw new Error(data.error || "Request failed");
+      if (!response.ok) {
+        // If request failed but we have cache, return cached data for GET
+        if (isGetRequest && cacheKey) {
+          const cached = getCached<T>(cacheKey);
+          if (cached !== null) {
+            console.log(`[OfflineShopService] Request failed - returning cached data for ${resource}`);
+            return cached;
+          }
+        }
+        throw new Error(data.error || "Request failed");
+      }
+
+      // Cache GET responses
+      if (isGetRequest && cacheKey) {
+        setCache(cacheKey, data);
+      }
+
+      return data;
+    } catch (error) {
+      // Network error - try cache for GET requests
+      if (isGetRequest && cacheKey) {
+        const cached = getCached<T>(cacheKey);
+        if (cached !== null) {
+          console.log(`[OfflineShopService] Network error - returning cached data for ${resource}`);
+          return cached;
+        }
+      }
+      throw error;
     }
-
-    // Cache GET responses
-    if ((!options.method || options.method === 'GET') && cacheKey) {
-      setCache(cacheKey, data);
-    }
-
-    return data;
   }
 
   // Dashboard

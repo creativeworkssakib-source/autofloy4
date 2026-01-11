@@ -3,6 +3,7 @@ import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2, WifiOff, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { hasValidOfflineAuth, getCachedAuth, getOfflineAuthRemainingDays } from "@/lib/offlineAuth";
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -31,8 +32,19 @@ const ProtectedRoute = ({ children, requireEmailVerification = true }: Protected
     return <>{children}</>;
   }
 
+  // No user from context - check for valid offline auth as fallback
+  // This handles edge cases where AuthContext might not have set user yet
+  if (hasValidOfflineAuth()) {
+    const offlineAuth = getCachedAuth();
+    if (offlineAuth && offlineAuth.user) {
+      console.log('[ProtectedRoute] Using offline auth fallback');
+      // Allow access since we have valid offline auth
+      return <>{children}</>;
+    }
+  }
+
   // No user - check if offline
-  if (isOfflineMode) {
+  if (isOfflineMode || !navigator.onLine) {
     // Offline and no cached auth - show message
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">

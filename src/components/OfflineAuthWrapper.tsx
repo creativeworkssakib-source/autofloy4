@@ -11,7 +11,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Loader2, WifiOff, LogIn, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
-import { hasValidOfflineAuth, getOfflineAuthRemainingDays } from "@/lib/offlineAuth";
+import { hasValidOfflineAuth, getOfflineAuthRemainingDays, getCachedAuth } from "@/lib/offlineAuth";
 
 interface OfflineAuthWrapperProps {
   children: ReactNode;
@@ -21,7 +21,7 @@ export function OfflineAuthWrapper({ children }: OfflineAuthWrapperProps) {
   const { user, isLoading, isOfflineMode, offlineAuthDaysRemaining } = useAuth();
   const navigate = useNavigate();
 
-  // Show loading state
+  // Show loading state (with timeout fallback)
   if (isLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background">
@@ -37,13 +37,18 @@ export function OfflineAuthWrapper({ children }: OfflineAuthWrapperProps) {
   }
 
   // Check if there's valid offline auth but user object is not set yet
-  if (hasValidOfflineAuth()) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-background">
-        <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
-        <p className="text-muted-foreground">অফলাইন সেশন লোড হচ্ছে...</p>
-      </div>
-    );
+  // Only show loading briefly - if auth context hasn't set user after loading is done,
+  // it means there's an issue
+  const hasOfflineAuth = hasValidOfflineAuth();
+  if (hasOfflineAuth && !isLoading) {
+    // Try to get user from offline auth directly as fallback
+    const offlineAuth = getCachedAuth();
+    if (offlineAuth && offlineAuth.user) {
+      // This is a rare edge case - AuthContext should have set this
+      // But we handle it anyway to prevent infinite loading
+      console.log('[OfflineAuthWrapper] Fallback: using offline auth directly');
+      return <>{children}</>;
+    }
   }
 
   // If offline and no valid auth, show offline message
