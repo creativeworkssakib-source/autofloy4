@@ -12,28 +12,19 @@ import { LanguageProvider } from "@/contexts/LanguageContext";
 import { ShopProvider } from "@/contexts/ShopContext";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import AdminProtectedRoute from "@/components/admin/AdminProtectedRoute";
-import { CookieConsentBanner } from "@/components/CookieConsentBanner";
 import { DynamicDocumentTitle } from "@/components/DynamicDocumentTitle";
 import { DynamicAppearance } from "@/components/DynamicAppearance";
-import BackToTopButton from "@/components/ui/BackToTopButton";
 import { Loader2 } from "lucide-react";
 
 // Eagerly loaded routes (small, critical)
-import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import NotFound from "./pages/NotFound";
 
-// Lazy loaded routes (larger bundles)
+// Lazy loaded routes
 const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
-const Pricing = lazy(() => import("./pages/Pricing"));
-const Checkout = lazy(() => import("./pages/Checkout"));
-const Contact = lazy(() => import("./pages/Contact"));
-const About = lazy(() => import("./pages/About"));
-const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
-const TermsOfService = lazy(() => import("./pages/TermsOfService"));
 
 // Offline Shop pages
 const ShopDashboard = lazy(() => import("./pages/offline-shop/ShopDashboard"));
@@ -69,11 +60,11 @@ const AdminAppearance = lazy(() => import("./pages/admin/AdminAppearance"));
 // Loading fallback component
 const PageLoader = () => (
   <div className="min-h-screen flex items-center justify-center bg-background">
-    <Loader2 className="w-8 h-8 animate-spin text-primary" />
+    <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
   </div>
 );
 
-// Smart Index component - redirects logged-in users to offline-shop
+// Smart Index component - redirects to appropriate page
 const SmartIndex = () => {
   const { user, isLoading } = useAuth();
   
@@ -85,23 +76,23 @@ const SmartIndex = () => {
     return <Navigate to="/offline-shop" replace />;
   }
   
-  return <Index />;
+  return <Navigate to="/login" replace />;
 };
 
 // Configure React Query with caching
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 5, // 5 minutes - data won't refetch if fresh
-      gcTime: 1000 * 60 * 30, // 30 minutes cache time
-      refetchOnWindowFocus: false, // Don't refetch when tab gains focus
-      retry: 1, // Only retry once on failure
+      staleTime: 1000 * 60 * 5,
+      gcTime: 1000 * 60 * 30,
+      refetchOnWindowFocus: false,
+      retry: 1,
     },
   },
 });
 
 const App = () => (
-  <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+  <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <SiteSettingsProvider>
@@ -114,8 +105,6 @@ const App = () => (
               <BrowserRouter>
               <DynamicDocumentTitle />
               <DynamicAppearance />
-              <CookieConsentBanner />
-              <BackToTopButton />
               <Suspense fallback={<PageLoader />}>
                 <Routes>
                   {/* Public routes */}
@@ -125,18 +114,6 @@ const App = () => (
                   <Route path="/verify-email" element={<VerifyEmail />} />
                   <Route path="/forgot-password" element={<ForgotPassword />} />
                   <Route path="/reset-password" element={<ResetPassword />} />
-                  <Route path="/pricing" element={<Pricing />} />
-                  <Route path="/contact" element={<Contact />} />
-                  <Route path="/about" element={<About />} />
-                  <Route path="/privacy" element={<PrivacyPolicy />} />
-                  <Route path="/terms" element={<TermsOfService />} />
-                  
-                  {/* Protected routes */}
-                  <Route path="/checkout" element={
-                    <ProtectedRoute>
-                      <Checkout />
-                    </ProtectedRoute>
-                  } />
                   
                   {/* Offline Shop Routes */}
                   <Route path="/offline-shop" element={
@@ -235,7 +212,7 @@ const App = () => (
                     </ProtectedRoute>
                   } />
                   
-                  {/* Legacy redirects - redirect old routes to offline-shop */}
+                  {/* Legacy redirects */}
                   <Route path="/dashboard" element={<Navigate to="/offline-shop" replace />} />
                   <Route path="/dashboard/*" element={<Navigate to="/offline-shop" replace />} />
                   
@@ -278,7 +255,7 @@ const App = () => (
                     </AdminProtectedRoute>
                   } />
                   
-                  {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                  {/* Catch-all */}
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </Suspense>
