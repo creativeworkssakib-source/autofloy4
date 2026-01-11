@@ -16,7 +16,8 @@ import {
   Barcode,
   Printer,
   Wand2,
-  Layers
+  Layers,
+  WifiOff
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -73,6 +74,7 @@ import ShopLayout from "@/components/offline-shop/ShopLayout";
 import { offlineShopService } from "@/services/offlineShopService";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useShop } from "@/contexts/ShopContext";
+import { useOfflineProducts, useOfflineCategories } from "@/hooks/useOfflineData";
 import * as XLSX from "xlsx";
 import { format } from "date-fns";
 import { BarcodeGenerator } from "@/components/offline-shop/BarcodeGenerator";
@@ -125,9 +127,25 @@ interface ProductHistorySummary {
 const ShopProducts = () => {
   const { t, language } = useLanguage();
   const { currentShop } = useShop();
-  const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  
+  // Use offline-first hooks
+  const { 
+    products, 
+    loading: isLoading, 
+    fromCache,
+    isOnline,
+    refetch: loadData,
+    createProduct: createOfflineProduct,
+    updateProduct: updateOfflineProduct,
+    deleteProduct: deleteOfflineProduct,
+  } = useOfflineProducts();
+  
+  const {
+    categories,
+    refetch: refetchCategories,
+    createCategory: createOfflineCategory,
+  } = useOfflineCategories();
+
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
@@ -171,30 +189,10 @@ const ShopProducts = () => {
 
   const [showCustomCategory, setShowCustomCategory] = useState(false);
 
-  const loadData = async () => {
-    setIsLoading(true);
-    try {
-      const [productsRes, categoriesRes] = await Promise.all([
-        offlineShopService.getProducts(),
-        offlineShopService.getCategories(),
-      ]);
-      setProducts(productsRes.products || []);
-      setCategories(categoriesRes.categories || []);
-      setSelectedProductIds([]);
-    } catch (error) {
-      console.error("Load products error:", error);
-      toast.error(t("shop.loadError"));
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Refetch when shop changes
+  // Clear selection when products change
   useEffect(() => {
-    if (currentShop?.id) {
-      loadData();
-    }
-  }, [currentShop?.id]);
+    setSelectedProductIds([]);
+  }, [products]);
 
   const filteredProducts = products.filter(
     (p) =>
@@ -261,11 +259,10 @@ const ShopProducts = () => {
       // If "others" is selected, create new category first
       if (formData.category_id === "others" && formData.custom_category.trim()) {
         try {
-          const result = await offlineShopService.createCategory({ name: formData.custom_category.trim() });
+          const result = await createOfflineCategory({ name: formData.custom_category.trim() });
           categoryId = result.category?.id || null;
-          // Reload categories
-          const categoriesRes = await offlineShopService.getCategories();
-          setCategories(categoriesRes.categories || []);
+          // Categories will auto-refresh via hook
+          await refetchCategories();
         } catch (error) {
           console.error("Failed to create category:", error);
           toast.error(language === "bn" ? "ক্যাটাগরি তৈরি করতে সমস্যা" : "Failed to create category");
@@ -286,16 +283,16 @@ const ShopProducts = () => {
       };
 
       if (editingProduct) {
-        await offlineShopService.updateProduct({ id: editingProduct.id, ...productData });
+        await updateOfflineProduct({ id: editingProduct.id, ...productData });
         toast.success(t("shop.productUpdated"));
       } else {
-        await offlineShopService.createProduct(productData);
+        await createOfflineProduct(productData);
         toast.success(t("shop.productAdded"));
       }
 
       setIsModalOpen(false);
       resetForm();
-      loadData();
+      // Products will auto-refresh via hook
     } catch (error) {
       toast.error(t("shop.errorOccurred"));
     }
@@ -304,12 +301,12 @@ const ShopProducts = () => {
   const handleDelete = async (id: string) => {
     if (!confirm(t("shop.deleteConfirm"))) return;
     try {
-      await offlineShopService.deleteProduct(id);
+      await deleteOfflineProduct(id);
       setSelectedProductIds((prev) => prev.filter((x) => x !== id));
       toast.success(
         language === "en" ? "Product moved to Trash" : "প্রোডাক্ট ট্র্যাশে গেছে"
       );
-      loadData();
+      // Products will auto-refresh via hook
     } catch (error) {
       toast.error(t("shop.errorOccurred"));
     }
@@ -795,9 +792,17 @@ const ShopProducts = () => {
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col gap-3 sm:gap-4">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold">{t("shop.productsTitle")}</h1>
-            <p className="text-sm sm:text-base text-muted-foreground">{t("shop.productsDesc")}</p>
+          <div className="flex items-start justify-between">
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold">{t("shop.productsTitle")}</h1>
+              <p className="text-sm sm:text-base text-muted-foreground">{t("shop.productsDesc")}</p>
+            </div>
+            {(fromCache || !isOnline) && (
+              <Badge variant="outline" className="border-amber-500 text-amber-600 bg-amber-50 dark:bg-amber-950 flex items-center gap-1">
+                <WifiOff className="h-3 w-3" />
+                {t('offline.usingCache')}
+              </Badge>
+            )}
           </div>
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={handleOpenHistory} size="sm" className="text-xs sm:text-sm border-purple-500 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950">

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { 
   Plus, 
   Search, 
@@ -8,7 +8,8 @@ import {
   Eye,
   RotateCcw,
   X,
-  ScanBarcode
+  ScanBarcode,
+  WifiOff
 } from "lucide-react";
 import { 
   generateSimplePrintHTML, 
@@ -63,8 +64,9 @@ import ShopLayout from "@/components/offline-shop/ShopLayout";
 import { offlineShopService } from "@/services/offlineShopService";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useShop } from "@/contexts/ShopContext";
+import { useOfflineProducts, useOfflineSales, useOfflineSettings } from "@/hooks/useOfflineData";
 import DateRangeFilter, { DateRangePreset, DateRange, getDateRangeFromPreset } from "@/components/offline-shop/DateRangeFilter";
-import { isWithinInterval } from "date-fns";
+import { isWithinInterval, format } from "date-fns";
 
 interface Product {
   id: string;
@@ -159,16 +161,38 @@ const getCustomerInfo = (sale: Sale): { name: string; phone?: string; email?: st
 const ShopSales = () => {
   const { t, language } = useLanguage();
   const { currentShop } = useShop();
-  const [sales, setSales] = useState<Sale[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [viewingSale, setViewingSale] = useState<Sale | null>(null);
-  const [shopSettings, setShopSettings] = useState<ShopSettings | null>(null);
-
-  // Date range filter state
+  
+  // Date range filter state (needed before hooks for date filtering)
   const [dateRange, setDateRange] = useState<DateRangePreset>('this_month');
   const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>();
+  
+  // Calculate date range for hook
+  const currentDateRange = useMemo(() => getDateRangeFromPreset(dateRange, customDateRange), [dateRange, customDateRange]);
+  
+  // Use offline-first hooks
+  const { 
+    sales, 
+    loading: isLoading, 
+    fromCache,
+    isOnline,
+    refetch: loadData,
+    createSale: createOfflineSale,
+  } = useOfflineSales(
+    currentDateRange.from.toISOString().split('T')[0],
+    currentDateRange.to.toISOString().split('T')[0]
+  );
+  
+  const {
+    products,
+    refetch: refetchProducts,
+  } = useOfflineProducts();
+  
+  const {
+    settings: shopSettings,
+  } = useOfflineSettings();
+  
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [viewingSale, setViewingSale] = useState<Sale | null>(null);
 
   // Bulk selection state
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -229,34 +253,6 @@ const ShopSales = () => {
       setIsBulkDeleting(false);
     }
   };
-
-  const loadData = async () => {
-    setIsLoading(true);
-    try {
-      const [salesRes, productsRes, settingsRes] = await Promise.all([
-        offlineShopService.getSales(),
-        offlineShopService.getProducts(),
-        offlineShopService.getSettings(),
-      ]);
-      setSales(salesRes.sales || []);
-      setProducts(productsRes.products || []);
-      if (settingsRes.settings) {
-        setShopSettings(settingsRes.settings);
-      }
-    } catch (error) {
-      console.error("Load sales error:", error);
-      toast.error(t("shop.loadError"));
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Refetch when shop changes
-  useEffect(() => {
-    if (currentShop?.id) {
-      loadData();
-    }
-  }, [currentShop?.id]);
 
   const addToCart = (product: Product) => {
     const existingItem = cart.find((item) => item.product_id === product.id);
@@ -337,7 +333,7 @@ const ShopSales = () => {
     }
 
     try {
-      const result = await offlineShopService.createSale({
+      const result = await createOfflineSale({
         customer_name: customerName || undefined,
         customer_phone: customerPhone || undefined,
         items: cart,
@@ -347,12 +343,12 @@ const ShopSales = () => {
         payment_method: paymentMethod,
       });
 
-      toast.success(`${t("shop.saleComplete")} ${t("shop.invoice")}: ${result.invoice_number}`);
+      toast.success(`${t("shop.saleComplete")} ${t("shop.invoice")}: ${result.sale?.invoice_number || 'OFFLINE'}`);
       
       // Create the sale object for viewing
       const newSale: Sale = {
         id: result.sale?.id || '',
-        invoice_number: result.invoice_number,
+        invoice_number: result.sale?.invoice_number || `OFF-${Date.now()}`,
         total,
         subtotal,
         discount: discountAmount,
@@ -377,8 +373,8 @@ const ShopSales = () => {
       setIsModalOpen(false);
       resetForm();
       
-      // Load data in background without blocking UI
-      loadData();
+      // Refresh products to update stock (hook will auto-refresh)
+      refetchProducts();
     } catch (error) {
       console.error("Sale error:", error);
       toast.error(t("shop.errorOccurred"));
@@ -459,8 +455,7 @@ const ShopSales = () => {
     p.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Filter sales by date range
-  const currentDateRange = getDateRangeFromPreset(dateRange, customDateRange);
+  // Filter sales by date range (already filtered by hook, but apply local filtering too)
   const filteredSales = sales.filter(sale => {
     const saleDate = new Date(sale.sale_date);
     return isWithinInterval(saleDate, { start: currentDateRange.from, end: currentDateRange.to });
@@ -545,12 +540,20 @@ const ShopSales = () => {
         {/* Header */}
         <div className="flex flex-col gap-3 sm:gap-4">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold">{t("shop.salesTitle")}</h1>
-              <p className="text-xs sm:text-sm text-muted-foreground">
-                {t("shop.salesDesc")} • {filteredSales.length} {language === "bn" ? "টি বিক্রয়" : "sales"}
-                {selectedIds.length > 0 && ` • ${selectedIds.length} ${language === "bn" ? "টি নির্বাচিত" : "selected"}`}
-              </p>
+            <div className="flex items-start gap-2">
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-bold">{t("shop.salesTitle")}</h1>
+                <p className="text-xs sm:text-sm text-muted-foreground">
+                  {t("shop.salesDesc")} • {filteredSales.length} {language === "bn" ? "টি বিক্রয়" : "sales"}
+                  {selectedIds.length > 0 && ` • ${selectedIds.length} ${language === "bn" ? "টি নির্বাচিত" : "selected"}`}
+                </p>
+              </div>
+              {(fromCache || !isOnline) && (
+                <Badge variant="outline" className="border-amber-500 text-amber-600 bg-amber-50 dark:bg-amber-950 flex items-center gap-1 shrink-0">
+                  <WifiOff className="h-3 w-3" />
+                  {t('offline.usingCache')}
+                </Badge>
+              )}
             </div>
             <DateRangeFilter
               selectedRange={dateRange}
