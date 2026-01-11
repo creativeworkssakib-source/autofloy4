@@ -22,9 +22,17 @@ export function useSyncStatus() {
     progress: 0,
   });
   const [isDbReady, setIsDbReady] = useState(false);
+  const isMountedRef = useRef(true);
+  
+  // Safe setState wrapper to prevent updates on unmounted components
+  const safeSetStatus = useCallback((newStatus: SyncStatus) => {
+    if (isMountedRef.current) {
+      setStatus(newStatus);
+    }
+  }, []);
   
   useEffect(() => {
-    let isMounted = true;
+    isMountedRef.current = true;
     let unsubscribe: (() => void) | null = null;
     let interval: NodeJS.Timeout | null = null;
     
@@ -34,22 +42,27 @@ export function useSyncStatus() {
         // Initialize the database if needed
         await offlineDataService.init();
         
-        if (!isMounted) return;
+        if (!isMountedRef.current) return;
         
         setIsDbReady(true);
         
-        unsubscribe = syncManager.subscribe(setStatus);
+        // Subscribe with safe setter
+        unsubscribe = syncManager.subscribe(safeSetStatus);
         
         // Get initial pending count - now safe as DB is initialized
-        const initialStatus = await syncManager.getStatusWithCount();
-        if (isMounted) {
-          setStatus(initialStatus);
+        try {
+          const initialStatus = await syncManager.getStatusWithCount();
+          if (isMountedRef.current) {
+            setStatus(initialStatus);
+          }
+        } catch (e) {
+          console.warn('Failed to get initial sync status:', e);
         }
         
         // Update pending count periodically
         interval = setInterval(() => {
-          if (isMounted) {
-            syncManager.updatePendingCount();
+          if (isMountedRef.current) {
+            syncManager.updatePendingCount().catch(() => {});
           }
         }, 10000);
       } catch (error) {
@@ -60,11 +73,11 @@ export function useSyncStatus() {
     initAndSubscribe();
     
     return () => {
-      isMounted = false;
+      isMountedRef.current = false;
       if (unsubscribe) unsubscribe();
       if (interval) clearInterval(interval);
     };
-  }, []);
+  }, [safeSetStatus]);
   
   const triggerSync = useCallback(async () => {
     if (!isDbReady) return { success: false, synced: 0, failed: 0 };
