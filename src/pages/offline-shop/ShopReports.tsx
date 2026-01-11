@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Download, FileText, Calendar, TrendingUp, Package } from "lucide-react";
+import { Download, FileText, Calendar, TrendingUp, Package, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -10,6 +10,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import * as XLSX from "xlsx";
 import DateRangeFilter, { DateRangePreset, DateRange, getDateRangeFromPreset } from "@/components/offline-shop/DateRangeFilter";
 import { format } from "date-fns";
+import { FullBusinessGrowthInsight } from "@/components/offline-shop/FullBusinessGrowthInsight";
 
 const ShopReports = () => {
   const { t, language } = useLanguage();
@@ -132,6 +133,9 @@ const ShopReports = () => {
             customDateRange={customDateRange}
           />
         </div>
+
+        {/* Business Growth Insight Section */}
+        <FullBusinessGrowthInsight />
 
         <Tabs defaultValue="sales" className="space-y-4">
           <TabsList>
