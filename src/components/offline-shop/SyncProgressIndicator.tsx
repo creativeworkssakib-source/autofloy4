@@ -79,34 +79,22 @@ export function SyncProgressIndicator({
 
 /**
  * Floating sync indicator for corner of screen
+ * Only shows when there are errors - sync happens silently in background
  */
 export function FloatingSyncIndicator() {
-  const { isSyncing, progress, pendingCount } = useSyncStatus();
+  const { lastError, pendingCount } = useSyncStatus();
   
-  if (!isSyncing && pendingCount === 0) return null;
+  // Only show if there's an error - sync happens silently in background
+  // Don't show for normal syncing or pending items
+  if (!lastError) return null;
   
   return (
     <div className="fixed bottom-4 right-4 z-50">
-      <div className="bg-background border rounded-full shadow-lg p-3 flex items-center gap-2">
-        {isSyncing ? (
-          <>
-            <div className="relative">
-              <Cloud className="h-5 w-5 text-primary" />
-              <div 
-                className="absolute inset-0 flex items-center justify-center"
-                style={{ fontSize: '8px' }}
-              >
-                <span className="font-bold text-primary">{progress}</span>
-              </div>
-            </div>
-            <Progress value={progress} className="w-16 h-1.5" />
-          </>
-        ) : (
-          <>
-            <CloudOff className="h-5 w-5 text-yellow-500" />
-            <span className="text-xs font-medium">{pendingCount}</span>
-          </>
-        )}
+      <div className="bg-destructive/10 border border-destructive/30 rounded-lg shadow-lg p-3 flex items-center gap-2">
+        <AlertCircle className="h-5 w-5 text-destructive" />
+        <span className="text-xs font-medium text-destructive">
+          Sync error - {pendingCount} pending
+        </span>
       </div>
     </div>
   );
