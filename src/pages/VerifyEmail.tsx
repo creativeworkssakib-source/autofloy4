@@ -113,7 +113,10 @@ const VerifyEmail = () => {
   };
 
   const handleVerify = async () => {
+    console.log("handleVerify called, OTP:", otp, "Length:", otp.length);
+    
     if (otp.length !== 6) {
+      console.log("OTP length validation failed");
       toast({
         title: "Invalid Code",
         description: "Please enter the complete 6-digit verification code.",
@@ -123,8 +126,10 @@ const VerifyEmail = () => {
     }
 
     setIsLoading(true);
+    console.log("Calling verifyEmailOtp...");
     try {
-      await authService.verifyEmailOtp(otp);
+      const result = await authService.verifyEmailOtp(otp);
+      console.log("verifyEmailOtp result:", result);
       await refreshUser();
       setIsVerified(true);
       setStep(3);
@@ -139,6 +144,7 @@ const VerifyEmail = () => {
         navigate("/dashboard");
       }, 2500);
     } catch (error) {
+      console.error("verifyEmailOtp error:", error);
       toast({
         title: "Verification Failed",
         description: error instanceof Error ? error.message : "Invalid or expired code. Please try again.",
