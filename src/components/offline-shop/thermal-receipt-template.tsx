@@ -30,6 +30,8 @@ export interface ThermalReceiptData {
     logo_url?: string;
     invoice_footer?: string;
     terms_and_conditions?: string;
+    tax_rate?: number;
+    invoice_format?: 'simple' | 'better';
     receipt_size?: '80mm' | '58mm' | 'a4';
     receipt_font_size?: 'small' | 'medium' | 'large';
     show_logo_on_receipt?: boolean;
