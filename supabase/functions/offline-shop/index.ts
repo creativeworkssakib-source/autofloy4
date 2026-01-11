@@ -5686,6 +5686,290 @@ serve(async (req) => {
       }
     }
 
+    // ===== DAILY CASH REGISTER =====
+    if (resource === "cash-register") {
+      if (req.method === "GET") {
+        const dateParam = url.searchParams.get("date");
+        const startDate = url.searchParams.get("startDate");
+        const endDate = url.searchParams.get("endDate");
+        
+        let query = supabase
+          .from("shop_daily_cash_register")
+          .select("*")
+          .eq("user_id", userId)
+          .order("register_date", { ascending: false });
+        
+        if (shopId) query = query.eq("shop_id", shopId);
+        if (dateParam) query = query.eq("register_date", dateParam);
+        if (startDate) query = query.gte("register_date", startDate);
+        if (endDate) query = query.lte("register_date", endDate);
+        
+        const { data, error } = await query;
+        if (error) throw error;
+        
+        // Get today's register or the specific date
+        const today = dateParam || new Date().toISOString().split("T")[0];
+        const todayRegister = (data || []).find((r: any) => r.register_date === today);
+        
+        return new Response(JSON.stringify({ 
+          registers: data, 
+          todayRegister,
+          hasOpenRegister: !!todayRegister && todayRegister.status === "open"
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      
+      if (req.method === "POST") {
+        const body = await req.json();
+        const action = body.action;
+        const today = new Date().toISOString().split("T")[0];
+        
+        if (action === "open") {
+          // Check if already open today
+          const { data: existing } = await supabase
+            .from("shop_daily_cash_register")
+            .select("id, status")
+            .eq("user_id", userId)
+            .eq("shop_id", shopId)
+            .eq("register_date", today)
+            .maybeSingle();
+          
+          if (existing && existing.status === "open") {
+            return new Response(JSON.stringify({ 
+              error: "আজকের ক্যাশ রেজিস্টার ইতোমধ্যে খোলা আছে",
+              register: existing 
+            }), {
+              status: 400,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+          
+          // Get yesterday's closing cash as suggestion
+          const { data: yesterday } = await supabase
+            .from("shop_daily_cash_register")
+            .select("closing_cash, register_date")
+            .eq("user_id", userId)
+            .eq("shop_id", shopId)
+            .eq("status", "closed")
+            .order("register_date", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          
+          const suggestedOpening = yesterday?.closing_cash || 0;
+          
+          const { data: register, error } = await supabase
+            .from("shop_daily_cash_register")
+            .upsert({
+              user_id: userId,
+              shop_id: shopId,
+              register_date: today,
+              opening_cash: body.opening_cash ?? suggestedOpening,
+              opening_time: new Date().toISOString(),
+              status: "open",
+              notes: body.notes,
+            }, { onConflict: "user_id,shop_id,register_date" })
+            .select()
+            .single();
+          
+          if (error) throw error;
+          
+          return new Response(JSON.stringify({ 
+            register, 
+            message: "ক্যাশ রেজিস্টার খোলা হয়েছে",
+            suggestedOpening 
+          }), {
+            status: 201,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        
+        if (action === "close") {
+          // Get today's register
+          const { data: todayReg, error: fetchErr } = await supabase
+            .from("shop_daily_cash_register")
+            .select("*")
+            .eq("user_id", userId)
+            .eq("shop_id", shopId)
+            .eq("register_date", today)
+            .eq("status", "open")
+            .single();
+          
+          if (fetchErr || !todayReg) {
+            return new Response(JSON.stringify({ error: "আজকের জন্য কোনো খোলা ক্যাশ রেজিস্টার নেই" }), {
+              status: 400,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+          
+          // Get today's sales summary from shop_sales
+          const todayStart = today + "T00:00:00";
+          const todayEnd = today + "T23:59:59";
+          
+          const { data: sales } = await supabase
+            .from("shop_sales")
+            .select("total, paid_amount, payment_method")
+            .eq("user_id", userId)
+            .eq("shop_id", shopId)
+            .gte("sale_date", todayStart)
+            .lte("sale_date", todayEnd);
+          
+          const totalSales = (sales || []).reduce((sum: number, s: any) => sum + Number(s.total || 0), 0);
+          const totalCashSales = (sales || []).filter((s: any) => s.payment_method === "cash")
+            .reduce((sum: number, s: any) => sum + Number(s.paid_amount || 0), 0);
+          const totalCardSales = (sales || []).filter((s: any) => s.payment_method === "card")
+            .reduce((sum: number, s: any) => sum + Number(s.paid_amount || 0), 0);
+          const totalMobileSales = (sales || []).filter((s: any) => ["bkash", "nagad", "rocket", "mobile"].includes(s.payment_method))
+            .reduce((sum: number, s: any) => sum + Number(s.paid_amount || 0), 0);
+          
+          // Get today's due collections from cash transactions
+          const { data: dueCollections } = await supabase
+            .from("shop_cash_transactions")
+            .select("amount")
+            .eq("user_id", userId)
+            .eq("shop_id", shopId)
+            .eq("type", "in")
+            .eq("source", "due_collection")
+            .gte("transaction_date", todayStart)
+            .lte("transaction_date", todayEnd);
+          
+          const totalDueCollected = (dueCollections || []).reduce((sum: number, d: any) => sum + Number(d.amount || 0), 0);
+          
+          // Get today's expenses
+          const { data: expenses } = await supabase
+            .from("shop_expenses")
+            .select("amount")
+            .eq("user_id", userId)
+            .eq("shop_id", shopId)
+            .gte("expense_date", todayStart)
+            .lte("expense_date", todayEnd);
+          
+          const totalExpenses = (expenses || []).reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
+          
+          // Get today's withdrawals and deposits from cash transactions
+          const { data: withdrawals } = await supabase
+            .from("shop_cash_transactions")
+            .select("amount")
+            .eq("user_id", userId)
+            .eq("shop_id", shopId)
+            .eq("type", "out")
+            .eq("source", "withdrawal")
+            .gte("transaction_date", todayStart)
+            .lte("transaction_date", todayEnd);
+          
+          const totalWithdrawals = (withdrawals || []).reduce((sum: number, w: any) => sum + Number(w.amount || 0), 0);
+          
+          const { data: deposits } = await supabase
+            .from("shop_cash_transactions")
+            .select("amount")
+            .eq("user_id", userId)
+            .eq("shop_id", shopId)
+            .eq("type", "in")
+            .eq("source", "deposit")
+            .gte("transaction_date", todayStart)
+            .lte("transaction_date", todayEnd);
+          
+          const totalDeposits = (deposits || []).reduce((sum: number, d: any) => sum + Number(d.amount || 0), 0);
+          
+          // Calculate expected cash
+          const expectedCash = Number(todayReg.opening_cash) + totalCashSales + totalDueCollected + totalDeposits - totalExpenses - totalWithdrawals;
+          const closingCash = body.closing_cash ?? expectedCash;
+          const cashDifference = closingCash - expectedCash;
+          
+          // Update register
+          const { data: updatedReg, error: updateErr } = await supabase
+            .from("shop_daily_cash_register")
+            .update({
+              closing_cash: closingCash,
+              closing_time: new Date().toISOString(),
+              total_sales: totalSales,
+              total_cash_sales: totalCashSales,
+              total_card_sales: totalCardSales,
+              total_mobile_sales: totalMobileSales,
+              total_due_collected: totalDueCollected,
+              total_expenses: totalExpenses,
+              total_withdrawals: totalWithdrawals,
+              total_deposits: totalDeposits,
+              expected_cash: expectedCash,
+              cash_difference: cashDifference,
+              notes: body.notes || todayReg.notes,
+              status: "closed",
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", todayReg.id)
+            .select()
+            .single();
+          
+          if (updateErr) throw updateErr;
+          
+          return new Response(JSON.stringify({ 
+            register: updatedReg, 
+            message: "ক্যাশ রেজিস্টার বন্ধ হয়েছে",
+            summary: {
+              totalSales,
+              totalCashSales,
+              totalCardSales,
+              totalMobileSales,
+              totalDueCollected,
+              totalExpenses,
+              totalWithdrawals,
+              totalDeposits,
+              expectedCash,
+              actualCash: closingCash,
+              cashDifference,
+            }
+          }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        
+        if (action === "update") {
+          const { data: updatedReg, error } = await supabase
+            .from("shop_daily_cash_register")
+            .update({
+              opening_cash: body.opening_cash,
+              notes: body.notes,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", body.id)
+            .eq("user_id", userId)
+            .select()
+            .single();
+          
+          if (error) throw error;
+          
+          return new Response(JSON.stringify({ register: updatedReg }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        
+        return new Response(JSON.stringify({ error: "Invalid action" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      
+      if (req.method === "DELETE") {
+        const { id } = await req.json();
+        
+        const { error } = await supabase
+          .from("shop_daily_cash_register")
+          .delete()
+          .eq("id", id)
+          .eq("user_id", userId);
+        
+        if (error) throw error;
+        
+        return new Response(JSON.stringify({ message: "Register deleted" }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     return new Response(JSON.stringify({ error: "Not found" }), {
       status: 404,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
