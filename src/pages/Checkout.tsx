@@ -36,6 +36,9 @@ interface DbPaymentMethod {
   icon: string;
   is_active: boolean;
   display_order: number;
+  gateway_url: string | null;
+  api_key: string | null;
+  api_secret: string | null;
 }
 
 const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -44,6 +47,7 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   "credit-card": CreditCard,
   wallet: Wallet,
   bitcoin: Bitcoin,
+  globe: CreditCard, // Use CreditCard as fallback for globe
 };
 
 const communities = [
@@ -79,7 +83,7 @@ const Checkout = () => {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
 
-  // Load payment methods from database
+  // Load payment methods from database with real-time updates
   useEffect(() => {
     const loadPaymentMethods = async () => {
       try {
@@ -91,8 +95,8 @@ const Checkout = () => {
 
         if (error) throw error;
         
-        setPaymentMethods(data || []);
-        if (data && data.length > 0) {
+        setPaymentMethods((data as DbPaymentMethod[]) || []);
+        if (data && data.length > 0 && !formData.paymentMethodId) {
           setFormData(prev => ({ ...prev, paymentMethodId: data[0].id }));
         }
       } catch (error) {
@@ -108,6 +112,22 @@ const Checkout = () => {
     };
 
     loadPaymentMethods();
+
+    // Real-time subscription for payment methods
+    const channel = supabase
+      .channel("checkout-payment-methods-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "payment_methods" },
+        () => {
+          loadPaymentMethods();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   // Pre-fill user data
