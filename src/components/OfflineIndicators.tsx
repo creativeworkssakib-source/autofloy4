@@ -6,12 +6,12 @@
  */
 
 import { useEffect, useState } from "react";
-import { useOnlineStatus } from "@/hooks/useOnlineStatus";
+import { useIsOnline } from "@/hooks/useOnlineStatus";
 import { Wifi, WifiOff, Download, Check } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export function OfflineReadyIndicator() {
-  const isOnline = useOnlineStatus();
+  const isOnline = useIsOnline();
   const { toast } = useToast();
   const [wasOffline, setWasOffline] = useState(false);
   const [showStatus, setShowStatus] = useState(false);
