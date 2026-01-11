@@ -41,16 +41,11 @@ interface AdminLayoutProps {
 const navItems = [
   { name: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
   { name: "Users", href: "/admin/users", icon: Users },
+  { name: "Payment Requests", href: "/admin/payment-requests", icon: CreditCard },
+  { name: "Subscriptions", href: "/admin/subscriptions", icon: DollarSign },
   { name: "User Settings", href: "/admin/user-settings", icon: Settings },
-  { name: "Subscriptions", href: "/admin/subscriptions", icon: CreditCard },
-  { name: "Content Pages", href: "/admin/content-pages", icon: FileText },
-  { name: "Blog Posts", href: "/admin/blog-posts", icon: BookOpen },
   { name: "Pricing Plans", href: "/admin/pricing-plans", icon: DollarSign },
   { name: "Appearance", href: "/admin/appearance", icon: Palette },
-  { name: "SEO Settings", href: "/admin/seo", icon: Search },
-  { name: "Email Templates", href: "/admin/email-templates", icon: Mail },
-  { name: "Webhooks", href: "/admin/webhooks", icon: Webhook },
-  { name: "API Integrations", href: "/admin/api-integrations", icon: Zap },
   { name: "Site Settings", href: "/admin/settings", icon: Settings },
   { name: "Passcode Reset", href: "/admin/passcode-reset", icon: KeyRound },
 ];
