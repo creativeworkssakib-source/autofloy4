@@ -1,7 +1,8 @@
 // Event emitter utility for n8n webhook integration
 // This module provides functions to create outgoing events
 
-const N8N_WEBHOOK_URL = "https://server3.automationlearners.pro/webhook-test/autofloy01401918624";
+// N8N webhook URL loaded from environment variable for security
+const N8N_WEBHOOK_URL = Deno.env.get("N8N_WEBHOOK_URL") || "";
 
 export const EVENT_TYPES = {
   // User events
