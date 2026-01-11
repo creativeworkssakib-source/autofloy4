@@ -6,7 +6,6 @@
  */
 
 import { offlineShopService } from './offlineShopService';
-import { syncManager } from './syncManager';
 
 interface AppVersion {
   version: string;
@@ -32,7 +31,7 @@ class AppUpdateService {
   private currentVersion = '1.0.0';
   private buildNumber = 1;
   private listeners: Set<(result: UpdateCheckResult) => void> = new Set();
-  private checkInterval: NodeJS.Timeout | null = null;
+  private checkInterval: ReturnType<typeof setInterval> | null = null;
   
   constructor() {
     // Load current version from storage
@@ -132,7 +131,10 @@ class AppUpdateService {
       if (navigator.onLine) {
         this.checkForUpdates();
         // Also trigger a data sync when coming online
-        syncManager.sync();
+        // Import dynamically to avoid circular dependency
+        import('./syncManager').then(({ syncManager }) => {
+          syncManager.sync();
+        }).catch(console.error);
       }
     }, 2000);
   };
@@ -188,6 +190,9 @@ class AppUpdateService {
       if (!shopId) {
         return { success: false, synced: [] };
       }
+      
+      // Import dynamically to avoid circular dependency
+      const { syncManager } = await import('./syncManager');
       
       // Perform full sync to get latest data
       const result = await syncManager.fullSync(shopId);
