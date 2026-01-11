@@ -127,15 +127,13 @@ serve(async (req) => {
       .eq("user_id", userId)
       .eq("type", "email");
 
-    // Insert new OTP with expiry (10 minutes from now)
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+    // Insert new OTP
     const { error: insertError } = await supabase
       .from("verification_otps")
       .insert({
         user_id: userId,
         type: "email",
-        email_otp: String(otp),
-        expires_at: expiresAt,
+        email_otp: otp,
       });
 
     if (insertError) {

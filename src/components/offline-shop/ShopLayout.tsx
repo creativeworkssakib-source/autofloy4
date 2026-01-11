@@ -6,6 +6,7 @@ import {
   ShoppingCart, 
   Wallet, 
   Settings,
+  Link2,
   Menu,
   Store,
   LogOut,
@@ -19,7 +20,6 @@ import {
   Trash2,
   MessageSquareMore,
   Scan,
-  CreditCard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
@@ -35,7 +35,11 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { DynamicDocumentTitle } from "@/components/DynamicDocumentTitle";
 import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
+import { BusinessModeSwitcher } from "@/components/dashboard/BusinessModeSwitcher";
+import { SyncStatusBadge } from "@/components/dashboard/SyncStatusBadge";
 import { ShopSelector } from "@/components/offline-shop/ShopSelector";
+import { useSyncSettings } from "@/hooks/useSyncSettings";
 import { useOfflineShopTrial } from "@/hooks/useOfflineShopTrial";
 import OfflineTrialBanner from "./OfflineTrialBanner";
 import OfflineTrialExpiredOverlay from "./OfflineTrialExpiredOverlay";
@@ -49,6 +53,7 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { t, language } = useLanguage();
+  const { syncEnabled } = useSyncSettings();
   const { isTrialUser, isOfflineTrialExpired } = useOfflineShopTrial();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -68,7 +73,6 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
     { name: t("shop.reports"), href: "/offline-shop/reports", icon: BarChart3 },
     { name: language === "bn" ? "ফলোআপ SMS" : "Followup SMS", href: "/offline-shop/followup-sms", icon: MessageSquareMore },
     { name: language === "bn" ? "ট্র্যাশ বিন" : "Trash Bin", href: "/offline-shop/trash", icon: Trash2 },
-    { name: language === "bn" ? "সেটিংস" : "Settings", href: "/offline-shop/settings", icon: Settings },
   ];
 
   const handleLogout = () => {
@@ -113,26 +117,15 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
               <span className="text-lg font-bold">{t("shop.offlineShop")}</span>
             </div>
 
-            {/* Current Location Indicator */}
+            {/* Current Location Indicator with Sync Status */}
             <div className="px-4 py-3 bg-emerald-500/10 border-b border-emerald-500/20">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs text-muted-foreground">{t("shop.youAreIn")}</p>
                   <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400">{t("shop.offlineShopBusiness")}</p>
                 </div>
+                <SyncStatusBadge syncEnabled={syncEnabled} mode="offline" />
               </div>
-            </div>
-
-            {/* Pricing/Upgrade Button */}
-            <div className="p-3 border-b">
-              <Button 
-                variant="outline" 
-                className="w-full justify-start gap-2 text-primary border-primary/30 hover:bg-primary/10"
-                onClick={() => navigate("/pricing")}
-              >
-                <CreditCard className="h-4 w-4" />
-                {language === "bn" ? "প্ল্যান আপগ্রেড করুন" : "Upgrade Plan"}
-              </Button>
             </div>
 
             {/* Navigation */}
@@ -154,6 +147,12 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
                   <Menu className="h-5 w-5" />
                 </Button>
               </SheetTrigger>
+
+            {/* Business Mode Switcher - Desktop */}
+            <div className="hidden lg:flex items-center gap-3">
+              <BusinessModeSwitcher syncEnabled={syncEnabled} />
+              <SyncStatusBadge syncEnabled={syncEnabled} mode="offline" />
+            </div>
               <SheetContent side="left" className="w-72 p-0">
                 <SheetTitle className="sr-only">{t("shop.offlineShop")} Menu</SheetTitle>
                 <div className="flex h-full flex-col">
@@ -166,18 +165,18 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
                     <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400">{t("shop.offlineShopBusiness")}</p>
                   </div>
                   
-                  {/* Pricing/Upgrade Button - Mobile */}
+                  {/* Switch to Online Business */}
                   <div className="p-3 border-b">
                     <Button 
                       variant="outline" 
-                      className="w-full justify-start gap-2 text-primary border-primary/30 hover:bg-primary/10"
+                      className="w-full justify-start gap-2 text-blue-600 border-blue-200 hover:bg-blue-50 dark:text-blue-400 dark:border-blue-800 dark:hover:bg-blue-900/20"
                       onClick={() => {
                         setSidebarOpen(false);
-                        navigate("/pricing");
+                        navigate("/dashboard");
                       }}
                     >
-                      <CreditCard className="h-4 w-4" />
-                      {language === "bn" ? "প্ল্যান আপগ্রেড করুন" : "Upgrade Plan"}
+                      <Link2 className="h-4 w-4" />
+                      {language === "bn" ? "অনলাইন বিজনেসে যান" : "Go to Online Business"}
                     </Button>
                   </div>
                   
@@ -221,13 +220,13 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem onClick={() => navigate("/offline-shop/settings")}>
+                <DropdownMenuItem onClick={() => navigate("/dashboard/sync")}>
+                  <Link2 className="mr-2 h-4 w-4" />
+                  {language === "bn" ? "সিঙ্ক সেটিংস" : "Sync Settings"}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate("/dashboard/settings")}>
                   <Settings className="mr-2 h-4 w-4" />
                   {t("nav.settings")}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate("/pricing")}>
-                  <CreditCard className="mr-2 h-4 w-4" />
-                  {language === "bn" ? "প্ল্যান" : "Plans"}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout} className="text-destructive">

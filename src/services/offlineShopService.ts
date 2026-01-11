@@ -1,6 +1,6 @@
 import { authService } from "./authService";
 
-const SUPABASE_URL = "https://xvwsqxfydvagfhfkwxdm.supabase.co";
+const SUPABASE_URL = "https://klkrzfwvrmffqkmkyqrh.supabase.co";
 const CURRENT_SHOP_KEY = "autofloy_current_shop_id";
 
 class OfflineShopService {

@@ -39,7 +39,7 @@ interface ShopContextType {
 const ShopContext = createContext<ShopContextType | undefined>(undefined);
 
 const CURRENT_SHOP_KEY = "autofloy_current_shop_id";
-const SHOP_API_URL = "https://xvwsqxfydvagfhfkwxdm.supabase.co/functions/v1/offline-shop/shops";
+const SHOP_API_URL = "https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1/offline-shop/shops";
 
 export function ShopProvider({ children }: { children: ReactNode }) {
   const [shops, setShops] = useState<Shop[]>([]);

@@ -131,7 +131,7 @@ const RETURN_REASONS = [
 
 
 
-const SUPABASE_URL = "https://xvwsqxfydvagfhfkwxdm.supabase.co";
+const SUPABASE_URL = "https://klkrzfwvrmffqkmkyqrh.supabase.co";
 
 export default function ShopReturns() {
   const { t } = useLanguage();

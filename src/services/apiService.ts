@@ -1,4 +1,4 @@
-const SUPABASE_URL = "https://xvwsqxfydvagfhfkwxdm.supabase.co";
+const SUPABASE_URL = "https://klkrzfwvrmffqkmkyqrh.supabase.co";
 
 function getAuthHeaders(): HeadersInit {
   const token = localStorage.getItem("autofloy_token");
