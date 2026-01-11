@@ -1,5 +1,14 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { authService, User as ServiceUser } from "@/services/authService";
+import { 
+  cacheAuthForOffline, 
+  getCachedAuth, 
+  clearOfflineAuth, 
+  hasValidOfflineAuth,
+  initOfflineAuth,
+  refreshOfflineAuthExpiry,
+  getOfflineAuthRemainingDays
+} from "@/lib/offlineAuth";
 
 interface User {
   id: string;
@@ -20,6 +29,8 @@ interface User {
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
+  isOfflineMode: boolean;
+  offlineAuthDaysRemaining: number;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   signup: (data: { name: string; email: string; phone: string; password: string }) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
@@ -29,7 +40,6 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const CURRENT_USER_KEY = "autofloy_current_user";
-const AUTH_TOKEN_KEY = "autofloy_auth_token";
 
 // Check if we're online
 const isOnline = () => typeof navigator !== 'undefined' && navigator.onLine;
@@ -54,14 +64,24 @@ const mapServiceUser = (serviceUser: ServiceUser): User => ({
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isOfflineMode, setIsOfflineMode] = useState(!isOnline());
+  const [offlineAuthDaysRemaining, setOfflineAuthDaysRemaining] = useState(0);
 
   const refreshUser = async () => {
     if (authService.isAuthenticated()) {
       try {
-        const { user: serviceUser } = await authService.refreshUser();
+        const { user: serviceUser, token } = await authService.refreshUser();
         const mappedUser = mapServiceUser(serviceUser);
         setUser(mappedUser);
         localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(mappedUser));
+        
+        // Cache for offline use (7 days)
+        const authToken = token || authService.getToken();
+        if (authToken) {
+          cacheAuthForOffline(authToken, mappedUser);
+          refreshOfflineAuthExpiry();
+          setOfflineAuthDaysRemaining(getOfflineAuthRemainingDays());
+        }
       } catch {
         authService.logout();
         setUser(null);
@@ -71,41 +91,98 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    // Initialize offline auth system
+    initOfflineAuth();
+    
+    // Listen for online/offline changes
+    const handleOnline = () => {
+      setIsOfflineMode(false);
+      // Refresh auth expiry when back online
+      if (hasValidOfflineAuth()) {
+        refreshOfflineAuthExpiry();
+        setOfflineAuthDaysRemaining(getOfflineAuthRemainingDays());
+      }
+    };
+    
+    const handleOffline = () => {
+      setIsOfflineMode(true);
+    };
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
     // Check for existing session via token
     const initAuth = async () => {
-      // First, try to load from cache (for offline support)
       const cachedUser = localStorage.getItem(CURRENT_USER_KEY);
       const hasToken = authService.isAuthenticated();
+      const offlineAuth = getCachedAuth();
       
+      // OFFLINE MODE: Use cached auth if available
+      if (!isOnline()) {
+        if (offlineAuth && offlineAuth.user) {
+          console.log('[AuthContext] Offline mode - using cached auth');
+          // Create a User object from cached data
+          const offlineUser: User = {
+            id: offlineAuth.user.id,
+            email: offlineAuth.user.email,
+            name: offlineAuth.user.name,
+            phone: offlineAuth.user.phone,
+            emailVerified: true, // Assume verified since they logged in before
+            subscriptionPlan: offlineAuth.user.subscriptionPlan,
+            avatarUrl: offlineAuth.user.avatarUrl,
+            createdAt: new Date().toISOString(),
+          };
+          setUser(offlineUser);
+          setOfflineAuthDaysRemaining(getOfflineAuthRemainingDays());
+          setIsLoading(false);
+          return;
+        } else {
+          // No valid offline auth - user needs to go online
+          setUser(null);
+          setIsLoading(false);
+          return;
+        }
+      }
+      
+      // ONLINE MODE: Normal auth flow
       if (cachedUser && hasToken) {
         try {
           // Load cached user immediately
           const parsedUser = JSON.parse(cachedUser) as User;
           setUser(parsedUser);
           
-          // If online, refresh user data in background
-          if (isOnline()) {
-            try {
-              const { user: serviceUser } = await authService.refreshUser();
-              const mappedUser = mapServiceUser(serviceUser);
-              setUser(mappedUser);
-              localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(mappedUser));
-            } catch (error) {
-              // If refresh fails but we have cached user, keep using it
-              console.log("Background refresh failed, using cached user:", error);
+          // Refresh user data in background
+          try {
+            const { user: serviceUser, token } = await authService.refreshUser();
+            const mappedUser = mapServiceUser(serviceUser);
+            setUser(mappedUser);
+            localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(mappedUser));
+            
+            // Cache for offline use
+            const authToken = token || authService.getToken();
+            if (authToken) {
+              cacheAuthForOffline(authToken, mappedUser);
+              setOfflineAuthDaysRemaining(getOfflineAuthRemainingDays());
             }
+          } catch (error) {
+            console.log("Background refresh failed, using cached user:", error);
           }
         } catch (error) {
           console.log("Cache parse failed:", error);
-          // If online, try to refresh from server
-          if (isOnline() && hasToken) {
+          if (hasToken) {
             try {
-              const { user: serviceUser } = await authService.refreshUser();
+              const { user: serviceUser, token } = await authService.refreshUser();
               const mappedUser = mapServiceUser(serviceUser);
               setUser(mappedUser);
               localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(mappedUser));
+              
+              const authToken = token || authService.getToken();
+              if (authToken) {
+                cacheAuthForOffline(authToken, mappedUser);
+              }
             } catch {
               authService.logout();
+              clearOfflineAuth();
               setUser(null);
               localStorage.removeItem(CURRENT_USER_KEY);
             }
@@ -113,38 +190,59 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setUser(null);
           }
         }
-      } else if (hasToken && isOnline()) {
+      } else if (hasToken) {
         // No cache but has token - try to refresh
         try {
-          const { user: serviceUser } = await authService.refreshUser();
+          const { user: serviceUser, token } = await authService.refreshUser();
           const mappedUser = mapServiceUser(serviceUser);
           setUser(mappedUser);
           localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(mappedUser));
+          
+          const authToken = token || authService.getToken();
+          if (authToken) {
+            cacheAuthForOffline(authToken, mappedUser);
+            setOfflineAuthDaysRemaining(getOfflineAuthRemainingDays());
+          }
         } catch (error) {
           console.log("Auth init failed, clearing session:", error);
           authService.logout();
+          clearOfflineAuth();
           setUser(null);
           localStorage.removeItem(CURRENT_USER_KEY);
         }
       } else if (!hasToken) {
         setUser(null);
+        clearOfflineAuth();
         localStorage.removeItem(CURRENT_USER_KEY);
       }
-      // If offline and no cache, user stays null but we don't clear token
-      // They can log in when back online
       
       setIsLoading(false);
     };
     
     initAuth();
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
 
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+    // Require online for login
+    if (!isOnline()) {
+      return { success: false, error: "লগইন করতে ইন্টারনেট সংযোগ প্রয়োজন" };
+    }
+    
     try {
-      const { user: serviceUser } = await authService.login(email, password);
+      const { user: serviceUser, token } = await authService.login(email, password);
       const mappedUser = mapServiceUser(serviceUser);
       setUser(mappedUser);
       localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(mappedUser));
+      
+      // Cache for offline use (7 days)
+      cacheAuthForOffline(token, mappedUser);
+      setOfflineAuthDaysRemaining(7);
+      
       return { success: true };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : "Login failed" };
@@ -152,8 +250,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signup = async (data: { name: string; email: string; phone: string; password: string }): Promise<{ success: boolean; error?: string }> => {
+    // Require online for signup
+    if (!isOnline()) {
+      return { success: false, error: "সাইন আপ করতে ইন্টারনেট সংযোগ প্রয়োজন" };
+    }
+    
     try {
-      const { user: serviceUser } = await authService.signup(
+      const { user: serviceUser, token } = await authService.signup(
         data.email,
         data.password,
         data.phone,
@@ -162,6 +265,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const mappedUser = mapServiceUser(serviceUser);
       setUser(mappedUser);
       localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(mappedUser));
+      
+      // Cache for offline use (7 days)
+      cacheAuthForOffline(token, mappedUser);
+      setOfflineAuthDaysRemaining(7);
+      
       return { success: true };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : "Signup failed" };
@@ -170,12 +278,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     authService.logout();
+    clearOfflineAuth(); // Clear offline cache on logout
     setUser(null);
+    setOfflineAuthDaysRemaining(0);
     localStorage.removeItem(CURRENT_USER_KEY);
   };
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, signup, logout, refreshUser }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      isLoading, 
+      isOfflineMode,
+      offlineAuthDaysRemaining,
+      login, 
+      signup, 
+      logout, 
+      refreshUser 
+    }}>
       {children}
     </AuthContext.Provider>
   );
