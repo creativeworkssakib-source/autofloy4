@@ -90,6 +90,7 @@ interface CartItem {
 
 interface ShopSettings {
   shop_name: string;
+  branch_name?: string;
   shop_address: string;
   shop_phone: string;
   shop_email: string;
@@ -100,6 +101,15 @@ interface ShopSettings {
   logo_url?: string;
   terms_and_conditions?: string;
   invoice_format?: 'simple' | 'better';
+  // Receipt/Invoice settings from Invoice Settings page
+  receipt_size?: '80mm' | '58mm' | 'a4';
+  receipt_font_size?: 'small' | 'medium' | 'large';
+  show_logo_on_receipt?: boolean;
+  thank_you_message?: string;
+  show_tax_on_receipt?: boolean;
+  show_payment_method?: boolean;
+  receipt_header_text?: string;
+  receipt_footer_text?: string;
 }
 
 interface Sale {
