@@ -1030,6 +1030,27 @@ class OfflineDB {
     return registers.find(r => r.register_date === date && !r._locallyDeleted);
   }
 
+  async getAllDailyCashRegisters(shopId: string, startDate?: string, endDate?: string): Promise<ShopDailyCashRegister[]> {
+    const db = this.ensureDb();
+    const registers = await db.getAllFromIndex('dailyCashRegister', 'by-shop', shopId);
+    let filtered = registers.filter(r => !r._locallyDeleted);
+    
+    if (startDate) {
+      filtered = filtered.filter(r => r.register_date >= startDate);
+    }
+    if (endDate) {
+      filtered = filtered.filter(r => r.register_date <= endDate);
+    }
+    
+    return filtered.sort((a, b) => new Date(b.register_date).getTime() - new Date(a.register_date).getTime());
+  }
+
+  async getOpenCashRegister(shopId: string): Promise<ShopDailyCashRegister | undefined> {
+    const db = this.ensureDb();
+    const registers = await db.getAllFromIndex('dailyCashRegister', 'by-shop', shopId);
+    return registers.find(r => r.status === 'open' && !r._locallyDeleted);
+  }
+
   async saveDailyCashRegister(register: ShopDailyCashRegister): Promise<void> {
     const db = this.ensureDb();
     await db.put('dailyCashRegister', register);

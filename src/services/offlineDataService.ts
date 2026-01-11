@@ -1216,6 +1216,179 @@ class OfflineDataService {
     return { transaction, offline: true };
   }
   
+  // =============== DAILY CASH REGISTER ===============
+  
+  async getCashRegisters(startDate?: string): Promise<{
+    registers: ShopDailyCashRegister[];
+    todayRegister: ShopDailyCashRegister | null;
+    hasOpenRegister: boolean;
+    fromCache: boolean;
+  }> {
+    await this.init();
+    const shopId = this.ensureShopId();
+    
+    const today = new Date().toISOString().split('T')[0];
+    const registers = await offlineDB.getAllDailyCashRegisters(shopId, startDate);
+    const todayRegister = registers.find(r => r.register_date === today) || null;
+    const openRegister = await offlineDB.getOpenCashRegister(shopId);
+    
+    if (this.isOnline()) {
+      this.syncCashRegistersInBackground(shopId);
+    }
+    
+    return {
+      registers,
+      todayRegister,
+      hasOpenRegister: !!openRegister,
+      fromCache: true,
+    };
+  }
+  
+  private async syncCashRegistersInBackground(shopId: string): Promise<void> {
+    try {
+      const result = await offlineShopService.getCashRegisters({});
+      for (const register of result.registers || []) {
+        const existing = await offlineDB.getDailyCashRegister(shopId, register.register_date);
+        if (!existing?._locallyModified && !existing?._locallyCreated) {
+          await offlineDB.saveDailyCashRegister({
+            ...register,
+            shop_id: shopId,
+            user_id: this.userId || '',
+            _locallyModified: false,
+            _locallyCreated: false,
+            _locallyDeleted: false,
+          } as ShopDailyCashRegister);
+        }
+      }
+    } catch (error) {
+      console.error('Background sync failed for cash registers:', error);
+    }
+  }
+  
+  async openCashRegister(openingCash: number, notes?: string): Promise<{ register: ShopDailyCashRegister; offline: boolean; message: string }> {
+    await this.init();
+    const shopId = this.ensureShopId();
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+    
+    // Check if already open
+    const existingOpen = await offlineDB.getOpenCashRegister(shopId);
+    if (existingOpen) {
+      throw new Error('A cash register is already open');
+    }
+    
+    const register: ShopDailyCashRegister = {
+      id: generateOfflineId(),
+      shop_id: shopId,
+      user_id: this.userId || '',
+      register_date: today,
+      opening_cash: openingCash,
+      opening_time: now.toISOString(),
+      status: 'open',
+      notes: notes || undefined,
+      created_at: now.toISOString(),
+      updated_at: now.toISOString(),
+      _locallyCreated: true,
+      _locallyModified: false,
+      _locallyDeleted: false,
+    };
+    
+    await offlineDB.saveDailyCashRegister(register);
+    await syncQueue.add('create', 'dailyCashRegister', register.id, register);
+    
+    // Try to sync if online
+    if (this.isOnline()) {
+      try {
+        const result = await offlineShopService.openCashRegister(openingCash, notes);
+        const updatedRegister = { ...register, id: result.register?.id || register.id, _locallyCreated: false };
+        await offlineDB.saveDailyCashRegister(updatedRegister as ShopDailyCashRegister);
+        return { register: updatedRegister as ShopDailyCashRegister, offline: false, message: result.message };
+      } catch (error) {
+        console.error('Failed to sync open register:', error);
+      }
+    }
+    
+    return { register, offline: true, message: 'Shop opened (will sync when online)' };
+  }
+  
+  async closeCashRegister(closingCash: number, notes?: string): Promise<{ register: ShopDailyCashRegister; offline: boolean; message: string }> {
+    await this.init();
+    const shopId = this.ensureShopId();
+    const now = new Date();
+    
+    const openRegister = await offlineDB.getOpenCashRegister(shopId);
+    if (!openRegister) {
+      throw new Error('No open cash register found');
+    }
+    
+    const updatedRegister: ShopDailyCashRegister = {
+      ...openRegister,
+      closing_cash: closingCash,
+      closing_time: now.toISOString(),
+      status: 'closed',
+      notes: notes || openRegister.notes,
+      updated_at: now.toISOString(),
+      _locallyModified: true,
+    };
+    
+    await offlineDB.saveDailyCashRegister(updatedRegister);
+    await syncQueue.add('update', 'dailyCashRegister', updatedRegister.id, updatedRegister);
+    
+    // Try to sync if online
+    if (this.isOnline()) {
+      try {
+        const result = await offlineShopService.closeCashRegister(closingCash, notes);
+        const synced = { ...updatedRegister, _locallyModified: false };
+        await offlineDB.saveDailyCashRegister(synced as ShopDailyCashRegister);
+        return { register: synced as ShopDailyCashRegister, offline: false, message: result.message };
+      } catch (error) {
+        console.error('Failed to sync close register:', error);
+      }
+    }
+    
+    return { register: updatedRegister, offline: true, message: 'Shop closed (will sync when online)' };
+  }
+  
+  async addQuickExpense(amount: number, description?: string): Promise<{ offline: boolean }> {
+    await this.init();
+    
+    // Quick expenses are temporary and stored on the open register
+    // For now, just call the API if online, otherwise store locally
+    if (this.isOnline()) {
+      try {
+        await offlineShopService.addQuickExpense(amount, description);
+        return { offline: false };
+      } catch (error) {
+        console.error('Failed to add quick expense:', error);
+      }
+    }
+    
+    // Store in local cash transactions as fallback
+    await this.createCashTransaction({
+      type: 'out',
+      source: 'quick_expense',
+      amount,
+      notes: description || 'Quick expense',
+    });
+    
+    return { offline: true };
+  }
+  
+  async deleteQuickExpense(expenseId: string): Promise<{ offline: boolean }> {
+    await this.init();
+    
+    if (this.isOnline()) {
+      try {
+        await offlineShopService.deleteQuickExpense(expenseId);
+        return { offline: false };
+      } catch (error) {
+        console.error('Failed to delete quick expense:', error);
+      }
+    }
+    
+    return { offline: true };
+  }
+  
   // =============== SETTINGS ===============
   
   async getSettings(): Promise<{ settings: ShopSettings | undefined; fromCache: boolean }> {

@@ -22,9 +22,11 @@ import {
   Package,
   RefreshCw,
   History,
-  BookOpen
+  BookOpen,
+  WifiOff,
+  Wifi
 } from "lucide-react";
-import { offlineShopService } from "@/services/offlineShopService";
+import { useOfflineProductsSimple } from "@/hooks/useOfflineShopData";
 import { toast } from "sonner";
 
 // Bangladesh Consumer Protection Law - Maximum Markup Rates
@@ -124,36 +126,21 @@ interface CalculationHistory {
 
 const ShopPriceCalculator = () => {
   const { language } = useLanguage();
+  const { products, loading, fromCache, isOnline } = useOfflineProductsSimple();
   const [purchasePrice, setPurchasePrice] = useState<string>("");
   const [productName, setProductName] = useState<string>("");
   const [category, setCategory] = useState<string>("general");
   const [customMarkup, setCustomMarkup] = useState<string>("");
-  const [products, setProducts] = useState<any[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<string>("");
-  const [loading, setLoading] = useState(false);
   const [calculationHistory, setCalculationHistory] = useState<CalculationHistory[]>([]);
 
-  // Load products for reference
+  // Load history from localStorage
   useEffect(() => {
-    loadProducts();
-    // Load history from localStorage
     const savedHistory = localStorage.getItem("price_calc_history");
     if (savedHistory) {
       setCalculationHistory(JSON.parse(savedHistory));
     }
   }, []);
-
-  const loadProducts = async () => {
-    try {
-      setLoading(true);
-      const data = await offlineShopService.getProducts();
-      setProducts(data.products || []);
-    } catch (error) {
-      console.error("Error loading products:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleProductSelect = (productId: string) => {
     setSelectedProduct(productId);
@@ -254,6 +241,12 @@ const ShopPriceCalculator = () => {
             <h1 className="text-2xl font-bold flex items-center gap-2">
               <Calculator className="h-6 w-6 text-primary" />
               {language === "bn" ? "মূল্য ক্যালকুলেটর" : "Price Calculator"}
+              {!isOnline && (
+                <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/30">
+                  <WifiOff className="h-3 w-3 mr-1" />
+                  {language === "bn" ? "অফলাইন" : "Offline"}
+                </Badge>
+              )}
             </h1>
             <p className="text-muted-foreground mt-1">
               {language === "bn" 
