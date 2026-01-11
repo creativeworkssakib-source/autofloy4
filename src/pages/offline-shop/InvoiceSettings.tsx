@@ -110,7 +110,28 @@ const InvoiceSettings = () => {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await offlineShopService.saveSettings(settings);
+      // Only send the fields that should be saved - exclude computed fields
+      const settingsToSave = {
+        shop_name: settings.shop_name,
+        branch_name: settings.branch_name,
+        shop_address: settings.shop_address,
+        shop_phone: settings.shop_phone,
+        shop_email: settings.shop_email,
+        logo_url: settings.logo_url,
+        currency: settings.currency,
+        invoice_prefix: settings.invoice_prefix,
+        receipt_size: settings.receipt_size,
+        receipt_font_size: settings.receipt_font_size,
+        show_logo_on_receipt: settings.show_logo_on_receipt,
+        thank_you_message: settings.thank_you_message,
+        show_tax_on_receipt: settings.show_tax_on_receipt,
+        show_payment_method: settings.show_payment_method,
+        receipt_header_text: settings.receipt_header_text,
+        receipt_footer_text: settings.receipt_footer_text,
+        terms_and_conditions: settings.terms_and_conditions,
+        invoice_footer: settings.invoice_footer,
+      };
+      await offlineShopService.saveSettings(settingsToSave);
       toast.success(language === 'bn' ? 'সেটিংস সংরক্ষিত হয়েছে' : 'Settings saved successfully');
     } catch (error) {
       console.error("Save settings error:", error);
