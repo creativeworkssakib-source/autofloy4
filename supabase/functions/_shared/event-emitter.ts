@@ -1,8 +1,8 @@
 // Event emitter utility for n8n webhook integration
 // This module provides functions to create outgoing events
 
-// N8N webhook URL loaded from environment variable for security
-const N8N_WEBHOOK_URL = Deno.env.get("N8N_WEBHOOK_URL") || "";
+// Webhook ID for n8n integration in webhook_configs table
+const N8N_WEBHOOK_CONFIG_ID = "n8n_main";
 
 export const EVENT_TYPES = {
   // User events
@@ -143,6 +143,33 @@ interface EmitEventOptions {
   payload: Record<string, unknown>;
 }
 
+// Fetch n8n webhook URL from webhook_configs table
+// deno-lint-ignore no-explicit-any
+async function getN8nWebhookUrl(supabase: any): Promise<string | null> {
+  try {
+    const { data, error } = await supabase
+      .from("webhook_configs")
+      .select("url, is_active")
+      .eq("id", N8N_WEBHOOK_CONFIG_ID)
+      .single();
+
+    if (error || !data) {
+      console.log(`[EventEmitter] n8n webhook config not found or error:`, error?.message);
+      return null;
+    }
+
+    if (!data.is_active || !data.url) {
+      console.log(`[EventEmitter] n8n webhook is inactive or URL not set`);
+      return null;
+    }
+
+    return data.url;
+  } catch (error) {
+    console.error(`[EventEmitter] Error fetching n8n webhook URL:`, error);
+    return null;
+  }
+}
+
 // deno-lint-ignore no-explicit-any
 export async function emitEvent(supabase: any, options: EmitEventOptions): Promise<string | null> {
   const { event_type, user_id, account_id, payload } = options;
@@ -212,7 +239,7 @@ export async function emitEvent(supabase: any, options: EmitEventOptions): Promi
     console.log(`[EventEmitter] Event created: ${event_type} (${event.id})`);
 
     // Try to dispatch immediately (non-blocking)
-    dispatchEventBackground(event, enrichedPayload);
+    dispatchEventBackground(supabase, event, enrichedPayload);
 
     return event.id;
   } catch (error) {
@@ -223,6 +250,8 @@ export async function emitEvent(supabase: any, options: EmitEventOptions): Promi
 
 // Dispatch event in background without blocking
 function dispatchEventBackground(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
   event: { id: string; event_type: string; user_id: string | null; account_id: string | null; created_at: string },
   payload: unknown
 ): void {
@@ -230,6 +259,14 @@ function dispatchEventBackground(
   
   (async () => {
     try {
+      // Get webhook URL from database
+      const webhookUrl = await getN8nWebhookUrl(supabase);
+      
+      if (!webhookUrl) {
+        console.log(`[EventEmitter] Skipping dispatch for event ${event.id} - no webhook URL configured`);
+        return;
+      }
+
       const webhookBody = {
         event_id: event.id,
         event_type: event.event_type,
@@ -257,7 +294,7 @@ function dispatchEventBackground(
         .map((b) => b.toString(16).padStart(2, "0"))
         .join("");
 
-      const response = await fetch(N8N_WEBHOOK_URL, {
+      const response = await fetch(webhookUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
