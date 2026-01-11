@@ -16,6 +16,7 @@ import { CookieConsentBanner } from "@/components/CookieConsentBanner";
 import { DynamicDocumentTitle } from "@/components/DynamicDocumentTitle";
 import { DynamicAppearance } from "@/components/DynamicAppearance";
 import BackToTopButton from "@/components/ui/BackToTopButton";
+import { OfflineReadyIndicator, InstallPWAPrompt } from "@/components/OfflineIndicators";
 import { Loader2 } from "lucide-react";
 
 // Eagerly loaded routes (small, critical)
@@ -136,6 +137,8 @@ const App = () => (
               <DynamicAppearance />
               <CookieConsentBanner />
               <BackToTopButton />
+              <OfflineReadyIndicator />
+              <InstallPWAPrompt />
               <Suspense fallback={<PageLoader />}>
                 <Routes>
                   {/* Public routes */}
