@@ -107,6 +107,13 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
 
   // Check if online business is disabled
   const isOnlineBusinessDisabled = settings.online_business_enabled === false;
+  
+  // Routes that should still work when online business is disabled (shared with offline shop)
+  const allowedRoutesWhenOnlineDisabled = ['/dashboard/sync', '/dashboard/settings'];
+  const isAllowedRoute = allowedRoutesWhenOnlineDisabled.some(route => location.pathname.startsWith(route));
+  
+  // Only show overlay for online business features, not for shared features like sync/settings
+  const shouldShowDisabledOverlay = isOnlineBusinessDisabled && !isAllowedRoute;
 
   return (
     <div className="min-h-screen bg-muted/30">
@@ -334,8 +341,8 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
 
         {/* Page Content */}
         <div className="flex-1 p-4 sm:p-6 lg:p-8 relative">
-          {/* Show frozen overlay if feature is disabled by admin */}
-          {isOnlineBusinessDisabled && (
+          {/* Show frozen overlay if feature is disabled by admin (except for sync/settings pages) */}
+          {shouldShowDisabledOverlay && (
             <FeatureDisabledOverlay featureName={language === "bn" ? "অনলাইন বিজনেস" : "Online Business"} featureType="online" />
           )}
           {children}
