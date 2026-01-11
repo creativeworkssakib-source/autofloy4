@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import ShopLayout from "@/components/offline-shop/ShopLayout";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -54,8 +54,13 @@ import {
   MessageSquare,
   Send,
   Settings,
+  WifiOff,
+  Wifi,
+  RefreshCw,
 } from "lucide-react";
 import { format, isWithinInterval, startOfDay, endOfDay } from "date-fns";
+import { useOfflineDueCustomers } from "@/hooks/useOfflineShopData";
+import { useOfflineSettings } from "@/hooks/useOfflineData";
 import { offlineShopService } from "@/services/offlineShopService";
 
 interface DueSale {
@@ -85,8 +90,11 @@ const ShopDueCustomers = () => {
   const { t, language } = useLanguage();
   const navigate = useNavigate();
   
-  const [loading, setLoading] = useState(true);
-  const [dueCustomers, setDueCustomers] = useState<CustomerDueInfo[]>([]);
+  // Use offline hooks
+  const { dueCustomers, loading, fromCache, isOnline, refetch, updateSalePayment, deleteSales } = useOfflineDueCustomers();
+  const { settings } = useOfflineSettings();
+  const currency = settings?.currency || "BDT";
+  
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerDueInfo | null>(null);
   const [viewModalOpen, setViewModalOpen] = useState(false);
@@ -117,91 +125,10 @@ const ShopDueCustomers = () => {
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat(language === "bn" ? "bn-BD" : "en-BD", {
       style: "currency",
-      currency: "BDT",
+      currency: currency,
       minimumFractionDigits: 0,
     }).format(amount);
   };
-
-  const fetchDueCustomers = async () => {
-    setLoading(true);
-    try {
-      // Fetch all sales with due amounts
-      const response = await offlineShopService.getSales();
-      const allSales = response.sales || [];
-      
-      // Filter sales with due amount > 0
-      const dueSales = allSales.filter((sale: any) => 
-        sale.due_amount && Number(sale.due_amount) > 0
-      );
-      
-      // Group by customer
-      const customerMap = new Map<string, CustomerDueInfo>();
-      
-      for (const sale of dueSales) {
-        // Extract customer info
-        let customerName = sale.customer?.name || "Walk-in Customer";
-        let customerPhone = sale.customer?.phone || null;
-        const customerId = sale.customer_id || null;
-        
-        // Try to extract from notes if no customer
-        if (!customerId && sale.notes) {
-          const noteMatch = sale.notes.match(/Customer: ([^(]+)(?:\(([^)]+)\))?/);
-          if (noteMatch) {
-            customerName = noteMatch[1].trim();
-            customerPhone = noteMatch[2] || null;
-          }
-        }
-        
-        const key = customerId || `walk-in-${customerName}-${customerPhone || 'unknown'}`;
-        
-        if (!customerMap.has(key)) {
-          customerMap.set(key, {
-            customerId,
-            customerName,
-            customerPhone,
-            totalSales: 0,
-            totalPaid: 0,
-            totalDue: 0,
-            salesCount: 0,
-            sales: [],
-          });
-        }
-        
-        const customer = customerMap.get(key)!;
-        customer.totalSales += Number(sale.total) || 0;
-        customer.totalPaid += Number(sale.paid_amount) || 0;
-        customer.totalDue += Number(sale.due_amount) || 0;
-        customer.salesCount += 1;
-        customer.sales.push({
-          id: sale.id,
-          invoice_number: sale.invoice_number,
-          sale_date: sale.sale_date,
-          total: Number(sale.total),
-          paid_amount: Number(sale.paid_amount),
-          due_amount: Number(sale.due_amount),
-          customer_id: sale.customer_id,
-          customer_name: customerName,
-          notes: sale.notes,
-        });
-      }
-      
-      // Convert to array and sort by due amount descending
-      const customers = Array.from(customerMap.values()).sort(
-        (a, b) => b.totalDue - a.totalDue
-      );
-      
-      setDueCustomers(customers);
-    } catch (error) {
-      console.error("Error fetching due customers:", error);
-      toast.error(language === "bn" ? "ডাটা লোড করতে সমস্যা হয়েছে" : "Failed to load data");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchDueCustomers();
-  }, []);
 
   // Filter by date range and search
   const filteredCustomers = useMemo(() => {
@@ -270,7 +197,7 @@ const ShopDueCustomers = () => {
     
     setDeleting(true);
     try {
-      const result = await offlineShopService.deleteSales(selectedSaleIds);
+      const result = await deleteSales(selectedSaleIds);
       
       const deletedCount = result.deleted?.length || 0;
       const failedCount = result.failed?.length || 0;
@@ -298,7 +225,6 @@ const ShopDueCustomers = () => {
       
       setSelectedSaleIds([]);
       setDeleteDialogOpen(false);
-      fetchDueCustomers();
     } catch (error: any) {
       console.error("Error deleting sales:", error);
       toast.error(
@@ -455,16 +381,11 @@ const ShopDueCustomers = () => {
       const newPaidAmount = selectedSale.paid_amount + amount;
       const newDueAmount = selectedSale.due_amount - amount;
       
-      await offlineShopService.updateSale(selectedSale.id, {
-        paid_amount: newPaidAmount,
-        due_amount: newDueAmount,
-        payment_status: newDueAmount <= 0 ? "paid" : "partial",
-      });
+      await updateSalePayment(selectedSale.id, newPaidAmount, newDueAmount);
       
       toast.success(language === "bn" ? "পেমেন্ট সফল হয়েছে" : "Payment recorded successfully");
       setPaymentModalOpen(false);
       setViewModalOpen(false);
-      fetchDueCustomers();
     } catch (error) {
       console.error("Error recording payment:", error);
       toast.error(language === "bn" ? "পেমেন্ট রেকর্ড করতে সমস্যা হয়েছে" : "Failed to record payment");
