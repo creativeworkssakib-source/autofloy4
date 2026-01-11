@@ -251,7 +251,12 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
           </header>
 
           {/* Page Content */}
-          <main className="p-3 sm:p-4 lg:p-6">
+          <main className="p-3 sm:p-4 lg:p-6 relative">
+            {/* Show frozen overlay if feature is disabled by admin */}
+            {isOfflineShopDisabled && (
+              <FeatureDisabledOverlay featureName={language === "bn" ? "অফলাইন শপ সিস্টেম" : "Offline Shop System"} />
+            )}
+            
             {/* Trial Banner for trial users */}
             <OfflineTrialBanner />
             
@@ -260,11 +265,6 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
             
             {children}
           </main>
-          
-          {/* Show frozen overlay if feature is disabled by admin */}
-          {isOfflineShopDisabled && (
-            <FeatureDisabledOverlay featureName={language === "bn" ? "অফলাইন শপ সিস্টেম" : "Offline Shop System"} />
-          )}
         </div>
       </div>
     </>
