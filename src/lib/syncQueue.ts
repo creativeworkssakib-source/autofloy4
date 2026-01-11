@@ -81,6 +81,13 @@ class SyncQueue {
   }
 
   /**
+   * Delete a sync queue item by table and record ID
+   */
+  async deleteByRecordId(table: SyncTable, recordId: string): Promise<void> {
+    await offlineDB.deleteSyncQueueByRecordId(table, recordId);
+  }
+
+  /**
    * Get items by table
    */
   async getByTable(table: SyncTable): Promise<SyncQueueItem[]> {
