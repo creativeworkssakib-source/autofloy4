@@ -8,7 +8,7 @@ import { offlineDataService } from '@/services/offlineDataService';
 import { offlineShopService } from '@/services/offlineShopService';
 import { ShopPurchase, ShopSupplier, ShopStockAdjustment, ShopReturn, ShopLoan, ShopStaff, ShopDailyCashRegister } from '@/lib/offlineDB';
 import { generateOfflineId } from '@/lib/offlineUtils';
-import { useOnlineStatus } from './useOnlineStatus';
+import { useIsOnline } from './useOnlineStatus';
 import { useShop } from '@/contexts/ShopContext';
 
 // =============== PURCHASES ===============
@@ -17,7 +17,7 @@ export function useOfflinePurchases(startDate?: string, endDate?: string) {
   const [purchases, setPurchases] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [fromCache, setFromCache] = useState(false);
-  const isOnline = useOnlineStatus();
+  const isOnline = useIsOnline();
   const { currentShop } = useShop();
 
   const refetch = useCallback(async () => {
@@ -83,7 +83,7 @@ export function useOfflineSuppliersExt() {
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [fromCache, setFromCache] = useState(false);
-  const isOnline = useOnlineStatus();
+  const isOnline = useIsOnline();
   const { currentShop } = useShop();
 
   const refetch = useCallback(async () => {
@@ -163,7 +163,7 @@ export function useOfflineAdjustments(filterType?: string) {
   const [adjustments, setAdjustments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [fromCache, setFromCache] = useState(false);
-  const isOnline = useOnlineStatus();
+  const isOnline = useIsOnline();
   const { currentShop } = useShop();
 
   const refetch = useCallback(async () => {
@@ -221,7 +221,7 @@ export function useOfflineReturns(returnType?: 'sale' | 'purchase') {
   const [returns, setReturns] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [fromCache, setFromCache] = useState(false);
-  const isOnline = useOnlineStatus();
+  const isOnline = useIsOnline();
   const { currentShop } = useShop();
 
   const refetch = useCallback(async () => {
@@ -271,7 +271,7 @@ export function useOfflineLoans(statusFilter?: string) {
   const [overdueLoans, setOverdueLoans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [fromCache, setFromCache] = useState(false);
-  const isOnline = useOnlineStatus();
+  const isOnline = useIsOnline();
   const { currentShop } = useShop();
 
   const refetch = useCallback(async () => {
@@ -357,7 +357,7 @@ export function useOfflineStaff() {
   const [staff, setStaff] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [fromCache, setFromCache] = useState(false);
-  const isOnline = useOnlineStatus();
+  const isOnline = useIsOnline();
   const { currentShop } = useShop();
 
   const refetch = useCallback(async () => {
@@ -440,7 +440,7 @@ export function useOfflineCashSummary() {
   });
   const [loading, setLoading] = useState(true);
   const [fromCache, setFromCache] = useState(false);
-  const isOnline = useOnlineStatus();
+  const isOnline = useIsOnline();
   const { currentShop } = useShop();
 
   const refetch = useCallback(async () => {
@@ -490,7 +490,7 @@ export function useOfflineDueCustomers() {
   const [dueCustomers, setDueCustomers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [fromCache, setFromCache] = useState(false);
-  const isOnline = useOnlineStatus();
+  const isOnline = useIsOnline();
   const { currentShop } = useShop();
 
   const refetch = useCallback(async () => {
@@ -606,7 +606,7 @@ export function useOfflineCashRegister() {
   const [hasOpenRegister, setHasOpenRegister] = useState(false);
   const [loading, setLoading] = useState(true);
   const [fromCache, setFromCache] = useState(false);
-  const isOnline = useOnlineStatus();
+  const isOnline = useIsOnline();
   const { currentShop } = useShop();
 
   const refetch = useCallback(async () => {
@@ -698,7 +698,7 @@ export function useOfflineCashRegister() {
 export function useOfflineTrash(table?: string) {
   const [trash, setTrash] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const isOnline = useOnlineStatus();
+  const isOnline = useIsOnline();
   const { currentShop } = useShop();
 
   const refetch = useCallback(async () => {
@@ -765,7 +765,7 @@ export function useOfflineProductsSimple() {
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [fromCache, setFromCache] = useState(false);
-  const isOnline = useOnlineStatus();
+  const isOnline = useIsOnline();
   const { currentShop } = useShop();
 
   const refetch = useCallback(async () => {
