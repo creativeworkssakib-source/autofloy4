@@ -1,13 +1,16 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Globe, Store, ArrowRight, Sparkles } from "lucide-react";
+import { Globe, Store, ArrowRight, Sparkles, Lock } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DynamicDocumentTitle } from "@/components/DynamicDocumentTitle";
+import { useSiteSettings } from "@/contexts/SiteSettingsContext";
+import { Badge } from "@/components/ui/badge";
 
 const BusinessSelector = () => {
   const navigate = useNavigate();
+  const { settings } = useSiteSettings();
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);
 
   const businessTypes = [
@@ -22,6 +25,7 @@ const BusinessSelector = () => {
       borderColor: "border-blue-500/30",
       path: "/dashboard",
       features: ["AI Automation", "Message Replies", "Comment Management", "Analytics"],
+      enabled: settings.online_business_enabled !== false,
     },
     {
       id: "offline",
@@ -34,8 +38,15 @@ const BusinessSelector = () => {
       borderColor: "border-emerald-500/30",
       path: "/offline-shop",
       features: ["Inventory Management", "Sales Tracking", "Invoice Printing", "Download Reports"],
+      enabled: settings.offline_shop_enabled !== false,
     },
   ];
+
+  const handleCardClick = (business: typeof businessTypes[0]) => {
+    if (business.enabled) {
+      navigate(business.path);
+    }
+  };
 
   return (
     <>
@@ -70,13 +81,25 @@ const BusinessSelector = () => {
                 onMouseLeave={() => setHoveredCard(null)}
               >
                 <Card 
-                  className={`relative overflow-hidden cursor-pointer transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 ${business.borderColor} border-2 ${
-                    hoveredCard === business.id ? 'shadow-xl' : ''
+                  className={`relative overflow-hidden transition-all duration-300 ${business.borderColor} border-2 ${
+                    business.enabled 
+                      ? `cursor-pointer hover:shadow-2xl hover:-translate-y-1 ${hoveredCard === business.id ? 'shadow-xl' : ''}`
+                      : 'opacity-60 cursor-not-allowed'
                   }`}
-                  onClick={() => navigate(business.path)}
+                  onClick={() => handleCardClick(business)}
                 >
+                  {/* Disabled overlay */}
+                  {!business.enabled && (
+                    <div className="absolute inset-0 bg-background/50 z-10 flex items-center justify-center">
+                      <Badge variant="destructive" className="text-sm flex items-center gap-2 px-4 py-2">
+                        <Lock className="h-4 w-4" />
+                        Disabled by Admin
+                      </Badge>
+                    </div>
+                  )}
+
                   <div className={`absolute inset-0 bg-gradient-to-br ${business.color} opacity-0 transition-opacity duration-300 ${
-                    hoveredCard === business.id ? 'opacity-5' : ''
+                    hoveredCard === business.id && business.enabled ? 'opacity-5' : ''
                   }`} />
                   
                   <CardHeader className="pb-4">
@@ -109,10 +132,23 @@ const BusinessSelector = () => {
                     </div>
                     
                     <Button 
-                      className={`w-full mt-4 bg-gradient-to-r ${business.color} hover:opacity-90 text-white`}
+                      className={`w-full mt-4 ${business.enabled 
+                        ? `bg-gradient-to-r ${business.color} hover:opacity-90 text-white`
+                        : 'bg-muted text-muted-foreground cursor-not-allowed'
+                      }`}
+                      disabled={!business.enabled}
                     >
-                      Enter
-                      <ArrowRight className="ml-2 h-4 w-4" />
+                      {business.enabled ? (
+                        <>
+                          Enter
+                          <ArrowRight className="ml-2 h-4 w-4" />
+                        </>
+                      ) : (
+                        <>
+                          <Lock className="mr-2 h-4 w-4" />
+                          Unavailable
+                        </>
+                      )}
                     </Button>
                   </CardContent>
                 </Card>

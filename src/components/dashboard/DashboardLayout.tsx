@@ -42,6 +42,7 @@ import { SyncStatusBadge } from "./SyncStatusBadge";
 import { useSyncSettings } from "@/hooks/useSyncSettings";
 import { checkAdminRole } from "@/services/adminService";
 import Footer from "@/components/layout/Footer";
+import { FeatureDisabledOverlay } from "@/components/FeatureDisabledOverlay";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -103,6 +104,19 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     }
     return location.pathname.startsWith(path);
   };
+
+  // Check if online business is disabled
+  const isOnlineBusinessDisabled = settings.online_business_enabled === false;
+
+  // Show overlay if feature is disabled
+  if (isOnlineBusinessDisabled) {
+    return (
+      <FeatureDisabledOverlay 
+        featureName="Online Business" 
+        description="The Online Business module has been disabled by the administrator. This includes Facebook/WhatsApp automation, online orders, and product sync features."
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-muted/30">

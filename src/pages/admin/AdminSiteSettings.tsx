@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Save, Upload, Building2, Mail, Phone, Globe, Share2, FileText, Loader2, MessageSquare, Send, CheckCircle, XCircle, Video, Youtube, PlayCircle } from 'lucide-react';
+import { Save, Upload, Building2, Mail, Phone, Globe, Share2, FileText, Loader2, MessageSquare, Send, CheckCircle, XCircle, Video, Youtube, PlayCircle, ToggleLeft, Store, ShoppingBag } from 'lucide-react';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -147,8 +147,9 @@ const AdminSiteSettings = () => {
         </div>
 
         <Tabs defaultValue="branding" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-6 h-auto gap-1">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 md:grid-cols-7 h-auto gap-1">
             <TabsTrigger value="branding" className="text-xs sm:text-sm py-2">Branding</TabsTrigger>
+            <TabsTrigger value="features" className="text-xs sm:text-sm py-2">Features</TabsTrigger>
             <TabsTrigger value="contact" className="text-xs sm:text-sm py-2">Contact</TabsTrigger>
             <TabsTrigger value="social" className="text-xs sm:text-sm py-2">Social</TabsTrigger>
             <TabsTrigger value="demo" className="text-xs sm:text-sm py-2">Demo Video</TabsTrigger>
@@ -987,6 +988,77 @@ const AdminSiteSettings = () => {
                   />
                   <p className="text-xs text-muted-foreground">
                     Use {'{year}'} to automatically insert the current year
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Features Tab - Global Business Module Toggles */}
+          <TabsContent value="features">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ToggleLeft className="w-5 h-5 text-primary" />
+                  Business Module Controls
+                </CardTitle>
+                <CardDescription>
+                  Enable or disable business modules globally. When disabled, users cannot access these features.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Online Business Toggle */}
+                <div className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 rounded-lg bg-blue-500/10">
+                      <ShoppingBag className="w-6 h-6 text-blue-500" />
+                    </div>
+                    <div>
+                      <h4 className="font-medium">Online Business</h4>
+                      <p className="text-sm text-muted-foreground">
+                        Facebook/WhatsApp automation, online orders, product sync
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className={`text-sm font-medium ${formData.online_business_enabled ? 'text-green-600' : 'text-red-500'}`}>
+                      {formData.online_business_enabled ? 'Enabled' : 'Disabled'}
+                    </span>
+                    <Switch
+                      checked={formData.online_business_enabled ?? true}
+                      onCheckedChange={(checked) => handleChange('online_business_enabled', checked)}
+                    />
+                  </div>
+                </div>
+
+                {/* Offline Shop Toggle */}
+                <div className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 rounded-lg bg-orange-500/10">
+                      <Store className="w-6 h-6 text-orange-500" />
+                    </div>
+                    <div>
+                      <h4 className="font-medium">Offline Shop System</h4>
+                      <p className="text-sm text-muted-foreground">
+                        POS, inventory, sales, purchases, expenses, customers
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className={`text-sm font-medium ${formData.offline_shop_enabled ? 'text-green-600' : 'text-red-500'}`}>
+                      {formData.offline_shop_enabled ? 'Enabled' : 'Disabled'}
+                    </span>
+                    <Switch
+                      checked={formData.offline_shop_enabled ?? true}
+                      onCheckedChange={(checked) => handleChange('offline_shop_enabled', checked)}
+                    />
+                  </div>
+                </div>
+
+                <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                  <p className="text-sm text-yellow-700 dark:text-yellow-400">
+                    <strong>⚠️ Warning:</strong> Disabling a module will immediately block all users from accessing it.
+                    Changes take effect in real-time across the entire platform.
                   </p>
                 </div>
               </CardContent>

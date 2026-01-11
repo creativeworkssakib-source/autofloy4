@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useSiteSettings } from "@/contexts/SiteSettingsContext";
 import { DynamicDocumentTitle } from "@/components/DynamicDocumentTitle";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -46,6 +47,7 @@ import { useSyncSettings } from "@/hooks/useSyncSettings";
 import { useOfflineShopTrial } from "@/hooks/useOfflineShopTrial";
 import OfflineTrialBanner from "./OfflineTrialBanner";
 import OfflineTrialExpiredOverlay from "./OfflineTrialExpiredOverlay";
+import { FeatureDisabledOverlay } from "@/components/FeatureDisabledOverlay";
 
 interface ShopLayoutProps {
   children: ReactNode;
@@ -56,9 +58,13 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { t, language } = useLanguage();
+  const { settings } = useSiteSettings();
   const { syncEnabled } = useSyncSettings();
   const { isTrialUser, isOfflineTrialExpired } = useOfflineShopTrial();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Check if offline shop is disabled by admin
+  const isOfflineShopDisabled = settings.offline_shop_enabled === false;
 
   const navigation = [
     { name: t("shop.overview"), href: "/offline-shop", icon: LayoutDashboard },
@@ -109,6 +115,16 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
       })}
     </nav>
   );
+
+  // Show overlay if feature is disabled by admin
+  if (isOfflineShopDisabled) {
+    return (
+      <FeatureDisabledOverlay 
+        featureName="Offline Shop System" 
+        description="The Offline Shop module has been disabled by the administrator. This includes POS, inventory, sales, purchases, expenses, and customer management features."
+      />
+    );
+  }
 
   return (
     <>

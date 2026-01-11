@@ -3786,6 +3786,8 @@ export type Database = {
           legal_contact_email: string | null
           linkedin_url: string | null
           logo_url: string | null
+          offline_shop_enabled: boolean | null
+          online_business_enabled: boolean | null
           phone_number: string | null
           platform_sms_api_key: string | null
           platform_sms_enabled: boolean | null
@@ -3825,6 +3827,8 @@ export type Database = {
           legal_contact_email?: string | null
           linkedin_url?: string | null
           logo_url?: string | null
+          offline_shop_enabled?: boolean | null
+          online_business_enabled?: boolean | null
           phone_number?: string | null
           platform_sms_api_key?: string | null
           platform_sms_enabled?: boolean | null
@@ -3864,6 +3868,8 @@ export type Database = {
           legal_contact_email?: string | null
           linkedin_url?: string | null
           logo_url?: string | null
+          offline_shop_enabled?: boolean | null
+          online_business_enabled?: boolean | null
           phone_number?: string | null
           platform_sms_api_key?: string | null
           platform_sms_enabled?: boolean | null
