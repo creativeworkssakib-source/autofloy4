@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
-import { Download, TrendingUp, TrendingDown, DollarSign, Wallet, Users, Truck, ArrowUpRight, ArrowDownRight, Calculator, PiggyBank, Receipt, ShoppingBag, Package, Warehouse, Tags } from "lucide-react";
+import { useState, useMemo } from "react";
+import { Download, TrendingUp, TrendingDown, DollarSign, Wallet, Users, Truck, ArrowUpRight, ArrowDownRight, Calculator, PiggyBank, Receipt, ShoppingBag, Package, Warehouse, Tags, WifiOff, Wifi, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,7 +9,6 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import ShopLayout from "@/components/offline-shop/ShopLayout";
-import { offlineShopService } from "@/services/offlineShopService";
 import * as XLSX from "xlsx";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useShop } from "@/contexts/ShopContext";
@@ -17,6 +16,8 @@ import { useNavigate } from "react-router-dom";
 import DateRangeFilter, { DateRangePreset, DateRange, getDateRangeFromPreset } from "@/components/offline-shop/DateRangeFilter";
 import { isWithinInterval, startOfDay, endOfDay } from "date-fns";
 import { FullBusinessGrowthInsight } from "@/components/offline-shop/FullBusinessGrowthInsight";
+import { useOfflineCashSummary } from "@/hooks/useOfflineShopData";
+import { useOfflineSettings } from "@/hooks/useOfflineData";
 
 interface SummaryData {
   totalSales: number;
@@ -39,29 +40,16 @@ interface SummaryData {
   totalProductsCount: number;
 }
 
-interface RawData {
-  sales: any[];
-  purchases: any[];
-  expenses: any[];
-  customers: any[];
-  suppliers: any[];
-  products: any[];
-}
-
 const ShopCash = () => {
   const { t, language } = useLanguage();
   const { currentShop } = useShop();
   const navigate = useNavigate();
-  const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("overview");
-  const [rawData, setRawData] = useState<RawData>({
-    sales: [],
-    purchases: [],
-    expenses: [],
-    customers: [],
-    suppliers: [],
-    products: [],
-  });
+  
+  // Use offline hooks
+  const { data: rawData, loading: isLoading, fromCache, isOnline, refetch } = useOfflineCashSummary();
+  const { settings } = useOfflineSettings();
+  const currency = settings?.currency || "BDT";
   
   // Date filter state
   const [dateRangePreset, setDateRangePreset] = useState<DateRangePreset>('this_year');
@@ -75,37 +63,6 @@ const ShopCash = () => {
       setCustomDateRange(dates);
     }
   };
-
-  const loadData = async () => {
-    setIsLoading(true);
-    try {
-      const [salesRes, purchasesRes, expensesRes, customersRes, suppliersRes, productsRes] = await Promise.all([
-        offlineShopService.getSales(),
-        offlineShopService.getPurchases(),
-        offlineShopService.getExpenses(),
-        offlineShopService.getCustomers(),
-        offlineShopService.getSuppliers(),
-        offlineShopService.getProducts(),
-      ]);
-
-      setRawData({
-        sales: salesRes.sales || [],
-        purchases: purchasesRes.purchases || [],
-        expenses: expensesRes.expenses || [],
-        customers: customersRes.customers || [],
-        suppliers: suppliersRes.suppliers || [],
-        products: productsRes.products || [],
-      });
-    } catch (error) {
-      toast.error(t("shop.loadError"));
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadData();
-  }, [currentShop?.id]);
 
   // Compute filtered summary based on date range
   const summaryData = useMemo<SummaryData>(() => {

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, Search, AlertTriangle, Download, Trash2 } from "lucide-react";
+import { Plus, Search, AlertTriangle, Download, Trash2, WifiOff, Wifi, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,12 +31,13 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import ShopLayout from "@/components/offline-shop/ShopLayout";
-import { offlineShopService } from "@/services/offlineShopService";
 import * as XLSX from "xlsx";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useShop } from "@/contexts/ShopContext";
 import DateRangeFilter, { DateRangePreset, DateRange, getDateRangeFromPreset } from "@/components/offline-shop/DateRangeFilter";
 import { isWithinInterval } from "date-fns";
+import { useOfflineAdjustments } from "@/hooks/useOfflineShopData";
+import { useOfflineProducts, useOfflineSettings } from "@/hooks/useOfflineData";
 
 interface Adjustment {
   id: string;
@@ -49,13 +50,6 @@ interface Adjustment {
   cost_impact: number;
   notes?: string;
   created_at: string;
-}
-
-interface Product {
-  id: string;
-  name: string;
-  stock_quantity: number;
-  purchase_price: number;
 }
 
 const ShopAdjustments = () => {
@@ -71,9 +65,7 @@ const ShopAdjustments = () => {
     { value: "manual_decrease", label: t("shop.manualDecrease"), color: "secondary" },
     { value: "return", label: t("shop.return"), color: "default" },
   ];
-  const [adjustments, setAdjustments] = useState<Adjustment[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  
   const [searchQuery, setSearchQuery] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [filterType, setFilterType] = useState<string>("");
@@ -87,6 +79,11 @@ const ShopAdjustments = () => {
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
+  // Use offline hooks
+  const { adjustments, loading: isLoading, fromCache, isOnline, refetch, createAdjustment, deleteAdjustments } = useOfflineAdjustments(filterType);
+  const { products } = useOfflineProducts();
+  const { settings } = useOfflineSettings();
+  const currency = settings?.currency || "BDT";
 
   const [formData, setFormData] = useState({
     product_id: "",
@@ -97,26 +94,6 @@ const ShopAdjustments = () => {
     reason: "",
     notes: "",
   });
-
-  const loadData = async () => {
-    setIsLoading(true);
-    try {
-      const [adjustmentsRes, productsRes] = await Promise.all([
-        offlineShopService.getAdjustments(filterType ? { type: filterType } : {}),
-        offlineShopService.getProducts(),
-      ]);
-      setAdjustments(adjustmentsRes.adjustments || []);
-      setProducts(productsRes.products || []);
-    } catch (error) {
-      toast.error(t("shop.loadError"));
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadData();
-  }, [filterType, currentShop?.id]);
 
   // Filter adjustments by date range and search
   const currentDateRange = getDateRangeFromPreset(dateRange, customDateRange);
@@ -155,7 +132,7 @@ const ShopAdjustments = () => {
     if (selectedIds.length === 0) return;
     setIsBulkDeleting(true);
     try {
-      const result = await offlineShopService.deleteAdjustments(selectedIds);
+      const result = await deleteAdjustments(selectedIds);
       const deletedCount = result.deleted?.length || 0;
       toast.success(
         language === "bn"
@@ -163,7 +140,6 @@ const ShopAdjustments = () => {
           : `${deletedCount} adjustment(s) moved to trash`
       );
       setSelectedIds([]);
-      loadData();
     } catch (error) {
       toast.error(t("shop.errorOccurred"));
     } finally {
@@ -178,7 +154,7 @@ const ShopAdjustments = () => {
       return;
     }
     try {
-      const selectedProduct = products.find(p => p.id === formData.product_id);
+      const selectedProduct = products.find((p: any) => p.id === formData.product_id);
       const adjustmentData = {
         product_id: formData.product_id,
         product_name: selectedProduct?.name || formData.product_name,
@@ -189,11 +165,10 @@ const ShopAdjustments = () => {
         notes: formData.notes,
       };
       console.log("Creating adjustment:", adjustmentData);
-      await offlineShopService.createAdjustment(adjustmentData);
+      await createAdjustment(adjustmentData);
       toast.success(t("shop.adjustmentSaved"));
       setIsModalOpen(false);
       resetForm();
-      loadData();
     } catch (error: any) {
       console.error("Adjustment error:", error);
       toast.error(error.message || t("shop.errorOccurred"));
