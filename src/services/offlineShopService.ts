@@ -825,6 +825,47 @@ class OfflineShopService {
     const product = products.find((p: any) => p.barcode === barcode);
     return { product: product || null };
   }
+
+  // ===== DAILY CASH REGISTER =====
+  async getCashRegisters(params?: { date?: string; startDate?: string; endDate?: string }): Promise<{ 
+    registers: any[]; 
+    todayRegister: any | null; 
+    hasOpenRegister: boolean 
+  }> {
+    const queryParams: Record<string, string> = {};
+    if (params?.date) queryParams.date = params.date;
+    if (params?.startDate) queryParams.startDate = params.startDate;
+    if (params?.endDate) queryParams.endDate = params.endDate;
+    return this.request("cash-register", { method: "GET" }, queryParams);
+  }
+
+  async openCashRegister(openingCash: number, notes?: string): Promise<{ register: any; message: string; suggestedOpening: number }> {
+    return this.request("cash-register", {
+      method: "POST",
+      body: JSON.stringify({ action: "open", opening_cash: openingCash, notes }),
+    });
+  }
+
+  async closeCashRegister(closingCash: number, notes?: string): Promise<{ register: any; message: string; summary: any }> {
+    return this.request("cash-register", {
+      method: "POST",
+      body: JSON.stringify({ action: "close", closing_cash: closingCash, notes }),
+    });
+  }
+
+  async updateCashRegister(id: string, openingCash: number, notes?: string): Promise<{ register: any }> {
+    return this.request("cash-register", {
+      method: "POST",
+      body: JSON.stringify({ action: "update", id, opening_cash: openingCash, notes }),
+    });
+  }
+
+  async deleteCashRegister(id: string): Promise<{ message: string }> {
+    return this.request("cash-register", {
+      method: "DELETE",
+      body: JSON.stringify({ id }),
+    });
+  }
 }
 
 // Scanner Device interface

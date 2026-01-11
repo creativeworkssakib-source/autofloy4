@@ -1943,6 +1943,96 @@ export type Database = {
           },
         ]
       }
+      shop_daily_cash_register: {
+        Row: {
+          cash_difference: number | null
+          closing_cash: number | null
+          closing_time: string | null
+          created_at: string
+          expected_cash: number | null
+          id: string
+          notes: string | null
+          opening_cash: number
+          opening_time: string | null
+          register_date: string
+          shop_id: string | null
+          status: string | null
+          total_card_sales: number | null
+          total_cash_sales: number | null
+          total_deposits: number | null
+          total_due_collected: number | null
+          total_expenses: number | null
+          total_mobile_sales: number | null
+          total_sales: number | null
+          total_withdrawals: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cash_difference?: number | null
+          closing_cash?: number | null
+          closing_time?: string | null
+          created_at?: string
+          expected_cash?: number | null
+          id?: string
+          notes?: string | null
+          opening_cash?: number
+          opening_time?: string | null
+          register_date: string
+          shop_id?: string | null
+          status?: string | null
+          total_card_sales?: number | null
+          total_cash_sales?: number | null
+          total_deposits?: number | null
+          total_due_collected?: number | null
+          total_expenses?: number | null
+          total_mobile_sales?: number | null
+          total_sales?: number | null
+          total_withdrawals?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cash_difference?: number | null
+          closing_cash?: number | null
+          closing_time?: string | null
+          created_at?: string
+          expected_cash?: number | null
+          id?: string
+          notes?: string | null
+          opening_cash?: number
+          opening_time?: string | null
+          register_date?: string
+          shop_id?: string | null
+          status?: string | null
+          total_card_sales?: number | null
+          total_cash_sales?: number | null
+          total_deposits?: number | null
+          total_due_collected?: number | null
+          total_expenses?: number | null
+          total_mobile_sales?: number | null
+          total_sales?: number | null
+          total_withdrawals?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shop_daily_cash_register_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "shops"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shop_daily_cash_register_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       shop_damages: {
         Row: {
           created_at: string | null
