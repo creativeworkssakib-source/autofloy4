@@ -570,6 +570,17 @@ const ShopSales = () => {
               <Plus className="h-4 w-4 mr-2" />
               {t("shop.newSale")}
             </Button>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setIsModalOpen(true);
+                // Small delay to ensure modal is open before starting scanner
+                setTimeout(() => setScannerOpen(true), 100);
+              }}
+            >
+              <ScanBarcode className="h-4 w-4 mr-2" />
+              {language === "bn" ? "স্ক্যান" : "Scan"}
+            </Button>
           </div>
           <DeleteConfirmDialog
             open={deleteDialogOpen}
