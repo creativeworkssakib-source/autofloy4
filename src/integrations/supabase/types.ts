@@ -1341,8 +1341,11 @@ export type Database = {
         Row: {
           account_name: string | null
           account_number: string | null
+          api_key: string | null
+          api_secret: string | null
           created_at: string
           display_order: number | null
+          gateway_url: string | null
           icon: string | null
           id: string
           instructions: string | null
@@ -1354,8 +1357,11 @@ export type Database = {
         Insert: {
           account_name?: string | null
           account_number?: string | null
+          api_key?: string | null
+          api_secret?: string | null
           created_at?: string
           display_order?: number | null
+          gateway_url?: string | null
           icon?: string | null
           id?: string
           instructions?: string | null
@@ -1367,8 +1373,11 @@ export type Database = {
         Update: {
           account_name?: string | null
           account_number?: string | null
+          api_key?: string | null
+          api_secret?: string | null
           created_at?: string
           display_order?: number | null
+          gateway_url?: string | null
           icon?: string | null
           id?: string
           instructions?: string | null
