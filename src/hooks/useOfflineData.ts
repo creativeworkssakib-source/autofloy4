@@ -21,34 +21,64 @@ export function useSyncStatus() {
     lastError: null,
     progress: 0,
   });
+  const [isDbReady, setIsDbReady] = useState(false);
   
   useEffect(() => {
-    const unsubscribe = syncManager.subscribe(setStatus);
+    let isMounted = true;
+    let unsubscribe: (() => void) | null = null;
+    let interval: NodeJS.Timeout | null = null;
     
-    // Get initial pending count
-    syncManager.getStatusWithCount().then(setStatus);
+    // Wait for offlineDataService to be initialized before accessing sync status
+    const initAndSubscribe = async () => {
+      try {
+        // Initialize the database if needed
+        await offlineDataService.init();
+        
+        if (!isMounted) return;
+        
+        setIsDbReady(true);
+        
+        unsubscribe = syncManager.subscribe(setStatus);
+        
+        // Get initial pending count - now safe as DB is initialized
+        const initialStatus = await syncManager.getStatusWithCount();
+        if (isMounted) {
+          setStatus(initialStatus);
+        }
+        
+        // Update pending count periodically
+        interval = setInterval(() => {
+          if (isMounted) {
+            syncManager.updatePendingCount();
+          }
+        }, 10000);
+      } catch (error) {
+        console.warn('Failed to initialize sync status:', error);
+      }
+    };
     
-    // Update pending count periodically
-    const interval = setInterval(() => {
-      syncManager.updatePendingCount();
-    }, 10000);
+    initAndSubscribe();
     
     return () => {
-      unsubscribe();
-      clearInterval(interval);
+      isMounted = false;
+      if (unsubscribe) unsubscribe();
+      if (interval) clearInterval(interval);
     };
   }, []);
   
   const triggerSync = useCallback(async () => {
+    if (!isDbReady) return { success: false, synced: 0, failed: 0 };
     return syncManager.sync();
-  }, []);
+  }, [isDbReady]);
   
   const triggerFullSync = useCallback(async (shopId: string) => {
+    if (!isDbReady) return { success: false, tables: [] };
     return syncManager.fullSync(shopId);
-  }, []);
+  }, [isDbReady]);
   
   return {
     ...status,
+    isDbReady,
     triggerSync,
     triggerFullSync,
   };

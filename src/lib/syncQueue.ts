@@ -47,13 +47,15 @@ class SyncQueue {
    * Get all pending (unsynced) items
    */
   async getPending(): Promise<SyncQueueItem[]> {
-    return offlineDB.getPendingSyncItems();
+    // Use safe method that handles uninitialized DB
+    return offlineDB.getPendingSyncItemsSafe();
   }
 
   /**
    * Get pending items count
    */
   async getPendingCount(): Promise<number> {
+    // getSyncQueueCount already handles uninitialized DB
     return offlineDB.getSyncQueueCount();
   }
 

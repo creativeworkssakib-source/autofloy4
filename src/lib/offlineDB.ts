@@ -1148,8 +1148,29 @@ class OfflineDB {
   }
 
   async getSyncQueueCount(): Promise<number> {
+    // Return 0 if database is not initialized yet
+    if (!this.db) {
+      return 0;
+    }
     const items = await this.getPendingSyncItems();
     return items.length;
+  }
+
+  /**
+   * Check if database is initialized
+   */
+  isInitialized(): boolean {
+    return this.db !== null;
+  }
+
+  /**
+   * Safe method to get pending sync items - returns empty array if DB not initialized
+   */
+  async getPendingSyncItemsSafe(): Promise<SyncQueueItem[]> {
+    if (!this.db) {
+      return [];
+    }
+    return this.getPendingSyncItems();
   }
 
   // =============== SYNC METADATA ===============
