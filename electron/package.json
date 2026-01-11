@@ -1,0 +1,11 @@
+{
+  "name": "autofloy-shop-desktop",
+  "version": "1.0.0",
+  "description": "AutoFloy Shop - Complete Business Solution for Desktop",
+  "main": "main.js",
+  "author": "AutoFloy",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron ."
+  }
+}
