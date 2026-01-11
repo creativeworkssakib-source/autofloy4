@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useShop } from "@/contexts/ShopContext";
 import { offlineShopService } from "@/services/offlineShopService";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,10 +67,8 @@ interface QuickExpense {
 export function DailyCashRegister() {
   const { language } = useLanguage();
   const { currentShop } = useShop();
-  const [isLoading, setIsLoading] = useState(true);
-  const [registers, setRegisters] = useState<CashRegister[]>([]);
-  const [todayRegister, setTodayRegister] = useState<CashRegister | null>(null);
-  const [hasOpenRegister, setHasOpenRegister] = useState(false);
+  const queryClient = useQueryClient();
+  
   const [showOpenModal, setShowOpenModal] = useState(false);
   const [showCloseModal, setShowCloseModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
@@ -77,10 +76,36 @@ export function DailyCashRegister() {
   const [openingCash, setOpeningCash] = useState("");
   const [closingCash, setClosingCash] = useState("");
   const [notes, setNotes] = useState("");
-  const [suggestedOpening, setSuggestedOpening] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [quickExpenseAmount, setQuickExpenseAmount] = useState("");
   const [quickExpenseDescription, setQuickExpenseDescription] = useState("");
+
+  // Use React Query for seamless background refetching
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ["cash-register", currentShop?.id],
+    queryFn: async () => {
+      if (!currentShop) return null;
+      return offlineShopService.getCashRegisters({
+        startDate: format(subDays(new Date(), 30), "yyyy-MM-dd"),
+      });
+    },
+    enabled: !!currentShop,
+    refetchInterval: (query) => {
+      // Auto-refresh every 30 seconds only when register is open
+      // This happens in background without showing loading
+      const data = query.state.data;
+      return data?.hasOpenRegister ? 30000 : false;
+    },
+    staleTime: 10000, // Consider data fresh for 10 seconds
+    refetchOnWindowFocus: true,
+  });
+
+  const registers = data?.registers || [];
+  const todayRegister = data?.todayRegister || null;
+  const hasOpenRegister = data?.hasOpenRegister || false;
+  
+  // Get suggested opening cash from last closed register
+  const suggestedOpening = registers.find((r: CashRegister) => r.status === "closed")?.closing_cash || 0;
 
   const t = {
     title: language === "bn" ? "দৈনিক ক্যাশ রেজিস্টার" : "Daily Cash Register",
@@ -132,44 +157,6 @@ export function DailyCashRegister() {
     }).format(amount);
   };
 
-  const loadData = useCallback(async () => {
-    if (!currentShop) return;
-    setIsLoading(true);
-    try {
-      const data = await offlineShopService.getCashRegisters({
-        startDate: format(subDays(new Date(), 30), "yyyy-MM-dd"),
-      });
-      setRegisters(data.registers || []);
-      setTodayRegister(data.todayRegister || null);
-      setHasOpenRegister(data.hasOpenRegister);
-      
-      // Set suggested opening cash from last closed register
-      const lastClosed = (data.registers || []).find((r: CashRegister) => r.status === "closed");
-      if (lastClosed) {
-        setSuggestedOpening(lastClosed.closing_cash || 0);
-      }
-    } catch (error) {
-      console.error("Failed to load cash register data:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [currentShop]);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
-
-  // Auto-refresh data every 30 seconds when register is open
-  useEffect(() => {
-    if (!hasOpenRegister) return;
-    
-    const interval = setInterval(() => {
-      loadData();
-    }, 30000);
-    
-    return () => clearInterval(interval);
-  }, [hasOpenRegister, loadData]);
-
   const handleOpenRegister = async () => {
     if (!openingCash && openingCash !== "0") {
       toast.error(t.enterOpeningAmount);
@@ -183,7 +170,7 @@ export function DailyCashRegister() {
       setShowOpenModal(false);
       setOpeningCash("");
       setNotes("");
-      loadData();
+      refetch();
     } catch (error: any) {
       toast.error(error.message || "Failed to open register");
     } finally {
@@ -204,7 +191,7 @@ export function DailyCashRegister() {
       setShowCloseModal(false);
       setClosingCash("");
       setNotes("");
-      loadData();
+      refetch();
     } catch (error: any) {
       toast.error(error.message || "Failed to close register");
     } finally {
@@ -225,7 +212,7 @@ export function DailyCashRegister() {
       setQuickExpenseAmount("");
       setQuickExpenseDescription("");
       setShowQuickExpenseModal(false);
-      loadData();
+      refetch();
     } catch (error: any) {
       toast.error(error.message || "Failed to add expense");
     } finally {
@@ -237,7 +224,7 @@ export function DailyCashRegister() {
     try {
       await offlineShopService.deleteQuickExpense(expenseId);
       toast.success(language === "bn" ? "খরচ মুছে ফেলা হয়েছে" : "Expense deleted");
-      loadData();
+      refetch();
     } catch (error: any) {
       toast.error(error.message || "Failed to delete expense");
     }
@@ -252,6 +239,8 @@ export function DailyCashRegister() {
            Number(todayRegister.total_expenses || 0) - 
            Number(todayRegister.total_withdrawals || 0);
   };
+
+  // Functions already defined above with refetch() instead of loadData()
 
   if (isLoading) {
     return (
