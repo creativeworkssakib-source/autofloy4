@@ -106,7 +106,7 @@ const AdminPaymentRequests = () => {
   });
 
   const filteredRequests = data?.requests?.filter((req) =>
-    req.user_email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    req.user?.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     req.transaction_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     req.plan_name?.toLowerCase().includes(searchTerm.toLowerCase())
   ) || [];
@@ -273,8 +273,8 @@ const AdminPaymentRequests = () => {
                               <User className="w-4 h-4 text-primary" />
                             </div>
                             <div>
-                              <p className="font-medium text-sm">{request.user_name || "Unknown"}</p>
-                              <p className="text-xs text-muted-foreground">{request.user_email}</p>
+                              <p className="font-medium text-sm">{request.user?.display_name || "Unknown"}</p>
+                              <p className="text-xs text-muted-foreground">{request.user?.email}</p>
                             </div>
                           </div>
                         </TableCell>
@@ -350,8 +350,8 @@ const AdminPaymentRequests = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <Label className="text-muted-foreground text-xs">User</Label>
-                  <p className="font-medium">{selectedRequest.user_name || "Unknown"}</p>
-                  <p className="text-sm text-muted-foreground">{selectedRequest.user_email}</p>
+                  <p className="font-medium">{selectedRequest.user?.display_name || "Unknown"}</p>
+                  <p className="text-sm text-muted-foreground">{selectedRequest.user?.email}</p>
                 </div>
                 <div className="space-y-1">
                   <Label className="text-muted-foreground text-xs">Plan</Label>
@@ -444,7 +444,7 @@ const AdminPaymentRequests = () => {
             <div className="p-4 bg-muted rounded-lg space-y-2">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">User:</span>
-                <span className="font-medium">{selectedRequest.user_email}</span>
+                <span className="font-medium">{selectedRequest.user?.email}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Plan:</span>
