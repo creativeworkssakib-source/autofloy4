@@ -56,6 +56,11 @@ const AdminSubscriptions = lazy(() => import("./pages/admin/AdminSubscriptions")
 const AdminSiteSettings = lazy(() => import("./pages/admin/AdminSiteSettings"));
 const AdminPricingPlans = lazy(() => import("./pages/admin/AdminPricingPlans"));
 const AdminAppearance = lazy(() => import("./pages/admin/AdminAppearance"));
+const AdminPaymentRequests = lazy(() => import("./pages/admin/AdminPaymentRequests"));
+
+// User pages
+const UpgradePlan = lazy(() => import("./pages/UpgradePlan"));
+const PaymentHistory = lazy(() => import("./pages/PaymentHistory"));
 
 // Loading fallback component
 const PageLoader = () => (
@@ -253,6 +258,23 @@ const App = () => (
                     <AdminProtectedRoute>
                       <AdminAppearance />
                     </AdminProtectedRoute>
+                  } />
+                  <Route path="/admin/payment-requests" element={
+                    <AdminProtectedRoute>
+                      <AdminPaymentRequests />
+                    </AdminProtectedRoute>
+                  } />
+                  
+                  {/* User Payment Routes */}
+                  <Route path="/upgrade" element={
+                    <ProtectedRoute>
+                      <UpgradePlan />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/payment-history" element={
+                    <ProtectedRoute>
+                      <PaymentHistory />
+                    </ProtectedRoute>
                   } />
                   
                   {/* Catch-all */}
