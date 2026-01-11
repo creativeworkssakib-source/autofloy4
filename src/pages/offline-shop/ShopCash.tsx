@@ -17,7 +17,6 @@ import { useNavigate } from "react-router-dom";
 import DateRangeFilter, { DateRangePreset, DateRange, getDateRangeFromPreset } from "@/components/offline-shop/DateRangeFilter";
 import { isWithinInterval, startOfDay, endOfDay } from "date-fns";
 import { FullBusinessGrowthInsight } from "@/components/offline-shop/FullBusinessGrowthInsight";
-import { DailyCashRegister } from "@/components/offline-shop/DailyCashRegister";
 
 interface SummaryData {
   totalSales: number;
@@ -198,8 +197,6 @@ const ShopCash = () => {
   return (
     <ShopLayout>
       <div className="space-y-4 sm:space-y-6">
-        {/* Daily Cash Register - Premium Feature */}
-        <DailyCashRegister />
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold">
