@@ -28,7 +28,15 @@ export function useSyncStatus() {
     // Get initial pending count
     syncManager.getStatusWithCount().then(setStatus);
     
-    return unsubscribe;
+    // Update pending count periodically
+    const interval = setInterval(() => {
+      syncManager.updatePendingCount();
+    }, 10000);
+    
+    return () => {
+      unsubscribe();
+      clearInterval(interval);
+    };
   }, []);
   
   const triggerSync = useCallback(async () => {
