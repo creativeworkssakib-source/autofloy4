@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSearchParams, Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   ArrowLeft, Check, Copy, ChevronDown, ChevronUp, Smartphone, 
-  Building2, CreditCard, Loader2, ArrowRight, Shield, Clock, Upload
+  Building2, CreditCard, Loader2, ArrowRight, Shield, Clock, Upload,
+  Wallet, Bitcoin
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,119 +23,27 @@ import Footer from "@/components/layout/Footer";
 import { getPlanById } from "@/data/plans";
 import { useToast } from "@/hooks/use-toast";
 import { useSiteSettings } from "@/contexts/SiteSettingsContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 
-type PaymentMethodId = "bkash" | "nagad" | "rocket" | "upay" | "bank" | "card";
-
-interface PaymentMethod {
-  id: PaymentMethodId;
+interface DbPaymentMethod {
+  id: string;
   name: string;
-  icon: React.ComponentType<{ className?: string }>;
-  color: string;
+  type: string;
+  account_number: string | null;
+  account_name: string | null;
+  instructions: string | null;
+  icon: string;
+  is_active: boolean;
+  display_order: number;
 }
 
-const paymentMethods: PaymentMethod[] = [
-  { id: "bkash", name: "bKash", icon: Smartphone, color: "#E2136E" },
-  { id: "nagad", name: "Nagad", icon: Smartphone, color: "#F6921E" },
-  { id: "rocket", name: "Rocket", icon: Smartphone, color: "#8E44AD" },
-  { id: "upay", name: "Upay", icon: Smartphone, color: "#00A651" },
-  { id: "bank", name: "Bank Transfer", icon: Building2, color: "#1E40AF" },
-  { id: "card", name: "Card", icon: CreditCard, color: "#6366F1" },
-];
-
-const paymentInstructions: Record<PaymentMethodId, { 
-  title: string; 
-  subtitle: string;
-  steps: string[]; 
-  accountNumber?: string;
-  accountLabel?: string;
-  bankDetails?: { label: string; value: string }[];
-  showFileUpload?: boolean;
-  isCard?: boolean;
-}> = {
-  bkash: {
-    title: "bKash Payment Instructions",
-    subtitle: "Follow these steps",
-    steps: [
-      "Go to your bKash app or Dial *247#",
-      'Choose "Send Money"',
-      "Enter our bKash Account Number",
-      "Enter total amount",
-      "Confirm with your PIN",
-      "Copy Transaction ID and paste below",
-    ],
-    accountNumber: "+8801401918624",
-    accountLabel: "Account Number",
-  },
-  nagad: {
-    title: "Nagad Payment Instructions",
-    subtitle: "Follow these steps",
-    steps: [
-      "Go to your Nagad app or Dial *167#",
-      'Choose "Send Money"',
-      "Enter our Nagad Account Number",
-      "Enter total amount",
-      "Confirm with your PIN",
-      "Copy Transaction ID and paste below",
-    ],
-    accountNumber: "+8801401918624",
-    accountLabel: "Account Number",
-  },
-  rocket: {
-    title: "Rocket Payment Instructions",
-    subtitle: "Follow these steps",
-    steps: [
-      "Go to your Rocket app or Dial *322#",
-      'Choose "Send Money"',
-      "Enter our Rocket Account Number",
-      "Enter total amount",
-      "Confirm with your PIN",
-      "Copy Transaction ID and paste below",
-    ],
-    accountNumber: "+8801401918624",
-    accountLabel: "Account Number",
-  },
-  upay: {
-    title: "Upay Payment Instructions",
-    subtitle: "Follow these steps",
-    steps: [
-      "Go to your Upay app",
-      'Choose "Send Money"',
-      "Enter our Upay Account Number",
-      "Enter total amount",
-      "Confirm with your PIN",
-      "Copy Transaction ID and paste below",
-    ],
-    accountNumber: "+8801401918624",
-    accountLabel: "Account Number",
-  },
-  bank: {
-    title: "Bank Transfer Instructions",
-    subtitle: "Transfer to our bank account",
-    steps: [
-      "Transfer the amount to the bank account above",
-      "Take a payment screenshot",
-      "Upload payment screenshot below",
-      "Enter transaction/reference number",
-    ],
-    bankDetails: [
-      { label: "Bank Name", value: "Dutch-Bangla Bank Ltd." },
-      { label: "Account Holder", value: "AutoFloy Technologies" },
-      { label: "Account Number", value: "1234567890123" },
-      { label: "Branch Name", value: "Dhaka Main Branch" },
-    ],
-    showFileUpload: true,
-  },
-  card: {
-    title: "Card Payment Instructions",
-    subtitle: "Secure payment gateway",
-    steps: [
-      'Click "Proceed to Card Payment"',
-      "Enter card details securely",
-      "Complete payment",
-      "Return automatically after success",
-    ],
-    isCard: true,
-  },
+const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
+  smartphone: Smartphone,
+  landmark: Building2,
+  "credit-card": CreditCard,
+  wallet: Wallet,
+  bitcoin: Bitcoin,
 };
 
 const communities = [
@@ -150,35 +59,103 @@ const Checkout = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { settings } = useSiteSettings();
+  const { user } = useAuth();
   const planId = searchParams.get("plan") || "starter";
   const plan = getPlanById(planId);
 
+  const [paymentMethods, setPaymentMethods] = useState<DbPaymentMethod[]>([]);
+  const [isLoadingMethods, setIsLoadingMethods] = useState(true);
+
   const [formData, setFormData] = useState({
-    fullName: "",
-    email: "",
-    phone: "",
+    fullName: user?.name || "",
+    email: user?.email || "",
+    phone: user?.phone || "",
     community: "none",
-    paymentMethod: "bkash" as PaymentMethodId,
+    paymentMethodId: "",
     transactionId: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAllFeatures, setShowAllFeatures] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
 
-  const currentInstructions = paymentInstructions[formData.paymentMethod];
+  // Load payment methods from database
+  useEffect(() => {
+    const loadPaymentMethods = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("payment_methods")
+          .select("*")
+          .eq("is_active", true)
+          .order("display_order", { ascending: true });
+
+        if (error) throw error;
+        
+        setPaymentMethods(data || []);
+        if (data && data.length > 0) {
+          setFormData(prev => ({ ...prev, paymentMethodId: data[0].id }));
+        }
+      } catch (error) {
+        console.error("Error loading payment methods:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load payment methods",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoadingMethods(false);
+      }
+    };
+
+    loadPaymentMethods();
+  }, []);
+
+  // Pre-fill user data
+  useEffect(() => {
+    if (user) {
+      setFormData(prev => ({
+        ...prev,
+        fullName: user.name || prev.fullName,
+        email: user.email || prev.email,
+        phone: user.phone || prev.phone,
+      }));
+    }
+  }, [user]);
+
+  const selectedMethod = paymentMethods.find(m => m.id === formData.paymentMethodId);
 
   const handleCopyNumber = () => {
-    if (currentInstructions.accountNumber) {
-      navigator.clipboard.writeText(currentInstructions.accountNumber);
+    if (selectedMethod?.account_number) {
+      navigator.clipboard.writeText(selectedMethod.account_number);
       toast({ title: "Copied!", description: "Account number copied to clipboard" });
     }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setUploadedFile(file);
-      toast({ title: "File uploaded!", description: file.name });
+    if (!file) return;
+
+    setUploadedFile(file);
+    toast({ title: "File selected!", description: file.name });
+
+    // Upload to storage
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `payment-screenshots/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+      
+      const { data, error } = await supabase.storage
+        .from("uploads")
+        .upload(fileName, file);
+
+      if (error) {
+        console.error("Upload error:", error);
+        // If bucket doesn't exist, we'll still proceed but without screenshot
+      } else if (data) {
+        const { data: urlData } = supabase.storage.from("uploads").getPublicUrl(fileName);
+        setScreenshotUrl(urlData.publicUrl);
+      }
+    } catch (err) {
+      console.error("Upload failed:", err);
     }
   };
 
@@ -190,26 +167,69 @@ const Checkout = () => {
       return;
     }
 
-    if (plan && plan.priceNumeric > 0 && formData.paymentMethod !== "card" && !formData.transactionId) {
-      toast({ title: "Please enter Transaction ID", variant: "destructive" });
+    if (!user) {
+      toast({ 
+        title: "Please login first", 
+        description: "You need to be logged in to make a purchase",
+        variant: "destructive" 
+      });
+      navigate("/login?redirect=/checkout?plan=" + planId);
       return;
     }
 
-    if (formData.paymentMethod === "bank" && !uploadedFile) {
-      toast({ title: "Please upload payment screenshot", variant: "destructive" });
-      return;
+    if (plan && plan.priceNumeric > 0) {
+      if (!formData.transactionId) {
+        toast({ title: "Please enter Transaction ID", variant: "destructive" });
+        return;
+      }
+
+      if (selectedMethod?.type === "bank" && !uploadedFile) {
+        toast({ title: "Please upload payment screenshot", variant: "destructive" });
+        return;
+      }
     }
 
     setIsSubmitting(true);
-    await new Promise((r) => setTimeout(r, 2000));
-    
-    toast({ 
-      title: "Purchase Successful! 🎉", 
-      description: "Your order has been placed. Check your email for details." 
-    });
-    
-    setIsSubmitting(false);
-    navigate("/dashboard");
+
+    try {
+      // Create payment request in database
+      const { error } = await supabase
+        .from("payment_requests")
+        .insert({
+          user_id: user.id,
+          plan_id: planId,
+          plan_name: plan?.name || planId,
+          amount: plan?.priceNumeric || 0,
+          currency: "BDT",
+          payment_method: selectedMethod?.name || "Unknown",
+          transaction_id: formData.transactionId || null,
+          screenshot_url: screenshotUrl,
+          status: "pending",
+        });
+
+      if (error) throw error;
+
+      toast({ 
+        title: "Payment Request Submitted! 🎉", 
+        description: "Your request is being reviewed. You'll be notified once approved." 
+      });
+      
+      navigate("/dashboard");
+    } catch (error) {
+      console.error("Error submitting payment request:", error);
+      toast({ 
+        title: "Submission Failed", 
+        description: "Please try again or contact support",
+        variant: "destructive" 
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const getIcon = (iconName: string) => {
+    const IconComponent = iconMap[iconName] || Wallet;
+    return IconComponent;
   };
 
   if (!plan) {
@@ -307,7 +327,7 @@ const Checkout = () => {
                 </div>
                 <div className="flex items-center gap-2">
                   <Clock className="w-4 h-4 text-primary" />
-                  <span>Instant Activation</span>
+                  <span>Quick Activation</span>
                 </div>
               </div>
 
@@ -345,10 +365,10 @@ const Checkout = () => {
               </Card>
 
               {/* Dynamic Payment Instructions */}
-              {plan.priceNumeric > 0 && (
+              {plan.priceNumeric > 0 && selectedMethod && (
                 <AnimatePresence mode="wait">
                   <motion.div
-                    key={formData.paymentMethod}
+                    key={selectedMethod.id}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -20 }}
@@ -358,108 +378,53 @@ const Checkout = () => {
                       <CardContent className="p-6">
                         {/* Header with Icon */}
                         <div className="flex items-center gap-3 mb-4">
-                          <div 
-                            className="w-10 h-10 rounded-xl flex items-center justify-center"
-                            style={{ 
-                              backgroundColor: `${paymentMethods.find(m => m.id === formData.paymentMethod)?.color}15`,
-                            }}
-                          >
-                            <Smartphone 
-                              className="w-5 h-5" 
-                              style={{ color: paymentMethods.find(m => m.id === formData.paymentMethod)?.color }}
-                            />
+                          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                            {(() => {
+                              const IconComp = getIcon(selectedMethod.icon);
+                              return <IconComp className="w-5 h-5 text-primary" />;
+                            })()}
                           </div>
                           <div>
-                            <h3 className="font-semibold">{currentInstructions.title}</h3>
-                            <p className="text-sm text-muted-foreground">{currentInstructions.subtitle}</p>
+                            <h3 className="font-semibold">{selectedMethod.name} Payment</h3>
+                            <p className="text-sm text-muted-foreground">Follow the instructions below</p>
                           </div>
                         </div>
 
-                        {/* Bank Details for Bank Transfer */}
-                        {currentInstructions.bankDetails && (
-                          <div className="mb-4 p-4 rounded-xl bg-muted/50 border border-border space-y-2">
-                            {currentInstructions.bankDetails.map((detail, i) => (
-                              <div key={i} className="flex justify-between text-sm">
-                                <span className="text-muted-foreground">{detail.label}:</span>
-                                <span className="font-medium">
-                                  {detail.label === "Account Holder" ? `${settings.company_name} Technologies` : detail.value}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
+                        {/* Instructions */}
+                        {selectedMethod.instructions && (
+                          <p className="text-sm text-muted-foreground mb-4">
+                            {selectedMethod.instructions}
+                          </p>
                         )}
 
-                        {/* Card Info */}
-                        {currentInstructions.isCard && (
-                          <div className="mb-4 p-4 rounded-xl bg-gradient-to-br from-primary/10 to-secondary/10 border border-primary/20">
-                            <p className="text-sm mb-2">
-                              You will be redirected to a secure payment gateway.
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              Supports Visa, MasterCard, and AMEX
-                            </p>
-                          </div>
-                        )}
-                        
-                        {/* Steps */}
-                        <ol className="space-y-3 text-sm">
-                          {currentInstructions.steps.map((step, index) => (
-                            <motion.li 
-                              key={index}
-                              initial={{ opacity: 0, x: -10 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              transition={{ delay: index * 0.05 }}
-                              className="flex gap-3"
-                            >
-                              <span 
-                                className="flex-shrink-0 w-5 h-5 rounded-full text-xs flex items-center justify-center font-medium text-primary-foreground"
-                                style={{ 
-                                  background: `linear-gradient(135deg, ${paymentMethods.find(m => m.id === formData.paymentMethod)?.color}, ${paymentMethods.find(m => m.id === formData.paymentMethod)?.color}99)`,
-                                }}
-                              >
-                                {index + 1}
-                              </span>
-                              <span>{step}</span>
-                            </motion.li>
-                          ))}
-                        </ol>
-
-                        {/* Account Number Box */}
-                        {currentInstructions.accountNumber && (
-                          <motion.div 
-                            initial={{ opacity: 0, scale: 0.95 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            transition={{ delay: 0.2 }}
-                            className="mt-4 p-4 rounded-xl bg-muted/50 border border-border"
-                          >
+                        {/* Account Details */}
+                        {selectedMethod.account_number && (
+                          <div className="p-4 rounded-xl bg-muted/50 border border-border mb-4">
                             <div className="flex items-center justify-between">
                               <div>
                                 <p className="text-xs text-muted-foreground mb-1">
-                                  {currentInstructions.accountLabel}
+                                  {selectedMethod.type === "bank" ? "Account Number" : "Send Money To"}
                                 </p>
-                                <p 
-                                  className="font-bold text-lg"
-                                  style={{ color: paymentMethods.find(m => m.id === formData.paymentMethod)?.color }}
-                                >
-                                  {currentInstructions.accountNumber}
+                                <p className="font-bold text-lg text-primary">
+                                  {selectedMethod.account_number}
                                 </p>
+                                {selectedMethod.account_name && (
+                                  <p className="text-sm text-muted-foreground mt-1">
+                                    {selectedMethod.account_name}
+                                  </p>
+                                )}
                               </div>
                               <Button variant="outline" size="sm" onClick={handleCopyNumber} className="gap-2">
                                 <Copy className="h-4 w-4" />
                                 Copy
                               </Button>
                             </div>
-                          </motion.div>
+                          </div>
                         )}
 
                         {/* File Upload for Bank Transfer */}
-                        {currentInstructions.showFileUpload && (
-                          <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            transition={{ delay: 0.3 }}
-                            className="mt-4"
-                          >
+                        {selectedMethod.type === "bank" && (
+                          <div className="mt-4">
                             <Label className="text-sm font-medium mb-2 block">
                               Upload Payment Screenshot <span className="text-destructive">*</span>
                             </Label>
@@ -482,22 +447,7 @@ const Checkout = () => {
                                 )}
                               </label>
                             </div>
-                          </motion.div>
-                        )}
-
-                        {/* Proceed to Card Payment Button */}
-                        {currentInstructions.isCard && (
-                          <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            transition={{ delay: 0.3 }}
-                            className="mt-4"
-                          >
-                            <Button variant="gradient" className="w-full" size="lg">
-                              Proceed to Card Payment
-                              <ArrowRight className="w-4 h-4 ml-2" />
-                            </Button>
-                          </motion.div>
+                          </div>
                         )}
                       </CardContent>
                     </Card>
@@ -582,39 +532,52 @@ const Checkout = () => {
                       </Select>
                     </div>
 
-                    {/* Payment Method */}
+                    {/* Payment Method - Dynamic from Database */}
                     {plan.priceNumeric > 0 && (
                       <div className="space-y-3">
                         <Label>
                           Payment Method <span className="text-destructive">*</span>
                         </Label>
-                        <RadioGroup
-                          value={formData.paymentMethod}
-                          onValueChange={(value) => setFormData({ ...formData, paymentMethod: value as PaymentMethodId })}
-                          className="grid grid-cols-3 gap-3"
-                        >
-                          {paymentMethods.map((method) => (
-                            <div key={method.id}>
-                              <RadioGroupItem
-                                value={method.id}
-                                id={method.id}
-                                className="peer sr-only"
-                              />
-                              <Label
-                                htmlFor={method.id}
-                                className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 cursor-pointer transition-all peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:border-primary/50"
-                              >
-                                <method.icon className="h-5 w-5 text-muted-foreground" />
-                                <span className="font-medium text-sm text-center">{method.name}</span>
-                              </Label>
-                            </div>
-                          ))}
-                        </RadioGroup>
+                        {isLoadingMethods ? (
+                          <div className="flex items-center justify-center py-4">
+                            <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                          </div>
+                        ) : paymentMethods.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">
+                            No payment methods available. Please contact support.
+                          </p>
+                        ) : (
+                          <RadioGroup
+                            value={formData.paymentMethodId}
+                            onValueChange={(value) => setFormData({ ...formData, paymentMethodId: value })}
+                            className="grid grid-cols-2 sm:grid-cols-3 gap-3"
+                          >
+                            {paymentMethods.map((method) => {
+                              const IconComp = getIcon(method.icon);
+                              return (
+                                <div key={method.id}>
+                                  <RadioGroupItem
+                                    value={method.id}
+                                    id={method.id}
+                                    className="peer sr-only"
+                                  />
+                                  <Label
+                                    htmlFor={method.id}
+                                    className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 cursor-pointer transition-all peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:border-primary/50"
+                                  >
+                                    <IconComp className="h-5 w-5 text-muted-foreground" />
+                                    <span className="font-medium text-sm text-center">{method.name}</span>
+                                  </Label>
+                                </div>
+                              );
+                            })}
+                          </RadioGroup>
+                        )}
                       </div>
                     )}
 
-                    {/* Transaction ID (not for Card payments) */}
-                    {plan.priceNumeric > 0 && formData.paymentMethod !== "card" && (
+                    {/* Transaction ID */}
+                    {plan.priceNumeric > 0 && (
                       <div className="space-y-2">
                         <Label htmlFor="transactionId">
                           Transaction ID <span className="text-destructive">*</span>
@@ -627,7 +590,7 @@ const Checkout = () => {
                           className="bg-background/50"
                         />
                         <p className="text-xs text-muted-foreground">
-                          Find this in your payment confirmation SMS
+                          Find this in your payment confirmation SMS or receipt
                         </p>
                       </div>
                     )}
@@ -650,20 +613,24 @@ const Checkout = () => {
                       variant="gradient"
                       size="lg"
                       className="w-full"
-                      disabled={isSubmitting}
+                      disabled={isSubmitting || (plan.priceNumeric > 0 && paymentMethods.length === 0)}
                     >
                       {isSubmitting ? (
                         <>
                           <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Processing...
+                          Submitting...
                         </>
                       ) : (
                         <>
-                          Complete Purchase — ৳{plan.priceNumeric.toLocaleString()}
+                          Submit Payment Request — ৳{plan.priceNumeric.toLocaleString()}
                           <ArrowRight className="w-4 h-4 ml-2" />
                         </>
                       )}
                     </Button>
+
+                    <p className="text-xs text-center text-muted-foreground">
+                      Your plan will be activated after admin approval (usually within 1-2 hours)
+                    </p>
                   </form>
                 </CardContent>
               </Card>
