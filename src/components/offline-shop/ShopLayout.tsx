@@ -51,6 +51,7 @@ import { FeatureDisabledOverlay } from "@/components/FeatureDisabledOverlay";
 import { OfflineStatusBar } from "./OfflineStatusBar";
 import { OfflineExpiredModal } from "./OfflineExpiredModal";
 import { FloatingSyncIndicator } from "./SyncProgressIndicator";
+import { UpdateNotification } from "./UpdateNotification";
 import { offlineDataService } from "@/services/offlineDataService";
 import { syncManager } from "@/services/syncManager";
 import { appUpdateService } from "@/services/appUpdateService";
@@ -315,6 +316,9 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
         
         {/* Floating Sync Indicator */}
         <FloatingSyncIndicator />
+        
+        {/* Update Notification */}
+        <UpdateNotification />
         
         {/* Offline Expired Modal */}
         <OfflineExpiredModal 
