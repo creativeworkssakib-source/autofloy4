@@ -91,8 +91,9 @@ serve(async (req) => {
       });
     }
 
-    // Verify OTP
-    if (otpRecord.email_otp !== parseInt(otp)) {
+    // Verify OTP (compare as strings since email_otp is stored as text)
+    if (String(otpRecord.email_otp) !== String(otp)) {
+      console.log("OTP mismatch:", { stored: otpRecord.email_otp, provided: otp });
       return new Response(JSON.stringify({ error: "Invalid OTP" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
