@@ -54,6 +54,11 @@ class OfflineShopService {
     return this.request<any>("dashboard", {}, { range });
   }
 
+  // Growth Insights
+  async getGrowthInsights() {
+    return this.request<any>("growth-insights");
+  }
+
   // Products
   async getProducts() {
     return this.request<{ products: any[] }>("products");

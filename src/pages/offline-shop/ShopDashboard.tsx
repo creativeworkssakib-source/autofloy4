@@ -27,6 +27,7 @@ import { offlineShopService } from "@/services/offlineShopService";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useShop } from "@/contexts/ShopContext";
 import { ProductPerformanceSection } from "@/components/analytics/ProductPerformanceSection";
+import { BusinessGrowthInsight } from "@/components/offline-shop/BusinessGrowthInsight";
 
 interface DashboardData {
   period: {
@@ -520,6 +521,9 @@ const ShopDashboard = () => {
             </CardContent>
           </Card>
         </div>
+
+        {/* Business Growth Insight */}
+        <BusinessGrowthInsight />
 
         {/* Product Performance Analytics */}
         <ProductPerformanceSection type="offline" shopId={currentShop?.id} />

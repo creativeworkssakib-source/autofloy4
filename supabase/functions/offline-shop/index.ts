@@ -811,6 +811,164 @@ serve(async (req) => {
       });
     }
 
+    // ===== GROWTH INSIGHTS =====
+    if (req.method === "GET" && resource === "growth-insights") {
+      const now = new Date();
+      const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
+      const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().split("T")[0];
+      const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().split("T")[0];
+      const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1).toISOString().split("T")[0];
+
+      // Current month sales
+      let currentMonthQuery = supabase
+        .from("shop_sales")
+        .select("total, sale_date")
+        .eq("user_id", userId)
+        .gte("sale_date", currentMonthStart);
+      if (shopId) currentMonthQuery = currentMonthQuery.eq("shop_id", shopId);
+      const { data: currentMonthSales } = await currentMonthQuery;
+
+      // Last month sales
+      let lastMonthQuery = supabase
+        .from("shop_sales")
+        .select("total")
+        .eq("user_id", userId)
+        .gte("sale_date", lastMonthStart)
+        .lte("sale_date", lastMonthEnd);
+      if (shopId) lastMonthQuery = lastMonthQuery.eq("shop_id", shopId);
+      const { data: lastMonthSales } = await lastMonthQuery;
+
+      // Monthly sales for last 6 months
+      let monthlySalesQuery = supabase
+        .from("shop_sales")
+        .select("total, sale_date")
+        .eq("user_id", userId)
+        .gte("sale_date", sixMonthsAgo);
+      if (shopId) monthlySalesQuery = monthlySalesQuery.eq("shop_id", shopId);
+      const { data: allSales } = await monthlySalesQuery;
+
+      // Top customers by purchases
+      let customersQuery = supabase
+        .from("shop_sales")
+        .select("customer_id, total, customer:shop_customers(name)")
+        .eq("user_id", userId)
+        .not("customer_id", "is", null);
+      if (shopId) customersQuery = customersQuery.eq("shop_id", shopId);
+      const { data: customerSales } = await customersQuery;
+
+      // Calculate totals
+      const currentTotal = (currentMonthSales || []).reduce((sum: number, s: any) => sum + Number(s.total), 0);
+      const lastTotal = (lastMonthSales || []).reduce((sum: number, s: any) => sum + Number(s.total), 0);
+      const growthPercent = lastTotal > 0 ? ((currentTotal - lastTotal) / lastTotal) * 100 : (currentTotal > 0 ? 100 : 0);
+
+      // Daily average for current month
+      const daysInMonth = now.getDate();
+      const dailyAverage = daysInMonth > 0 ? currentTotal / daysInMonth : 0;
+
+      // Monthly trend
+      const monthlyMap: Record<string, number> = {};
+      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      const monthNamesBn = ["জান", "ফেব", "মার্চ", "এপ্রি", "মে", "জুন", "জুলা", "আগ", "সেপ্ট", "অক্টো", "নভে", "ডিসে"];
+      
+      (allSales || []).forEach((sale: any) => {
+        const saleDate = new Date(sale.sale_date);
+        const monthKey = `${saleDate.getFullYear()}-${saleDate.getMonth()}`;
+        monthlyMap[monthKey] = (monthlyMap[monthKey] || 0) + Number(sale.total);
+      });
+
+      const monthlyTrend = Object.entries(monthlyMap)
+        .map(([key, sales]) => {
+          const [year, month] = key.split("-").map(Number);
+          return {
+            month: monthNames[month],
+            monthBn: monthNamesBn[month],
+            sales,
+            sortKey: year * 12 + month
+          };
+        })
+        .sort((a, b) => a.sortKey - b.sortKey);
+
+      // Find best and worst months
+      let bestMonth = null;
+      let worstMonth = null;
+      if (monthlyTrend.length > 0) {
+        const sorted = [...monthlyTrend].sort((a, b) => b.sales - a.sales);
+        bestMonth = { month: sorted[0].month, monthBn: sorted[0].monthBn, sales: sorted[0].sales };
+        worstMonth = { month: sorted[sorted.length - 1].month, monthBn: sorted[sorted.length - 1].monthBn, sales: sorted[sorted.length - 1].sales };
+      }
+
+      // Top customers calculation
+      const customerMap: Record<string, { name: string; total: number }> = {};
+      let totalAllSales = 0;
+      (customerSales || []).forEach((sale: any) => {
+        if (sale.customer?.name) {
+          if (!customerMap[sale.customer_id]) {
+            customerMap[sale.customer_id] = { name: sale.customer.name, total: 0 };
+          }
+          customerMap[sale.customer_id].total += Number(sale.total);
+          totalAllSales += Number(sale.total);
+        }
+      });
+
+      const topCustomers = Object.values(customerMap)
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 5)
+        .map(c => ({
+          name: c.name,
+          totalPurchases: c.total,
+          percentage: totalAllSales > 0 ? (c.total / totalAllSales) * 100 : 0
+        }));
+
+      // Generate smart insights
+      const insights: string[] = [];
+      const lang = req.headers.get("Accept-Language")?.includes("bn") ? "bn" : "en";
+
+      if (growthPercent > 0) {
+        insights.push(lang === "bn" 
+          ? `📈 এই মাসে বিক্রি ${Math.abs(growthPercent).toFixed(1)}% বেড়েছে!`
+          : `📈 Sales increased by ${Math.abs(growthPercent).toFixed(1)}% this month!`);
+      } else if (growthPercent < 0) {
+        insights.push(lang === "bn"
+          ? `📉 এই মাসে বিক্রি ${Math.abs(growthPercent).toFixed(1)}% কমেছে`
+          : `📉 Sales decreased by ${Math.abs(growthPercent).toFixed(1)}% this month`);
+      }
+
+      if (topCustomers.length > 0) {
+        const topContribution = topCustomers.slice(0, 5).reduce((sum, c) => sum + c.percentage, 0);
+        insights.push(lang === "bn"
+          ? `👥 টপ ${Math.min(5, topCustomers.length)} কাস্টমার ${topContribution.toFixed(0)}% বিক্রি করছে`
+          : `👥 Top ${Math.min(5, topCustomers.length)} customers account for ${topContribution.toFixed(0)}% of sales`);
+      }
+
+      if (dailyAverage > 0) {
+        insights.push(lang === "bn"
+          ? `💰 দৈনিক গড় বিক্রি ৳${dailyAverage.toLocaleString("bn-BD", { maximumFractionDigits: 0 })}`
+          : `💰 Daily average sale: ৳${dailyAverage.toLocaleString("en-US", { maximumFractionDigits: 0 })}`);
+      }
+
+      if (bestMonth && monthlyTrend.length > 2) {
+        const bestMonthName = lang === "bn" ? bestMonth.monthBn : bestMonth.month;
+        insights.push(lang === "bn"
+          ? `🏆 সবচেয়ে বেশি বিক্রি হয়েছে ${bestMonthName} মাসে`
+          : `🏆 Best performing month was ${bestMonthName}`);
+      }
+
+      return new Response(JSON.stringify({
+        currentMonthSales: currentTotal,
+        lastMonthSales: lastTotal,
+        salesGrowthPercent: growthPercent,
+        dailyAverage,
+        topCustomers,
+        monthlyTrend: monthlyTrend.map(m => ({ month: m.month, sales: m.sales })),
+        insights,
+        bestMonth: bestMonth ? { month: bestMonth.month, sales: bestMonth.sales } : null,
+        worstMonth: worstMonth ? { month: worstMonth.month, sales: worstMonth.sales } : null,
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // ===== PRODUCTS CRUD =====
     if (resource === "products") {
       if (req.method === "GET") {
