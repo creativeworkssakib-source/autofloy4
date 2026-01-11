@@ -50,7 +50,13 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
   const url = new URL(req.url);
   const pathParts = url.pathname.split("/").filter(Boolean);
-  const loanId = pathParts[2]; // /shop-loans/:id
+  
+  // Edge function URL: /shop-loans or /shop-loans/:id or /shop-loans/:id/payments
+  // pathParts = ["shop-loans"] or ["shop-loans", ":id"] or ["shop-loans", ":id", "payments"]
+  const loanId = pathParts.length > 1 ? pathParts[1] : null;
+  const isPaymentsRoute = pathParts.length > 2 && pathParts[2] === "payments";
+  
+  console.log("Request path:", url.pathname, "Method:", req.method, "LoanId:", loanId, "IsPayments:", isPaymentsRoute);
 
   try {
     // GET /shop-loans - List all loans
@@ -241,7 +247,7 @@ serve(async (req) => {
     }
 
     // POST /shop-loans/:id/payments - Add payment to loan
-    if (req.method === "POST" && loanId && url.pathname.includes("/payments")) {
+    if (req.method === "POST" && loanId && isPaymentsRoute) {
       const body = await req.json();
 
       // Get current loan
