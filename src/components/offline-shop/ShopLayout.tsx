@@ -20,6 +20,7 @@ import {
   Trash2,
   MessageSquareMore,
   Scan,
+  Landmark,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
@@ -71,6 +72,7 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
     { name: t("shop.expenses"), href: "/offline-shop/expenses", icon: Banknote },
     { name: language === "bn" ? "ব্যবসার সারাংশ" : "Business Summary", href: "/offline-shop/cash", icon: Banknote },
     { name: t("shop.reports"), href: "/offline-shop/reports", icon: BarChart3 },
+    { name: language === "bn" ? "লোন / কিস্তি" : "Loans / EMI", href: "/offline-shop/loans", icon: Landmark },
     { name: language === "bn" ? "ফলোআপ SMS" : "Followup SMS", href: "/offline-shop/followup-sms", icon: MessageSquareMore },
     { name: language === "bn" ? "ট্র্যাশ বিন" : "Trash Bin", href: "/offline-shop/trash", icon: Trash2 },
   ];
