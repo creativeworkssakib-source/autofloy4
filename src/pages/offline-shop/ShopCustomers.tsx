@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, Search, Users, Phone, MapPin, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { Plus, Search, Users, Phone, MapPin, MoreHorizontal, Pencil, Trash2, WifiOff, Cloud } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,24 +13,13 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { DeleteConfirmDialog } from "@/components/offline-shop/DeleteConfirmDialog";
-
+import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import ShopLayout from "@/components/offline-shop/ShopLayout";
-import { offlineShopService } from "@/services/offlineShopService";
+import { useOfflineCustomers, useOfflineSettings } from "@/hooks/useOfflineData";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useShop } from "@/contexts/ShopContext";
 
@@ -48,8 +37,8 @@ interface Customer {
 const ShopCustomers = () => {
   const { t, language } = useLanguage();
   const { currentShop } = useShop();
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { customers, loading: isLoading, fromCache, isOnline, refetch, createCustomer, updateCustomer, deleteCustomer } = useOfflineCustomers();
+  const { settings } = useOfflineSettings();
   const [searchQuery, setSearchQuery] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
@@ -61,8 +50,6 @@ const ShopCustomers = () => {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-
-
   const [formData, setFormData] = useState({
     name: "",
     phone: "",
@@ -71,27 +58,14 @@ const ShopCustomers = () => {
     notes: "",
   });
 
-  const loadData = async () => {
-    setIsLoading(true);
-    try {
-      const result = await offlineShopService.getCustomers();
-      setCustomers(result.customers || []);
-    } catch (error) {
-      console.error("Load customers error:", error);
-      toast.error(t("shop.loadError"));
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   // Refetch when shop changes
   useEffect(() => {
     if (currentShop?.id) {
-      loadData();
+      refetch();
     }
-  }, [currentShop?.id]);
+  }, [currentShop?.id, refetch]);
 
-  const filteredCustomers = customers.filter(
+  const filteredCustomers = (customers as Customer[]).filter(
     (c) =>
       c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.phone?.includes(searchQuery) ||
@@ -117,15 +91,15 @@ const ShopCustomers = () => {
     if (selectedIds.length === 0) return;
     setIsBulkDeleting(true);
     try {
-      const result = await offlineShopService.deleteCustomers(selectedIds);
-      const deletedCount = result.deleted?.length || 0;
+      for (const id of selectedIds) {
+        await deleteCustomer(id);
+      }
       toast.success(
         language === "bn"
-          ? `${deletedCount}টি গ্রাহক ট্র্যাশে সরানো হয়েছে`
-          : `${deletedCount} customer(s) moved to trash`
+          ? `${selectedIds.length}টি গ্রাহক ট্র্যাশে সরানো হয়েছে`
+          : `${selectedIds.length} customer(s) moved to trash`
       );
       setSelectedIds([]);
-      loadData();
     } catch (error) {
       toast.error(t("shop.errorOccurred"));
     } finally {
@@ -137,15 +111,14 @@ const ShopCustomers = () => {
     e.preventDefault();
     try {
       if (editingCustomer) {
-        await offlineShopService.updateCustomer({ id: editingCustomer.id, ...formData });
+        await updateCustomer({ id: editingCustomer.id, ...formData });
         toast.success(t("shop.customerUpdated"));
       } else {
-        await offlineShopService.createCustomer(formData);
+        await createCustomer(formData);
         toast.success(t("shop.customerAdded"));
       }
       setIsModalOpen(false);
       resetForm();
-      loadData();
     } catch (error) {
       toast.error(t("shop.errorOccurred"));
     }
@@ -172,9 +145,8 @@ const ShopCustomers = () => {
     if (!deletingId) return;
     setIsDeleting(true);
     try {
-      await offlineShopService.deleteCustomer(deletingId);
+      await deleteCustomer(deletingId);
       toast.success(language === "bn" ? "গ্রাহক ট্র্যাশে সরানো হয়েছে" : "Customer moved to trash");
-      loadData();
       setDeleteDialogOpen(false);
       setDeletingId(null);
     } catch (error) {
@@ -190,10 +162,11 @@ const ShopCustomers = () => {
     setFormData({ name: "", phone: "", email: "", address: "", notes: "" });
   };
 
+  const currency = settings?.currency || "BDT";
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat(language === "bn" ? "bn-BD" : "en-US", {
       style: "currency",
-      currency: "BDT",
+      currency: currency,
       minimumFractionDigits: 0,
     }).format(amount);
   };
@@ -202,12 +175,20 @@ const ShopCustomers = () => {
     <ShopLayout>
       <div className="space-y-4 sm:space-y-6">
         <div className="flex flex-col gap-3 sm:gap-4">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold">{t("shop.customersTitle")}</h1>
-            <p className="text-sm sm:text-base text-muted-foreground">
-              {t("shop.customersDesc")} • {customers.length} {language === "bn" ? "জন গ্রাহক" : "customers"}
-              {selectedIds.length > 0 && ` • ${selectedIds.length} ${language === "bn" ? "টি নির্বাচিত" : "selected"}`}
-            </p>
+          <div className="flex items-start justify-between">
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold">{t("shop.customersTitle")}</h1>
+              <p className="text-sm sm:text-base text-muted-foreground">
+                {t("shop.customersDesc")} • {customers.length} {language === "bn" ? "জন গ্রাহক" : "customers"}
+                {selectedIds.length > 0 && ` • ${selectedIds.length} ${language === "bn" ? "টি নির্বাচিত" : "selected"}`}
+              </p>
+            </div>
+            {fromCache && (
+              <Badge variant={isOnline ? "secondary" : "destructive"} className="flex items-center gap-1">
+                {isOnline ? <Cloud className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
+                {isOnline ? (language === "bn" ? "ক্যাশ" : "Cached") : (language === "bn" ? "অফলাইন" : "Offline")}
+              </Badge>
+            )}
           </div>
           <div className="flex flex-wrap gap-2">
             {selectedIds.length > 0 && (

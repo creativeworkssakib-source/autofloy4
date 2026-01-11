@@ -14,7 +14,9 @@ import {
   ArrowRight,
   Plus,
   Clock,
-  Trash2
+  Trash2,
+  WifiOff,
+  Cloud
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -24,6 +26,8 @@ import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import ShopLayout from "@/components/offline-shop/ShopLayout";
 import { offlineShopService } from "@/services/offlineShopService";
+import { useOfflineSettings, useSyncStatus } from "@/hooks/useOfflineData";
+import { useIsOnline } from "@/hooks/useOnlineStatus";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useShop } from "@/contexts/ShopContext";
 import { ProductPerformanceSection } from "@/components/analytics/ProductPerformanceSection";
@@ -75,6 +79,9 @@ interface DashboardData {
 const ShopDashboard = () => {
   const { t, language } = useLanguage();
   const { currentShop } = useShop();
+  const { settings } = useOfflineSettings();
+  const isOnline = useIsOnline();
+  const { pendingCount, isSyncing, triggerSync } = useSyncStatus();
   const [data, setData] = useState<DashboardData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [trashCount, setTrashCount] = useState(0);
@@ -103,10 +110,11 @@ const ShopDashboard = () => {
     }
   }, [currentShop?.id]);
 
+  const currency = settings?.currency || "BDT";
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat(language === "bn" ? "bn-BD" : "en-US", {
       style: "currency",
-      currency: "BDT",
+      currency: currency,
       minimumFractionDigits: 0,
     }).format(amount);
   };
@@ -153,14 +161,43 @@ const ShopDashboard = () => {
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold">{t("shop.dashboard")}</h1>
-            <p className="text-sm sm:text-base text-muted-foreground">{t("dashboard.overview")}</p>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold">{t("shop.dashboard")}</h1>
+              <p className="text-sm sm:text-base text-muted-foreground">{t("dashboard.overview")}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              {!isOnline && (
+                <Badge variant="destructive" className="flex items-center gap-1">
+                  <WifiOff className="h-3 w-3" />
+                  {language === "bn" ? "অফলাইন" : "Offline"}
+                </Badge>
+              )}
+              {pendingCount > 0 && (
+                <Badge variant="secondary" className="flex items-center gap-1">
+                  <Cloud className="h-3 w-3" />
+                  {pendingCount} {language === "bn" ? "পেন্ডিং" : "pending"}
+                </Badge>
+              )}
+            </div>
           </div>
-          <Button variant="outline" onClick={loadDashboard} disabled={isLoading} size="sm" className="sm:size-default">
-            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-            {t("common.refresh")}
-          </Button>
+          <div className="flex gap-2">
+            {pendingCount > 0 && isOnline && (
+              <Button 
+                variant="outline" 
+                onClick={() => triggerSync()} 
+                disabled={isSyncing}
+                size="sm"
+              >
+                <Cloud className={`h-4 w-4 mr-2 ${isSyncing ? 'animate-pulse' : ''}`} />
+                {language === "bn" ? "সিংক করুন" : "Sync Now"}
+              </Button>
+            )}
+            <Button variant="outline" onClick={loadDashboard} disabled={isLoading} size="sm" className="sm:size-default">
+              <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+              {t("common.refresh")}
+            </Button>
+          </div>
         </div>
 
         {/* Stats Grid */}
