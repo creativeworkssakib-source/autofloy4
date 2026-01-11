@@ -414,6 +414,91 @@ export function useOfflineDataSize() {
   return { dataSize, loading };
 }
 
+// =============== OFFLINE CATEGORIES HOOK ===============
+
+export function useOfflineCategories() {
+  const [categories, setCategories] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [fromCache, setFromCache] = useState(false);
+  const isOnline = useIsOnline();
+  const { t } = useLanguage();
+  
+  const fetchCategories = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const result = await offlineDataService.getCategories();
+      setCategories(result.categories);
+      setFromCache(result.fromCache);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load categories');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  
+  useEffect(() => {
+    fetchCategories();
+  }, [fetchCategories]);
+  
+  const createCategory = useCallback(async (data: { name: string; description?: string }) => {
+    const result = await offlineDataService.createCategory(data);
+    if (result.offline) {
+      toast.info(t('offline.savedLocally'));
+    }
+    await fetchCategories();
+    return result;
+  }, [fetchCategories, t]);
+  
+  return {
+    categories,
+    loading,
+    error,
+    fromCache,
+    isOnline,
+    refetch: fetchCategories,
+    createCategory,
+  };
+}
+
+// =============== OFFLINE SETTINGS HOOK ===============
+
+export function useOfflineSettings() {
+  const [settings, setSettings] = useState<any | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [fromCache, setFromCache] = useState(false);
+  const isOnline = useIsOnline();
+  
+  const fetchSettings = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const result = await offlineDataService.getSettings();
+      setSettings(result.settings);
+      setFromCache(result.fromCache);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load settings');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  
+  useEffect(() => {
+    fetchSettings();
+  }, [fetchSettings]);
+  
+  return {
+    settings,
+    loading,
+    error,
+    fromCache,
+    isOnline,
+    refetch: fetchSettings,
+  };
+}
+
 // =============== PENDING SYNC COUNT HOOK ===============
 
 export function usePendingSyncCount() {
