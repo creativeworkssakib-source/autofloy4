@@ -14,7 +14,9 @@ import {
   DollarSign,
   ShoppingCart,
   PieChart,
-  Activity
+  Activity,
+  Brain,
+  LineChart as LineChartIcon
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -61,7 +63,7 @@ export const FullBusinessGrowthInsight = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   const t = {
-    title: language === "bn" ? "📊 ব্যবসা বৃদ্ধি বিশ্লেষণ" : "📊 Business Growth Analysis",
+    title: language === "bn" ? "ব্যবসা বৃদ্ধি বিশ্লেষণ" : "Business Growth Analysis",
     subtitle: language === "bn" ? "আপনার ব্যবসার সম্পূর্ণ বিশ্লেষণ দেখুন" : "View complete analysis of your business",
     overview: language === "bn" ? "সামগ্রিক দৃশ্য" : "Overview",
     trends: language === "bn" ? "ট্রেন্ড" : "Trends",
@@ -80,7 +82,7 @@ export const FullBusinessGrowthInsight = () => {
     topCustomersDesc: language === "bn" ? "সবচেয়ে বেশি কেনাকাটা করা কাস্টমার" : "Customers with highest purchases",
     contribution: language === "bn" ? "মোট বিক্রির অবদান" : "Contribution to total sales",
     
-    smartInsights: language === "bn" ? "🧠 স্মার্ট ইনসাইট" : "🧠 Smart Insights",
+    smartInsights: language === "bn" ? "স্মার্ট ইনসাইট" : "Smart Insights",
     smartInsightsDesc: language === "bn" ? "আপনার ব্যবসার জন্য AI বিশ্লেষণ" : "AI analysis for your business",
     
     bestMonth: language === "bn" ? "সেরা মাস" : "Best Month",
@@ -169,8 +171,8 @@ export const FullBusinessGrowthInsight = () => {
     >
       {/* Header */}
       <div className="flex items-center gap-3">
-        <div className="p-3 rounded-xl bg-gradient-to-br from-primary/20 to-purple-500/20">
-          <Activity className="h-6 w-6 text-primary" />
+        <div className="p-3 rounded-xl bg-gradient-to-br from-primary/20 via-purple-500/15 to-cyan-500/10 border border-primary/20 shadow-lg shadow-primary/5">
+          <LineChartIcon className="h-6 w-6 text-primary" />
         </div>
         <div>
           <h2 className="text-xl font-bold">{t.title}</h2>
@@ -506,7 +508,7 @@ export const FullBusinessGrowthInsight = () => {
           <Card className="border-amber-500/20 bg-gradient-to-br from-amber-500/5 via-transparent to-orange-500/5">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Lightbulb className="h-5 w-5 text-amber-500" />
+                <Brain className="h-5 w-5 text-amber-500" />
                 {t.smartInsights}
               </CardTitle>
               <CardDescription>{t.smartInsightsDesc}</CardDescription>
