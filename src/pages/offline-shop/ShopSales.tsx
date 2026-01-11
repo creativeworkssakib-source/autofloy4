@@ -13,8 +13,6 @@ import {
 import { 
   generateSimplePrintHTML, 
   generateBetterPrintHTML,
-  SimpleInvoiceModal,
-  BetterInvoiceModal
 } from "@/components/offline-shop/invoice-templates";
 import { generateThermalReceiptHTML, ThermalReceiptPreview } from "@/components/offline-shop/thermal-receipt-template";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -916,12 +914,12 @@ const ShopSales = () => {
         </DialogContent>
       </Dialog>
 
-      {/* View/Print Invoice Modal - Dynamic based on format setting */}
+      {/* View/Print Invoice Modal - Uses Thermal Receipt Preview from Invoice Settings */}
       <Dialog open={!!viewingSale} onOpenChange={() => setViewingSale(null)}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto p-0 [&>button]:hidden">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto p-4">
           {viewingSale && (
-            shopSettings?.invoice_format === 'better' ? (
-              <BetterInvoiceModal
+            <div className="space-y-4">
+              <ThermalReceiptPreview
                 sale={{
                   invoice_number: viewingSale.invoice_number,
                   sale_date: viewingSale.sale_date,
@@ -932,40 +930,41 @@ const ShopSales = () => {
                   total: Number(viewingSale.total),
                   paid_amount: Number(viewingSale.paid_amount),
                   due_amount: Number(viewingSale.due_amount),
+                  payment_method: viewingSale.payment_method,
                 }}
-                shopSettings={shopSettings}
+                shopSettings={{
+                  shop_name: shopSettings?.shop_name || '',
+                  shop_address: shopSettings?.shop_address || '',
+                  shop_phone: shopSettings?.shop_phone || '',
+                  shop_email: shopSettings?.shop_email || '',
+                  currency: shopSettings?.currency || 'BDT',
+                  logo_url: shopSettings?.logo_url,
+                  receipt_size: (shopSettings as any)?.receipt_size || '80mm',
+                  receipt_font_size: (shopSettings as any)?.receipt_font_size || 'small',
+                  show_logo_on_receipt: (shopSettings as any)?.show_logo_on_receipt ?? true,
+                  thank_you_message: (shopSettings as any)?.thank_you_message || (language === 'bn' ? 'ধন্যবাদ! আবার আসবেন' : 'Thank you! Please Come Again'),
+                  show_tax_on_receipt: (shopSettings as any)?.show_tax_on_receipt ?? true,
+                  show_payment_method: (shopSettings as any)?.show_payment_method ?? true,
+                  receipt_header_text: (shopSettings as any)?.receipt_header_text,
+                  receipt_footer_text: (shopSettings as any)?.receipt_footer_text,
+                  tax_rate: shopSettings?.tax_rate,
+                  invoice_format: shopSettings?.invoice_format,
+                }}
                 customerInfo={getCustomerInfo(viewingSale)}
                 t={t}
               />
-            ) : (
-              <SimpleInvoiceModal
-                sale={{
-                  invoice_number: viewingSale.invoice_number,
-                  sale_date: viewingSale.sale_date,
-                  items: viewingSale.items || [],
-                  subtotal: Number(viewingSale.subtotal),
-                  discount: Number(viewingSale.discount),
-                  tax: Number(viewingSale.tax),
-                  total: Number(viewingSale.total),
-                  paid_amount: Number(viewingSale.paid_amount),
-                  due_amount: Number(viewingSale.due_amount),
-                }}
-                shopSettings={shopSettings}
-                customerInfo={getCustomerInfo(viewingSale)}
-                t={t}
-              />
-            )
-          )}
 
-          <div className="flex justify-end gap-2 p-4 border-t bg-gray-50">
-            <Button variant="outline" size="sm" onClick={() => setViewingSale(null)}>
-              {t("shop.close")}
-            </Button>
-            <Button size="sm" onClick={handlePrint} className="gap-2">
-              <Printer className="h-4 w-4" />
-              {t("shop.print")}
-            </Button>
-          </div>
+              <div className="flex justify-end gap-2 pt-2 border-t">
+                <Button variant="outline" size="sm" onClick={() => setViewingSale(null)}>
+                  {t("shop.close")}
+                </Button>
+                <Button size="sm" onClick={handlePrint} className="gap-2">
+                  <Printer className="h-4 w-4" />
+                  {t("shop.print")}
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
