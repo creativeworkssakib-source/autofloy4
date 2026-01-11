@@ -110,6 +110,47 @@ export type Database = {
         }
         Relationships: []
       }
+      notifications: {
+        Row: {
+          created_at: string
+          id: string
+          is_read: boolean | null
+          link: string | null
+          message: string | null
+          title: string
+          type: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_read?: boolean | null
+          link?: string | null
+          message?: string | null
+          title: string
+          type?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_read?: boolean | null
+          link?: string | null
+          message?: string | null
+          title?: string
+          type?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       outgoing_events: {
         Row: {
           created_at: string
@@ -1823,6 +1864,56 @@ export type Database = {
           },
         ]
       }
+      user_settings: {
+        Row: {
+          created_at: string
+          email_notifications: boolean | null
+          id: string
+          language: string | null
+          notifications_enabled: boolean | null
+          sms_notifications: boolean | null
+          sound_enabled: boolean | null
+          theme: string | null
+          trash_passcode: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email_notifications?: boolean | null
+          id?: string
+          language?: string | null
+          notifications_enabled?: boolean | null
+          sms_notifications?: boolean | null
+          sound_enabled?: boolean | null
+          theme?: string | null
+          trash_passcode?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email_notifications?: boolean | null
+          id?: string
+          language?: string | null
+          notifications_enabled?: boolean | null
+          sms_notifications?: boolean | null
+          sound_enabled?: boolean | null
+          theme?: string | null
+          trash_passcode?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_settings_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       users: {
         Row: {
           avatar_url: string | null
@@ -1882,6 +1973,53 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      verification_otps: {
+        Row: {
+          attempts: number | null
+          created_at: string
+          email: string | null
+          expires_at: string
+          id: string
+          otp_code: string
+          phone: string | null
+          type: string
+          user_id: string | null
+          verified: boolean | null
+        }
+        Insert: {
+          attempts?: number | null
+          created_at?: string
+          email?: string | null
+          expires_at: string
+          id?: string
+          otp_code: string
+          phone?: string | null
+          type?: string
+          user_id?: string | null
+          verified?: boolean | null
+        }
+        Update: {
+          attempts?: number | null
+          created_at?: string
+          email?: string | null
+          expires_at?: string
+          id?: string
+          otp_code?: string
+          phone?: string | null
+          type?: string
+          user_id?: string | null
+          verified?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "verification_otps_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
