@@ -1104,8 +1104,52 @@ class OfflineDB {
 
   // =============== SYNC QUEUE ===============
 
+  /**
+   * Add an operation to the sync queue.
+   * If an existing pending operation for the same table and recordId exists,
+   * it will be replaced to prevent duplicate syncs.
+   */
   async addToSyncQueue(item: Omit<SyncQueueItem, 'id'>): Promise<void> {
     const db = this.ensureDb();
+    
+    // Check for existing pending item with same table and recordId
+    const existingItems = await db.getAll('syncQueue');
+    const existingItem = existingItems.find(
+      i => !i.synced && i.table === item.table && i.recordId === item.recordId
+    );
+    
+    if (existingItem) {
+      // If there's already a pending operation for this record, update it
+      // Special case: if existing is 'create' and new is 'update', keep as 'create' with updated data
+      // If existing is 'create' and new is 'delete', just remove from queue
+      // Otherwise, replace with new operation
+      
+      if (existingItem.operation === 'create' && item.operation === 'delete') {
+        // Record was created offline and then deleted before sync
+        // Just remove from queue entirely
+        await db.delete('syncQueue', existingItem.id);
+        return;
+      }
+      
+      if (existingItem.operation === 'create' && item.operation === 'update') {
+        // Keep as 'create' but update the data
+        existingItem.data = item.data;
+        existingItem.timestamp = item.timestamp;
+        await db.put('syncQueue', existingItem);
+        return;
+      }
+      
+      // Replace with new operation
+      existingItem.operation = item.operation;
+      existingItem.data = item.data;
+      existingItem.timestamp = item.timestamp;
+      existingItem.retryCount = 0;
+      existingItem.lastError = undefined;
+      await db.put('syncQueue', existingItem);
+      return;
+    }
+    
+    // No existing item, add new one
     const id = `sync_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     await db.put('syncQueue', { ...item, id });
   }

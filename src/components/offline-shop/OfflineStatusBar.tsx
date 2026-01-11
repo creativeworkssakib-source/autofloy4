@@ -4,11 +4,10 @@
  * Shows current online/offline status, sync status, and pending changes.
  */
 
-import { useState, useEffect } from 'react';
-import { Wifi, WifiOff, Cloud, CloudOff, RefreshCw, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { useState } from 'react';
+import { Wifi, WifiOff, Cloud, RefreshCw, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { useSyncStatus, usePendingSyncCount } from '@/hooks/useOfflineData';
@@ -23,7 +22,7 @@ interface OfflineStatusBarProps {
 
 export function OfflineStatusBar({ className, compact = false }: OfflineStatusBarProps) {
   const { isOnline, getTimeSinceOnline } = useOnlineStatus();
-  const { isSyncing, progress, lastSyncAt, lastError, triggerSync } = useSyncStatus();
+  const { isSyncing, lastSyncAt, lastError, triggerSync } = useSyncStatus();
   const pendingCount = usePendingSyncCount();
   const { daysRemaining, isExpired } = useOfflineGracePeriod();
   const { t, language } = useLanguage();
@@ -33,7 +32,7 @@ export function OfflineStatusBar({ className, compact = false }: OfflineStatusBa
   const timeSinceOnline = getTimeSinceOnline(language);
   
   // Status color
-  const statusColor = isOnline 
+  const statusColor = isOnline
     ? 'text-green-500' 
     : isExpired 
       ? 'text-red-500' 
@@ -124,6 +123,14 @@ export function OfflineStatusBar({ className, compact = false }: OfflineStatusBa
               )}
             </div>
             
+            {/* Last Sync Info - Always show for online status */}
+            {isOnline && lastSyncAt && !isSyncing && (
+              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                <CheckCircle2 className="h-3 w-3 text-green-500" />
+                {t('offline.lastSynced')}: {lastSyncAt.toLocaleTimeString()}
+              </p>
+            )}
+            
             {!isOnline && timeSinceOnline && (
               <p className="text-xs text-muted-foreground">
                 {t('offline.lastOnline')}: {timeSinceOnline}
@@ -133,21 +140,13 @@ export function OfflineStatusBar({ className, compact = false }: OfflineStatusBa
         </div>
         
         <div className="flex items-center gap-2">
-          {/* Pending Changes */}
-          {pendingCount > 0 && (
-            <Badge variant="secondary" className="gap-1">
-              <CloudOff className="h-3 w-3" />
-              {pendingCount} {t('offline.pendingChanges')}
-            </Badge>
-          )}
-          
-          {/* Sync Button */}
-          {isOnline && (
+          {/* Manual Sync Button - Only show if there are errors or pending items */}
+          {isOnline && (lastError || pendingCount > 0) && (
             <Button
               variant="outline"
               size="sm"
               onClick={() => triggerSync()}
-              disabled={isSyncing || pendingCount === 0}
+              disabled={isSyncing}
               className="gap-2"
             >
               <RefreshCw className={cn('h-4 w-4', isSyncing && 'animate-spin')} />
@@ -156,25 +155,6 @@ export function OfflineStatusBar({ className, compact = false }: OfflineStatusBa
           )}
         </div>
       </div>
-      
-      {/* Sync Progress */}
-      {isSyncing && (
-        <div className="mt-3">
-          <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
-            <span>{t('offline.syncing')}...</span>
-            <span>{progress}%</span>
-          </div>
-          <Progress value={progress} className="h-1.5" />
-        </div>
-      )}
-      
-      {/* Last Sync Info */}
-      {lastSyncAt && !isSyncing && (
-        <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
-          <CheckCircle2 className="h-3 w-3 text-green-500" />
-          {t('offline.lastSynced')}: {lastSyncAt.toLocaleTimeString()}
-        </div>
-      )}
       
       {/* Error */}
       {lastError && (
