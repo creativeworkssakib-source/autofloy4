@@ -16,6 +16,7 @@ import { useShop } from "@/contexts/ShopContext";
 import { useNavigate } from "react-router-dom";
 import DateRangeFilter, { DateRangePreset, DateRange, getDateRangeFromPreset } from "@/components/offline-shop/DateRangeFilter";
 import { isWithinInterval, startOfDay, endOfDay } from "date-fns";
+import { FullBusinessGrowthInsight } from "@/components/offline-shop/FullBusinessGrowthInsight";
 
 interface SummaryData {
   totalSales: number;
@@ -463,6 +464,9 @@ const ShopCash = () => {
             </CardContent>
           </Card>
         </div>
+
+        {/* Business Growth Insight Section */}
+        <FullBusinessGrowthInsight />
 
         {/* Recent Transactions Tabs */}
         <Card>
