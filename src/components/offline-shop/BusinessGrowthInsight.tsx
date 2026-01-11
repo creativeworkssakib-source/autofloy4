@@ -9,7 +9,9 @@ import {
   BarChart3,
   ArrowUpRight,
   ArrowDownRight,
-  Sparkles
+  Sparkles,
+  LineChart,
+  Brain
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -38,7 +40,7 @@ export const BusinessGrowthInsight = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   const t = {
-    title: language === "bn" ? "📈 ব্যবসা বৃদ্ধি বিশ্লেষণ" : "📈 Business Growth Insight",
+    title: language === "bn" ? "ব্যবসা বৃদ্ধি বিশ্লেষণ" : "Business Growth Insight",
     subtitle: language === "bn" ? "আপনার ব্যবসা কোন দিকে যাচ্ছে" : "Where your business is heading",
     monthlySales: language === "bn" ? "এই মাসে বিক্রি" : "This Month Sales",
     dailyAverage: language === "bn" ? "দৈনিক গড়" : "Daily Average",
@@ -119,8 +121,8 @@ export const BusinessGrowthInsight = () => {
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <Sparkles className="h-5 w-5 text-primary" />
+              <div className="p-2 rounded-lg bg-gradient-to-br from-primary/20 to-purple-500/20">
+                <LineChart className="h-5 w-5 text-primary" />
               </div>
               <div>
                 <CardTitle className="text-lg">{t.title}</CardTitle>
@@ -230,7 +232,7 @@ export const BusinessGrowthInsight = () => {
           {data.insights && data.insights.length > 0 && (
             <div className="p-3 rounded-lg bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/20">
               <div className="flex items-center gap-2 mb-2">
-                <Lightbulb className="h-4 w-4 text-amber-500" />
+                <Brain className="h-4 w-4 text-amber-500" />
                 <span className="text-sm font-medium">{t.smartInsights}</span>
               </div>
               <ul className="space-y-1.5">
