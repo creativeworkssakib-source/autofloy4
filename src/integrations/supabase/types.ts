@@ -2064,6 +2064,141 @@ export type Database = {
           },
         ]
       }
+      shop_loan_payments: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          installment_number: number | null
+          late_fee: number | null
+          loan_id: string
+          notes: string | null
+          payment_date: string
+          payment_method: string | null
+          user_id: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          id?: string
+          installment_number?: number | null
+          late_fee?: number | null
+          loan_id: string
+          notes?: string | null
+          payment_date?: string
+          payment_method?: string | null
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          installment_number?: number | null
+          late_fee?: number | null
+          loan_id?: string
+          notes?: string | null
+          payment_date?: string
+          payment_method?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shop_loan_payments_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "shop_loans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shop_loan_payments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shop_loans: {
+        Row: {
+          created_at: string
+          id: string
+          installment_amount: number
+          interest_rate: number | null
+          lender_name: string
+          lender_type: string
+          loan_amount: number
+          next_payment_date: string | null
+          notes: string | null
+          paid_installments: number
+          payment_day: number | null
+          remaining_amount: number
+          shop_id: string | null
+          start_date: string
+          status: string
+          total_installments: number
+          total_paid: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          installment_amount?: number
+          interest_rate?: number | null
+          lender_name: string
+          lender_type?: string
+          loan_amount?: number
+          next_payment_date?: string | null
+          notes?: string | null
+          paid_installments?: number
+          payment_day?: number | null
+          remaining_amount?: number
+          shop_id?: string | null
+          start_date?: string
+          status?: string
+          total_installments?: number
+          total_paid?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          installment_amount?: number
+          interest_rate?: number | null
+          lender_name?: string
+          lender_type?: string
+          loan_amount?: number
+          next_payment_date?: string | null
+          notes?: string | null
+          paid_installments?: number
+          payment_day?: number | null
+          remaining_amount?: number
+          shop_id?: string | null
+          start_date?: string
+          status?: string
+          total_installments?: number
+          total_paid?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shop_loans_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "shops"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shop_loans_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       shop_product_history: {
         Row: {
           action_type: string
