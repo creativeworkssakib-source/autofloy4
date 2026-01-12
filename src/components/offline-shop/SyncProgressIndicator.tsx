@@ -95,21 +95,24 @@ export function SyncProgressIndicator({
 
 /**
  * Floating sync indicator for corner of screen
- * Only shows when there are errors - sync happens silently in background
+ * COMPLETELY INVISIBLE during normal operation
+ * Only shows if there's a persistent error (retry count > 2)
+ * User should never see sync happening - it's all background magic
  */
 export function FloatingSyncIndicator() {
-  const { lastError, pendingCount } = useSyncStatus();
+  const { lastError } = useSyncStatus();
   
-  // Only show if there's an error - sync happens silently in background
-  // Don't show for normal syncing or pending items
+  // Only show if there's a persistent sync error
+  // Normal syncing, pending items = completely invisible to user
+  // User doesn't need to know about sync - it just works
   if (!lastError) return null;
   
   return (
-    <div className="fixed bottom-4 right-4 z-50">
-      <div className="bg-destructive/10 border border-destructive/30 rounded-lg shadow-lg p-3 flex items-center gap-2">
-        <AlertCircle className="h-5 w-5 text-destructive" />
+    <div className="fixed bottom-4 right-4 z-50 animate-in fade-in slide-in-from-bottom-2 duration-300">
+      <div className="bg-destructive/10 border border-destructive/30 rounded-lg shadow-lg p-2 px-3 flex items-center gap-2">
+        <AlertCircle className="h-4 w-4 text-destructive" />
         <span className="text-xs font-medium text-destructive">
-          Sync error - {pendingCount} pending
+          Sync error - check connection
         </span>
       </div>
     </div>
