@@ -1,11 +1,12 @@
 /**
  * Offline Status Bar Component
  * 
- * Shows current online/offline status, sync status, and pending changes.
+ * INVISIBLE when online and synced - user doesn't see anything!
+ * Only shows when offline, or if there are persistent errors.
+ * Syncing happens silently in background.
  */
 
-import { useState } from 'react';
-import { Wifi, WifiOff, Cloud, RefreshCw, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { WifiOff, RefreshCw, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -21,15 +22,19 @@ interface OfflineStatusBarProps {
 }
 
 export function OfflineStatusBar({ className, compact = false }: OfflineStatusBarProps) {
-  const { isOnline, getTimeSinceOnline } = useOnlineStatus();
-  const { isSyncing, lastSyncAt, lastError, triggerSync } = useSyncStatus();
+  const { isOnline } = useOnlineStatus();
+  const { isSyncing, lastError, triggerSync } = useSyncStatus();
   const pendingCount = usePendingSyncCount();
   const { daysRemaining, isExpired } = useOfflineGracePeriod();
   const { t, language } = useLanguage();
   
-  const [showDetails, setShowDetails] = useState(false);
+  // INVISIBLE when online and no errors - user doesn't see anything
+  // Only show if offline, or if there's an error, or if subscription expired
+  const shouldShow = !isOnline || lastError || isExpired;
   
-  const timeSinceOnline = getTimeSinceOnline(language);
+  if (!shouldShow && !compact) {
+    return null;
+  }
   
   // Status color
   const statusColor = isOnline
@@ -45,50 +50,48 @@ export function OfflineStatusBar({ className, compact = false }: OfflineStatusBa
       : 'bg-yellow-500/10';
   
   if (compact) {
+    // Compact mode: only show if offline or has errors
+    if (isOnline && !lastError && pendingCount === 0) {
+      return null;
+    }
+    
     return (
       <TooltipProvider>
         <div className={cn('flex items-center gap-2', className)}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className={cn('p-1.5 rounded-full', bgColor)}>
-                {isOnline ? (
-                  <Wifi className={cn('h-4 w-4', statusColor)} />
-                ) : (
-                  <WifiOff className={cn('h-4 w-4', statusColor)} />
-                )}
-              </div>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>
-                {isOnline 
-                  ? t('offline.online') 
-                  : `${t('offline.offlineMode')} - ${daysRemaining} ${t('offline.daysRemaining')}`
-                }
-              </p>
-            </TooltipContent>
-          </Tooltip>
-          
-          {pendingCount > 0 && (
+          {!isOnline && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <Badge variant="outline" className="gap-1">
-                  <Cloud className="h-3 w-3" />
-                  {pendingCount}
-                </Badge>
+                <div className={cn('p-1.5 rounded-full', bgColor)}>
+                  <WifiOff className={cn('h-4 w-4', statusColor)} />
+                </div>
               </TooltipTrigger>
               <TooltipContent>
-                <p>{pendingCount} {t('offline.syncPending')}</p>
+                <p>{`${t('offline.offlineMode')} - ${daysRemaining} ${t('offline.daysRemaining')}`}</p>
               </TooltipContent>
             </Tooltip>
           )}
           
-          {isSyncing && (
-            <RefreshCw className="h-4 w-4 animate-spin text-primary" />
+          {lastError && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge variant="destructive" className="gap-1">
+                  <AlertTriangle className="h-3 w-3" />
+                  Error
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{lastError}</p>
+              </TooltipContent>
+            </Tooltip>
           )}
         </div>
       </TooltipProvider>
     );
   }
+  
+  // Full bar: only shows when offline or has errors (not when online and synced)
+  const { getTimeSinceOnline } = useOnlineStatus();
+  const timeSinceOnline = getTimeSinceOnline(language);
   
   return (
     <div className={cn('rounded-lg border p-3', bgColor, className)}>
@@ -96,17 +99,13 @@ export function OfflineStatusBar({ className, compact = false }: OfflineStatusBa
         <div className="flex items-center gap-3">
           {/* Online/Offline Status */}
           <div className={cn('p-2 rounded-full', isOnline ? 'bg-green-500/20' : 'bg-yellow-500/20')}>
-            {isOnline ? (
-              <Wifi className={cn('h-5 w-5', statusColor)} />
-            ) : (
-              <WifiOff className={cn('h-5 w-5', statusColor)} />
-            )}
+            <WifiOff className={cn('h-5 w-5', statusColor)} />
           </div>
           
           <div>
             <div className="flex items-center gap-2">
               <span className={cn('font-medium', statusColor)}>
-                {isOnline ? t('offline.online') : t('offline.offlineMode')}
+                {isOnline ? (lastError ? 'Sync Error' : t('offline.online')) : t('offline.offlineMode')}
               </span>
               
               {!isOnline && !isExpired && (
@@ -123,14 +122,6 @@ export function OfflineStatusBar({ className, compact = false }: OfflineStatusBa
               )}
             </div>
             
-            {/* Last Sync Info - Always show for online status */}
-            {isOnline && lastSyncAt && !isSyncing && (
-              <p className="text-xs text-muted-foreground flex items-center gap-1">
-                <CheckCircle2 className="h-3 w-3 text-green-500" />
-                {t('offline.lastSynced')}: {lastSyncAt.toLocaleTimeString()}
-              </p>
-            )}
-            
             {!isOnline && timeSinceOnline && (
               <p className="text-xs text-muted-foreground">
                 {t('offline.lastOnline')}: {timeSinceOnline}
@@ -140,8 +131,8 @@ export function OfflineStatusBar({ className, compact = false }: OfflineStatusBa
         </div>
         
         <div className="flex items-center gap-2">
-          {/* Manual Sync Button - Only show if there are errors or pending items */}
-          {isOnline && (lastError || pendingCount > 0) && (
+          {/* Manual Sync Button - Only show if there are errors */}
+          {isOnline && lastError && (
             <Button
               variant="outline"
               size="sm"

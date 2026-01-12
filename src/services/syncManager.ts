@@ -240,8 +240,9 @@ class SyncManager {
       case 'loanPayments':
         await this.syncLoanPayment(operation, data);
         break;
+      // Staff feature removed - skip sync for legacy queue items
       case 'staff':
-        await this.syncStaff(operation, data);
+        console.log('[SyncManager] Staff sync skipped - feature removed');
         break;
       case 'dailyCashRegister':
         await this.syncDailyCashRegister(operation, data);
@@ -450,19 +451,10 @@ class SyncManager {
     }
   }
   
-  private async syncStaff(operation: SyncOperation, data: any): Promise<void> {
-    const cleanData = stripLocalFields(data);
-    switch (operation) {
-      case 'create':
-        await offlineShopService.createStaff(cleanData);
-        break;
-      case 'update':
-        await offlineShopService.updateStaff(cleanData);
-        break;
-      case 'delete':
-        await offlineShopService.deleteStaff(data.id);
-        break;
-    }
+  // Staff feature removed - method kept for backwards compatibility
+  private async syncStaff(_operation: SyncOperation, _data: any): Promise<void> {
+    // Staff sync removed - feature deprecated
+    console.log('[SyncManager] Staff sync skipped - feature removed');
   }
   
   private async syncDailyCashRegister(operation: SyncOperation, data: any): Promise<void> {
@@ -660,22 +652,7 @@ class SyncManager {
       this.progress = 75;
       this.notifyListeners();
       
-      // Sync staff (80%)
-      try {
-        const { staff } = await offlineShopService.getStaff();
-        for (const s of staff) {
-          await offlineDB.saveStaff({
-            ...s,
-            shop_id: shopId,
-            _locallyModified: false,
-            _locallyCreated: false,
-            _locallyDeleted: false,
-          });
-        }
-        syncedTables.push('staff');
-      } catch (e) {
-        console.error('Failed to sync staff:', e);
-      }
+      // Staff sync removed - feature deprecated
       this.progress = 80;
       this.notifyListeners();
       
