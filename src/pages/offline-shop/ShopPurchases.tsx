@@ -28,6 +28,7 @@ import { toast } from "sonner";
 import ShopLayout from "@/components/offline-shop/ShopLayout";
 import AddToStockModal, { PurchasedProduct } from "@/components/offline-shop/AddToStockModal";
 import { offlineShopService } from "@/services/offlineShopService";
+import { offlineDataService } from "@/services/offlineDataService";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useShop } from "@/contexts/ShopContext";
 import * as XLSX from "xlsx";
@@ -502,28 +503,14 @@ const ShopPurchases = () => {
     
     setIsDeleting(true);
     try {
-      let successCount = 0;
-      let failCount = 0;
-      
-      for (const id of selectedIds) {
-        try {
-          await offlineShopService.deletePurchase(id);
-          successCount++;
-        } catch (error) {
-          failCount++;
-          console.error(`Failed to delete purchase ${id}:`, error);
-        }
-      }
+      const ids = Array.from(selectedIds);
+      const result = await offlineDataService.deletePurchases(ids);
+      const successCount = result.deleted?.length || 0;
       
       if (successCount > 0) {
         toast.success(language === "bn" 
-          ? `${successCount}টি পার্চেজ মুছে ফেলা হয়েছে` 
-          : `${successCount} purchases deleted`);
-      }
-      if (failCount > 0) {
-        toast.error(language === "bn" 
-          ? `${failCount}টি পার্চেজ মুছে ফেলা যায়নি` 
-          : `${failCount} purchases failed to delete`);
+          ? `${successCount}টি পার্চেজ মুছে ফেলা হয়েছে${result.offline ? ' (অফলাইন)' : ''}` 
+          : `${successCount} purchases deleted${result.offline ? ' (offline)' : ''}`);
       }
       
       setSelectedIds(new Set());
