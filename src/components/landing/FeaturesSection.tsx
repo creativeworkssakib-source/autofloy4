@@ -1,6 +1,5 @@
-import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
-import { memo } from "react";
+import { memo, useMemo } from "react";
 import { 
   MessageSquare, 
   Image, 
@@ -15,12 +14,11 @@ import {
   ArrowRight
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
-import TiltCard from "@/components/ui/TiltCard";
 
 const FeaturesSection = memo(() => {
   const { t } = useLanguage();
 
-  const onlineFeatures = [
+  const onlineFeatures = useMemo(() => [
     {
       icon: MessageSquare,
       title: t("features.messageReply.title"),
@@ -63,9 +61,9 @@ const FeaturesSection = memo(() => {
       gradient: "from-secondary to-success",
       slug: "247-support",
     },
-  ];
+  ], [t]);
 
-  const offlineFeatures = [
+  const offlineFeatures = useMemo(() => [
     {
       icon: Store,
       title: t("features.offlineShop.title"),
@@ -94,23 +92,16 @@ const FeaturesSection = memo(() => {
       gradient: "from-primary to-success",
       slug: "reports-analytics",
     },
-  ];
+  ], [t]);
 
   return (
     <section id="features" className="py-16 lg:py-24 relative overflow-hidden">
       {/* Background */}
       <div className="absolute inset-0 bg-muted/30" />
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-primary/5 rounded-full blur-3xl" />
 
       <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         {/* Section Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5 }}
-          className="text-center max-w-3xl mx-auto mb-16"
-        >
+        <div className="text-center max-w-3xl mx-auto mb-16">
           <span className="inline-block px-4 py-1.5 rounded-full bg-primary/10 text-primary text-sm font-medium mb-4">
             {t("features.badge")}
           </span>
@@ -119,16 +110,10 @@ const FeaturesSection = memo(() => {
             <span className="gradient-text">{t("features.title2")}</span>
           </h2>
           <p className="text-lg text-muted-foreground">{t("features.subtitle")}</p>
-        </motion.div>
+        </div>
 
         {/* Online Business Features */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5 }}
-          className="mb-12"
-        >
+        <div className="mb-12">
           <h3 className="text-xl md:text-2xl font-bold mb-6 text-center">
             <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-secondary/10 text-secondary">
               <MessageSquare className="w-5 h-5" />
@@ -136,42 +121,32 @@ const FeaturesSection = memo(() => {
             </span>
           </h3>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
-            {onlineFeatures.map((feature, index) => (
-              <TiltCard key={feature.slug} className="h-full" tiltAmount={6}>
-                <motion.div
-                  initial={{ opacity: 0, y: 30 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.4, delay: index * 0.08 }}
-                  className="group relative bg-card/80 backdrop-blur-sm rounded-2xl p-8 border border-border/50 hover:border-primary/30 transition-colors h-full"
+            {onlineFeatures.map((feature) => (
+              <div
+                key={feature.slug}
+                className="group relative bg-card/80 backdrop-blur-sm rounded-2xl p-8 border border-border/50 hover:border-primary/30 transition-colors h-full"
+              >
+                <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${feature.gradient} flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300`}>
+                  <feature.icon className="w-7 h-7 text-primary-foreground" />
+                </div>
+                <h3 className="text-xl font-bold mb-3 group-hover:text-primary transition-colors">
+                  {feature.title}
+                </h3>
+                <p className="text-muted-foreground mb-4">{feature.description}</p>
+                <Link
+                  to={`/features/${feature.slug}`}
+                  className="inline-flex items-center text-primary font-medium text-sm group/link"
                 >
-                  <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${feature.gradient} flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300`}>
-                    <feature.icon className="w-7 h-7 text-primary-foreground" />
-                  </div>
-                  <h3 className="text-xl font-bold mb-3 group-hover:text-primary transition-colors">
-                    {feature.title}
-                  </h3>
-                  <p className="text-muted-foreground mb-4">{feature.description}</p>
-                  <Link
-                    to={`/features/${feature.slug}`}
-                    className="inline-flex items-center text-primary font-medium text-sm group/link"
-                  >
-                    {t("features.learnMore")}
-                    <ArrowRight className="w-4 h-4 ml-1 group-hover/link:translate-x-1 transition-transform" />
-                  </Link>
-                </motion.div>
-              </TiltCard>
+                  {t("features.learnMore")}
+                  <ArrowRight className="w-4 h-4 ml-1 group-hover/link:translate-x-1 transition-transform" />
+                </Link>
+              </div>
             ))}
           </div>
-        </motion.div>
+        </div>
 
         {/* Offline Shop Features */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-        >
+        <div>
           <h3 className="text-xl md:text-2xl font-bold mb-6 text-center">
             <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-success/10 text-success">
               <Store className="w-5 h-5" />
@@ -179,34 +154,29 @@ const FeaturesSection = memo(() => {
             </span>
           </h3>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8">
-            {offlineFeatures.map((feature, index) => (
-              <TiltCard key={feature.slug} className="h-full" tiltAmount={6}>
-                <motion.div
-                  initial={{ opacity: 0, y: 30 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.4, delay: index * 0.08 }}
-                  className="group relative bg-card/80 backdrop-blur-sm rounded-2xl p-6 border border-border/50 hover:border-success/30 transition-colors h-full"
+            {offlineFeatures.map((feature) => (
+              <div
+                key={feature.slug}
+                className="group relative bg-card/80 backdrop-blur-sm rounded-2xl p-6 border border-border/50 hover:border-success/30 transition-colors h-full"
+              >
+                <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${feature.gradient} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300`}>
+                  <feature.icon className="w-6 h-6 text-primary-foreground" />
+                </div>
+                <h3 className="text-lg font-bold mb-2 group-hover:text-success transition-colors">
+                  {feature.title}
+                </h3>
+                <p className="text-muted-foreground text-sm mb-3">{feature.description}</p>
+                <Link
+                  to={`/features/${feature.slug}`}
+                  className="inline-flex items-center text-success font-medium text-sm group/link"
                 >
-                  <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${feature.gradient} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300`}>
-                    <feature.icon className="w-6 h-6 text-primary-foreground" />
-                  </div>
-                  <h3 className="text-lg font-bold mb-2 group-hover:text-success transition-colors">
-                    {feature.title}
-                  </h3>
-                  <p className="text-muted-foreground text-sm mb-3">{feature.description}</p>
-                  <Link
-                    to={`/features/${feature.slug}`}
-                    className="inline-flex items-center text-success font-medium text-sm group/link"
-                  >
-                    {t("features.learnMore")}
-                    <ArrowRight className="w-4 h-4 ml-1 group-hover/link:translate-x-1 transition-transform" />
-                  </Link>
-                </motion.div>
-              </TiltCard>
+                  {t("features.learnMore")}
+                  <ArrowRight className="w-4 h-4 ml-1 group-hover/link:translate-x-1 transition-transform" />
+                </Link>
+              </div>
             ))}
           </div>
-        </motion.div>
+        </div>
       </div>
     </section>
   );
