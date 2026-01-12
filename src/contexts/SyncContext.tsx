@@ -52,18 +52,31 @@ export function SyncProvider({ children }: SyncProviderProps) {
 
     console.log('[SyncProvider] Initializing sync for shop:', currentShop.id);
 
-    // Initialize the sync orchestrator
-    offlineSyncOrchestrator.init(currentShop.id, user.id).catch(error => {
-      console.error('[SyncProvider] Failed to initialize sync:', error);
-    });
+    let unsubscribe: (() => void) | null = null;
 
-    // Subscribe to sync status updates
-    const unsubscribe = offlineSyncOrchestrator.subscribe(status => {
-      setSyncStatus(status);
-    });
+    // Initialize the sync orchestrator
+    offlineSyncOrchestrator.init(currentShop.id, user.id)
+      .then(() => {
+        // Subscribe to sync status updates after successful init
+        unsubscribe = offlineSyncOrchestrator.subscribe(status => {
+          setSyncStatus(status);
+        });
+      })
+      .catch(error => {
+        console.error('[SyncProvider] Failed to initialize sync:', error);
+        // Update status with error
+        setSyncStatus(prev => ({
+          ...prev,
+          lastError: error instanceof Error ? error.message : 'Sync initialization failed',
+        }));
+      });
 
     return () => {
-      unsubscribe();
+      if (unsubscribe) {
+        unsubscribe();
+      }
+      // Cleanup the orchestrator on unmount or when shop/user changes
+      offlineSyncOrchestrator.cleanup();
     };
   }, [currentShop?.id, user?.id]);
 

@@ -649,6 +649,28 @@ class OfflineSyncOrchestrator {
         }
       } catch (e) { console.error('[SyncOrchestrator] Failed to pull sales:', e); }
       
+      this.syncProgress = 65;
+      this.notifyListeners();
+      
+      // Pull purchases
+      try {
+        const { purchases } = await offlineShopService.getPurchases();
+        for (const purchase of purchases) {
+          const local = await offlineDB.getPurchaseById(purchase.id);
+          if (!local?._locallyModified && !local?._locallyCreated) {
+            await offlineDB.savePurchase({
+              ...purchase,
+              shop_id: this.shopId!,
+              user_id: this.userId || '',
+              _locallyModified: false,
+              _locallyCreated: false,
+              _locallyDeleted: false,
+            });
+            pulled++;
+          }
+        }
+      } catch (e) { console.error('[SyncOrchestrator] Failed to pull purchases:', e); }
+      
       this.syncProgress = 70;
       this.notifyListeners();
       
@@ -672,7 +694,62 @@ class OfflineSyncOrchestrator {
         }
       } catch (e) { console.error('[SyncOrchestrator] Failed to pull expenses:', e); }
       
+      this.syncProgress = 75;
+      this.notifyListeners();
+      
+      // Pull loans
+      try {
+        const token = localStorage.getItem("autofloy_token");
+        if (token) {
+          const baseUrl = import.meta.env.VITE_SUPABASE_URL;
+          const res = await fetch(`${baseUrl}/functions/v1/shop-loans?shop_id=${this.shopId}`, {
+            headers: { 'Authorization': `Bearer ${token}` },
+          });
+          if (res.ok) {
+            const { loans } = await res.json();
+            const localLoans = await offlineDB.getLoans(this.shopId!);
+            for (const loan of loans || []) {
+              const local = localLoans.find(l => l.id === loan.id);
+              if (!local?._locallyModified && !local?._locallyCreated) {
+                await offlineDB.saveLoan({
+                  ...loan,
+                  shop_id: this.shopId!,
+                  user_id: this.userId || '',
+                  _locallyModified: false,
+                  _locallyCreated: false,
+                  _locallyDeleted: false,
+                });
+                pulled++;
+              }
+            }
+          }
+        }
+      } catch (e) { console.error('[SyncOrchestrator] Failed to pull loans:', e); }
+      
       this.syncProgress = 80;
+      this.notifyListeners();
+      
+      // Pull cash transactions
+      try {
+        const { transactions: cashTxs } = await offlineShopService.getCashTransactions({});
+        const localCashTxs = await offlineDB.getCashTransactions(this.shopId!);
+        for (const tx of cashTxs || []) {
+          const local = localCashTxs.find(t => t.id === tx.id);
+          if (!local?._locallyModified && !local?._locallyCreated) {
+            await offlineDB.saveCashTransaction({
+              ...tx,
+              shop_id: this.shopId!,
+              user_id: this.userId || '',
+              _locallyModified: false,
+              _locallyCreated: false,
+              _locallyDeleted: false,
+            });
+            pulled++;
+          }
+        }
+      } catch (e) { console.error('[SyncOrchestrator] Failed to pull cash transactions:', e); }
+      
+      this.syncProgress = 85;
       this.notifyListeners();
       
       // Pull settings
@@ -711,22 +788,80 @@ class OfflineSyncOrchestrator {
     // This updates references in local DB when server assigns different ID
     console.log(`[SyncOrchestrator] Updating ${table} ID: ${oldId} -> ${newId}`);
     
-    switch (table) {
-      case 'products':
-        const product = await offlineDB.getProductById(oldId);
-        if (product) {
-          await offlineDB.hardDeleteProduct(oldId);
-          await offlineDB.saveProduct({ ...product, id: newId, _locallyCreated: false });
-        }
-        break;
-      case 'customers':
-        const customer = await offlineDB.getCustomerById(oldId);
-        if (customer) {
-          await offlineDB.hardDeleteCustomer(oldId);
-          await offlineDB.saveCustomer({ ...customer, id: newId, _locallyCreated: false });
-        }
-        break;
-      // Add other tables as needed
+    try {
+      switch (table) {
+        case 'products':
+          const product = await offlineDB.getProductById(oldId);
+          if (product) {
+            await offlineDB.hardDeleteProduct(oldId);
+            await offlineDB.saveProduct({ ...product, id: newId, _locallyCreated: false });
+          }
+          break;
+        case 'customers':
+          const customer = await offlineDB.getCustomerById(oldId);
+          if (customer) {
+            await offlineDB.hardDeleteCustomer(oldId);
+            await offlineDB.saveCustomer({ ...customer, id: newId, _locallyCreated: false });
+          }
+          break;
+        case 'suppliers':
+          const supplier = await offlineDB.getSupplierById(oldId);
+          if (supplier) {
+            await offlineDB.hardDeleteSupplier(oldId);
+            await offlineDB.saveSupplier({ ...supplier, id: newId, _locallyCreated: false });
+          }
+          break;
+        case 'sales':
+          const sale = await offlineDB.getSaleById(oldId);
+          if (sale) {
+            await offlineDB.hardDeleteSale(oldId);
+            await offlineDB.saveSale({ ...sale, id: newId, _locallyCreated: false });
+          }
+          break;
+        case 'purchases':
+          const purchase = await offlineDB.getPurchaseById(oldId);
+          if (purchase) {
+            await offlineDB.hardDeletePurchase(oldId);
+            await offlineDB.savePurchase({ ...purchase, id: newId, _locallyCreated: false });
+          }
+          break;
+        case 'expenses':
+          const expenses = await offlineDB.getExpenses(this.shopId!);
+          const expense = expenses.find(e => e.id === oldId);
+          if (expense) {
+            await offlineDB.hardDeleteExpense(oldId);
+            await offlineDB.saveExpense({ ...expense, id: newId, _locallyCreated: false });
+          }
+          break;
+        case 'loans':
+          const loans = await offlineDB.getLoans(this.shopId!);
+          const loan = loans.find(l => l.id === oldId);
+          if (loan) {
+            await offlineDB.hardDeleteLoan(oldId);
+            await offlineDB.saveLoan({ ...loan, id: newId, _locallyCreated: false });
+          }
+          break;
+        case 'cashTransactions':
+          const cashTxs = await offlineDB.getCashTransactions(this.shopId!);
+          const cashTx = cashTxs.find(t => t.id === oldId);
+          if (cashTx) {
+            await offlineDB.hardDeleteCashTransaction(oldId);
+            await offlineDB.saveCashTransaction({ ...cashTx, id: newId, _locallyCreated: false });
+          }
+          break;
+        case 'stockAdjustments':
+          const adjustments = await offlineDB.getStockAdjustments(this.shopId!);
+          const adjustment = adjustments.find(a => a.id === oldId);
+          if (adjustment) {
+            await offlineDB.hardDeleteStockAdjustment(oldId);
+            await offlineDB.saveStockAdjustment({ ...adjustment, id: newId, _locallyCreated: false });
+          }
+          break;
+        default:
+          console.warn(`[SyncOrchestrator] updateLocalRecordId: Unknown table ${table}`);
+      }
+    } catch (error) {
+      console.error(`[SyncOrchestrator] Error updating local record ID for ${table}:`, error);
     }
   }
 
@@ -736,24 +871,106 @@ class OfflineSyncOrchestrator {
   private async clearLocalFlags(item: SyncQueueItem): Promise<void> {
     const { table, recordId } = item;
     
-    switch (table) {
-      case 'products':
-        const product = await offlineDB.getProductById(recordId);
-        if (product) {
-          product._locallyModified = false;
-          product._locallyCreated = false;
-          await offlineDB.saveProduct(product);
-        }
-        break;
-      case 'customers':
-        const customer = await offlineDB.getCustomerById(recordId);
-        if (customer) {
-          customer._locallyModified = false;
-          customer._locallyCreated = false;
-          await offlineDB.saveCustomer(customer);
-        }
-        break;
-      // Add other tables as needed
+    try {
+      switch (table) {
+        case 'products':
+          const product = await offlineDB.getProductById(recordId);
+          if (product) {
+            product._locallyModified = false;
+            product._locallyCreated = false;
+            await offlineDB.saveProduct(product);
+          }
+          break;
+        case 'customers':
+          const customer = await offlineDB.getCustomerById(recordId);
+          if (customer) {
+            customer._locallyModified = false;
+            customer._locallyCreated = false;
+            await offlineDB.saveCustomer(customer);
+          }
+          break;
+        case 'suppliers':
+          const supplier = await offlineDB.getSupplierById(recordId);
+          if (supplier) {
+            supplier._locallyModified = false;
+            supplier._locallyCreated = false;
+            await offlineDB.saveSupplier(supplier);
+          }
+          break;
+        case 'sales':
+          const sale = await offlineDB.getSaleById(recordId);
+          if (sale) {
+            sale._locallyModified = false;
+            sale._locallyCreated = false;
+            await offlineDB.saveSale(sale);
+          }
+          break;
+        case 'purchases':
+          const purchase = await offlineDB.getPurchaseById(recordId);
+          if (purchase) {
+            purchase._locallyModified = false;
+            purchase._locallyCreated = false;
+            await offlineDB.savePurchase(purchase);
+          }
+          break;
+        case 'expenses':
+          const expenses = await offlineDB.getExpenses(this.shopId!);
+          const expense = expenses.find(e => e.id === recordId);
+          if (expense) {
+            expense._locallyModified = false;
+            expense._locallyCreated = false;
+            await offlineDB.saveExpense(expense);
+          }
+          break;
+        case 'loans':
+          const loans = await offlineDB.getLoans(this.shopId!);
+          const loan = loans.find(l => l.id === recordId);
+          if (loan) {
+            loan._locallyModified = false;
+            loan._locallyCreated = false;
+            await offlineDB.saveLoan(loan);
+          }
+          break;
+        case 'cashTransactions':
+          const cashTxs = await offlineDB.getCashTransactions(this.shopId!);
+          const cashTx = cashTxs.find(t => t.id === recordId);
+          if (cashTx) {
+            cashTx._locallyModified = false;
+            cashTx._locallyCreated = false;
+            await offlineDB.saveCashTransaction(cashTx);
+          }
+          break;
+        case 'dailyCashRegister':
+          const register = await offlineDB.getDailyCashRegister(this.shopId!, new Date().toISOString().split('T')[0]);
+          if (register && register.id === recordId) {
+            register._locallyModified = false;
+            register._locallyCreated = false;
+            await offlineDB.saveDailyCashRegister(register);
+          }
+          break;
+        case 'stockAdjustments':
+          const adjustments = await offlineDB.getStockAdjustments(this.shopId!);
+          const adjustment = adjustments.find(a => a.id === recordId);
+          if (adjustment) {
+            adjustment._locallyModified = false;
+            adjustment._locallyCreated = false;
+            await offlineDB.saveStockAdjustment(adjustment);
+          }
+          break;
+        case 'returns':
+          const returns = await offlineDB.getReturns(this.shopId!);
+          const returnItem = returns.find(r => r.id === recordId);
+          if (returnItem) {
+            returnItem._locallyModified = false;
+            returnItem._locallyCreated = false;
+            await offlineDB.saveReturn(returnItem);
+          }
+          break;
+        default:
+          console.warn(`[SyncOrchestrator] clearLocalFlags: Unknown table ${table}`);
+      }
+    } catch (error) {
+      console.error(`[SyncOrchestrator] Error clearing flags for ${table}:${recordId}:`, error);
     }
   }
 
@@ -837,11 +1054,22 @@ class OfflineSyncOrchestrator {
       this.syncInterval = null;
     }
     
-    window.removeEventListener('online', this.handleOnline);
-    window.removeEventListener('offline', this.handleOffline);
+    // Only remove event listeners if they were added (isInitialized indicates they were)
+    if (this.isInitialized) {
+      window.removeEventListener('online', this.handleOnline);
+      window.removeEventListener('offline', this.handleOffline);
+    }
     
+    // Reset all state
     this.isInitialized = false;
     this.isSyncing = false;
+    this.lastSyncAt = null;
+    this.lastError = null;
+    this.pendingChanges = 0;
+    this.syncProgress = 0;
+    this.syncDirection = 'idle';
+    // Clear listeners to prevent memory leaks
+    this.listeners.clear();
   }
 
   /**
