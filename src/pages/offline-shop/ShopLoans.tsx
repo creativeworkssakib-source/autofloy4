@@ -371,11 +371,6 @@ const ShopLoans = () => {
       setDeleting(false);
     }
   };
-      toast.error(error.message);
-    } finally {
-      setDeleting(false);
-    }
-  };
 
   const resetForm = () => {
     setFormData({
