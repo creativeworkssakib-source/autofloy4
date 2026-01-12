@@ -250,7 +250,13 @@ const BenefitsSection = memo(() => {
                       <label className="text-sm font-medium mb-2 block">Rating</label>
                       <div className="flex gap-1">
                         {[1, 2, 3, 4, 5].map((star) => (
-                          <button key={star} type="button" onClick={() => setNewReview({ ...newReview, rating: star })} className="hover:scale-110 transition-transform">
+                          <button 
+                            key={star} 
+                            type="button" 
+                            onClick={() => setNewReview({ ...newReview, rating: star })} 
+                            className="hover:scale-110 transition-transform"
+                            aria-label={`Rate ${star} star${star > 1 ? 's' : ''}`}
+                          >
                             <Star className={`w-6 h-6 ${star <= newReview.rating ? "text-amber-500 fill-current" : "text-muted-foreground"}`} />
                           </button>
                         ))}
@@ -283,11 +289,11 @@ const BenefitsSection = memo(() => {
                 Showing {currentPage * reviewsPerPage + 1}-{Math.min((currentPage + 1) * reviewsPerPage, reviews.length)} of {reviews.length}
               </p>
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="icon" onClick={() => setCurrentPage(prev => Math.max(0, prev - 1))} disabled={currentPage === 0} className="h-8 w-8">
+                <Button variant="outline" size="icon" onClick={() => setCurrentPage(prev => Math.max(0, prev - 1))} disabled={currentPage === 0} className="h-8 w-8" aria-label="Previous reviews page">
                   <ChevronLeft className="w-4 h-4" />
                 </Button>
                 <span className="text-sm text-muted-foreground min-w-[60px] text-center">{currentPage + 1} / {totalPages}</span>
-                <Button variant="outline" size="icon" onClick={() => setCurrentPage(prev => Math.min(totalPages - 1, prev + 1))} disabled={currentPage >= totalPages - 1} className="h-8 w-8">
+                <Button variant="outline" size="icon" onClick={() => setCurrentPage(prev => Math.min(totalPages - 1, prev + 1))} disabled={currentPage >= totalPages - 1} className="h-8 w-8" aria-label="Next reviews page">
                   <ChevronRight className="w-4 h-4" />
                 </Button>
               </div>
