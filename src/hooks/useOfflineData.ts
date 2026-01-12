@@ -284,6 +284,24 @@ export function useOfflineSuppliers() {
     return result;
   }, [fetchSuppliers, t]);
   
+  const updateSupplier = useCallback(async (data: any) => {
+    const result = await offlineDataService.updateSupplier(data);
+    if (result.offline) {
+      toast.info(t('offline.savedLocally'));
+    }
+    await fetchSuppliers();
+    return result;
+  }, [fetchSuppliers, t]);
+  
+  const deleteSupplier = useCallback(async (id: string) => {
+    const result = await offlineDataService.deleteSupplier(id);
+    if (result.offline) {
+      toast.info(t('offline.savedLocally'));
+    }
+    await fetchSuppliers();
+    return result;
+  }, [fetchSuppliers, t]);
+  
   return {
     suppliers,
     loading,
@@ -292,6 +310,8 @@ export function useOfflineSuppliers() {
     isOnline,
     refetch: fetchSuppliers,
     createSupplier,
+    updateSupplier,
+    deleteSupplier,
   };
 }
 
@@ -332,6 +352,15 @@ export function useOfflineSales(startDate?: string, endDate?: string) {
     return result;
   }, [fetchSales, t]);
   
+  const deleteSale = useCallback(async (id: string) => {
+    const result = await offlineDataService.deleteSale(id);
+    if (result.offline) {
+      toast.info(t('offline.savedLocally'));
+    }
+    await fetchSales();
+    return result;
+  }, [fetchSales, t]);
+  
   return {
     sales,
     loading,
@@ -340,6 +369,7 @@ export function useOfflineSales(startDate?: string, endDate?: string) {
     isOnline,
     refetch: fetchSales,
     createSale,
+    deleteSale,
   };
 }
 
@@ -380,6 +410,15 @@ export function useOfflineExpenses(startDate?: string, endDate?: string) {
     return result;
   }, [fetchExpenses, t]);
   
+  const deleteExpense = useCallback(async (id: string) => {
+    const result = await offlineDataService.deleteExpense(id);
+    if (result.offline) {
+      toast.info(t('offline.savedLocally'));
+    }
+    await fetchExpenses();
+    return result;
+  }, [fetchExpenses, t]);
+  
   return {
     expenses,
     loading,
@@ -388,6 +427,7 @@ export function useOfflineExpenses(startDate?: string, endDate?: string) {
     isOnline,
     refetch: fetchExpenses,
     createExpense,
+    deleteExpense,
   };
 }
 
@@ -428,6 +468,15 @@ export function useOfflinePurchases(startDate?: string, endDate?: string) {
     return result;
   }, [fetchPurchases, t]);
   
+  const deletePurchase = useCallback(async (id: string) => {
+    const result = await offlineDataService.deletePurchase(id);
+    if (result.offline) {
+      toast.info(t('offline.savedLocally'));
+    }
+    await fetchPurchases();
+    return result;
+  }, [fetchPurchases, t]);
+  
   return {
     purchases,
     loading,
@@ -436,6 +485,7 @@ export function useOfflinePurchases(startDate?: string, endDate?: string) {
     isOnline,
     refetch: fetchPurchases,
     createPurchase,
+    deletePurchase,
   };
 }
 

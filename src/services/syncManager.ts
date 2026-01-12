@@ -237,9 +237,7 @@ class SyncManager {
       case 'loans':
         await this.syncLoan(operation, data);
         break;
-      case 'loanPayments':
-        await this.syncLoanPayment(operation, data);
-        break;
+      // Note: loanPayments is handled within syncLoan for payment additions
       // Staff feature removed - handled via default case for legacy queue items
       case 'dailyCashRegister':
         await this.syncDailyCashRegister(operation, data);

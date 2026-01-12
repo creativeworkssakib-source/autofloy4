@@ -501,6 +501,54 @@ class OfflineDataService {
     return { supplier, offline: true };
   }
   
+  async updateSupplier(data: Partial<ShopSupplier> & { id: string }): Promise<{ supplier: ShopSupplier; offline: boolean }> {
+    await this.init();
+    const existing = await offlineDB.getSupplierById(data.id);
+    if (!existing) throw new Error('Supplier not found');
+    
+    const updated: ShopSupplier = {
+      ...existing,
+      ...data,
+      updated_at: new Date().toISOString(),
+      _locallyModified: true,
+    };
+    
+    await offlineDB.saveSupplier(updated);
+    await syncQueue.add('update', 'suppliers', updated.id, updated);
+    
+    if (this.isOnline()) {
+      try {
+        await offlineShopService.updateSupplier(data);
+        updated._locallyModified = false;
+        await offlineDB.saveSupplier(updated);
+        await syncQueue.deleteByRecordId('suppliers', updated.id);
+        return { supplier: updated, offline: false };
+      } catch (error) {
+        console.error('Failed to sync supplier update:', error);
+      }
+    }
+    
+    return { supplier: updated, offline: true };
+  }
+  
+  async deleteSupplier(id: string): Promise<{ offline: boolean }> {
+    await this.init();
+    await offlineDB.deleteSupplier(id);
+    await syncQueue.add('delete', 'suppliers', id, { id });
+    
+    if (this.isOnline()) {
+      try {
+        await offlineShopService.deleteSupplier(id);
+        await syncQueue.deleteByRecordId('suppliers', id);
+        return { offline: false };
+      } catch (error) {
+        console.error('Failed to sync supplier deletion:', error);
+      }
+    }
+    
+    return { offline: true };
+  }
+  
   // =============== SALES ===============
   
   async getSales(startDate?: string, endDate?: string): Promise<{ sales: ShopSale[]; fromCache: boolean }> {
@@ -651,6 +699,24 @@ class OfflineDataService {
     }
     
     return { sale, invoice_number: invoiceNumber, offline: true };
+  }
+  
+  async deleteSale(id: string): Promise<{ offline: boolean }> {
+    await this.init();
+    await offlineDB.deleteSale(id);
+    await syncQueue.add('delete', 'sales', id, { id });
+    
+    if (this.isOnline()) {
+      try {
+        await offlineShopService.deleteSale(id);
+        await syncQueue.deleteByRecordId('sales', id);
+        return { offline: false };
+      } catch (error) {
+        console.error('Failed to sync sale deletion:', error);
+      }
+    }
+    
+    return { offline: true };
   }
   
   // =============== PURCHASES ===============
