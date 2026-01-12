@@ -939,6 +939,27 @@ class OfflineDataService {
     return { loan, offline: true };
   }
   
+  async updateLoan(data: Partial<ShopLoan> & { id: string }): Promise<{ loan: ShopLoan; offline: boolean }> {
+    await this.init();
+    const shopId = this.ensureShopId();
+    const loans = await offlineDB.getLoans(shopId);
+    const existing = loans.find(l => l.id === data.id);
+    
+    if (!existing) throw new Error('Loan not found');
+    
+    const updated: ShopLoan = {
+      ...existing,
+      ...data,
+      updated_at: new Date().toISOString(),
+      _locallyModified: true,
+    };
+    
+    await offlineDB.saveLoan(updated);
+    await syncQueue.add('update', 'loans', updated.id, updated);
+    
+    return { loan: updated, offline: true };
+  }
+  
   async deleteLoan(id: string): Promise<{ offline: boolean }> {
     await this.init();
     await offlineDB.deleteLoan(id);

@@ -337,6 +337,32 @@ export function useOfflineLoans(statusFilter?: string) {
     }
   }, [refetch]);
 
+  const addPayment = useCallback(async (loanId: string, paymentData: any) => {
+    try {
+      // Update loan locally
+      const loan = loans.find(l => l.id === loanId);
+      if (loan) {
+        const newPaidAmount = (loan.paid_amount || 0) + (paymentData.amount || 0);
+        const newRemaining = (loan.total_amount || 0) - newPaidAmount;
+        const isCompleted = newRemaining <= 0;
+        
+        // This will be synced to server via sync queue
+        await offlineDataService.updateLoan({
+          id: loanId,
+          paid_amount: newPaidAmount,
+          remaining_amount: Math.max(0, newRemaining),
+          status: isCompleted ? 'paid' : loan.status,
+        } as any);
+        
+        await refetch();
+        return { offline: !isOnline, isCompleted };
+      }
+      throw new Error('Loan not found');
+    } catch (error) {
+      throw error;
+    }
+  }, [refetch, loans, isOnline]);
+
   return {
     loans,
     stats,
@@ -348,6 +374,7 @@ export function useOfflineLoans(statusFilter?: string) {
     refetch,
     createLoan,
     deleteLoan,
+    addPayment,
   };
 }
 
@@ -788,6 +815,233 @@ export function useOfflineProductsSimple() {
 
   return {
     products,
+    loading,
+    fromCache,
+    isOnline,
+    refetch,
+  };
+}
+
+// =============== DASHBOARD (Fully Offline) ===============
+
+export function useOfflineDashboard(range: 'today' | 'week' | 'month' = 'today') {
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [fromCache, setFromCache] = useState(false);
+  const isOnline = useIsOnline();
+  const { currentShop } = useShop();
+
+  const refetch = useCallback(async () => {
+    setLoading(true);
+    try {
+      // Get date range
+      const now = new Date();
+      let startDate: string;
+      const endDate = now.toISOString().split('T')[0];
+      
+      if (range === 'today') {
+        startDate = endDate;
+      } else if (range === 'week') {
+        const weekAgo = new Date(now);
+        weekAgo.setDate(weekAgo.getDate() - 7);
+        startDate = weekAgo.toISOString().split('T')[0];
+      } else {
+        const monthAgo = new Date(now);
+        monthAgo.setMonth(monthAgo.getMonth() - 1);
+        startDate = monthAgo.toISOString().split('T')[0];
+      }
+
+      // Fetch all data from local DB
+      const [salesResult, expensesResult, purchasesResult, productsResult, customersResult, returnsResult] = await Promise.all([
+        offlineDataService.getSales(startDate, endDate),
+        offlineDataService.getExpenses(startDate, endDate),
+        offlineDataService.getPurchases(startDate, endDate),
+        offlineDataService.getProducts(),
+        offlineDataService.getCustomers(),
+        offlineDataService.getReturns(),
+      ]);
+
+      const sales = salesResult.sales || [];
+      const expenses = expensesResult.expenses || [];
+      const purchases = purchasesResult.purchases || [];
+      const products = productsResult.products || [];
+      const customers = customersResult.customers || [];
+      const returns = returnsResult.returns || [];
+
+      // Calculate stats
+      const totalSales = sales.reduce((sum: number, s: any) => sum + Number(s.total || 0), 0);
+      const totalExpenses = expenses.reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
+      const totalPurchases = purchases.reduce((sum: number, p: any) => sum + Number(p.total || 0), 0);
+      const totalReturns = returns.reduce((sum: number, r: any) => sum + Number(r.total_amount || 0), 0);
+      const profit = totalSales - totalExpenses - totalReturns;
+
+      // Low stock items
+      const lowStockItems = products.filter((p: any) => 
+        p.stock_quantity <= (p.min_stock_alert || 5) && p.is_active
+      );
+
+      // Recent sales (last 5)
+      const recentSales = [...sales]
+        .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .slice(0, 5);
+
+      // Recent products (last 5)
+      const recentProducts = [...products]
+        .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .slice(0, 5);
+
+      // Returns summary
+      const returnsByReason = returns.reduce((acc: any, r: any) => {
+        const reason = r.reason || 'Other';
+        acc[reason] = (acc[reason] || 0) + 1;
+        return acc;
+      }, {});
+
+      const topReturnReasons = Object.entries(returnsByReason)
+        .map(([reason, count]) => ({ reason, count }))
+        .sort((a: any, b: any) => b.count - a.count)
+        .slice(0, 5);
+
+      setData({
+        totalSales,
+        totalExpenses,
+        totalPurchases,
+        totalReturns,
+        profit,
+        salesCount: sales.length,
+        customersCount: customers.length,
+        productsCount: products.length,
+        lowStockItems,
+        lowStockCount: lowStockItems.length,
+        recentSales,
+        recentProducts,
+        returnsSummary: {
+          totalCount: returns.length,
+          totalAmount: totalReturns,
+          topReasons: topReturnReasons,
+        },
+      });
+      
+      setFromCache(salesResult.fromCache || expensesResult.fromCache);
+    } catch (error) {
+      console.error('Failed to calculate dashboard data:', error);
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [range, currentShop?.id]);
+
+  useEffect(() => {
+    refetch();
+  }, [refetch]);
+
+  return {
+    data,
+    loading,
+    fromCache,
+    isOnline,
+    refetch,
+  };
+}
+
+// =============== REPORTS (Fully Offline) ===============
+
+export function useOfflineReports(
+  reportType: 'sales' | 'expenses' | 'inventory',
+  startDate?: string,
+  endDate?: string
+) {
+  const [reportData, setReportData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [fromCache, setFromCache] = useState(false);
+  const isOnline = useIsOnline();
+  const { currentShop } = useShop();
+
+  const refetch = useCallback(async () => {
+    setLoading(true);
+    try {
+      if (reportType === 'sales') {
+        const result = await offlineDataService.getSales(startDate, endDate);
+        const sales = result.sales || [];
+        
+        const totalAmount = sales.reduce((sum: number, s: any) => sum + Number(s.total || 0), 0);
+        const totalItems = sales.reduce((sum: number, s: any) => sum + (s.items?.length || 0), 0);
+        const avgSale = sales.length > 0 ? totalAmount / sales.length : 0;
+        
+        setReportData({
+          records: sales,
+          summary: {
+            totalAmount,
+            totalItems,
+            count: sales.length,
+            avgSale,
+          },
+        });
+        setFromCache(result.fromCache);
+        
+      } else if (reportType === 'expenses') {
+        const result = await offlineDataService.getExpenses(startDate, endDate);
+        const expenses = result.expenses || [];
+        
+        const totalAmount = expenses.reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
+        const byCategory = expenses.reduce((acc: any, e: any) => {
+          const cat = e.category || 'Other';
+          acc[cat] = (acc[cat] || 0) + Number(e.amount || 0);
+          return acc;
+        }, {});
+        
+        setReportData({
+          records: expenses,
+          summary: {
+            totalAmount,
+            count: expenses.length,
+            byCategory,
+          },
+        });
+        setFromCache(result.fromCache);
+        
+      } else if (reportType === 'inventory') {
+        const result = await offlineDataService.getProducts();
+        const products = result.products || [];
+        
+        const totalValue = products.reduce((sum: number, p: any) => 
+          sum + (Number(p.selling_price || 0) * Number(p.stock_quantity || 0)), 0
+        );
+        const totalCost = products.reduce((sum: number, p: any) => 
+          sum + (Number(p.purchase_price || 0) * Number(p.stock_quantity || 0)), 0
+        );
+        const lowStock = products.filter((p: any) => 
+          p.stock_quantity <= (p.min_stock_alert || 5)
+        );
+        const outOfStock = products.filter((p: any) => p.stock_quantity === 0);
+        
+        setReportData({
+          records: products,
+          summary: {
+            totalProducts: products.length,
+            totalValue,
+            totalCost,
+            potentialProfit: totalValue - totalCost,
+            lowStockCount: lowStock.length,
+            outOfStockCount: outOfStock.length,
+          },
+        });
+        setFromCache(result.fromCache);
+      }
+    } catch (error) {
+      console.error('Failed to generate report:', error);
+      setReportData(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [reportType, startDate, endDate, currentShop?.id]);
+
+  useEffect(() => {
+    refetch();
+  }, [refetch]);
+
+  return {
+    reportData,
     loading,
     fromCache,
     isOnline,
