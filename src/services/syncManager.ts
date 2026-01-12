@@ -479,14 +479,19 @@ class SyncManager {
     
     const syncedTables: string[] = [];
     const token = localStorage.getItem("autofloy_token");
+    const userId = localStorage.getItem("autofloy_user_id") || '';
     const baseUrl = import.meta.env.VITE_SUPABASE_URL;
+    
+    console.log('[SyncManager] Starting full sync for shop:', shopId, 'user:', userId);
     
     try {
       // Sync products (10%)
       const { products } = await offlineShopService.getProducts();
+      console.log('[SyncManager] Syncing', products.length, 'products to local DB');
       await offlineDB.bulkSaveProducts(products.map(p => ({
         ...p,
         shop_id: shopId,
+        user_id: p.user_id || userId,
         _locallyModified: false,
         _locallyCreated: false,
         _locallyDeleted: false,
@@ -497,10 +502,12 @@ class SyncManager {
       
       // Sync categories (15%)
       const { categories } = await offlineShopService.getCategories();
+      console.log('[SyncManager] Syncing', categories.length, 'categories to local DB');
       for (const cat of categories) {
         await offlineDB.saveCategory({
           ...cat,
           shop_id: shopId,
+          user_id: cat.user_id || userId,
           _locallyModified: false,
           _locallyCreated: false,
           _locallyDeleted: false,
@@ -512,10 +519,12 @@ class SyncManager {
       
       // Sync customers (25%)
       const { customers } = await offlineShopService.getCustomers();
+      console.log('[SyncManager] Syncing', customers.length, 'customers to local DB');
       for (const cust of customers) {
         await offlineDB.saveCustomer({
           ...cust,
           shop_id: shopId,
+          user_id: cust.user_id || userId,
           _locallyModified: false,
           _locallyCreated: false,
           _locallyDeleted: false,
@@ -527,10 +536,12 @@ class SyncManager {
       
       // Sync suppliers (35%)
       const { suppliers } = await offlineShopService.getSuppliers();
+      console.log('[SyncManager] Syncing', suppliers.length, 'suppliers to local DB');
       for (const supp of suppliers) {
         await offlineDB.saveSupplier({
           ...supp,
           shop_id: shopId,
+          user_id: supp.user_id || userId,
           _locallyModified: false,
           _locallyCreated: false,
           _locallyDeleted: false,
@@ -540,16 +551,18 @@ class SyncManager {
       this.progress = 35;
       this.notifyListeners();
       
-      // Sync sales - last 30 days (45%)
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      // Sync sales - last 90 days for better offline coverage (45%)
+      const ninetyDaysAgo = new Date();
+      ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
       const { sales } = await offlineShopService.getSales({
-        startDate: thirtyDaysAgo.toISOString().split('T')[0],
+        startDate: ninetyDaysAgo.toISOString().split('T')[0],
       });
+      console.log('[SyncManager] Syncing', sales.length, 'sales to local DB');
       for (const sale of sales) {
         await offlineDB.saveSale({
           ...sale,
           shop_id: shopId,
+          user_id: sale.user_id || userId,
           _locallyModified: false,
           _locallyCreated: false,
           _locallyDeleted: false,
@@ -562,10 +575,12 @@ class SyncManager {
       // Sync purchases (55%)
       try {
         const { purchases } = await offlineShopService.getPurchases();
+        console.log('[SyncManager] Syncing', purchases.length, 'purchases to local DB');
         for (const purchase of purchases) {
           await offlineDB.savePurchase({
             ...purchase,
             shop_id: shopId,
+            user_id: purchase.user_id || userId,
             _locallyModified: false,
             _locallyCreated: false,
             _locallyDeleted: false,
@@ -581,10 +596,12 @@ class SyncManager {
       // Sync expenses (60%)
       try {
         const { expenses } = await offlineShopService.getExpenses();
+        console.log('[SyncManager] Syncing', expenses.length, 'expenses to local DB');
         for (const expense of expenses) {
           await offlineDB.saveExpense({
             ...expense,
             shop_id: shopId,
+            user_id: expense.user_id || userId,
             _locallyModified: false,
             _locallyCreated: false,
             _locallyDeleted: false,
@@ -605,10 +622,12 @@ class SyncManager {
             { headers: { Authorization: `Bearer ${token}` } }
           );
           const loansData = await loansRes.json();
+          console.log('[SyncManager] Syncing', (loansData.loans || []).length, 'loans to local DB');
           for (const loan of loansData.loans || []) {
             await offlineDB.saveLoan({
               ...loan,
               shop_id: shopId,
+              user_id: loan.user_id || userId,
               _locallyModified: false,
               _locallyCreated: false,
               _locallyDeleted: false,
@@ -630,10 +649,12 @@ class SyncManager {
             { headers: { Authorization: `Bearer ${token}` } }
           );
           const returnsData = await returnsRes.json();
+          console.log('[SyncManager] Syncing', (returnsData.returns || []).length, 'returns to local DB');
           for (const ret of returnsData.returns || []) {
             await offlineDB.saveReturn({
               ...ret,
               shop_id: shopId,
+              user_id: ret.user_id || userId,
               _locallyModified: false,
               _locallyCreated: false,
               _locallyDeleted: false,
@@ -654,10 +675,12 @@ class SyncManager {
       // Sync cash registers (85%)
       try {
         const cashRegsData = await offlineShopService.getCashRegisters({});
+        console.log('[SyncManager] Syncing', (cashRegsData.registers || []).length, 'cash registers to local DB');
         for (const reg of cashRegsData.registers || []) {
           await offlineDB.saveDailyCashRegister({
             ...reg,
             shop_id: shopId,
+            user_id: reg.user_id || userId,
             _locallyModified: false,
             _locallyCreated: false,
             _locallyDeleted: false,
@@ -673,10 +696,12 @@ class SyncManager {
       // Sync cash transactions (90%)
       try {
         const { transactions } = await offlineShopService.getCashTransactions();
+        console.log('[SyncManager] Syncing', transactions.length, 'cash transactions to local DB');
         for (const tx of transactions) {
           await offlineDB.saveCashTransaction({
             ...tx,
             shop_id: shopId,
+            user_id: tx.user_id || userId,
             _locallyModified: false,
             _locallyCreated: false,
             _locallyDeleted: false,
