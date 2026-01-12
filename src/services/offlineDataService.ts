@@ -1,10 +1,19 @@
 /**
  * Offline-First Data Service
  * 
- * This service provides offline-first data access pattern:
- * 1. Always read from local IndexedDB first
- * 2. If online, sync with server in background
- * 3. All writes go to local first, then queue for server sync
+ * This service provides SMART data access pattern:
+ * 
+ * WHEN ONLINE (connected to internet):
+ * 1. ALWAYS fetch fresh data from Supabase server FIRST
+ * 2. Save fetched data to Local IndexedDB for offline backup
+ * 3. Return the LIVE Supabase data to UI
+ * 
+ * WHEN OFFLINE (no internet):
+ * 1. Use Local IndexedDB data (last synced copy)
+ * 2. Queue all writes for later sync
+ * 
+ * KEY PRINCIPLE: When online, Supabase is the source of truth.
+ * Local DB is only used as offline backup and sync queue storage.
  */
 
 import { offlineDB, ShopProduct, ShopCategory, ShopCustomer, ShopSupplier, ShopSale, ShopSaleItem, ShopPurchase, ShopExpense, ShopCashTransaction, ShopStockAdjustment, ShopReturn, ShopStockBatch, ShopSettings, ShopDailyCashRegister, ShopLoan, SyncMetadata } from '@/lib/offlineDB';
@@ -49,6 +58,29 @@ class OfflineDataService {
   
   isOnline(): boolean {
     return navigator.onLine;
+  }
+  
+  /**
+   * Helper to save server data to local DB without overwriting local changes
+   */
+  private async saveToLocalIfNotModified<T extends { id: string }>(
+    data: T,
+    getExisting: () => Promise<any>,
+    save: (item: T) => Promise<void>,
+    shopId: string
+  ): Promise<void> {
+    const existing = await getExisting();
+    // Only save if not locally modified or created
+    if (!existing?._locallyModified && !existing?._locallyCreated) {
+      await save({
+        ...data,
+        shop_id: shopId,
+        user_id: this.userId || '',
+        _locallyModified: false,
+        _locallyCreated: false,
+        _locallyDeleted: false,
+      } as any);
+    }
   }
   
   // =============== PRODUCTS ===============
