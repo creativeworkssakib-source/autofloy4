@@ -893,14 +893,21 @@ export function useOfflineDashboard(range: 'today' | 'week' | 'month' = 'today')
       // Returns summary
       const returnsByReason = returns.reduce((acc: any, r: any) => {
         const reason = r.reason || 'Other';
-        acc[reason] = (acc[reason] || 0) + 1;
+        if (!acc[reason]) {
+          acc[reason] = { count: 0, amount: 0 };
+        }
+        acc[reason].count += 1;
+        acc[reason].amount += Number(r.total_amount || r.refund_amount || 0);
         return acc;
-      }, {});
+      }, {} as Record<string, { count: number; amount: number }>);
 
       const topReturnReasons = Object.entries(returnsByReason)
-        .map(([reason, count]) => ({ reason, count }))
+        .map(([reason, data]: [string, any]) => ({ reason, count: data.count, amount: data.amount }))
         .sort((a: any, b: any) => b.count - a.count)
         .slice(0, 5);
+
+      const processedReturns = returns.filter((r: any) => r.status === 'processed' || r.status === 'completed');
+      const pendingReturns = returns.filter((r: any) => r.status === 'pending' || !r.status);
 
       setData({
         totalSales,
@@ -917,7 +924,9 @@ export function useOfflineDashboard(range: 'today' | 'week' | 'month' = 'today')
         recentProducts,
         returnsSummary: {
           totalCount: returns.length,
-          totalAmount: totalReturns,
+          totalRefundAmount: totalReturns,
+          processedCount: processedReturns.length,
+          pendingCount: pendingReturns.length,
           topReasons: topReturnReasons,
         },
       });
