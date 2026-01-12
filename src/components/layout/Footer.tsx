@@ -80,7 +80,7 @@ const Footer = () => {
               <span className="text-sm font-bold text-background">
                 {secondPart ? (
                   <>
-                    {firstPart}<span className="text-primary">{secondPart}</span>
+                    {firstPart}<span className="text-sky-400">{secondPart}</span>
                   </>
                 ) : (
                   settings.company_name
