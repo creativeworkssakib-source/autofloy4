@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Download, FileText, Calendar, TrendingUp, Package, BarChart3 } from "lucide-react";
+import { Download, FileText, Calendar, TrendingUp, Package, BarChart3, WifiOff, Cloud } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import ShopLayout from "@/components/offline-shop/ShopLayout";
-import { offlineShopService } from "@/services/offlineShopService";
+import { useOfflineReports } from "@/hooks/useOfflineShopData";
 import { useLanguage } from "@/contexts/LanguageContext";
 import * as XLSX from "xlsx";
 import DateRangeFilter, { DateRangePreset, DateRange, getDateRangeFromPreset } from "@/components/offline-shop/DateRangeFilter";
@@ -16,8 +17,7 @@ const ShopReports = () => {
   const { t, language } = useLanguage();
   const [dateRange, setDateRange] = useState<DateRangePreset>('this_month');
   const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>();
-  const [isLoading, setIsLoading] = useState(false);
-  const [reportData, setReportData] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState<'sales' | 'expenses' | 'inventory'>('sales');
 
   const handleDateRangeChange = (range: DateRangePreset, dates: DateRange) => {
     setDateRange(range);
@@ -27,19 +27,18 @@ const ShopReports = () => {
   };
 
   const currentDates = getDateRangeFromPreset(dateRange, customDateRange);
+  const startDate = format(currentDates.from, 'yyyy-MM-dd');
+  const endDate = format(currentDates.to, 'yyyy-MM-dd');
 
-  const loadReport = async (type: "sales" | "expenses" | "inventory") => {
-    setIsLoading(true);
-    try {
-      const startDate = format(currentDates.from, 'yyyy-MM-dd');
-      const endDate = format(currentDates.to, 'yyyy-MM-dd');
-      const data = await offlineShopService.getReport(type, startDate, endDate);
-      setReportData({ type, ...data });
-    } catch (error) {
-      toast.error(t("shop.loadError"));
-    } finally {
-      setIsLoading(false);
-    }
+  // Use offline-first reports hook
+  const { reportData, loading: isLoading, fromCache, isOnline, refetch } = useOfflineReports(
+    activeTab,
+    startDate,
+    endDate
+  );
+
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab as 'sales' | 'expenses' | 'inventory');
   };
 
   const downloadReport = () => {
@@ -49,8 +48,9 @@ const ShopReports = () => {
     let filename = "";
     const dateStr = `${format(currentDates.from, 'dd-MM-yyyy')}_to_${format(currentDates.to, 'dd-MM-yyyy')}`;
 
-    if (reportData.type === "sales") {
-      data = reportData.sales.map((s: any) => {
+    if (activeTab === "sales") {
+      const sales = reportData.records || [];
+      data = sales.map((s: any) => {
         const customerName = s.customer?.name || (s.notes?.match(/Customer: ([^(]+)/)?.[1]?.trim()) || t("shop.walkInCustomer");
         const customerPhone = s.customer?.phone || (s.notes?.match(/\(([^)]+)\)/)?.[1]?.trim()) || "";
         
@@ -78,8 +78,9 @@ const ShopReports = () => {
         };
       });
       filename = `sales-report-${dateStr}.xlsx`;
-    } else if (reportData.type === "expenses") {
-      data = reportData.expenses.map((e: any) => ({
+    } else if (activeTab === "expenses") {
+      const expenses = reportData.records || [];
+      data = expenses.map((e: any) => ({
         [language === "bn" ? "তারিখ" : "Date"]: format(new Date(e.expense_date), 'dd/MM/yyyy'),
         [language === "bn" ? "ক্যাটাগরি" : "Category"]: e.category,
         [language === "bn" ? "বিবরণ" : "Description"]: e.description || "",
@@ -88,8 +89,9 @@ const ShopReports = () => {
         [language === "bn" ? "নোট" : "Notes"]: e.notes || "",
       }));
       filename = `expenses-report-${dateStr}.xlsx`;
-    } else if (reportData.type === "inventory") {
-      data = reportData.products.map((p: any) => ({
+    } else if (activeTab === "inventory") {
+      const products = reportData.records || [];
+      data = products.map((p: any) => ({
         [language === "bn" ? "পণ্যের নাম" : "Product Name"]: p.name,
         [language === "bn" ? "SKU" : "SKU"]: p.sku || "",
         [language === "bn" ? "বারকোড" : "Barcode"]: p.barcode || "",
@@ -137,17 +139,17 @@ const ShopReports = () => {
         {/* Business Growth Insight Section */}
         <FullBusinessGrowthInsight />
 
-        <Tabs defaultValue="sales" className="space-y-4">
+        <Tabs defaultValue="sales" className="space-y-4" onValueChange={handleTabChange}>
           <TabsList>
-            <TabsTrigger value="sales" onClick={() => loadReport("sales")}>
+            <TabsTrigger value="sales">
               <TrendingUp className="h-4 w-4 mr-2" />
               {t("shop.sales")}
             </TabsTrigger>
-            <TabsTrigger value="expenses" onClick={() => loadReport("expenses")}>
+            <TabsTrigger value="expenses">
               <FileText className="h-4 w-4 mr-2" />
               {t("shop.expenses")}
             </TabsTrigger>
-            <TabsTrigger value="inventory" onClick={() => loadReport("inventory")}>
+            <TabsTrigger value="inventory">
               <Package className="h-4 w-4 mr-2" />
               {t("shop.products")}
             </TabsTrigger>
@@ -160,7 +162,7 @@ const ShopReports = () => {
                   <CardTitle>{t("shop.salesReport")}</CardTitle>
                   <CardDescription>{t("shop.salesReportDesc")}</CardDescription>
                 </div>
-                <Button onClick={downloadReport} disabled={!reportData || reportData.type !== "sales"}>
+                <Button onClick={downloadReport} disabled={!reportData || activeTab !== "sales"}>
                   <Download className="h-4 w-4 mr-2" />
                   {t("shop.download")}
                 </Button>
@@ -168,7 +170,7 @@ const ShopReports = () => {
               <CardContent>
                 {isLoading ? (
                   <p className="text-center py-8">{t("common.loading")}</p>
-                ) : reportData?.type === "sales" ? (
+                ) : reportData && activeTab === "sales" ? (
                   <div className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                       <div className="p-4 bg-muted rounded-lg">
@@ -203,7 +205,7 @@ const ShopReports = () => {
                   <CardTitle>{t("shop.expensesReport")}</CardTitle>
                   <CardDescription>{t("shop.expensesReportDesc")}</CardDescription>
                 </div>
-                <Button onClick={downloadReport} disabled={!reportData || reportData.type !== "expenses"}>
+                <Button onClick={downloadReport} disabled={!reportData || activeTab !== "expenses"}>
                   <Download className="h-4 w-4 mr-2" />
                   {t("shop.download")}
                 </Button>
@@ -211,7 +213,7 @@ const ShopReports = () => {
               <CardContent>
                 {isLoading ? (
                   <p className="text-center py-8">{t("common.loading")}</p>
-                ) : reportData?.type === "expenses" ? (
+                ) : reportData && activeTab === "expenses" ? (
                   <div className="space-y-4">
                     <div className="p-4 bg-muted rounded-lg">
                       <p className="text-sm text-muted-foreground">{t("shop.totalExpenses")}</p>
@@ -240,7 +242,7 @@ const ShopReports = () => {
                   <CardTitle>{t("shop.inventoryReport")}</CardTitle>
                   <CardDescription>{t("shop.inventoryReportDesc")}</CardDescription>
                 </div>
-                <Button onClick={downloadReport} disabled={!reportData || reportData.type !== "inventory"}>
+                <Button onClick={downloadReport} disabled={!reportData || activeTab !== "inventory"}>
                   <Download className="h-4 w-4 mr-2" />
                   {t("shop.download")}
                 </Button>
@@ -248,7 +250,7 @@ const ShopReports = () => {
               <CardContent>
                 {isLoading ? (
                   <p className="text-center py-8">{t("common.loading")}</p>
-                ) : reportData?.type === "inventory" ? (
+                ) : reportData && activeTab === "inventory" ? (
                   <div className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div className="p-4 bg-muted rounded-lg">

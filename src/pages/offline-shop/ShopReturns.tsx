@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { authService } from "@/services/authService";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { authService } from "@/services/authService";
 import ShopLayout from "@/components/offline-shop/ShopLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,7 +38,6 @@ import {
 } from "@/components/ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import {
   Plus,
@@ -59,9 +58,14 @@ import {
   AlertTriangle,
   Truck,
   Users,
+  WifiOff,
+  Cloud,
 } from "lucide-react";
 import SupplierReturnsTab from "@/components/offline-shop/SupplierReturnsTab";
 import { DeleteConfirmDialog } from "@/components/offline-shop/DeleteConfirmDialog";
+import { useOfflineReturns, useOfflineProductsSimple } from "@/hooks/useOfflineShopData";
+import { offlineDataService } from "@/services/offlineDataService";
+import { offlineShopService } from "@/services/offlineShopService";
 
 
 interface ShopReturn {
@@ -134,12 +138,13 @@ const RETURN_REASONS = [
 const SUPABASE_URL = "https://klkrzfwvrmffqkmkyqrh.supabase.co";
 
 export default function ShopReturns() {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [activeTab, setActiveTab] = useState("customer");
   const [returns, setReturns] = useState<ShopReturn[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
+  
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isViewOpen, setIsViewOpen] = useState(false);
   const [selectedReturn, setSelectedReturn] = useState<ShopReturn | null>(null);
@@ -216,56 +221,21 @@ export default function ShopReturns() {
   }, []);
 
   const fetchReturns = async () => {
-    const token = getToken();
-    if (!token) return;
-
+    setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (filters.startDate) params.append("startDate", filters.startDate);
-      if (filters.endDate) params.append("endDate", filters.endDate);
-      if (filters.reason) params.append("reason", filters.reason);
-      if (filters.status) params.append("status", filters.status);
-
-      const response = await fetch(
-        `${SUPABASE_URL}/functions/v1/shop-returns?${params}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      const data = await response.json();
-      if (data.returns) {
-        setReturns(data.returns);
-      }
+      const result = await offlineDataService.getReturns();
+      setReturns((result.returns as unknown as ShopReturn[]) || []);
     } catch (error) {
       console.error("Fetch returns error:", error);
-      toast.error("Failed to fetch returns");
     } finally {
       setLoading(false);
     }
   };
 
   const fetchProducts = async () => {
-    const token = getToken();
-    if (!token) return;
-
     try {
-      const response = await fetch(
-        `${SUPABASE_URL}/functions/v1/offline-shop/products`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-      const data = await response.json();
-      if (data.products) {
-        setProducts(data.products);
-      }
+      const result = await offlineDataService.getProducts();
+      setProducts(result.products.map((p: any) => ({ id: p.id, name: p.name, selling_price: p.selling_price })) || []);
     } catch (error) {
       console.error("Fetch products error:", error);
     }

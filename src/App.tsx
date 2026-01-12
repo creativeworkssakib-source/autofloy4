@@ -73,7 +73,7 @@ const ShopReturns = lazy(() => import("./pages/offline-shop/ShopReturns"));
 const ShopTrash = lazy(() => import("./pages/offline-shop/ShopTrash"));
 const ShopDueCustomers = lazy(() => import("./pages/offline-shop/ShopDueCustomers"));
 const ShopCustomers = lazy(() => import("./pages/offline-shop/ShopCustomers"));
-const ShopStaff = lazy(() => import("./pages/offline-shop/ShopStaff"));
+// ShopStaff removed - not used in menu
 const ShopFollowupSms = lazy(() => import("./pages/offline-shop/ShopFollowupSms"));
 const ScannerSetup = lazy(() => import("./pages/offline-shop/ScannerSetup"));
 const ShopPriceCalculator = lazy(() => import("./pages/offline-shop/ShopPriceCalculator"));
@@ -315,11 +315,7 @@ const App = () => (
                       <ShopCustomers />
                     </ProtectedRoute>
                   } />
-                  <Route path="/offline-shop/staff" element={
-                    <ProtectedRoute>
-                      <ShopStaff />
-                    </ProtectedRoute>
-                  } />
+                  {/* Staff route removed - not used in menu */}
                   <Route path="/offline-shop/scanner-setup" element={
                     <ProtectedRoute>
                       <ScannerSetup />
