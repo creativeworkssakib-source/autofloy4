@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode, useRef } from 'react';
 import { offlineSyncOrchestrator, SyncStatus } from '@/lib/offlineSyncOrchestrator';
 import { useShop } from '@/contexts/ShopContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -37,10 +37,19 @@ export function SyncProvider({ children }: SyncProviderProps) {
   const { user } = useAuth();
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(defaultSyncStatus);
   const [isOfflineCapable] = useState(() => isInstalled());
+  const initRef = useRef(false);
+  const shopIdRef = useRef<string | null>(null);
+  const userIdRef = useRef<string | null>(null);
 
   // Initialize sync orchestrator when shop and user are available
   useEffect(() => {
+    // Skip if no shop or user
     if (!currentShop?.id || !user?.id) {
+      return;
+    }
+
+    // Skip if already initialized with same shop and user
+    if (initRef.current && shopIdRef.current === currentShop.id && userIdRef.current === user.id) {
       return;
     }
 
@@ -51,34 +60,59 @@ export function SyncProvider({ children }: SyncProviderProps) {
     }
 
     console.log('[SyncProvider] Initializing sync for shop:', currentShop.id);
+    
+    shopIdRef.current = currentShop.id;
+    userIdRef.current = user.id;
 
     let unsubscribe: (() => void) | null = null;
+    let isMounted = true;
 
     // Initialize the sync orchestrator
     offlineSyncOrchestrator.init(currentShop.id, user.id)
       .then(() => {
+        if (!isMounted) return;
+        
+        initRef.current = true;
+        
         // Subscribe to sync status updates after successful init
         unsubscribe = offlineSyncOrchestrator.subscribe(status => {
-          setSyncStatus(status);
+          if (isMounted) {
+            setSyncStatus(status);
+          }
         });
       })
       .catch(error => {
         console.error('[SyncProvider] Failed to initialize sync:', error);
-        // Update status with error
-        setSyncStatus(prev => ({
-          ...prev,
-          lastError: error instanceof Error ? error.message : 'Sync initialization failed',
-        }));
+        if (isMounted) {
+          // Update status with error
+          setSyncStatus(prev => ({
+            ...prev,
+            lastError: error instanceof Error ? error.message : 'Sync initialization failed',
+          }));
+        }
       });
 
     return () => {
+      isMounted = false;
       if (unsubscribe) {
         unsubscribe();
       }
-      // Cleanup the orchestrator on unmount or when shop/user changes
-      offlineSyncOrchestrator.cleanup();
+      // Only cleanup if shop/user actually changes (not on every render)
+      // We'll handle full cleanup on unmount
     };
   }, [currentShop?.id, user?.id]);
+
+  // Cleanup on full unmount
+  useEffect(() => {
+    return () => {
+      if (initRef.current) {
+        offlineSyncOrchestrator.cleanup();
+        initRef.current = false;
+        shopIdRef.current = null;
+        userIdRef.current = null;
+      }
+    };
+  }, []);
 
   // Update online status independently
   useEffect(() => {
@@ -102,6 +136,11 @@ export function SyncProvider({ children }: SyncProviderProps) {
   const forceSync = useCallback(async () => {
     if (!isInstalled()) {
       console.log('[SyncProvider] Force sync not available in browser mode');
+      return;
+    }
+    
+    if (!initRef.current) {
+      console.log('[SyncProvider] Cannot force sync - not initialized');
       return;
     }
     

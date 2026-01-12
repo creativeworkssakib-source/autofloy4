@@ -797,6 +797,14 @@ class OfflineSyncOrchestrator {
             await offlineDB.saveProduct({ ...product, id: newId, _locallyCreated: false });
           }
           break;
+        case 'categories':
+          const localCats = await offlineDB.getCategories(this.shopId!);
+          const category = localCats.find(c => c.id === oldId);
+          if (category) {
+            await offlineDB.hardDeleteCategory(oldId);
+            await offlineDB.saveCategory({ ...category, id: newId, _locallyCreated: false });
+          }
+          break;
         case 'customers':
           const customer = await offlineDB.getCustomerById(oldId);
           if (customer) {
@@ -857,6 +865,14 @@ class OfflineSyncOrchestrator {
             await offlineDB.saveStockAdjustment({ ...adjustment, id: newId, _locallyCreated: false });
           }
           break;
+        case 'returns':
+          const returns = await offlineDB.getReturns(this.shopId!);
+          const returnItem = returns.find(r => r.id === oldId);
+          if (returnItem) {
+            await offlineDB.hardDeleteReturn(oldId);
+            await offlineDB.saveReturn({ ...returnItem, id: newId, _locallyCreated: false });
+          }
+          break;
         default:
           console.warn(`[SyncOrchestrator] updateLocalRecordId: Unknown table ${table}`);
       }
@@ -879,6 +895,15 @@ class OfflineSyncOrchestrator {
             product._locallyModified = false;
             product._locallyCreated = false;
             await offlineDB.saveProduct(product);
+          }
+          break;
+        case 'categories':
+          const localCats = await offlineDB.getCategories(this.shopId!);
+          const category = localCats.find(c => c.id === recordId);
+          if (category) {
+            category._locallyModified = false;
+            category._locallyCreated = false;
+            await offlineDB.saveCategory(category);
           }
           break;
         case 'customers':

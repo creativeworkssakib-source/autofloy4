@@ -2,12 +2,12 @@
  * Sync Progress Indicator
  * 
  * Shows real-time sync progress with animated visual feedback.
+ * Uses the new SyncContext (offlineSyncOrchestrator) for consistent sync status.
  */
 
 import { Cloud, CloudOff, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
-import { useSyncStatus } from '@/hooks/useOfflineData';
-import { useIsOnline } from '@/hooks/useOnlineStatus';
+import { useSyncContext } from '@/contexts/SyncContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
 
@@ -20,11 +20,13 @@ export function SyncProgressIndicator({
   className, 
   showLabel = true 
 }: SyncProgressIndicatorProps) {
-  const { isSyncing, progress, lastError, pendingCount } = useSyncStatus();
-  const isOnline = useIsOnline();
-  const { t, language } = useLanguage();
+  const { syncStatus } = useSyncContext();
+  const { t } = useLanguage();
   
-  if (!isSyncing && pendingCount === 0 && !lastError) {
+  const { isSyncing, syncProgress, lastError, pendingChanges, isOnline } = syncStatus;
+  
+  // All synced - green checkmark
+  if (!isSyncing && pendingChanges === 0 && !lastError) {
     return (
       <div className={cn('flex items-center gap-2 text-green-500', className)}>
         <CheckCircle2 className="h-4 w-4" />
@@ -37,6 +39,7 @@ export function SyncProgressIndicator({
     );
   }
   
+  // Error state
   if (lastError) {
     return (
       <div className={cn('flex items-center gap-2 text-destructive', className)}>
@@ -50,6 +53,7 @@ export function SyncProgressIndicator({
     );
   }
   
+  // Actively syncing
   if (isSyncing) {
     return (
       <div className={cn('space-y-1', className)}>
@@ -57,30 +61,44 @@ export function SyncProgressIndicator({
           <Loader2 className="h-4 w-4 animate-spin text-primary" />
           {showLabel && (
             <span className="text-sm text-muted-foreground">
-              {t('offline.syncing')}... {progress}%
+              {t('offline.syncing')}... {syncProgress}%
             </span>
           )}
         </div>
-        <Progress value={progress} className="h-1" />
+        <Progress value={syncProgress} className="h-1" />
       </div>
     );
   }
   
   // Has pending items but not syncing - only show if offline
-  if (!isOnline && pendingCount > 0) {
+  if (!isOnline && pendingChanges > 0) {
     return (
       <div className={cn('flex items-center gap-2 text-yellow-500', className)}>
         <CloudOff className="h-4 w-4" />
         {showLabel && (
           <span className="text-sm">
-            {pendingCount} {t('offline.pending')}
+            {pendingChanges} {t('offline.pending')}
           </span>
         )}
       </div>
     );
   }
   
-  // Online and synced (or no pending items)
+  // Online with pending changes - will sync soon
+  if (isOnline && pendingChanges > 0) {
+    return (
+      <div className={cn('flex items-center gap-2 text-blue-500', className)}>
+        <Cloud className="h-4 w-4" />
+        {showLabel && (
+          <span className="text-sm">
+            {pendingChanges} {t('offline.pending')}
+          </span>
+        )}
+      </div>
+    );
+  }
+  
+  // Online and synced (default state)
   return (
     <div className={cn('flex items-center gap-2 text-green-500', className)}>
       <CheckCircle2 className="h-4 w-4" />
@@ -100,12 +118,12 @@ export function SyncProgressIndicator({
  * User should never see sync happening - it's all background magic
  */
 export function FloatingSyncIndicator() {
-  const { lastError } = useSyncStatus();
+  const { syncStatus } = useSyncContext();
   
   // Only show if there's a persistent sync error
   // Normal syncing, pending items = completely invisible to user
   // User doesn't need to know about sync - it just works
-  if (!lastError) return null;
+  if (!syncStatus.lastError) return null;
   
   return (
     <div className="fixed bottom-4 right-4 z-50 animate-in fade-in slide-in-from-bottom-2 duration-300">
