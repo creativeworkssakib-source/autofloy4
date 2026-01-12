@@ -109,11 +109,22 @@ class SyncManager {
     window.removeEventListener('online', this.handleOnline);
   }
   
-  private handleOnline = (): void => {
+  private handleOnline = async (): Promise<void> => {
     // Wait a bit for connection to stabilize
-    setTimeout(() => {
+    setTimeout(async () => {
       if (navigator.onLine && !this.isSyncing) {
-        this.sync();
+        console.log('[SyncManager] Online - starting auto sync');
+        
+        // First, push any pending local changes to server
+        const result = await this.sync();
+        console.log('[SyncManager] Push sync complete:', result);
+        
+        // Then, pull latest data from server
+        const shopId = localStorage.getItem('autofloy_current_shop_id');
+        if (shopId && result.success) {
+          console.log('[SyncManager] Pulling latest data from server');
+          await this.fullSync(shopId);
+        }
       }
     }, 2000);
   };
@@ -219,6 +230,21 @@ class SyncManager {
         break;
       case 'stockAdjustments':
         await this.syncStockAdjustment(operation, data);
+        break;
+      case 'returns':
+        await this.syncReturn(operation, data);
+        break;
+      case 'loans':
+        await this.syncLoan(operation, data);
+        break;
+      case 'loanPayments':
+        await this.syncLoanPayment(operation, data);
+        break;
+      case 'staff':
+        await this.syncStaff(operation, data);
+        break;
+      case 'dailyCashRegister':
+        await this.syncDailyCashRegister(operation, data);
         break;
       default:
         console.warn(`Unknown table for sync: ${table}`);
@@ -341,6 +367,118 @@ class SyncManager {
     }
   }
   
+  private async syncReturn(operation: SyncOperation, data: any): Promise<void> {
+    const cleanData = stripLocalFields(data);
+    const token = localStorage.getItem("autofloy_token");
+    if (!token) throw new Error("No auth token");
+    
+    const baseUrl = import.meta.env.VITE_SUPABASE_URL;
+    
+    switch (operation) {
+      case 'create':
+        await fetch(`${baseUrl}/functions/v1/shop-returns`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(cleanData),
+        });
+        break;
+      case 'delete':
+        await fetch(`${baseUrl}/functions/v1/shop-returns?id=${data.id}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        break;
+    }
+  }
+  
+  private async syncLoan(operation: SyncOperation, data: any): Promise<void> {
+    const cleanData = stripLocalFields(data);
+    const token = localStorage.getItem("autofloy_token");
+    if (!token) throw new Error("No auth token");
+    
+    const baseUrl = import.meta.env.VITE_SUPABASE_URL;
+    
+    switch (operation) {
+      case 'create':
+        await fetch(`${baseUrl}/functions/v1/shop-loans`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(cleanData),
+        });
+        break;
+      case 'update':
+        await fetch(`${baseUrl}/functions/v1/shop-loans/${data.id}`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(cleanData),
+        });
+        break;
+      case 'delete':
+        await fetch(`${baseUrl}/functions/v1/shop-loans/${data.id}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        break;
+    }
+  }
+  
+  private async syncLoanPayment(operation: SyncOperation, data: any): Promise<void> {
+    const cleanData = stripLocalFields(data);
+    const token = localStorage.getItem("autofloy_token");
+    if (!token) throw new Error("No auth token");
+    
+    const baseUrl = import.meta.env.VITE_SUPABASE_URL;
+    
+    if (operation === 'create') {
+      await fetch(`${baseUrl}/functions/v1/shop-loans/${data.loan_id}/payments`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(cleanData),
+      });
+    }
+  }
+  
+  private async syncStaff(operation: SyncOperation, data: any): Promise<void> {
+    const cleanData = stripLocalFields(data);
+    switch (operation) {
+      case 'create':
+        await offlineShopService.createStaff(cleanData);
+        break;
+      case 'update':
+        await offlineShopService.updateStaff(cleanData);
+        break;
+      case 'delete':
+        await offlineShopService.deleteStaff(data.id);
+        break;
+    }
+  }
+  
+  private async syncDailyCashRegister(operation: SyncOperation, data: any): Promise<void> {
+    const cleanData = stripLocalFields(data);
+    switch (operation) {
+      case 'create':
+        await offlineShopService.openCashRegister(cleanData.opening_cash, cleanData.notes);
+        break;
+      case 'update':
+        if (cleanData.status === 'closed') {
+          await offlineShopService.closeCashRegister(cleanData.closing_cash, cleanData.notes);
+        }
+        break;
+    }
+  }
+  
   // =============== FULL DATA SYNC ===============
   
   async fullSync(shopId: string): Promise<{ success: boolean; tables: string[] }> {
@@ -353,9 +491,11 @@ class SyncManager {
     this.notifyListeners();
     
     const syncedTables: string[] = [];
+    const token = localStorage.getItem("autofloy_token");
+    const baseUrl = import.meta.env.VITE_SUPABASE_URL;
     
     try {
-      // Sync products
+      // Sync products (10%)
       const { products } = await offlineShopService.getProducts();
       await offlineDB.bulkSaveProducts(products.map(p => ({
         ...p,
@@ -365,10 +505,10 @@ class SyncManager {
         _locallyDeleted: false,
       })));
       syncedTables.push('products');
-      this.progress = 15;
+      this.progress = 10;
       this.notifyListeners();
       
-      // Sync categories
+      // Sync categories (15%)
       const { categories } = await offlineShopService.getCategories();
       for (const cat of categories) {
         await offlineDB.saveCategory({
@@ -380,10 +520,10 @@ class SyncManager {
         });
       }
       syncedTables.push('categories');
-      this.progress = 30;
+      this.progress = 15;
       this.notifyListeners();
       
-      // Sync customers
+      // Sync customers (25%)
       const { customers } = await offlineShopService.getCustomers();
       for (const cust of customers) {
         await offlineDB.saveCustomer({
@@ -395,10 +535,10 @@ class SyncManager {
         });
       }
       syncedTables.push('customers');
-      this.progress = 45;
+      this.progress = 25;
       this.notifyListeners();
       
-      // Sync suppliers
+      // Sync suppliers (35%)
       const { suppliers } = await offlineShopService.getSuppliers();
       for (const supp of suppliers) {
         await offlineDB.saveSupplier({
@@ -410,10 +550,10 @@ class SyncManager {
         });
       }
       syncedTables.push('suppliers');
-      this.progress = 60;
+      this.progress = 35;
       this.notifyListeners();
       
-      // Sync sales (last 30 days)
+      // Sync sales - last 30 days (45%)
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
       const { sales } = await offlineShopService.getSales({
@@ -429,21 +569,171 @@ class SyncManager {
         });
       }
       syncedTables.push('sales');
+      this.progress = 45;
+      this.notifyListeners();
+      
+      // Sync purchases (55%)
+      try {
+        const { purchases } = await offlineShopService.getPurchases();
+        for (const purchase of purchases) {
+          await offlineDB.savePurchase({
+            ...purchase,
+            shop_id: shopId,
+            _locallyModified: false,
+            _locallyCreated: false,
+            _locallyDeleted: false,
+          });
+        }
+        syncedTables.push('purchases');
+      } catch (e) {
+        console.error('Failed to sync purchases:', e);
+      }
+      this.progress = 55;
+      this.notifyListeners();
+      
+      // Sync expenses (60%)
+      try {
+        const { expenses } = await offlineShopService.getExpenses();
+        for (const expense of expenses) {
+          await offlineDB.saveExpense({
+            ...expense,
+            shop_id: shopId,
+            _locallyModified: false,
+            _locallyCreated: false,
+            _locallyDeleted: false,
+          });
+        }
+        syncedTables.push('expenses');
+      } catch (e) {
+        console.error('Failed to sync expenses:', e);
+      }
+      this.progress = 60;
+      this.notifyListeners();
+      
+      // Sync loans (70%)
+      if (token) {
+        try {
+          const loansRes = await fetch(
+            `${baseUrl}/functions/v1/shop-loans?shop_id=${shopId}`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          const loansData = await loansRes.json();
+          for (const loan of loansData.loans || []) {
+            await offlineDB.saveLoan({
+              ...loan,
+              shop_id: shopId,
+              _locallyModified: false,
+              _locallyCreated: false,
+              _locallyDeleted: false,
+            });
+          }
+          syncedTables.push('loans');
+        } catch (e) {
+          console.error('Failed to sync loans:', e);
+        }
+      }
+      this.progress = 70;
+      this.notifyListeners();
+      
+      // Sync returns (75%)
+      if (token) {
+        try {
+          const returnsRes = await fetch(
+            `${baseUrl}/functions/v1/shop-returns`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          const returnsData = await returnsRes.json();
+          for (const ret of returnsData.returns || []) {
+            await offlineDB.saveReturn({
+              ...ret,
+              shop_id: shopId,
+              _locallyModified: false,
+              _locallyCreated: false,
+              _locallyDeleted: false,
+            });
+          }
+          syncedTables.push('returns');
+        } catch (e) {
+          console.error('Failed to sync returns:', e);
+        }
+      }
+      this.progress = 75;
+      this.notifyListeners();
+      
+      // Sync staff (80%)
+      try {
+        const { staff } = await offlineShopService.getStaff();
+        for (const s of staff) {
+          await offlineDB.saveStaff({
+            ...s,
+            shop_id: shopId,
+            _locallyModified: false,
+            _locallyCreated: false,
+            _locallyDeleted: false,
+          });
+        }
+        syncedTables.push('staff');
+      } catch (e) {
+        console.error('Failed to sync staff:', e);
+      }
       this.progress = 80;
       this.notifyListeners();
       
-      // Sync settings
-      const { settings } = await offlineShopService.getSettings();
-      if (settings) {
-        await offlineDB.saveSettings({
-          ...settings,
-          shop_id: shopId,
-        });
+      // Sync cash registers (85%)
+      try {
+        const cashRegsData = await offlineShopService.getCashRegisters({});
+        for (const reg of cashRegsData.registers || []) {
+          await offlineDB.saveDailyCashRegister({
+            ...reg,
+            shop_id: shopId,
+            _locallyModified: false,
+            _locallyCreated: false,
+            _locallyDeleted: false,
+          });
+        }
+        syncedTables.push('dailyCashRegister');
+      } catch (e) {
+        console.error('Failed to sync cash registers:', e);
       }
-      syncedTables.push('settings');
+      this.progress = 85;
+      this.notifyListeners();
+      
+      // Sync cash transactions (90%)
+      try {
+        const { transactions } = await offlineShopService.getCashTransactions();
+        for (const tx of transactions) {
+          await offlineDB.saveCashTransaction({
+            ...tx,
+            shop_id: shopId,
+            _locallyModified: false,
+            _locallyCreated: false,
+            _locallyDeleted: false,
+          });
+        }
+        syncedTables.push('cashTransactions');
+      } catch (e) {
+        console.error('Failed to sync cash transactions:', e);
+      }
+      this.progress = 90;
+      this.notifyListeners();
+      
+      // Sync settings (100%)
+      try {
+        const { settings } = await offlineShopService.getSettings();
+        if (settings) {
+          await offlineDB.saveSettings({
+            ...settings,
+            shop_id: shopId,
+          });
+        }
+        syncedTables.push('settings');
+      } catch (e) {
+        console.error('Failed to sync settings:', e);
+      }
       this.progress = 100;
       
       this.lastSyncAt = new Date();
+      console.log('[SyncManager] Full sync complete:', syncedTables);
       
     } catch (error) {
       this.lastError = error instanceof Error ? error.message : 'Full sync failed';

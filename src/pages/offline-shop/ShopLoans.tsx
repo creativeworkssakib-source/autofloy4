@@ -42,6 +42,7 @@ import { Progress } from "@/components/ui/progress";
 import { useShop } from "@/contexts/ShopContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useOfflineLoans } from "@/hooks/useOfflineShopData";
 import { toast } from "sonner";
 import { format, differenceInDays } from "date-fns";
 import { bn, enUS } from "date-fns/locale";
@@ -59,6 +60,8 @@ import {
   Receipt,
   Bell,
   Search,
+  WifiOff,
+  Cloud,
 } from "lucide-react";
 
 interface Loan {
@@ -101,21 +104,29 @@ interface LoanStats {
   completedCount: number;
 }
 
-const API_BASE = import.meta.env.VITE_SUPABASE_URL;
-
 const ShopLoans = () => {
   const { currentShop: selectedShop } = useShop();
   const { user } = useAuth();
   const { language } = useLanguage();
   const token = localStorage.getItem("autofloy_token");
-  const [loans, setLoans] = useState<Loan[]>([]);
-  const [stats, setStats] = useState<LoanStats | null>(null);
-  const [upcomingLoans, setUpcomingLoans] = useState<Loan[]>([]);
-  const [overdueLoans, setOverdueLoans] = useState<Loan[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [deleting, setDeleting] = useState(false);
+
+  // Use offline-first hook
+  const {
+    loans,
+    stats,
+    upcomingLoans,
+    overdueLoans,
+    loading,
+    fromCache,
+    isOnline,
+    refetch: fetchLoans,
+    createLoan,
+    deleteLoan: deleteLoanOffline,
+    addPayment,
+  } = useOfflineLoans(statusFilter);
 
   // Modal states
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -228,36 +239,19 @@ const ShopLoans = () => {
     notes: "",
   });
 
-  const fetchLoans = async () => {
-    if (!token) return;
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (selectedShop) params.append("shop_id", selectedShop.id);
-      if (statusFilter !== "all") params.append("status", statusFilter);
-
-      const res = await fetch(
-        `${API_BASE}/functions/v1/shop-loans?${params.toString()}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-
-      setLoans(data.loans || []);
-      setStats(data.stats);
-      setUpcomingLoans(data.upcoming || []);
-      setOverdueLoans(data.overdue || []);
-    } catch (error: any) {
-      toast.error(error.message || t.loadError);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // fetchLoanDetails for viewing payment history (still uses API when online, or local data when offline)
+  const API_BASE = import.meta.env.VITE_SUPABASE_URL;
+  
   const fetchLoanDetails = async (loanId: string) => {
-    if (!token) return;
+    if (!token || !isOnline) {
+      // Use local data
+      const loan = loans.find((l: any) => l.id === loanId);
+      if (loan) {
+        setSelectedLoan(loan);
+        setLoanPayments([]); // Payments are not stored locally currently
+      }
+      return;
+    }
     try {
       const res = await fetch(`${API_BASE}/functions/v1/shop-loans/${loanId}`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -268,45 +262,63 @@ const ShopLoans = () => {
       setSelectedLoan(data.loan);
       setLoanPayments(data.payments || []);
     } catch (error: any) {
-      toast.error(error.message);
+      // Fallback to local
+      const loan = loans.find((l: any) => l.id === loanId);
+      if (loan) {
+        setSelectedLoan(loan);
+        setLoanPayments([]);
+      }
     }
   };
 
-  useEffect(() => {
-    fetchLoans();
-  }, [token, selectedShop, statusFilter]);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token) return;
 
     try {
-      const method = isEditing ? "PUT" : "POST";
-      const url = isEditing
-        ? `${API_BASE}/functions/v1/shop-loans/${selectedLoan?.id}`
-        : `${API_BASE}/functions/v1/shop-loans`;
+      if (isEditing && selectedLoan) {
+        // For editing, use API if online (offline editing not fully supported yet)
+        if (isOnline) {
+          const res = await fetch(`${API_BASE}/functions/v1/shop-loans/${selectedLoan.id}`, {
+            method: "PUT",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              ...formData,
+              shop_id: selectedShop?.id,
+              loan_amount: parseFloat(formData.loan_amount),
+              interest_rate: parseFloat(formData.interest_rate) || 0,
+              total_installments: parseInt(formData.total_installments),
+              installment_amount: parseFloat(formData.installment_amount) || undefined,
+              payment_day: parseInt(formData.payment_day),
+            }),
+          });
 
-      const res = await fetch(url, {
-        method,
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          ...formData,
-          shop_id: selectedShop?.id,
-          loan_amount: parseFloat(formData.loan_amount),
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error);
+          toast.success(t.loanUpdated);
+        } else {
+          toast.error(language === "bn" ? "এডিট করতে ইন্টারনেট প্রয়োজন" : "Internet required to edit");
+          return;
+        }
+      } else {
+        // Create new loan using offline-first hook
+        await createLoan({
+          customer_name: formData.lender_name,
+          loan_type: 'taken',
+          principal_amount: parseFloat(formData.loan_amount),
           interest_rate: parseFloat(formData.interest_rate) || 0,
-          total_installments: parseInt(formData.total_installments),
-          installment_amount: parseFloat(formData.installment_amount) || undefined,
-          payment_day: parseInt(formData.payment_day),
-        }),
-      });
+          total_amount: parseFloat(formData.loan_amount) * (1 + (parseFloat(formData.interest_rate) || 0) / 100),
+          paid_amount: 0,
+          remaining_amount: parseFloat(formData.loan_amount) * (1 + (parseFloat(formData.interest_rate) || 0) / 100),
+          status: 'active',
+          loan_date: formData.start_date,
+          notes: formData.notes,
+        });
+        toast.success(t.loanAdded);
+      }
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-
-      toast.success(isEditing ? t.loanUpdated : t.loanAdded);
       setIsAddModalOpen(false);
       resetForm();
       fetchLoans();
@@ -314,34 +326,20 @@ const ShopLoans = () => {
       toast.error(error.message);
     }
   };
-
   const handlePayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token || !selectedLoan) return;
+    if (!selectedLoan) return;
 
     try {
-      const res = await fetch(
-        `${API_BASE}/functions/v1/shop-loans/${selectedLoan.id}/payments`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            amount: parseFloat(paymentData.amount),
-            payment_date: paymentData.payment_date,
-            payment_method: paymentData.payment_method,
-            late_fee: parseFloat(paymentData.late_fee) || 0,
-            notes: paymentData.notes,
-          }),
-        }
-      );
+      const result = await addPayment(selectedLoan.id, {
+        amount: parseFloat(paymentData.amount),
+        payment_date: paymentData.payment_date,
+        payment_method: paymentData.payment_method,
+        late_fee: parseFloat(paymentData.late_fee) || 0,
+        notes: paymentData.notes,
+      });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-
-      toast.success(data.isCompleted ? t.loanCompleted : t.paymentSuccess);
+      toast.success(result.isCompleted ? t.loanCompleted : t.paymentSuccess);
       setIsPaymentModalOpen(false);
       setPaymentData({
         amount: "",
@@ -350,7 +348,6 @@ const ShopLoans = () => {
         late_fee: "",
         notes: "",
       });
-      fetchLoans();
       if (isViewModalOpen && selectedLoan) {
         fetchLoanDetails(selectedLoan.id);
       }
@@ -360,26 +357,20 @@ const ShopLoans = () => {
   };
 
   const handleDelete = async () => {
-    if (!token || !selectedLoan) return;
+    if (!selectedLoan) return;
     setDeleting(true);
 
     try {
-      const res = await fetch(
-        `${API_BASE}/functions/v1/shop-loans/${selectedLoan.id}`,
-        {
-          method: "DELETE",
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Delete failed");
-
+      await deleteLoanOffline(selectedLoan.id);
       toast.success(t.loanDeleted);
       setIsDeleteDialogOpen(false);
       setSelectedLoan(null);
-      fetchLoans();
     } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setDeleting(false);
+    }
+  };
       toast.error(error.message);
     } finally {
       setDeleting(false);
