@@ -930,7 +930,7 @@ const ShopSales = () => {
 
       {/* View/Print Invoice Modal - Uses Thermal Receipt Preview from Invoice Settings */}
       <Dialog open={!!viewingSale} onOpenChange={() => setViewingSale(null)}>
-        <DialogContent className="max-w-5xl max-h-[95vh] overflow-auto p-6">
+        <DialogContent className="max-w-md max-h-[95vh] overflow-auto p-4">
           {viewingSale && (
             <div className="space-y-4">
               <div className="flex justify-center">
@@ -967,7 +967,7 @@ const ShopSales = () => {
                   }}
                   customerInfo={getCustomerInfo(viewingSale)}
                   t={t}
-                  previewScale={3}
+                  previewScale={1.5}
                 />
               </div>
 
