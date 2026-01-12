@@ -240,10 +240,7 @@ class SyncManager {
       case 'loanPayments':
         await this.syncLoanPayment(operation, data);
         break;
-      // Staff feature removed - skip sync for legacy queue items
-      case 'staff':
-        console.log('[SyncManager] Staff sync skipped - feature removed');
-        break;
+      // Staff feature removed - handled via default case for legacy queue items
       case 'dailyCashRegister':
         await this.syncDailyCashRegister(operation, data);
         break;

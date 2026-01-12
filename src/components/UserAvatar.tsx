@@ -1,3 +1,4 @@
+import { forwardRef } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 
@@ -79,36 +80,35 @@ const sizeClasses = {
  * - Properly centered text
  * - White text on brand gradient for high contrast
  */
-export function UserAvatar({ 
-  name, 
-  avatarUrl, 
-  size = "md", 
-  className 
-}: UserAvatarProps) {
-  const initials = getInitials(name);
-  const gradientIndex = getGradientIndex(name);
-  const gradient = AVATAR_GRADIENTS[gradientIndex];
+export const UserAvatar = forwardRef<HTMLSpanElement, UserAvatarProps>(
+  ({ name, avatarUrl, size = "md", className }, ref) => {
+    const initials = getInitials(name);
+    const gradientIndex = getGradientIndex(name);
+    const gradient = AVATAR_GRADIENTS[gradientIndex];
 
-  return (
-    <Avatar className={cn(sizeClasses[size], className)}>
-      {avatarUrl && (
-        <AvatarImage 
-          src={avatarUrl} 
-          alt={name || "User"} 
-          className="object-cover"
-        />
-      )}
-      <AvatarFallback 
-        className={cn(
-          "bg-gradient-to-br text-white font-semibold",
-          "flex items-center justify-center",
-          gradient
+    return (
+      <Avatar ref={ref} className={cn(sizeClasses[size], className)}>
+        {avatarUrl && (
+          <AvatarImage 
+            src={avatarUrl} 
+            alt={name || "User"} 
+            className="object-cover"
+          />
         )}
-      >
-        {initials}
-      </AvatarFallback>
-    </Avatar>
-  );
-}
+        <AvatarFallback 
+          className={cn(
+            "bg-gradient-to-br text-white font-semibold",
+            "flex items-center justify-center",
+            gradient
+          )}
+        >
+          {initials}
+        </AvatarFallback>
+      </Avatar>
+    );
+  }
+);
+
+UserAvatar.displayName = "UserAvatar";
 
 export { getInitials };
