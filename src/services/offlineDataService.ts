@@ -7,7 +7,7 @@
  * 3. All writes go to local first, then queue for server sync
  */
 
-import { offlineDB, ShopProduct, ShopCategory, ShopCustomer, ShopSupplier, ShopSale, ShopSaleItem, ShopPurchase, ShopExpense, ShopCashTransaction, ShopStockAdjustment, ShopReturn, ShopStockBatch, ShopSettings, ShopDailyCashRegister, ShopLoan, ShopStaff, SyncMetadata } from '@/lib/offlineDB';
+import { offlineDB, ShopProduct, ShopCategory, ShopCustomer, ShopSupplier, ShopSale, ShopSaleItem, ShopPurchase, ShopExpense, ShopCashTransaction, ShopStockAdjustment, ShopReturn, ShopStockBatch, ShopSettings, ShopDailyCashRegister, ShopLoan, SyncMetadata } from '@/lib/offlineDB';
 import { syncQueue, SyncTable } from '@/lib/syncQueue';
 import { generateOfflineId, generateInvoiceNumber, calculateSaleTotals } from '@/lib/offlineUtils';
 import { offlineShopService } from './offlineShopService';
@@ -1043,117 +1043,8 @@ class OfflineDataService {
     return { return: returnItem, offline: true };
   }
   
-  // =============== STAFF ===============
-  
-  async getStaff(): Promise<{ staff: ShopStaff[]; fromCache: boolean }> {
-    await this.init();
-    const shopId = this.ensureShopId();
-    const staff = await offlineDB.getStaff(shopId);
-    
-    if (this.isOnline()) {
-      this.syncStaffInBackground(shopId);
-    }
-    
-    return { staff, fromCache: !this.isOnline() };
-  }
-  
-  private async syncStaffInBackground(shopId: string): Promise<void> {
-    try {
-      const { staff } = await offlineShopService.getStaff();
-      for (const s of staff) {
-        const existing = await offlineDB.getStaff(shopId);
-        const existingStaff = existing.find(st => st.id === s.id);
-        if (!existingStaff?._locallyModified && !existingStaff?._locallyCreated) {
-          await offlineDB.saveStaff({
-            ...s,
-            shop_id: shopId,
-            user_id: this.userId || '',
-            _locallyModified: false,
-            _locallyCreated: false,
-            _locallyDeleted: false,
-          } as ShopStaff);
-        }
-      }
-    } catch (error) {
-      console.error('Background sync failed for staff:', error);
-    }
-  }
-  
-  async createStaff(data: Partial<ShopStaff>): Promise<{ staff: ShopStaff; offline: boolean }> {
-    await this.init();
-    const shopId = this.ensureShopId();
-    const now = new Date().toISOString();
-    
-    const staffMember: ShopStaff = {
-      id: generateOfflineId(),
-      shop_id: shopId,
-      user_id: this.userId || '',
-      name: data.name || '',
-      phone: data.phone,
-      email: data.email,
-      role: data.role || 'staff',
-      passcode: data.passcode,
-      is_active: data.is_active ?? true,
-      permissions: data.permissions,
-      created_at: now,
-      updated_at: now,
-      _locallyCreated: true,
-      _locallyModified: false,
-      _locallyDeleted: false,
-    };
-    
-    await offlineDB.saveStaff(staffMember);
-    await syncQueue.add('create', 'staff', staffMember.id, staffMember);
-    
-    if (this.isOnline()) {
-      try {
-        const result = await offlineShopService.createStaff({
-          name: data.name || '',
-          role: data.role || 'staff',
-          phone: data.phone,
-          email: data.email,
-          permissions: data.permissions,
-        });
-        const updated = { ...staffMember, id: result.staffUser?.id || staffMember.id, _locallyCreated: false };
-        await offlineDB.deleteStaff(staffMember.id);
-        await offlineDB.saveStaff(updated as ShopStaff);
-        await syncQueue.deleteByRecordId('staff', staffMember.id);
-        return { staff: updated as ShopStaff, offline: false };
-      } catch (error) {
-        console.error('Failed to sync staff:', error);
-      }
-    }
-    
-    return { staff: staffMember, offline: true };
-  }
-  
-  async updateStaff(data: Partial<ShopStaff> & { id: string }): Promise<{ staff: ShopStaff; offline: boolean }> {
-    await this.init();
-    const shopId = this.ensureShopId();
-    const existing = await offlineDB.getStaff(shopId);
-    const staff = existing.find(s => s.id === data.id);
-    
-    if (!staff) throw new Error('Staff not found');
-    
-    const updated: ShopStaff = {
-      ...staff,
-      ...data,
-      updated_at: new Date().toISOString(),
-      _locallyModified: true,
-    };
-    
-    await offlineDB.saveStaff(updated);
-    await syncQueue.add('update', 'staff', updated.id, updated);
-    
-    return { staff: updated, offline: true };
-  }
-  
-  async deleteStaff(id: string): Promise<{ offline: boolean }> {
-    await this.init();
-    await offlineDB.deleteStaff(id);
-    await syncQueue.add('delete', 'staff', id, { id });
-    return { offline: true };
-  }
+  // =============== STAFF (REMOVED) ===============
+  // Staff feature has been removed from the application
   
   // =============== CASH TRANSACTIONS ===============
   
