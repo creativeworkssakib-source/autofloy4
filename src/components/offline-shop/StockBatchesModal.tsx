@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, forwardRef } from "react";
 import { Package, Calendar, AlertCircle, Layers, TrendingUp, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -47,7 +47,7 @@ interface StockBatchesModalProps {
   } | null;
 }
 
-const StockBatchesModal = ({ isOpen, onClose, product }: StockBatchesModalProps) => {
+const StockBatchesModal = forwardRef<HTMLDivElement, StockBatchesModalProps>(({ isOpen, onClose, product }, ref) => {
   const { language } = useLanguage();
   const [batches, setBatches] = useState<StockBatch[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -259,6 +259,8 @@ const StockBatchesModal = ({ isOpen, onClose, product }: StockBatchesModalProps)
       </DialogContent>
     </Dialog>
   );
-};
+});
+
+StockBatchesModal.displayName = "StockBatchesModal";
 
 export default StockBatchesModal;
