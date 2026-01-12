@@ -1,20 +1,17 @@
 /**
- * Smart Data Service
+ * Smart Data Service v2
  * 
  * Provides a unified interface for data access that automatically chooses
- * the right strategy based on platform:
+ * the right strategy based on platform and online status:
  * 
- * - Browser: Direct Supabase access (server-first)
- * - PWA/APK/EXE: Local-first with sync to server
+ * - Browser: Direct Supabase access (server-first, no local storage)
+ * - PWA/APK/EXE Online: Server-first, save to local, show from local after sync
+ * - PWA/APK/EXE Offline: Local-first, queue for sync when online
  * 
- * Also handles:
- * - Real-time updates when online
- * - Deduplication of data
- * - Automatic sync on reconnection
+ * Key principle: When online, data ALWAYS goes through server first to maintain consistency
  */
 
 import { offlineDB } from './offlineDB';
-import { offlineDataService } from '@/services/offlineDataService';
 import { offlineShopService } from '@/services/offlineShopService';
 import { syncManager } from '@/services/syncManager';
 import { realtimeSyncManager } from './realtimeSync';
@@ -23,7 +20,7 @@ import { platformDetector, shouldUseLocalFirst } from './platformDetection';
 type DataListener = (data: any) => void;
 
 interface SmartDataOptions {
-  forceServer?: boolean;
+  forceLocal?: boolean;
   skipCache?: boolean;
 }
 
@@ -34,6 +31,7 @@ class SmartDataService {
   private listeners: Map<string, Set<DataListener>> = new Map();
   private dataCache: Map<string, { data: any; timestamp: number }> = new Map();
   private readonly CACHE_TTL = 30000; // 30 seconds cache TTL
+  private initialSyncDone = false;
   
   /**
    * Initialize the smart data service
@@ -46,17 +44,15 @@ class SmartDataService {
     this.shopId = shopId;
     this.userId = userId;
     
-    // Initialize offline data service
-    offlineDataService.setShopId(shopId);
-    offlineDataService.setUserId(userId);
-    await offlineDataService.init();
+    // Initialize offline DB
+    await offlineDB.init();
     
-    // For installed apps, set up real-time sync
+    // For installed apps (PWA/APK/EXE), set up real-time sync
     if (shouldUseLocalFirst()) {
       await realtimeSyncManager.init(shopId, userId);
       
-      // Start auto-sync for background syncing
-      syncManager.startAutoSync(30000); // Every 30 seconds
+      // Start auto-sync for background syncing when online
+      syncManager.startAutoSync(60000); // Every 60 seconds
       
       // Subscribe to real-time updates to clear cache
       realtimeSyncManager.subscribe(() => {
@@ -64,9 +60,15 @@ class SmartDataService {
         this.notifyAllListeners();
       });
       
-      console.log('[SmartData] Initialized for installed app (local-first)');
+      // If online, do initial full sync to populate local DB
+      if (navigator.onLine && !this.initialSyncDone) {
+        console.log('[SmartData] Online - performing initial sync');
+        this.performInitialSync();
+      }
+      
+      console.log('[SmartData] Initialized for installed app (PWA/APK/EXE)');
     } else {
-      console.log('[SmartData] Initialized for browser (server-first)');
+      console.log('[SmartData] Initialized for browser (server-first only)');
     }
     
     // Listen for online/offline events
@@ -77,23 +79,39 @@ class SmartDataService {
   }
   
   /**
+   * Perform initial sync - pull all data from server to local DB
+   */
+  private async performInitialSync(): Promise<void> {
+    if (!this.shopId || this.initialSyncDone) return;
+    
+    try {
+      console.log('[SmartData] Starting initial sync...');
+      await syncManager.fullSync(this.shopId);
+      this.initialSyncDone = true;
+      console.log('[SmartData] Initial sync complete');
+    } catch (error) {
+      console.error('[SmartData] Initial sync failed:', error);
+    }
+  }
+  
+  /**
    * Handle coming online
    */
   private handleOnline = async (): Promise<void> => {
-    console.log('[SmartData] Online - refreshing data');
+    console.log('[SmartData] Online - syncing data');
     
     // Clear cache to get fresh data
     this.clearCache();
     
     if (shouldUseLocalFirst() && this.shopId) {
-      // Push pending changes
+      // First push any pending local changes
       await syncManager.sync();
       
-      // Pull fresh data
+      // Then pull fresh data from server
       await syncManager.fullSync(this.shopId);
     }
     
-    // Notify all listeners
+    // Notify all listeners to refresh
     this.notifyAllListeners();
   };
   
@@ -102,6 +120,7 @@ class SmartDataService {
    */
   private handleOffline = (): void => {
     console.log('[SmartData] Offline - using local data');
+    this.notifyAllListeners();
   };
   
   /**
@@ -114,33 +133,39 @@ class SmartDataService {
     const cached = this.getFromCache(cacheKey);
     if (cached) return cached;
     
-    if (shouldUseLocalFirst()) {
-      // PWA/APK/EXE: Try server first if online, fallback to local
-      if (navigator.onLine) {
-        try {
-          const serverData = await offlineShopService.getDashboard(range);
-          if (serverData) {
-            this.setCache(cacheKey, serverData);
-            return serverData;
-          }
-        } catch (error) {
-          console.warn('[SmartData] Server fetch failed, using local:', error);
-        }
-      }
-      
-      // Calculate from local data
-      return this.calculateLocalDashboard(range);
-    } else {
-      // Browser: Always use server
+    const isLocalFirstPlatform = shouldUseLocalFirst();
+    const isOnline = navigator.onLine;
+    
+    // STRATEGY:
+    // 1. Browser: Always server-first
+    // 2. PWA/APK/EXE + Online: Server-first, save to local
+    // 3. PWA/APK/EXE + Offline: Local-first
+    
+    if (isOnline) {
       try {
+        // Always try server first when online
         const serverData = await offlineShopService.getDashboard(range);
-        this.setCache(cacheKey, serverData);
-        return serverData;
+        
+        if (serverData) {
+          this.setCache(cacheKey, { ...serverData, fromLocal: false });
+          return { ...serverData, fromLocal: false };
+        }
       } catch (error) {
-        console.error('[SmartData] Server fetch failed:', error);
+        console.warn('[SmartData] Server fetch failed:', error);
+        
+        // If local-first platform, fall back to local data
+        if (isLocalFirstPlatform) {
+          const localData = await this.calculateLocalDashboard(range);
+          return { ...localData, fromLocal: true };
+        }
         throw error;
       }
+    } else if (isLocalFirstPlatform) {
+      // Offline + local-first platform: use local data
+      return this.calculateLocalDashboard(range);
     }
+    
+    throw new Error('Cannot fetch dashboard - offline and no local data available');
   }
   
   /**
@@ -200,20 +225,33 @@ class SmartDataService {
       .slice(0, 5);
     
     return {
-      totalSales,
-      totalExpenses,
-      totalPurchases,
-      totalReturns,
-      profit,
-      salesCount: sales.length,
-      customersCount: customers.length,
-      productsCount: products.length,
-      lowStockItems,
-      lowStockCount: lowStockItems.length,
+      period: {
+        totalSales,
+        totalExpenses,
+        totalPurchases,
+        grossProfit: profit,
+        netProfit: profit,
+        customersServed: sales.length,
+      },
+      lifetime: {
+        totalSales,
+        totalProfit: profit,
+        totalProducts: products.length,
+        totalSuppliers: 0,
+        totalDue,
+      },
+      totalProducts: products.length,
+      totalCustomers: customers.length,
+      lowStockProducts: lowStockItems,
       recentSales,
-      totalDue,
-      totalLoanAmount,
-      activeLoansCount: activeLoans.length,
+      recentProducts: products.slice(0, 5),
+      returns: {
+        totalCount: returns.length,
+        totalRefundAmount: totalReturns,
+        processedCount: returns.length,
+        pendingCount: 0,
+        topReasons: [],
+      },
       fromLocal: true,
     };
   }
@@ -229,15 +267,43 @@ class SmartDataService {
       if (cached) return { products: cached, fromCache: true };
     }
     
-    if (shouldUseLocalFirst() && !options?.forceServer) {
-      const result = await offlineDataService.getProducts();
-      this.setCache(cacheKey, result.products);
-      return result;
-    } else {
-      const result = await offlineShopService.getProducts();
-      this.setCache(cacheKey, result.products);
-      return { products: result.products, fromCache: false };
+    const isLocalFirstPlatform = shouldUseLocalFirst();
+    const isOnline = navigator.onLine;
+    
+    if (isOnline && !options?.forceLocal) {
+      try {
+        // Server-first when online
+        const result = await offlineShopService.getProducts();
+        
+        // If local-first platform, save to local DB
+        if (isLocalFirstPlatform && this.shopId) {
+          await offlineDB.bulkSaveProducts(result.products.map(p => ({
+            ...p,
+            shop_id: this.shopId!,
+            _locallyModified: false,
+            _locallyCreated: false,
+            _locallyDeleted: false,
+          })));
+        }
+        
+        this.setCache(cacheKey, result.products);
+        return { products: result.products, fromCache: false };
+      } catch (error) {
+        console.warn('[SmartData] Server fetch failed for products:', error);
+        
+        if (isLocalFirstPlatform && this.shopId) {
+          const localProducts = await offlineDB.getProducts(this.shopId);
+          return { products: localProducts, fromCache: true };
+        }
+        throw error;
+      }
+    } else if (isLocalFirstPlatform && this.shopId) {
+      // Offline: use local data
+      const localProducts = await offlineDB.getProducts(this.shopId);
+      return { products: localProducts, fromCache: true };
     }
+    
+    throw new Error('Cannot fetch products - offline and no local data available');
   }
   
   /**
@@ -251,15 +317,43 @@ class SmartDataService {
       if (cached) return { sales: cached, fromCache: true };
     }
     
-    if (shouldUseLocalFirst() && !options?.forceServer) {
-      const result = await offlineDataService.getSales(startDate, endDate);
-      this.setCache(cacheKey, result.sales);
-      return result;
-    } else {
-      const result = await offlineShopService.getSales();
-      this.setCache(cacheKey, result.sales);
-      return { sales: result.sales, fromCache: false };
+    const isLocalFirstPlatform = shouldUseLocalFirst();
+    const isOnline = navigator.onLine;
+    
+    if (isOnline && !options?.forceLocal) {
+      try {
+        const result = await offlineShopService.getSales({ startDate, endDate });
+        
+        // Save to local if local-first platform
+        if (isLocalFirstPlatform && this.shopId) {
+          for (const sale of result.sales) {
+            await offlineDB.saveSale({
+              ...sale,
+              shop_id: this.shopId,
+              _locallyModified: false,
+              _locallyCreated: false,
+              _locallyDeleted: false,
+            });
+          }
+        }
+        
+        this.setCache(cacheKey, result.sales);
+        return { sales: result.sales, fromCache: false };
+      } catch (error) {
+        console.warn('[SmartData] Server fetch failed for sales:', error);
+        
+        if (isLocalFirstPlatform && this.shopId) {
+          const localSales = await offlineDB.getSales(this.shopId, startDate, endDate);
+          return { sales: localSales, fromCache: true };
+        }
+        throw error;
+      }
+    } else if (isLocalFirstPlatform && this.shopId) {
+      const localSales = await offlineDB.getSales(this.shopId, startDate, endDate);
+      return { sales: localSales, fromCache: true };
     }
+    
+    throw new Error('Cannot fetch sales - offline and no local data available');
   }
   
   /**
@@ -273,15 +367,42 @@ class SmartDataService {
       if (cached) return { customers: cached, fromCache: true };
     }
     
-    if (shouldUseLocalFirst() && !options?.forceServer) {
-      const result = await offlineDataService.getCustomers();
-      this.setCache(cacheKey, result.customers);
-      return result;
-    } else {
-      const result = await offlineShopService.getCustomers();
-      this.setCache(cacheKey, result.customers);
-      return { customers: result.customers, fromCache: false };
+    const isLocalFirstPlatform = shouldUseLocalFirst();
+    const isOnline = navigator.onLine;
+    
+    if (isOnline && !options?.forceLocal) {
+      try {
+        const result = await offlineShopService.getCustomers();
+        
+        if (isLocalFirstPlatform && this.shopId) {
+          for (const cust of result.customers) {
+            await offlineDB.saveCustomer({
+              ...cust,
+              shop_id: this.shopId,
+              _locallyModified: false,
+              _locallyCreated: false,
+              _locallyDeleted: false,
+            });
+          }
+        }
+        
+        this.setCache(cacheKey, result.customers);
+        return { customers: result.customers, fromCache: false };
+      } catch (error) {
+        console.warn('[SmartData] Server fetch failed for customers:', error);
+        
+        if (isLocalFirstPlatform && this.shopId) {
+          const localCustomers = await offlineDB.getCustomers(this.shopId);
+          return { customers: localCustomers, fromCache: true };
+        }
+        throw error;
+      }
+    } else if (isLocalFirstPlatform && this.shopId) {
+      const localCustomers = await offlineDB.getCustomers(this.shopId);
+      return { customers: localCustomers, fromCache: true };
     }
+    
+    throw new Error('Cannot fetch customers - offline and no local data available');
   }
   
   /**
@@ -295,15 +416,42 @@ class SmartDataService {
       if (cached) return { expenses: cached, fromCache: true };
     }
     
-    if (shouldUseLocalFirst() && !options?.forceServer) {
-      const result = await offlineDataService.getExpenses(startDate, endDate);
-      this.setCache(cacheKey, result.expenses);
-      return result;
-    } else {
-      const result = await offlineShopService.getExpenses();
-      this.setCache(cacheKey, result.expenses);
-      return { expenses: result.expenses, fromCache: false };
+    const isLocalFirstPlatform = shouldUseLocalFirst();
+    const isOnline = navigator.onLine;
+    
+    if (isOnline && !options?.forceLocal) {
+      try {
+        const result = await offlineShopService.getExpenses({ startDate, endDate });
+        
+        if (isLocalFirstPlatform && this.shopId) {
+          for (const exp of result.expenses) {
+            await offlineDB.saveExpense({
+              ...exp,
+              shop_id: this.shopId,
+              _locallyModified: false,
+              _locallyCreated: false,
+              _locallyDeleted: false,
+            });
+          }
+        }
+        
+        this.setCache(cacheKey, result.expenses);
+        return { expenses: result.expenses, fromCache: false };
+      } catch (error) {
+        console.warn('[SmartData] Server fetch failed for expenses:', error);
+        
+        if (isLocalFirstPlatform && this.shopId) {
+          const localExpenses = await offlineDB.getExpenses(this.shopId, startDate, endDate);
+          return { expenses: localExpenses, fromCache: true };
+        }
+        throw error;
+      }
+    } else if (isLocalFirstPlatform && this.shopId) {
+      const localExpenses = await offlineDB.getExpenses(this.shopId, startDate, endDate);
+      return { expenses: localExpenses, fromCache: true };
     }
+    
+    throw new Error('Cannot fetch expenses - offline and no local data available');
   }
   
   /**
@@ -317,42 +465,91 @@ class SmartDataService {
       if (cached) return { loans: cached, fromCache: true };
     }
     
-    if (shouldUseLocalFirst() && !options?.forceServer) {
-      const result = await offlineDataService.getLoans();
-      this.setCache(cacheKey, result.loans);
-      return result;
-    } else {
-      // Browser: fetch from server
-      const token = localStorage.getItem('autofloy_token');
-      if (!token) throw new Error('Not authenticated');
-      
-      const baseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const response = await fetch(`${baseUrl}/functions/v1/shop-loans`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      
-      if (!response.ok) throw new Error('Failed to fetch loans');
-      const data = await response.json();
-      this.setCache(cacheKey, data.loans);
-      return { loans: data.loans || [], fromCache: false };
+    const isLocalFirstPlatform = shouldUseLocalFirst();
+    const isOnline = navigator.onLine;
+    
+    if (isOnline && !options?.forceLocal) {
+      try {
+        const token = localStorage.getItem('autofloy_token');
+        if (!token) throw new Error('Not authenticated');
+        
+        const baseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const shopId = localStorage.getItem('autofloy_current_shop_id');
+        const response = await fetch(`${baseUrl}/functions/v1/shop-loans?shop_id=${shopId}`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        
+        if (!response.ok) throw new Error('Failed to fetch loans');
+        const data = await response.json();
+        
+        if (isLocalFirstPlatform && this.shopId) {
+          for (const loan of (data.loans || [])) {
+            await offlineDB.saveLoan({
+              ...loan,
+              shop_id: this.shopId,
+              _locallyModified: false,
+              _locallyCreated: false,
+              _locallyDeleted: false,
+            });
+          }
+        }
+        
+        this.setCache(cacheKey, data.loans);
+        return { loans: data.loans || [], fromCache: false };
+      } catch (error) {
+        console.warn('[SmartData] Server fetch failed for loans:', error);
+        
+        if (isLocalFirstPlatform && this.shopId) {
+          const localLoans = await offlineDB.getLoans(this.shopId);
+          return { loans: localLoans, fromCache: true };
+        }
+        throw error;
+      }
+    } else if (isLocalFirstPlatform && this.shopId) {
+      const localLoans = await offlineDB.getLoans(this.shopId);
+      return { loans: localLoans, fromCache: true };
     }
+    
+    throw new Error('Cannot fetch loans - offline and no local data available');
   }
   
   /**
    * Create a sale with smart strategy
+   * Online: Send to server first, then save locally
+   * Offline: Save locally, queue for sync
    */
   async createSale(saleData: any): Promise<{ sale: any; offline: boolean }> {
     this.clearCache('sales');
-    this.clearCache('products'); // Stock changed
-    this.clearCache('customers'); // Due might change
+    this.clearCache('products');
+    this.clearCache('customers');
     this.clearCache('dashboard');
     
-    if (shouldUseLocalFirst()) {
-      return offlineDataService.createSale(saleData);
-    } else {
+    const isLocalFirstPlatform = shouldUseLocalFirst();
+    const isOnline = navigator.onLine;
+    
+    if (isOnline) {
+      // Server-first when online
       const result = await offlineShopService.createSale(saleData);
+      
+      // Save to local if local-first platform
+      if (isLocalFirstPlatform && this.shopId) {
+        await offlineDB.saveSale({
+          ...result.sale,
+          shop_id: this.shopId,
+          _locallyModified: false,
+          _locallyCreated: false,
+          _locallyDeleted: false,
+        });
+      }
+      
       return { sale: result.sale, offline: false };
+    } else if (isLocalFirstPlatform) {
+      // Offline: save locally and queue
+      const { offlineDataService } = await import('@/services/offlineDataService');
+      return offlineDataService.createSale(saleData);
     }
+    
+    throw new Error('Cannot create sale - offline and not on local-first platform');
   }
   
   /**
@@ -362,12 +559,29 @@ class SmartDataService {
     this.clearCache('products');
     this.clearCache('dashboard');
     
-    if (shouldUseLocalFirst()) {
-      return offlineDataService.createProduct(productData);
-    } else {
+    const isLocalFirstPlatform = shouldUseLocalFirst();
+    const isOnline = navigator.onLine;
+    
+    if (isOnline) {
       const result = await offlineShopService.createProduct(productData);
+      
+      if (isLocalFirstPlatform && this.shopId) {
+        await offlineDB.saveProduct({
+          ...result.product,
+          shop_id: this.shopId,
+          _locallyModified: false,
+          _locallyCreated: false,
+          _locallyDeleted: false,
+        });
+      }
+      
       return { product: result.product, offline: false };
+    } else if (isLocalFirstPlatform) {
+      const { offlineDataService } = await import('@/services/offlineDataService');
+      return offlineDataService.createProduct(productData);
     }
+    
+    throw new Error('Cannot create product - offline and not on local-first platform');
   }
   
   /**
@@ -377,12 +591,29 @@ class SmartDataService {
     this.clearCache('expenses');
     this.clearCache('dashboard');
     
-    if (shouldUseLocalFirst()) {
-      return offlineDataService.createExpense(expenseData);
-    } else {
+    const isLocalFirstPlatform = shouldUseLocalFirst();
+    const isOnline = navigator.onLine;
+    
+    if (isOnline) {
       const result = await offlineShopService.createExpense(expenseData);
+      
+      if (isLocalFirstPlatform && this.shopId) {
+        await offlineDB.saveExpense({
+          ...result.expense,
+          shop_id: this.shopId,
+          _locallyModified: false,
+          _locallyCreated: false,
+          _locallyDeleted: false,
+        });
+      }
+      
       return { expense: result.expense, offline: false };
+    } else if (isLocalFirstPlatform) {
+      const { offlineDataService } = await import('@/services/offlineDataService');
+      return offlineDataService.createExpense(expenseData);
     }
+    
+    throw new Error('Cannot create expense - offline and not on local-first platform');
   }
   
   /**
@@ -487,6 +718,7 @@ class SmartDataService {
     this.listeners.clear();
     this.dataCache.clear();
     this.initialized = false;
+    this.initialSyncDone = false;
   }
 }
 

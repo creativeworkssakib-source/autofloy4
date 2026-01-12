@@ -53,43 +53,38 @@ class OfflineDataService {
   
   // =============== PRODUCTS ===============
   
-  async getProducts(): Promise<{ products: ShopProduct[]; fromCache: boolean }> {
+async getProducts(): Promise<{ products: ShopProduct[]; fromCache: boolean }> {
     await this.init();
     const shopId = this.ensureShopId();
     
-    // Always get from local first
-    const localProducts = await offlineDB.getProducts(shopId);
-    
-    // If online, sync in background
+    // If online, get from server first and save to local
     if (this.isOnline()) {
-      this.syncProductsInBackground(shopId);
+      try {
+        const { products } = await offlineShopService.getProducts();
+        // Save to local DB
+        for (const product of products) {
+          const localProduct = await offlineDB.getProductById(product.id);
+          // Only update if not locally modified
+          if (!localProduct?._locallyModified && !localProduct?._locallyCreated) {
+            await offlineDB.saveProduct({
+              ...product,
+              shop_id: shopId,
+              user_id: this.userId || '',
+              _locallyModified: false,
+              _locallyCreated: false,
+              _locallyDeleted: false,
+            } as ShopProduct);
+          }
+        }
+        return { products, fromCache: false };
+      } catch (error) {
+        console.error('Server fetch failed, falling back to local:', error);
+      }
     }
     
-    // Only show "fromCache" if we're actually offline
-    return { products: localProducts, fromCache: !this.isOnline() };
-  }
-  
-  private async syncProductsInBackground(shopId: string): Promise<void> {
-    try {
-      const { products } = await offlineShopService.getProducts();
-      // Update local cache with server data
-      for (const product of products) {
-        const localProduct = await offlineDB.getProductById(product.id);
-        // Only update if not locally modified
-        if (!localProduct?._locallyModified && !localProduct?._locallyCreated) {
-          await offlineDB.saveProduct({
-            ...product,
-            shop_id: shopId,
-            user_id: this.userId || '',
-            _locallyModified: false,
-            _locallyCreated: false,
-            _locallyDeleted: false,
-          } as ShopProduct);
-        }
-      }
-    } catch (error) {
-      console.error('Background sync failed for products:', error);
-    }
+    // Offline or server failed - get from local
+    const localProducts = await offlineDB.getProducts(shopId);
+    return { products: localProducts, fromCache: true };
   }
   
   async getProductById(id: string): Promise<ShopProduct | undefined> {
@@ -291,39 +286,38 @@ class OfflineDataService {
     return { category, offline: true };
   }
   
-  // =============== CUSTOMERS ===============
+// =============== CUSTOMERS ===============
   
   async getCustomers(): Promise<{ customers: ShopCustomer[]; fromCache: boolean }> {
     await this.init();
     const shopId = this.ensureShopId();
-    const customers = await offlineDB.getCustomers(shopId);
     
+    // If online, get from server first and save to local
     if (this.isOnline()) {
-      this.syncCustomersInBackground(shopId);
+      try {
+        const { customers } = await offlineShopService.getCustomers();
+        for (const cust of customers) {
+          const existing = await offlineDB.getCustomerById(cust.id);
+          if (!existing?._locallyModified && !existing?._locallyCreated) {
+            await offlineDB.saveCustomer({
+              ...cust,
+              shop_id: shopId,
+              user_id: this.userId || '',
+              _locallyModified: false,
+              _locallyCreated: false,
+              _locallyDeleted: false,
+            } as ShopCustomer);
+          }
+        }
+        return { customers, fromCache: false };
+      } catch (error) {
+        console.error('Server fetch failed, falling back to local:', error);
+      }
     }
     
-    return { customers, fromCache: !this.isOnline() };
-  }
-  
-  private async syncCustomersInBackground(shopId: string): Promise<void> {
-    try {
-      const { customers } = await offlineShopService.getCustomers();
-      for (const cust of customers) {
-        const existing = await offlineDB.getCustomerById(cust.id);
-        if (!existing?._locallyModified && !existing?._locallyCreated) {
-          await offlineDB.saveCustomer({
-            ...cust,
-            shop_id: shopId,
-            user_id: this.userId || '',
-            _locallyModified: false,
-            _locallyCreated: false,
-            _locallyDeleted: false,
-          } as ShopCustomer);
-        }
-      }
-    } catch (error) {
-      console.error('Background sync failed for customers:', error);
-    }
+    // Offline or server failed - get from local
+    const localCustomers = await offlineDB.getCustomers(shopId);
+    return { customers: localCustomers, fromCache: true };
   }
   
   async getCustomerById(id: string): Promise<ShopCustomer | undefined> {
@@ -549,39 +543,38 @@ class OfflineDataService {
     return { offline: true };
   }
   
-  // =============== SALES ===============
+// =============== SALES ===============
   
   async getSales(startDate?: string, endDate?: string): Promise<{ sales: ShopSale[]; fromCache: boolean }> {
     await this.init();
     const shopId = this.ensureShopId();
-    const sales = await offlineDB.getSales(shopId, startDate, endDate);
     
+    // If online, get from server first and save to local
     if (this.isOnline()) {
-      this.syncSalesInBackground(shopId);
+      try {
+        const { sales } = await offlineShopService.getSales({ startDate, endDate });
+        for (const sale of sales) {
+          const existing = await offlineDB.getSaleById(sale.id);
+          if (!existing?._locallyModified && !existing?._locallyCreated) {
+            await offlineDB.saveSale({
+              ...sale,
+              shop_id: shopId,
+              user_id: this.userId || '',
+              _locallyModified: false,
+              _locallyCreated: false,
+              _locallyDeleted: false,
+            } as ShopSale);
+          }
+        }
+        return { sales, fromCache: false };
+      } catch (error) {
+        console.error('Server fetch failed, falling back to local:', error);
+      }
     }
     
-    return { sales, fromCache: !this.isOnline() };
-  }
-  
-  private async syncSalesInBackground(shopId: string): Promise<void> {
-    try {
-      const { sales } = await offlineShopService.getSales();
-      for (const sale of sales) {
-        const existing = await offlineDB.getSaleById(sale.id);
-        if (!existing?._locallyModified && !existing?._locallyCreated) {
-          await offlineDB.saveSale({
-            ...sale,
-            shop_id: shopId,
-            user_id: this.userId || '',
-            _locallyModified: false,
-            _locallyCreated: false,
-            _locallyDeleted: false,
-          } as ShopSale);
-        }
-      }
-    } catch (error) {
-      console.error('Background sync failed for sales:', error);
-    }
+    // Offline or server failed - get from local
+    const localSales = await offlineDB.getSales(shopId, startDate, endDate);
+    return { sales: localSales, fromCache: true };
   }
   
   async getSaleById(id: string): Promise<ShopSale | undefined> {
@@ -824,40 +817,39 @@ class OfflineDataService {
     return { offline: true };
   }
   
-  // =============== EXPENSES ===============
+// =============== EXPENSES ===============
   
   async getExpenses(startDate?: string, endDate?: string): Promise<{ expenses: ShopExpense[]; fromCache: boolean }> {
     await this.init();
     const shopId = this.ensureShopId();
-    const expenses = await offlineDB.getExpenses(shopId, startDate, endDate);
     
+    // If online, get from server first and save to local
     if (this.isOnline()) {
-      this.syncExpensesInBackground(shopId);
+      try {
+        const { expenses } = await offlineShopService.getExpenses({ startDate, endDate });
+        for (const exp of expenses) {
+          const allExpenses = await offlineDB.getExpenses(shopId);
+          const existing = allExpenses.find(e => e.id === exp.id);
+          if (!existing?._locallyModified && !existing?._locallyCreated) {
+            await offlineDB.saveExpense({
+              ...exp,
+              shop_id: shopId,
+              user_id: this.userId || '',
+              _locallyModified: false,
+              _locallyCreated: false,
+              _locallyDeleted: false,
+            } as ShopExpense);
+          }
+        }
+        return { expenses, fromCache: false };
+      } catch (error) {
+        console.error('Server fetch failed, falling back to local:', error);
+      }
     }
     
-    return { expenses, fromCache: !this.isOnline() };
-  }
-  
-  private async syncExpensesInBackground(shopId: string): Promise<void> {
-    try {
-      const { expenses } = await offlineShopService.getExpenses();
-      for (const exp of expenses) {
-        const allExpenses = await offlineDB.getExpenses(shopId);
-        const existing = allExpenses.find(e => e.id === exp.id);
-        if (!existing?._locallyModified && !existing?._locallyCreated) {
-          await offlineDB.saveExpense({
-            ...exp,
-            shop_id: shopId,
-            user_id: this.userId || '',
-            _locallyModified: false,
-            _locallyCreated: false,
-            _locallyDeleted: false,
-          } as ShopExpense);
-        }
-      }
-    } catch (error) {
-      console.error('Background sync failed for expenses:', error);
-    }
+    // Offline or server failed - get from local
+    const localExpenses = await offlineDB.getExpenses(shopId, startDate, endDate);
+    return { expenses: localExpenses, fromCache: true };
   }
   
   async createExpense(data: {
@@ -926,48 +918,47 @@ class OfflineDataService {
     return { offline: true };
   }
   
-  // =============== LOANS ===============
+// =============== LOANS ===============
   
   async getLoans(): Promise<{ loans: ShopLoan[]; fromCache: boolean }> {
     await this.init();
     const shopId = this.ensureShopId();
-    const loans = await offlineDB.getLoans(shopId);
     
+    // If online, get from server first and save to local
     if (this.isOnline()) {
-      this.syncLoansInBackground(shopId);
+      try {
+        const token = localStorage.getItem("autofloy_token");
+        if (!token) throw new Error('No token');
+        
+        const response = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/shop-loans?shop_id=${shopId}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const data = await response.json();
+        
+        for (const loan of data.loans || []) {
+          const existing = await offlineDB.getLoans(shopId);
+          const existingLoan = existing.find(l => l.id === loan.id);
+          if (!existingLoan?._locallyModified && !existingLoan?._locallyCreated) {
+            await offlineDB.saveLoan({
+              ...loan,
+              shop_id: shopId,
+              user_id: this.userId || '',
+              _locallyModified: false,
+              _locallyCreated: false,
+              _locallyDeleted: false,
+            } as ShopLoan);
+          }
+        }
+        return { loans: data.loans || [], fromCache: false };
+      } catch (error) {
+        console.error('Server fetch failed, falling back to local:', error);
+      }
     }
     
-    return { loans, fromCache: !this.isOnline() };
-  }
-  
-  private async syncLoansInBackground(shopId: string): Promise<void> {
-    try {
-      const token = localStorage.getItem("autofloy_token");
-      if (!token) return;
-      
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/shop-loans?shop_id=${shopId}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      const data = await response.json();
-      
-      for (const loan of data.loans || []) {
-        const existing = await offlineDB.getLoans(shopId);
-        const existingLoan = existing.find(l => l.id === loan.id);
-        if (!existingLoan?._locallyModified && !existingLoan?._locallyCreated) {
-          await offlineDB.saveLoan({
-            ...loan,
-            shop_id: shopId,
-            user_id: this.userId || '',
-            _locallyModified: false,
-            _locallyCreated: false,
-            _locallyDeleted: false,
-          } as ShopLoan);
-        }
-      }
-    } catch (error) {
-      console.error('Background sync failed for loans:', error);
-    }
+    // Offline or server failed - get from local
+    const localLoans = await offlineDB.getLoans(shopId);
+    return { loans: localLoans, fromCache: true };
   }
   
   async createLoan(data: Partial<ShopLoan>): Promise<{ loan: ShopLoan; offline: boolean }> {
