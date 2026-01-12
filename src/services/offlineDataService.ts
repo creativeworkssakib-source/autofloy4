@@ -1033,6 +1033,55 @@ class OfflineDataService {
     return { offline: true };
   }
   
+  // =============== STOCK ADJUSTMENTS ===============
+  
+  async getStockAdjustments(): Promise<{ adjustments: ShopStockAdjustment[]; fromCache: boolean }> {
+    await this.init();
+    const shopId = this.ensureShopId();
+    const adjustments = await offlineDB.getStockAdjustments(shopId);
+    return { adjustments, fromCache: !this.isOnline() };
+  }
+  
+  async createStockAdjustment(data: Partial<ShopStockAdjustment>): Promise<{ adjustment: ShopStockAdjustment; offline: boolean }> {
+    await this.init();
+    const shopId = this.ensureShopId();
+    const now = new Date().toISOString();
+    
+    const adjustment: ShopStockAdjustment = {
+      id: generateOfflineId(),
+      shop_id: shopId,
+      user_id: this.userId || '',
+      product_id: data.product_id || '',
+      product_name: data.product_name || '',
+      adjustment_type: data.adjustment_type || 'add',
+      quantity: data.quantity || 0,
+      previous_stock: data.previous_stock || 0,
+      new_stock: data.new_stock || 0,
+      reason: data.reason,
+      notes: data.notes,
+      adjustment_date: data.adjustment_date || now.split('T')[0],
+      created_at: now,
+      _locallyCreated: true,
+      _locallyModified: false,
+      _locallyDeleted: false,
+    };
+    
+    await offlineDB.saveStockAdjustment(adjustment);
+    await syncQueue.add('create', 'stockAdjustments', adjustment.id, adjustment);
+    
+    // Update product stock
+    if (data.product_id) {
+      const quantityChange = data.adjustment_type === 'add' 
+        ? data.quantity || 0 
+        : data.adjustment_type === 'remove' 
+          ? -(data.quantity || 0) 
+          : (data.new_stock || 0) - (data.previous_stock || 0);
+      await this.updateProductStock(data.product_id, quantityChange);
+    }
+    
+    return { adjustment, offline: true };
+  }
+  
   // =============== RETURNS ===============
   
   async getReturns(returnType?: 'sale' | 'purchase'): Promise<{ returns: ShopReturn[]; fromCache: boolean }> {
