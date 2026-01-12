@@ -575,18 +575,26 @@ export function useOfflineCashRegister() {
   const [fromCache, setFromCache] = useState(false);
   const isOnline = useIsOnline();
   const { currentShop } = useShop();
+  const [lastRefetch, setLastRefetch] = useState(0);
 
   const refetch = useCallback(async () => {
+    if (!currentShop?.id) {
+      setLoading(false);
+      return;
+    }
+    
     setLoading(true);
     try {
+      // Use offlineDataService which now properly handles server-first for online
       const result = await offlineDataService.getCashRegisters();
       setRegisters(result.registers || []);
       setTodayRegister(result.todayRegister || null);
       setHasOpenRegister(result.hasOpenRegister || false);
       setFromCache(result.fromCache);
+      setLastRefetch(Date.now());
     } catch (error) {
       console.error('Failed to fetch cash registers:', error);
-      // Fallback to API
+      // Fallback to direct API call
       try {
         const result = await offlineShopService.getCashRegisters({});
         setRegisters(result.registers || []);
@@ -594,6 +602,7 @@ export function useOfflineCashRegister() {
         setHasOpenRegister(result.hasOpenRegister || false);
         setFromCache(false);
       } catch (e) {
+        console.error('Fallback API also failed:', e);
         setRegisters([]);
       }
     } finally {
@@ -608,6 +617,7 @@ export function useOfflineCashRegister() {
   const openRegister = useCallback(async (openingCash: number, notes?: string) => {
     try {
       const result = await offlineDataService.openCashRegister(openingCash, notes);
+      // Always refetch to get latest data from server
       await refetch();
       return result;
     } catch (error) {
@@ -628,6 +638,7 @@ export function useOfflineCashRegister() {
   const addQuickExpense = useCallback(async (amount: number, description?: string) => {
     try {
       const result = await offlineDataService.addQuickExpense(amount, description);
+      // Refetch to get updated register data with new expense
       await refetch();
       return result;
     } catch (error) {
@@ -638,6 +649,7 @@ export function useOfflineCashRegister() {
   const deleteQuickExpense = useCallback(async (expenseId: string) => {
     try {
       const result = await offlineDataService.deleteQuickExpense(expenseId);
+      // Refetch to update register data
       await refetch();
       return result;
     } catch (error) {
@@ -657,6 +669,7 @@ export function useOfflineCashRegister() {
     closeRegister,
     addQuickExpense,
     deleteQuickExpense,
+    lastRefetch,
   };
 }
 
