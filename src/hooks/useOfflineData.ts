@@ -507,6 +507,15 @@ export function useOfflinePurchases(startDate?: string, endDate?: string) {
     return result;
   }, [fetchPurchases, t]);
   
+  const deletePurchases = useCallback(async (ids: string[]) => {
+    const result = await offlineDataService.deletePurchases(ids);
+    if (result.offline) {
+      toast.info(t('offline.savedLocally'));
+    }
+    await fetchPurchases();
+    return result;
+  }, [fetchPurchases, t]);
+  
   return {
     purchases,
     loading,
@@ -516,6 +525,7 @@ export function useOfflinePurchases(startDate?: string, endDate?: string) {
     refetch: fetchPurchases,
     createPurchase,
     deletePurchase,
+    deletePurchases,
   };
 }
 

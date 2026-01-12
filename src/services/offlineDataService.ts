@@ -892,6 +892,31 @@ async getProducts(): Promise<{ products: ShopProduct[]; fromCache: boolean }> {
     return { offline: true };
   }
   
+  async deletePurchases(ids: string[]): Promise<{ deleted: string[]; offline: boolean }> {
+    await this.init();
+    const deleted: string[] = [];
+    
+    for (const id of ids) {
+      await offlineDB.deletePurchase(id);
+      await syncQueue.add('delete', 'purchases', id, { id });
+      deleted.push(id);
+    }
+    
+    if (this.isOnline()) {
+      try {
+        for (const id of ids) {
+          await offlineShopService.deletePurchase(id);
+          await syncQueue.deleteByRecordId('purchases', id);
+        }
+        return { deleted, offline: false };
+      } catch (error) {
+        console.error('Failed to sync purchases deletion:', error);
+      }
+    }
+    
+    return { deleted, offline: true };
+  }
+  
 // =============== EXPENSES ===============
   
   async getExpenses(startDate?: string, endDate?: string): Promise<{ expenses: ShopExpense[]; fromCache: boolean }> {
