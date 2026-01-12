@@ -32,13 +32,8 @@ const HeroSection = memo(() => {
 
       <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-16 relative z-10">
         <div className="flex flex-col items-center gap-12">
-          {/* Top Content - Text */}
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-            className="text-center max-w-4xl"
-          >
+          {/* Top Content - Text - No animation for LCP optimization */}
+          <div className="text-center max-w-4xl">
             {/* Badge */}
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/30 text-primary text-sm font-medium mb-6">
               <Sparkles className="w-4 h-4" />
@@ -90,7 +85,7 @@ const HeroSection = memo(() => {
                 </span>
               ))}
             </div>
-          </motion.div>
+          </div>
 
           {/* Bottom Content - Hero Conversation Illustration */}
           <motion.div
