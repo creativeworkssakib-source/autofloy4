@@ -585,26 +585,44 @@ export function useOfflineCashRegister() {
     
     setLoading(true);
     try {
-      // Use offlineDataService which now properly handles server-first for online
+      console.log('[useOfflineCashRegister] Fetching cash registers...');
+      
+      // IMPORTANT: When online, ALWAYS fetch directly from Supabase for LIVE data
+      // This ensures we get the latest quick_expenses, sales, etc.
+      if (navigator.onLine) {
+        try {
+          console.log('[useOfflineCashRegister] Online - fetching from Supabase directly');
+          const result = await offlineShopService.getCashRegisters({});
+          console.log('[useOfflineCashRegister] Server response:', {
+            registersCount: result.registers?.length,
+            todayRegister: result.todayRegister ? 'exists' : 'null',
+            quickExpenses: result.todayRegister?.quick_expenses?.length || 0
+          });
+          setRegisters(result.registers || []);
+          setTodayRegister(result.todayRegister || null);
+          setHasOpenRegister(result.hasOpenRegister || false);
+          setFromCache(false);
+          setLastRefetch(Date.now());
+          return;
+        } catch (error) {
+          console.error('[useOfflineCashRegister] Server fetch failed, trying offlineDataService:', error);
+        }
+      }
+      
+      // Offline or server failed - use offlineDataService which has fallback logic
+      console.log('[useOfflineCashRegister] Using offlineDataService (offline or fallback)');
       const result = await offlineDataService.getCashRegisters();
       setRegisters(result.registers || []);
       setTodayRegister(result.todayRegister || null);
       setHasOpenRegister(result.hasOpenRegister || false);
       setFromCache(result.fromCache);
       setLastRefetch(Date.now());
+      
     } catch (error) {
-      console.error('Failed to fetch cash registers:', error);
-      // Fallback to direct API call
-      try {
-        const result = await offlineShopService.getCashRegisters({});
-        setRegisters(result.registers || []);
-        setTodayRegister(result.todayRegister || null);
-        setHasOpenRegister(result.hasOpenRegister || false);
-        setFromCache(false);
-      } catch (e) {
-        console.error('Fallback API also failed:', e);
-        setRegisters([]);
-      }
+      console.error('[useOfflineCashRegister] Failed to fetch cash registers:', error);
+      setRegisters([]);
+      setTodayRegister(null);
+      setHasOpenRegister(false);
     } finally {
       setLoading(false);
     }
@@ -616,8 +634,14 @@ export function useOfflineCashRegister() {
 
   const openRegister = useCallback(async (openingCash: number, notes?: string) => {
     try {
+      // When online, call server directly for immediate sync
+      if (navigator.onLine) {
+        const result = await offlineShopService.openCashRegister(openingCash, notes);
+        await refetch(); // Refetch to get latest data
+        return { register: result.register, offline: false, message: result.message };
+      }
+      // Offline - use offlineDataService
       const result = await offlineDataService.openCashRegister(openingCash, notes);
-      // Always refetch to get latest data from server
       await refetch();
       return result;
     } catch (error) {
@@ -627,6 +651,12 @@ export function useOfflineCashRegister() {
 
   const closeRegister = useCallback(async (closingCash: number, notes?: string) => {
     try {
+      // When online, call server directly
+      if (navigator.onLine) {
+        const result = await offlineShopService.closeCashRegister(closingCash, notes);
+        await refetch();
+        return { register: result.register, offline: false, message: result.message };
+      }
       const result = await offlineDataService.closeCashRegister(closingCash, notes);
       await refetch();
       return result;
@@ -637,19 +667,35 @@ export function useOfflineCashRegister() {
 
   const addQuickExpense = useCallback(async (amount: number, description?: string) => {
     try {
+      console.log('[useOfflineCashRegister] Adding quick expense:', { amount, description });
+      
+      // When online, call server directly for immediate sync
+      if (navigator.onLine) {
+        const result = await offlineShopService.addQuickExpense(amount, description);
+        console.log('[useOfflineCashRegister] Quick expense added on server, refreshing...');
+        await refetch(); // Refetch to get updated register data with new expense
+        return { expense: result.expense, offline: false };
+      }
+      
+      // Offline - use offlineDataService
       const result = await offlineDataService.addQuickExpense(amount, description);
-      // Refetch to get updated register data with new expense
       await refetch();
       return result;
     } catch (error) {
+      console.error('[useOfflineCashRegister] Failed to add quick expense:', error);
       throw error;
     }
   }, [refetch]);
 
   const deleteQuickExpense = useCallback(async (expenseId: string) => {
     try {
+      // When online, call server directly
+      if (navigator.onLine) {
+        await offlineShopService.deleteQuickExpense(expenseId);
+        await refetch();
+        return { offline: false };
+      }
       const result = await offlineDataService.deleteQuickExpense(expenseId);
-      // Refetch to update register data
       await refetch();
       return result;
     } catch (error) {

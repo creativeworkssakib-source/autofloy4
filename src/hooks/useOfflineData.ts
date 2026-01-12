@@ -2,10 +2,14 @@
  * Offline Data Hook
  * 
  * Provides offline-first data access with automatic sync status tracking.
+ * 
+ * WHEN ONLINE: Always fetch from Supabase server first (LIVE data)
+ * WHEN OFFLINE: Use local IndexedDB data
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { offlineDataService } from '@/services/offlineDataService';
+import { offlineShopService } from '@/services/offlineShopService';
 import { syncManager, SyncStatus } from '@/services/syncManager';
 import { useIsOnline } from './useOnlineStatus';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -349,11 +353,26 @@ export function useOfflineSales(startDate?: string, endDate?: string) {
     try {
       setLoading(true);
       setError(null);
+      
+      // When online, always try server-first for LIVE data
+      if (navigator.onLine) {
+        try {
+          const { sales: serverSales } = await offlineShopService.getSales({ startDate, endDate });
+          setSales(serverSales || []);
+          setFromCache(false);
+          return;
+        } catch (serverError) {
+          console.warn('[useOfflineSales] Server fetch failed, using offlineDataService:', serverError);
+        }
+      }
+      
+      // Offline or server failed - use offlineDataService
       const result = await offlineDataService.getSales(startDate, endDate);
-      setSales(result.sales);
+      setSales(result.sales || []);
       setFromCache(result.fromCache);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load sales');
+      setSales([]);
     } finally {
       setLoading(false);
     }
@@ -364,6 +383,7 @@ export function useOfflineSales(startDate?: string, endDate?: string) {
   }, [fetchSales]);
   
   const createSale = useCallback(async (data: any) => {
+    // When online, server handles everything and we just refetch
     const result = await offlineDataService.createSale(data);
     if (result.offline) {
       toast.info(t('offline.savedLocally'));
