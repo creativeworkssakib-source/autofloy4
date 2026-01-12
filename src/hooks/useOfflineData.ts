@@ -437,6 +437,20 @@ export function useOfflineExpenses(startDate?: string, endDate?: string) {
     try {
       setLoading(true);
       setError(null);
+      
+      // SERVER-FIRST: When online, fetch from Supabase directly
+      if (navigator.onLine) {
+        try {
+          const { expenses: serverExpenses } = await offlineShopService.getExpenses({ startDate, endDate });
+          setExpenses(serverExpenses || []);
+          setFromCache(false);
+          return;
+        } catch (serverError) {
+          console.warn('[useOfflineExpenses] Server fetch failed, using offlineDataService:', serverError);
+        }
+      }
+      
+      // Offline or server failed - use offlineDataService
       const result = await offlineDataService.getExpenses(startDate, endDate);
       setExpenses(result.expenses);
       setFromCache(result.fromCache);
@@ -495,6 +509,20 @@ export function useOfflinePurchases(startDate?: string, endDate?: string) {
     try {
       setLoading(true);
       setError(null);
+      
+      // SERVER-FIRST: When online, fetch from Supabase directly
+      if (navigator.onLine) {
+        try {
+          const { purchases: serverPurchases } = await offlineShopService.getPurchases();
+          setPurchases(serverPurchases || []);
+          setFromCache(false);
+          return;
+        } catch (serverError) {
+          console.warn('[useOfflinePurchases] Server fetch failed, using offlineDataService:', serverError);
+        }
+      }
+      
+      // Offline or server failed - use offlineDataService
       const result = await offlineDataService.getPurchases(startDate, endDate);
       setPurchases(result.purchases);
       setFromCache(result.fromCache);
@@ -566,6 +594,30 @@ export function useOfflineCashTransactions(startDate?: string, endDate?: string)
     try {
       setLoading(true);
       setError(null);
+      
+      // SERVER-FIRST: When online, fetch from Supabase directly
+      if (navigator.onLine) {
+        try {
+          const { transactions: serverTx } = await offlineShopService.getCashTransactions();
+          setTransactions(serverTx || []);
+          
+          // Calculate totals
+          let inAmount = 0, outAmount = 0;
+          for (const tx of serverTx || []) {
+            if (tx.type === 'in') inAmount += Number(tx.amount);
+            else outAmount += Number(tx.amount);
+          }
+          setCashIn(inAmount);
+          setCashOut(outAmount);
+          setBalance(inAmount - outAmount);
+          setFromCache(false);
+          return;
+        } catch (serverError) {
+          console.warn('[useOfflineCashTransactions] Server fetch failed, using offlineDataService:', serverError);
+        }
+      }
+      
+      // Offline or server failed - use offlineDataService
       const result = await offlineDataService.getCashTransactions(startDate, endDate);
       setTransactions(result.transactions);
       setBalance(result.balance);
@@ -638,6 +690,30 @@ export function useOfflineLoans() {
     try {
       setLoading(true);
       setError(null);
+      
+      // SERVER-FIRST: When online, fetch from Supabase directly
+      if (navigator.onLine) {
+        try {
+          const shopId = localStorage.getItem('autofloy_current_shop_id');
+          const token = localStorage.getItem('autofloy_token');
+          if (shopId && token) {
+            const response = await fetch(
+              `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/shop-loans?shop_id=${shopId}`,
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+            const data = await response.json();
+            if (data.loans) {
+              setLoans(data.loans);
+              setFromCache(false);
+              return;
+            }
+          }
+        } catch (serverError) {
+          console.warn('[useOfflineLoans] Server fetch failed, using offlineDataService:', serverError);
+        }
+      }
+      
+      // Offline or server failed - use offlineDataService
       const result = await offlineDataService.getLoans();
       setLoans(result.loans);
       setFromCache(result.fromCache);
@@ -706,6 +782,31 @@ export function useOfflineReturns(returnType?: 'sale' | 'purchase') {
     try {
       setLoading(true);
       setError(null);
+      
+      // SERVER-FIRST: When online, fetch from Supabase directly
+      if (navigator.onLine) {
+        try {
+          const token = localStorage.getItem('autofloy_token');
+          if (token) {
+            const response = await fetch(
+              `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/shop-returns`,
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+            const data = await response.json();
+            let serverReturns = data.returns || [];
+            if (returnType) {
+              serverReturns = serverReturns.filter((r: any) => r.return_type === returnType);
+            }
+            setReturns(serverReturns);
+            setFromCache(false);
+            return;
+          }
+        } catch (serverError) {
+          console.warn('[useOfflineReturns] Server fetch failed, using offlineDataService:', serverError);
+        }
+      }
+      
+      // Offline or server failed - use offlineDataService
       const result = await offlineDataService.getReturns(returnType);
       setReturns(result.returns);
       setFromCache(result.fromCache);
@@ -754,6 +855,20 @@ export function useOfflineStockAdjustments() {
     try {
       setLoading(true);
       setError(null);
+      
+      // SERVER-FIRST: When online, fetch from Supabase directly
+      if (navigator.onLine) {
+        try {
+          const result = await offlineShopService.getAdjustments({});
+          setAdjustments(result.adjustments || []);
+          setFromCache(false);
+          return;
+        } catch (serverError) {
+          console.warn('[useOfflineStockAdjustments] Server fetch failed, using offlineDataService:', serverError);
+        }
+      }
+      
+      // Offline or server failed - use offlineDataService
       const result = await offlineDataService.getStockAdjustments();
       setAdjustments(result.adjustments);
       setFromCache(result.fromCache);
@@ -804,6 +919,22 @@ export function useOfflineCashRegister() {
     try {
       setLoading(true);
       setError(null);
+      
+      // SERVER-FIRST: When online, fetch from Supabase directly
+      if (navigator.onLine) {
+        try {
+          const result = await offlineShopService.getCashRegisters({});
+          setRegisters(result.registers || []);
+          setTodayRegister(result.todayRegister || null);
+          setHasOpenRegister(result.hasOpenRegister || false);
+          setFromCache(false);
+          return;
+        } catch (serverError) {
+          console.warn('[useOfflineCashRegister] Server fetch failed, using offlineDataService:', serverError);
+        }
+      }
+      
+      // Offline or server failed - use offlineDataService
       const result = await offlineDataService.getCashRegisters();
       setRegisters(result.registers);
       setTodayRegister(result.todayRegister);
@@ -821,6 +952,13 @@ export function useOfflineCashRegister() {
   }, [fetchRegisters]);
   
   const openRegister = useCallback(async (openingCash: number, notes?: string) => {
+    // When online, call server directly
+    if (navigator.onLine) {
+      const result = await offlineShopService.openCashRegister(openingCash, notes);
+      await fetchRegisters();
+      return { register: result.register, offline: false, message: result.message };
+    }
+    
     const result = await offlineDataService.openCashRegister(openingCash, notes);
     if (result.offline) {
       toast.info(t('offline.savedLocally'));
@@ -830,6 +968,13 @@ export function useOfflineCashRegister() {
   }, [fetchRegisters, t]);
   
   const closeRegister = useCallback(async (closingCash: number, notes?: string) => {
+    // When online, call server directly
+    if (navigator.onLine) {
+      const result = await offlineShopService.closeCashRegister(closingCash, notes);
+      await fetchRegisters();
+      return { register: result.register, offline: false, message: result.message };
+    }
+    
     const result = await offlineDataService.closeCashRegister(closingCash, notes);
     if (result.offline) {
       toast.info(t('offline.savedLocally'));
@@ -866,6 +1011,20 @@ export function useOfflineCategories() {
     try {
       setLoading(true);
       setError(null);
+      
+      // SERVER-FIRST: When online, fetch from Supabase directly
+      if (navigator.onLine) {
+        try {
+          const { categories: serverCategories } = await offlineShopService.getCategories();
+          setCategories(serverCategories || []);
+          setFromCache(false);
+          return;
+        } catch (serverError) {
+          console.warn('[useOfflineCategories] Server fetch failed, using offlineDataService:', serverError);
+        }
+      }
+      
+      // Offline or server failed - use offlineDataService
       const result = await offlineDataService.getCategories();
       setCategories(result.categories);
       setFromCache(result.fromCache);
@@ -913,6 +1072,22 @@ export function useOfflineSettings() {
     try {
       setLoading(true);
       setError(null);
+      
+      // SERVER-FIRST: When online, fetch from Supabase directly
+      if (navigator.onLine) {
+        try {
+          const { settings: serverSettings } = await offlineShopService.getSettings();
+          if (serverSettings) {
+            setSettings(serverSettings);
+            setFromCache(false);
+            return;
+          }
+        } catch (serverError) {
+          console.warn('[useOfflineSettings] Server fetch failed, using offlineDataService:', serverError);
+        }
+      }
+      
+      // Offline or server failed - use offlineDataService
       const result = await offlineDataService.getSettings();
       setSettings(result.settings);
       setFromCache(result.fromCache);
