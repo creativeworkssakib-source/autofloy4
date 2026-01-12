@@ -762,7 +762,7 @@ export function useOfflineProductsSimple() {
   };
 }
 
-// =============== DASHBOARD (Fully Offline) ===============
+// =============== DASHBOARD (Smart Sync) ===============
 
 export function useOfflineDashboard(range: 'today' | 'week' | 'month' = 'today') {
   const [data, setData] = useState<any>(null);
@@ -782,9 +782,17 @@ export function useOfflineDashboard(range: 'today' | 'week' | 'month' = 'today')
   }, [currentShop?.id]);
 
   const refetch = useCallback(async () => {
+    if (!currentShop?.id) {
+      setLoading(false);
+      return;
+    }
+    
     setLoading(true);
     try {
-      // Use smart data service which handles platform detection automatically
+      // Use smart data service which handles:
+      // - Browser: Server-first
+      // - PWA/APK/EXE + Online: Server-first, save to local
+      // - PWA/APK/EXE + Offline: Local-first
       const dashboardData = await smartDataService.getDashboard(range);
       
       if (dashboardData) {
@@ -794,8 +802,8 @@ export function useOfflineDashboard(range: 'today' | 'week' | 'month' = 'today')
           totalExpenses: dashboardData.period?.totalExpenses || dashboardData.totalExpenses || 0,
           totalPurchases: dashboardData.period?.totalPurchases || dashboardData.totalPurchases || 0,
           totalReturns: dashboardData.returns?.totalRefundAmount || dashboardData.totalReturns || 0,
-          profit: dashboardData.period?.netProfit || dashboardData.profit || 0,
-          salesCount: dashboardData.recentSales?.length || dashboardData.period?.customersServed || dashboardData.salesCount || 0,
+          profit: dashboardData.period?.netProfit || dashboardData.period?.grossProfit || dashboardData.profit || 0,
+          salesCount: dashboardData.period?.customersServed || dashboardData.recentSales?.length || dashboardData.salesCount || 0,
           customersCount: dashboardData.totalCustomers || dashboardData.customersCount || 0,
           productsCount: dashboardData.totalProducts || dashboardData.productsCount || 0,
           lowStockItems: dashboardData.lowStockProducts || dashboardData.lowStockItems || [],
@@ -812,118 +820,19 @@ export function useOfflineDashboard(range: 'today' | 'week' | 'month' = 'today')
             pendingCount: 0,
             topReasons: [],
           },
-          platform, // Include platform info
+          platform,
           fromLocal: dashboardData.fromLocal || false,
         };
         setData(mappedData);
-        setFromCache(dashboardData.fromLocal || !isOnline);
-        setLoading(false);
-        return;
+        setFromCache(dashboardData.fromLocal || false);
       }
     } catch (error) {
       console.error('Dashboard fetch error:', error);
+      setData(null);
+    } finally {
+      setLoading(false);
     }
-
-    // Fallback to local calculation if smart service fails
-    const now = new Date();
-    let startDate: string;
-    const endDate = now.toISOString().split('T')[0];
-    
-    if (range === 'today') {
-      startDate = endDate;
-    } else if (range === 'week') {
-      const weekAgo = new Date(now);
-      weekAgo.setDate(weekAgo.getDate() - 7);
-      startDate = weekAgo.toISOString().split('T')[0];
-    } else {
-      const monthAgo = new Date(now);
-      monthAgo.setMonth(monthAgo.getMonth() - 1);
-      startDate = monthAgo.toISOString().split('T')[0];
-    }
-
-    // Fetch all data from local DB
-    const [salesResult, expensesResult, purchasesResult, productsResult, customersResult, returnsResult] = await Promise.all([
-      offlineDataService.getSales(startDate, endDate),
-      offlineDataService.getExpenses(startDate, endDate),
-      offlineDataService.getPurchases(startDate, endDate),
-      offlineDataService.getProducts(),
-      offlineDataService.getCustomers(),
-      offlineDataService.getReturns(),
-    ]);
-
-    const sales = salesResult.sales || [];
-    const expenses = expensesResult.expenses || [];
-    const purchases = purchasesResult.purchases || [];
-    const products = productsResult.products || [];
-    const customers = customersResult.customers || [];
-    const returns = returnsResult.returns || [];
-
-    // Calculate stats
-    const totalSales = sales.reduce((sum: number, s: any) => sum + Number(s.total || 0), 0);
-    const totalExpenses = expenses.reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
-    const totalPurchases = purchases.reduce((sum: number, p: any) => sum + Number(p.total || 0), 0);
-    const totalReturns = returns.reduce((sum: number, r: any) => sum + Number(r.total_amount || 0), 0);
-    const profit = totalSales - totalExpenses - totalReturns;
-    const totalDue = customers.reduce((sum: number, c: any) => sum + Number(c.total_due || 0), 0);
-
-    const lowStockItems = products.filter((p: any) => 
-      p.stock_quantity <= (p.min_stock_alert || 5) && p.is_active
-    );
-
-    const recentSales = [...sales]
-      .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-      .slice(0, 5);
-
-    const recentProducts = [...products]
-      .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-      .slice(0, 5);
-
-    const returnsByReason = returns.reduce((acc: any, r: any) => {
-      const reason = r.reason || 'Other';
-      if (!acc[reason]) {
-        acc[reason] = { count: 0, amount: 0 };
-      }
-      acc[reason].count += 1;
-      acc[reason].amount += Number(r.total_amount || r.refund_amount || 0);
-      return acc;
-    }, {} as Record<string, { count: number; amount: number }>);
-
-    const topReturnReasons = Object.entries(returnsByReason)
-      .map(([reason, data]: [string, any]) => ({ reason, count: data.count, amount: data.amount }))
-      .sort((a: any, b: any) => b.count - a.count)
-      .slice(0, 5);
-
-    const processedReturns = returns.filter((r: any) => r.status === 'processed' || r.status === 'completed');
-    const pendingReturns = returns.filter((r: any) => r.status === 'pending' || !r.status);
-
-    setData({
-      totalSales,
-      totalExpenses,
-      totalPurchases,
-      totalReturns,
-      profit,
-      salesCount: sales.length,
-      customersCount: customers.length,
-      productsCount: products.length,
-      lowStockItems,
-      lowStockCount: lowStockItems.length,
-      recentSales,
-      recentProducts,
-      totalDue,
-      returnsSummary: {
-        totalCount: returns.length,
-        totalRefundAmount: totalReturns,
-        processedCount: processedReturns.length,
-        pendingCount: pendingReturns.length,
-        topReasons: topReturnReasons,
-      },
-      platform,
-      fromLocal: true,
-    });
-    
-    setFromCache(true);
-    setLoading(false);
-  }, [range, currentShop?.id, isOnline]);
+  }, [range, currentShop?.id, platform]);
 
   useEffect(() => {
     refetch();
