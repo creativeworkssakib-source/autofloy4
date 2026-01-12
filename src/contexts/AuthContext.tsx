@@ -77,6 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const mappedUser = mapServiceUser(serviceUser);
         setUser(mappedUser);
         localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(mappedUser));
+        localStorage.setItem('autofloy_user_id', mappedUser.id);
         
         // Cache for offline use (7 days)
         const authToken = token || authService.getToken();
@@ -166,9 +167,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             emailVerified: true,
             subscriptionPlan: offlineAuth.user.subscriptionPlan,
             avatarUrl: offlineAuth.user.avatarUrl,
-            createdAt: new Date().toISOString(),
+          createdAt: new Date().toISOString(),
           };
           setUser(offlineUser);
+          localStorage.setItem('autofloy_user_id', offlineUser.id);
           setOfflineAuthDaysRemaining(getOfflineAuthRemainingDays());
           setIsLoading(false);
           return;
@@ -177,9 +179,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Fallback: try regular cached user (if token exists)
         if (cachedUser && hasToken) {
           try {
-            console.log('[AuthContext] Using regular cached user for offline');
-            const parsedUser = JSON.parse(cachedUser) as User;
-            setUser(parsedUser);
+          console.log('[AuthContext] Using regular cached user for offline');
+          const parsedUser = JSON.parse(cachedUser) as User;
+          setUser(parsedUser);
+          localStorage.setItem('autofloy_user_id', parsedUser.id);
             
             // Create offline auth cache from this data for future offline use
             const token = authService.getToken();
@@ -208,6 +211,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // Load cached user immediately
           const parsedUser = JSON.parse(cachedUser) as User;
           setUser(parsedUser);
+          localStorage.setItem('autofloy_user_id', parsedUser.id);
           setIsLoading(false); // Show UI immediately with cached data
           
           // Refresh user data in background
@@ -216,6 +220,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const mappedUser = mapServiceUser(serviceUser);
             setUser(mappedUser);
             localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(mappedUser));
+            localStorage.setItem('autofloy_user_id', mappedUser.id);
             
             // Cache for offline use
             const authToken = token || authService.getToken();
@@ -239,6 +244,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               const mappedUser = mapServiceUser(serviceUser);
               setUser(mappedUser);
               localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(mappedUser));
+              localStorage.setItem('autofloy_user_id', mappedUser.id);
               
               const authToken = token || authService.getToken();
               if (authToken) {
@@ -264,6 +270,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const mappedUser = mapServiceUser(serviceUser);
           setUser(mappedUser);
           localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(mappedUser));
+          localStorage.setItem('autofloy_user_id', mappedUser.id);
           
           const authToken = token || authService.getToken();
           if (authToken) {
@@ -294,6 +301,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           createdAt: new Date().toISOString(),
         };
         setUser(offlineUser);
+        localStorage.setItem('autofloy_user_id', offlineUser.id);
         setOfflineAuthDaysRemaining(getOfflineAuthRemainingDays());
         
         // Try to restore the token from offline auth
@@ -328,6 +336,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const mappedUser = mapServiceUser(serviceUser);
       setUser(mappedUser);
       localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(mappedUser));
+      localStorage.setItem('autofloy_user_id', mappedUser.id);
       
       // Cache for offline use (7 days)
       cacheAuthForOffline(token, mappedUser);
@@ -355,6 +364,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const mappedUser = mapServiceUser(serviceUser);
       setUser(mappedUser);
       localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(mappedUser));
+      localStorage.setItem('autofloy_user_id', mappedUser.id);
       
       // Cache for offline use (7 days)
       cacheAuthForOffline(token, mappedUser);

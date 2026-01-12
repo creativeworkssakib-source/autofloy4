@@ -154,14 +154,23 @@ class SmartDataService {
     this.clearCache();
     
     if (shouldUseLocalFirst() && this.shopId) {
-      // First push any pending local changes
-      await syncManager.sync();
-      
-      // Then pull fresh data from server
-      await syncManager.fullSync(this.shopId);
+      try {
+        // First push any pending local changes to server
+        console.log('[SmartData] Pushing pending local changes...');
+        const pushResult = await syncManager.sync();
+        console.log('[SmartData] Push sync complete:', pushResult);
+        
+        // Then pull fresh data from server to local DB
+        console.log('[SmartData] Pulling fresh data from server...');
+        await syncManager.fullSync(this.shopId);
+        console.log('[SmartData] Full sync complete');
+      } catch (error) {
+        console.error('[SmartData] Sync error:', error);
+        // Continue anyway to notify listeners
+      }
     }
     
-    // Notify all listeners to refresh
+    // Notify all listeners to refresh their data
     this.notifyAllListeners();
   };
   
@@ -376,11 +385,12 @@ class SmartDataService {
         // Server-first when online
         const result = await offlineShopService.getProducts();
         
-        // If local-first platform, save to local DB
+        // If local-first platform, save to local DB with user_id
         if (isLocalFirstPlatform && this.shopId) {
           await offlineDB.bulkSaveProducts(result.products.map(p => ({
             ...p,
             shop_id: this.shopId!,
+            user_id: p.user_id || this.userId || '',
             _locallyModified: false,
             _locallyCreated: false,
             _locallyDeleted: false,
@@ -425,12 +435,13 @@ class SmartDataService {
       try {
         const result = await offlineShopService.getSales({ startDate, endDate });
         
-        // Save to local if local-first platform
+        // Save to local if local-first platform with user_id
         if (isLocalFirstPlatform && this.shopId) {
           for (const sale of result.sales) {
             await offlineDB.saveSale({
               ...sale,
               shop_id: this.shopId,
+              user_id: sale.user_id || this.userId || '',
               _locallyModified: false,
               _locallyCreated: false,
               _locallyDeleted: false,
@@ -480,6 +491,7 @@ class SmartDataService {
             await offlineDB.saveCustomer({
               ...cust,
               shop_id: this.shopId,
+              user_id: cust.user_id || this.userId || '',
               _locallyModified: false,
               _locallyCreated: false,
               _locallyDeleted: false,
