@@ -6,7 +6,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { offlineDataService } from '@/services/offlineDataService';
 import { offlineShopService } from '@/services/offlineShopService';
-import { ShopPurchase, ShopSupplier, ShopStockAdjustment, ShopReturn, ShopLoan, ShopStaff, ShopDailyCashRegister } from '@/lib/offlineDB';
+import { ShopPurchase, ShopSupplier, ShopStockAdjustment, ShopReturn, ShopLoan, ShopDailyCashRegister } from '@/lib/offlineDB';
 import { generateOfflineId } from '@/lib/offlineUtils';
 import { useIsOnline } from './useOnlineStatus';
 import { useShop } from '@/contexts/ShopContext';
@@ -378,74 +378,8 @@ export function useOfflineLoans(statusFilter?: string) {
   };
 }
 
-// =============== STAFF ===============
-
-export function useOfflineStaff() {
-  const [staff, setStaff] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [fromCache, setFromCache] = useState(false);
-  const isOnline = useIsOnline();
-  const { currentShop } = useShop();
-
-  const refetch = useCallback(async () => {
-    setLoading(true);
-    try {
-      const result = await offlineDataService.getStaff();
-      setStaff(result.staff || []);
-      setFromCache(result.fromCache);
-    } catch (error) {
-      console.error('Failed to fetch staff:', error);
-      setStaff([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [currentShop?.id]);
-
-  useEffect(() => {
-    refetch();
-  }, [refetch]);
-
-  const createStaff = useCallback(async (data: any) => {
-    try {
-      const result = await offlineDataService.createStaff(data);
-      await refetch();
-      return { staff: result.staff, offline: result.offline };
-    } catch (error) {
-      throw error;
-    }
-  }, [refetch]);
-
-  const updateStaff = useCallback(async (data: any) => {
-    try {
-      const result = await offlineDataService.updateStaff(data);
-      await refetch();
-      return { staff: result.staff, offline: result.offline };
-    } catch (error) {
-      throw error;
-    }
-  }, [refetch]);
-
-  const deleteStaff = useCallback(async (id: string) => {
-    try {
-      const result = await offlineDataService.deleteStaff(id);
-      await refetch();
-      return { offline: result.offline };
-    } catch (error) {
-      throw error;
-    }
-  }, [refetch]);
-
-  return {
-    staff,
-    loading,
-    fromCache,
-    isOnline,
-    refetch,
-    createStaff,
-    updateStaff,
-    deleteStaff,
-  };
-}
+// =============== STAFF (REMOVED) ===============
+// Staff feature has been removed from the application
 
 // =============== CASH SUMMARY ===============
 
