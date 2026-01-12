@@ -175,16 +175,33 @@ export function useOfflineAdjustments(filterType?: string) {
   const refetch = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await offlineShopService.getAdjustments(filterType ? { type: filterType } : {});
-      setAdjustments(result.adjustments || []);
-      setFromCache(!isOnline);
+      // SERVER-FIRST: When online, fetch from Supabase directly
+      if (navigator.onLine) {
+        try {
+          const result = await offlineShopService.getAdjustments(filterType ? { type: filterType } : {});
+          setAdjustments(result.adjustments || []);
+          setFromCache(false);
+          return;
+        } catch (error) {
+          console.error('[useOfflineAdjustments] Server fetch failed, using offlineDataService:', error);
+        }
+      }
+      
+      // Offline or server failed - use offlineDataService
+      const result = await offlineDataService.getStockAdjustments();
+      let filteredAdjustments = result.adjustments || [];
+      if (filterType) {
+        filteredAdjustments = filteredAdjustments.filter((a: any) => a.adjustment_type === filterType);
+      }
+      setAdjustments(filteredAdjustments);
+      setFromCache(result.fromCache);
     } catch (error) {
       console.error('Failed to fetch adjustments:', error);
       setAdjustments([]);
     } finally {
       setLoading(false);
     }
-  }, [filterType, isOnline, currentShop?.id]);
+  }, [filterType, currentShop?.id]);
 
   useEffect(() => {
     refetch();
@@ -192,19 +209,31 @@ export function useOfflineAdjustments(filterType?: string) {
 
   const createAdjustment = useCallback(async (data: any) => {
     try {
-      const result = await offlineShopService.createAdjustment(data);
+      // When online, use server directly
+      if (navigator.onLine) {
+        const result = await offlineShopService.createAdjustment(data);
+        await refetch();
+        return { adjustment: result.adjustment, offline: false };
+      }
+      // Offline - use offlineDataService
+      const result = await offlineDataService.createStockAdjustment(data);
       await refetch();
-      return { adjustment: result.adjustment, offline: !isOnline };
+      return { adjustment: result.adjustment, offline: result.offline };
     } catch (error) {
       throw error;
     }
-  }, [isOnline, refetch]);
+  }, [refetch]);
 
   const deleteAdjustments = useCallback(async (ids: string[]) => {
     try {
-      const result = await offlineShopService.deleteAdjustments(ids);
+      if (navigator.onLine) {
+        const result = await offlineShopService.deleteAdjustments(ids);
+        await refetch();
+        return result;
+      }
+      // Offline - just refetch (local delete will be queued)
       await refetch();
-      return result;
+      return { deleted: ids, offline: true };
     } catch (error) {
       throw error;
     }
@@ -724,14 +753,28 @@ export function useOfflineCashRegister() {
 export function useOfflineTrash(table?: string) {
   const [trash, setTrash] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fromCache, setFromCache] = useState(false);
   const isOnline = useIsOnline();
   const { currentShop } = useShop();
 
   const refetch = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await offlineShopService.getTrash(table);
-      setTrash(result.trash || []);
+      // SERVER-FIRST: Always fetch from server when online
+      if (navigator.onLine) {
+        try {
+          const result = await offlineShopService.getTrash(table);
+          setTrash(result.trash || []);
+          setFromCache(false);
+          return;
+        } catch (error) {
+          console.error('[useOfflineTrash] Server fetch failed:', error);
+        }
+      }
+      
+      // Offline - trash is server-only, show empty
+      setTrash([]);
+      setFromCache(true);
     } catch (error) {
       console.error('Failed to fetch trash:', error);
       setTrash([]);
@@ -746,37 +789,47 @@ export function useOfflineTrash(table?: string) {
 
   const restoreItem = useCallback(async (id: string) => {
     try {
-      await offlineShopService.restoreFromTrash(id);
-      await refetch();
-      return { offline: !isOnline };
+      if (navigator.onLine) {
+        await offlineShopService.restoreFromTrash(id);
+        await refetch();
+        return { offline: false };
+      }
+      throw new Error('Cannot restore items while offline');
     } catch (error) {
       throw error;
     }
-  }, [isOnline, refetch]);
+  }, [refetch]);
 
   const permanentDelete = useCallback(async (id: string) => {
     try {
-      await offlineShopService.permanentDelete(id);
-      await refetch();
-      return { offline: !isOnline };
+      if (navigator.onLine) {
+        await offlineShopService.permanentDelete(id);
+        await refetch();
+        return { offline: false };
+      }
+      throw new Error('Cannot permanently delete while offline');
     } catch (error) {
       throw error;
     }
-  }, [isOnline, refetch]);
+  }, [refetch]);
 
   const emptyTrash = useCallback(async () => {
     try {
-      await offlineShopService.emptyTrash();
-      await refetch();
-      return { offline: !isOnline };
+      if (navigator.onLine) {
+        await offlineShopService.emptyTrash();
+        await refetch();
+        return { offline: false };
+      }
+      throw new Error('Cannot empty trash while offline');
     } catch (error) {
       throw error;
     }
-  }, [isOnline, refetch]);
+  }, [refetch]);
 
   return {
     trash,
     loading,
+    fromCache,
     isOnline,
     refetch,
     restoreItem,

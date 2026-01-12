@@ -1156,13 +1156,42 @@ async getProducts(): Promise<{ products: ShopProduct[]; fromCache: boolean }> {
     return { offline: true };
   }
   
-  // =============== STOCK ADJUSTMENTS ===============
+// =============== STOCK ADJUSTMENTS ===============
   
   async getStockAdjustments(): Promise<{ adjustments: ShopStockAdjustment[]; fromCache: boolean }> {
     await this.init();
     const shopId = this.ensureShopId();
+    
+    // If online, get from server first (server-first approach)
+    if (this.isOnline()) {
+      try {
+        const result = await offlineShopService.getAdjustments({});
+        const serverAdjustments = result.adjustments || [];
+        
+        // Save to local DB
+        for (const adj of serverAdjustments) {
+          const existing = await offlineDB.getStockAdjustments(shopId);
+          const existingAdj = existing.find(a => a.id === adj.id);
+          if (!existingAdj?._locallyModified && !existingAdj?._locallyCreated) {
+            await offlineDB.saveStockAdjustment({
+              ...adj,
+              shop_id: shopId,
+              user_id: this.userId || '',
+              _locallyModified: false,
+              _locallyCreated: false,
+              _locallyDeleted: false,
+            } as ShopStockAdjustment);
+          }
+        }
+        return { adjustments: serverAdjustments, fromCache: false };
+      } catch (error) {
+        console.error('Server fetch failed, falling back to local:', error);
+      }
+    }
+    
+    // Offline or server failed - get from local
     const adjustments = await offlineDB.getStockAdjustments(shopId);
-    return { adjustments, fromCache: !this.isOnline() };
+    return { adjustments, fromCache: true };
   }
   
   async createStockAdjustment(data: Partial<ShopStockAdjustment>): Promise<{ adjustment: ShopStockAdjustment; offline: boolean }> {
