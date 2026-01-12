@@ -136,8 +136,10 @@ const FeaturesSection = memo(() => {
                 <Link
                   to={`/features/${feature.slug}`}
                   className="inline-flex items-center text-primary font-medium text-sm group/link"
+                  aria-label={`${t("features.learnMore")} ${feature.title}`}
                 >
-                  {t("features.learnMore")}
+                  <span>{t("features.learnMore")}</span>
+                  <span className="sr-only"> {feature.title}</span>
                   <ArrowRight className="w-4 h-4 ml-1 group-hover/link:translate-x-1 transition-transform" />
                 </Link>
               </div>
@@ -169,8 +171,10 @@ const FeaturesSection = memo(() => {
                 <Link
                   to={`/features/${feature.slug}`}
                   className="inline-flex items-center text-success font-medium text-sm group/link"
+                  aria-label={`${t("features.learnMore")} ${feature.title}`}
                 >
-                  {t("features.learnMore")}
+                  <span>{t("features.learnMore")}</span>
+                  <span className="sr-only"> {feature.title}</span>
                   <ArrowRight className="w-4 h-4 ml-1 group-hover/link:translate-x-1 transition-transform" />
                 </Link>
               </div>
