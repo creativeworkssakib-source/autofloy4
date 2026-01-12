@@ -81,34 +81,41 @@ const ShopDashboard = () => {
   const { settings } = useOfflineSettings();
   const { pendingCount, isSyncing, triggerSync } = useSyncStatus();
   
-  // Use offline-first dashboard hook
-  const { data: dashboardData, loading: isLoading, fromCache, isOnline, refetch: loadDashboard } = useOfflineDashboard('today');
+  // Use offline-first dashboard hooks - one for today, one for month
+  const { data: todayData, loading: isTodayLoading, fromCache, isOnline, refetch: loadTodayDashboard } = useOfflineDashboard('today');
+  const { data: monthData, loading: isMonthLoading, refetch: loadMonthDashboard } = useOfflineDashboard('month');
   const { trash, refetch: refetchTrash } = useOfflineTrash();
   const trashCount = trash?.length || 0;
 
-  // Map hook data to expected format
-  const data: DashboardData | null = dashboardData ? {
+  const isLoading = isTodayLoading || isMonthLoading;
+  
+  const loadDashboard = async () => {
+    await Promise.all([loadTodayDashboard(), loadMonthDashboard()]);
+  };
+
+  // Map hook data to expected format - today's data for period, month data for lifetime
+  const data: DashboardData | null = (todayData || monthData) ? {
     period: {
-      totalSales: dashboardData.totalSales || 0,
-      totalPurchases: dashboardData.totalPurchases || 0,
-      grossProfit: dashboardData.profit || 0,
-      totalExpenses: dashboardData.totalExpenses || 0,
-      netProfit: dashboardData.profit || 0,
-      customersServed: dashboardData.salesCount || 0,
+      totalSales: todayData?.totalSales || 0,
+      totalPurchases: todayData?.totalPurchases || 0,
+      grossProfit: todayData?.profit || 0,
+      totalExpenses: todayData?.totalExpenses || 0,
+      netProfit: todayData?.profit || 0,
+      customersServed: todayData?.salesCount || 0,
     },
     lifetime: {
-      totalSales: dashboardData.totalSales || 0,
-      totalProfit: dashboardData.profit || 0,
-      totalProducts: dashboardData.productsCount || 0,
+      totalSales: monthData?.totalSales || 0,
+      totalProfit: monthData?.profit || 0,
+      totalProducts: todayData?.productsCount || monthData?.productsCount || 0,
       totalSuppliers: 0,
-      totalDue: 0,
+      totalDue: todayData?.totalDue || monthData?.totalDue || 0,
     },
-    totalProducts: dashboardData.productsCount || 0,
-    totalCustomers: dashboardData.customersCount || 0,
-    lowStockProducts: dashboardData.lowStockItems || [],
-    recentSales: dashboardData.recentSales || [],
-    recentProducts: dashboardData.recentProducts || [],
-    returns: dashboardData.returnsSummary || {
+    totalProducts: todayData?.productsCount || monthData?.productsCount || 0,
+    totalCustomers: todayData?.customersCount || monthData?.customersCount || 0,
+    lowStockProducts: todayData?.lowStockItems || monthData?.lowStockItems || [],
+    recentSales: todayData?.recentSales || monthData?.recentSales || [],
+    recentProducts: todayData?.recentProducts || monthData?.recentProducts || [],
+    returns: todayData?.returnsSummary || monthData?.returnsSummary || {
       totalCount: 0,
       totalRefundAmount: 0,
       processedCount: 0,
