@@ -26,6 +26,7 @@ interface SmartDataOptions {
 
 class SmartDataService {
   private initialized = false;
+  private initializingPromise: Promise<void> | null = null;
   private shopId: string | null = null;
   private userId: string | null = null;
   private listeners: Map<string, Set<DataListener>> = new Map();
@@ -35,10 +36,36 @@ class SmartDataService {
   
   /**
    * Initialize the smart data service
+   * Returns a promise that resolves when initialization is complete
    */
   async init(shopId: string, userId: string): Promise<void> {
+    // If already initialized with same shopId, return immediately
     if (this.initialized && this.shopId === shopId) {
       return;
+    }
+    
+    // If currently initializing, wait for that to complete
+    if (this.initializingPromise) {
+      await this.initializingPromise;
+      // Check again if we're now initialized with correct shopId
+      if (this.initialized && this.shopId === shopId) {
+        return;
+      }
+    }
+    
+    // Start new initialization
+    this.initializingPromise = this.doInit(shopId, userId);
+    await this.initializingPromise;
+    this.initializingPromise = null;
+  }
+  
+  private async doInit(shopId: string, userId: string): Promise<void> {
+    console.log('[SmartData] Initializing with shopId:', shopId);
+    
+    // Clear cache if shopId changed
+    if (this.shopId && this.shopId !== shopId) {
+      this.clearCache();
+      this.initialSyncDone = false;
     }
     
     this.shopId = shopId;
@@ -63,6 +90,7 @@ class SmartDataService {
       // If online, do initial full sync to populate local DB
       if (navigator.onLine && !this.initialSyncDone) {
         console.log('[SmartData] Online - performing initial sync');
+        // Don't await - let it run in background
         this.performInitialSync();
       }
       
@@ -72,10 +100,32 @@ class SmartDataService {
     }
     
     // Listen for online/offline events
+    window.removeEventListener('online', this.handleOnline);
+    window.removeEventListener('offline', this.handleOffline);
     window.addEventListener('online', this.handleOnline);
     window.addEventListener('offline', this.handleOffline);
     
     this.initialized = true;
+  }
+  
+  /**
+   * Ensure service is initialized before any operation
+   */
+  private async ensureInitialized(): Promise<boolean> {
+    if (this.initialized && this.shopId) {
+      return true;
+    }
+    
+    // Try to get from localStorage
+    const shopId = localStorage.getItem('autofloy_current_shop_id');
+    const userId = localStorage.getItem('autofloy_user_id');
+    
+    if (shopId && userId) {
+      await this.init(shopId, userId);
+      return true;
+    }
+    
+    return false;
   }
   
   /**
@@ -127,7 +177,14 @@ class SmartDataService {
    * Get dashboard data with smart strategy
    */
   async getDashboard(range: 'today' | 'week' | 'month' = 'today'): Promise<any> {
-    const cacheKey = `dashboard-${range}`;
+    // Ensure we're initialized
+    const ready = await this.ensureInitialized();
+    if (!ready) {
+      console.warn('[SmartData] Not initialized, returning empty dashboard');
+      return this.getEmptyDashboard();
+    }
+    
+    const cacheKey = `dashboard-${this.shopId}-${range}`;
     
     // Check cache first
     const cached = this.getFromCache(cacheKey);
@@ -135,6 +192,8 @@ class SmartDataService {
     
     const isLocalFirstPlatform = shouldUseLocalFirst();
     const isOnline = navigator.onLine;
+    
+    console.log(`[SmartData] getDashboard - Platform: ${isLocalFirstPlatform ? 'PWA/APK/EXE' : 'Browser'}, Online: ${isOnline}`);
     
     // STRATEGY:
     // 1. Browser: Always server-first
@@ -144,9 +203,11 @@ class SmartDataService {
     if (isOnline) {
       try {
         // Always try server first when online
+        console.log('[SmartData] Fetching dashboard from server...');
         const serverData = await offlineShopService.getDashboard(range);
         
         if (serverData) {
+          console.log('[SmartData] Got server dashboard data:', Object.keys(serverData));
           this.setCache(cacheKey, { ...serverData, fromLocal: false });
           return { ...serverData, fromLocal: false };
         }
@@ -154,18 +215,58 @@ class SmartDataService {
         console.warn('[SmartData] Server fetch failed:', error);
         
         // If local-first platform, fall back to local data
-        if (isLocalFirstPlatform) {
+        if (isLocalFirstPlatform && this.shopId) {
+          console.log('[SmartData] Falling back to local dashboard');
           const localData = await this.calculateLocalDashboard(range);
           return { ...localData, fromLocal: true };
         }
         throw error;
       }
-    } else if (isLocalFirstPlatform) {
+    } else if (isLocalFirstPlatform && this.shopId) {
       // Offline + local-first platform: use local data
+      console.log('[SmartData] Offline - using local dashboard');
       return this.calculateLocalDashboard(range);
     }
     
-    throw new Error('Cannot fetch dashboard - offline and no local data available');
+    // Browser + Offline: return empty dashboard
+    console.warn('[SmartData] Browser offline - returning empty dashboard');
+    return this.getEmptyDashboard();
+  }
+  
+  /**
+   * Get empty dashboard structure
+   */
+  private getEmptyDashboard(): any {
+    return {
+      period: {
+        totalSales: 0,
+        totalExpenses: 0,
+        totalPurchases: 0,
+        grossProfit: 0,
+        netProfit: 0,
+        customersServed: 0,
+      },
+      lifetime: {
+        totalSales: 0,
+        totalProfit: 0,
+        totalProducts: 0,
+        totalSuppliers: 0,
+        totalDue: 0,
+      },
+      totalProducts: 0,
+      totalCustomers: 0,
+      lowStockProducts: [],
+      recentSales: [],
+      recentProducts: [],
+      returns: {
+        totalCount: 0,
+        totalRefundAmount: 0,
+        processedCount: 0,
+        pendingCount: 0,
+        topReasons: [],
+      },
+      fromLocal: false,
+    };
   }
   
   /**
