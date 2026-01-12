@@ -1,69 +1,52 @@
-import { motion } from "framer-motion";
+import { lazy, Suspense } from "react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import HeroSection from "@/components/landing/HeroSection";
-import FeaturesSection from "@/components/landing/FeaturesSection";
-import BenefitsSection from "@/components/landing/BenefitsSection";
-import FAQSection from "@/components/landing/FAQSection";
-import CTASection from "@/components/landing/CTASection";
 
-// Smooth page entrance animation variants
-const pageVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      duration: 0.6,
-      ease: "easeOut" as const,
-      staggerChildren: 0.15,
-    },
-  },
-};
+// Lazy load below-the-fold sections for faster initial load
+const FeaturesSection = lazy(() => import("@/components/landing/FeaturesSection"));
+const BenefitsSection = lazy(() => import("@/components/landing/BenefitsSection"));
+const FAQSection = lazy(() => import("@/components/landing/FAQSection"));
+const CTASection = lazy(() => import("@/components/landing/CTASection"));
 
-const sectionVariants = {
-  hidden: { opacity: 0, y: 30 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: {
-      duration: 0.7,
-      ease: "easeOut" as const,
-    },
-  },
-};
+// Simple skeleton loader for lazy sections
+const SectionLoader = () => (
+  <div className="py-16 lg:py-20">
+    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="animate-pulse space-y-8">
+        <div className="h-8 bg-muted rounded w-1/3 mx-auto" />
+        <div className="h-4 bg-muted rounded w-2/3 mx-auto" />
+        <div className="grid md:grid-cols-3 gap-6">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-48 bg-muted rounded-xl" />
+          ))}
+        </div>
+      </div>
+    </div>
+  </div>
+);
 
 const Index = () => {
   return (
-    <motion.div
-      className="min-h-screen bg-background"
-      initial="hidden"
-      animate="visible"
-      variants={pageVariants}
-    >
-      <motion.div variants={sectionVariants}>
-        <Header />
-      </motion.div>
+    <div className="min-h-screen bg-background">
+      <Header />
       <main>
-        <motion.div variants={sectionVariants}>
-          <HeroSection />
-        </motion.div>
-        <motion.div variants={sectionVariants}>
+        <HeroSection />
+        <Suspense fallback={<SectionLoader />}>
           <FeaturesSection />
-        </motion.div>
-        <motion.div variants={sectionVariants}>
+        </Suspense>
+        <Suspense fallback={<SectionLoader />}>
           <BenefitsSection />
-        </motion.div>
-        <motion.div variants={sectionVariants}>
+        </Suspense>
+        <Suspense fallback={<SectionLoader />}>
           <FAQSection />
-        </motion.div>
-        <motion.div variants={sectionVariants}>
+        </Suspense>
+        <Suspense fallback={<SectionLoader />}>
           <CTASection />
-        </motion.div>
+        </Suspense>
       </main>
-      <motion.div variants={sectionVariants}>
-        <Footer />
-      </motion.div>
-    </motion.div>
+      <Footer />
+    </div>
   );
 };
 
