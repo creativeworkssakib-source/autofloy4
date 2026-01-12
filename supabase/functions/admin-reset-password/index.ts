@@ -11,6 +11,57 @@ const corsHeaders = {
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
+// Verify admin token and check admin role
+async function verifyAdminToken(authHeader: string | null): Promise<{ userId: string; isAdmin: boolean } | null> {
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    console.log("[admin-reset-password] Missing Bearer token");
+    return null;
+  }
+
+  const token = authHeader.replace("Bearer ", "");
+  const jwtSecret = Deno.env.get("JWT_SECRET");
+
+  if (!jwtSecret) {
+    console.error("[admin-reset-password] JWT_SECRET not configured");
+    return null;
+  }
+
+  try {
+    const { verify } = await import("https://deno.land/x/djwt@v3.0.2/mod.ts");
+    const key = await crypto.subtle.importKey(
+      "raw",
+      new TextEncoder().encode(jwtSecret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign", "verify"],
+    );
+
+    const payload = await verify(token, key);
+    const userId = payload.sub as string;
+
+    // Check if user has admin role
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const { data: roleData, error: roleError } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (roleError) {
+      console.error("[admin-reset-password] role lookup error:", roleError);
+      return null;
+    }
+
+    const isAdmin = roleData?.role === "admin";
+    console.log(`[admin-reset-password] user ${userId} isAdmin=${isAdmin}`);
+
+    return { userId, isAdmin };
+  } catch (e) {
+    console.error("[admin-reset-password] token verification failed:", e);
+    return null;
+  }
+}
+
 // Password hashing using PBKDF2 (Web Crypto API - Edge Runtime compatible)
 async function hashPassword(password: string): Promise<string> {
   const encoder = new TextEncoder();
@@ -49,6 +100,25 @@ serve(async (req) => {
   }
 
   try {
+    // CRITICAL: Verify admin authorization before any action
+    const authResult = await verifyAdminToken(req.headers.get("Authorization"));
+
+    if (!authResult) {
+      console.log("[admin-reset-password] Unauthorized - no valid token");
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (!authResult.isAdmin) {
+      console.log(`[admin-reset-password] Forbidden - user ${authResult.userId} is not admin`);
+      return new Response(JSON.stringify({ error: "Forbidden - Admin access required" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const { user_id, password } = await req.json();
 
     if (!user_id || !password) {
@@ -77,21 +147,21 @@ serve(async (req) => {
       .eq("id", user_id);
 
     if (updateError) {
-      console.error("Update error:", updateError);
+      console.error("[admin-reset-password] Update error:", updateError);
       return new Response(JSON.stringify({ error: "Failed to update password" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    console.log(`Password reset for user: ${user_id.substring(0, 8)}...`);
+    console.log(`[admin-reset-password] Password reset for user ${user_id.substring(0, 8)}... by admin ${authResult.userId.substring(0, 8)}...`);
 
     return new Response(JSON.stringify({ success: true, message: "Password updated successfully" }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
-    console.error("Password reset error:", error);
+    console.error("[admin-reset-password] Password reset error:", error);
     return new Response(JSON.stringify({ error: "Internal server error" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
