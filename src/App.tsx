@@ -10,6 +10,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { SiteSettingsProvider } from "@/contexts/SiteSettingsContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { ShopProvider } from "@/contexts/ShopContext";
+import { SyncProvider } from "@/contexts/SyncContext";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import AdminProtectedRoute from "@/components/admin/AdminProtectedRoute";
 import { CookieConsentBanner } from "@/components/CookieConsentBanner";
@@ -129,6 +130,7 @@ const App = () => (
           <LanguageProvider>
             <NotificationProvider>
               <ShopProvider>
+              <SyncProvider>
               <TooltipProvider>
               <Toaster />
               <Sonner />
@@ -437,6 +439,7 @@ const App = () => (
               </Suspense>
               </BrowserRouter>
             </TooltipProvider>
+            </SyncProvider>
             </ShopProvider>
           </NotificationProvider>
         </LanguageProvider>
