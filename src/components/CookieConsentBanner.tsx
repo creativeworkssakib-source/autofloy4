@@ -186,7 +186,7 @@ export const CookieConsentBanner = () => {
                             <>
                               We use cookies to enhance your browsing experience, serve personalized content, and analyze our traffic. 
                               By clicking "Accept All", you consent to our use of cookies. Read our{' '}
-                              <Link to="/cookies" className="text-primary hover:underline">
+                              <Link to="/cookies" className="text-primary underline">
                                 Cookie Policy
                               </Link>{' '}
                               to learn more.
