@@ -564,6 +564,234 @@ export function useOfflineDataSize() {
   return { dataSize, loading };
 }
 
+// =============== OFFLINE LOANS HOOK ===============
+
+export function useOfflineLoans() {
+  const [loans, setLoans] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [fromCache, setFromCache] = useState(false);
+  const isOnline = useIsOnline();
+  const { t } = useLanguage();
+  
+  const fetchLoans = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const result = await offlineDataService.getLoans();
+      setLoans(result.loans);
+      setFromCache(result.fromCache);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load loans');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  
+  useEffect(() => {
+    fetchLoans();
+  }, [fetchLoans]);
+  
+  const createLoan = useCallback(async (data: any) => {
+    const result = await offlineDataService.createLoan(data);
+    if (result.offline) {
+      toast.info(t('offline.savedLocally'));
+    }
+    await fetchLoans();
+    return result;
+  }, [fetchLoans, t]);
+  
+  const updateLoan = useCallback(async (data: any) => {
+    const result = await offlineDataService.updateLoan(data);
+    if (result.offline) {
+      toast.info(t('offline.savedLocally'));
+    }
+    await fetchLoans();
+    return result;
+  }, [fetchLoans, t]);
+  
+  const deleteLoan = useCallback(async (id: string) => {
+    const result = await offlineDataService.deleteLoan(id);
+    if (result.offline) {
+      toast.info(t('offline.savedLocally'));
+    }
+    await fetchLoans();
+    return result;
+  }, [fetchLoans, t]);
+  
+  return {
+    loans,
+    loading,
+    error,
+    fromCache,
+    isOnline,
+    refetch: fetchLoans,
+    createLoan,
+    updateLoan,
+    deleteLoan,
+  };
+}
+
+// =============== OFFLINE RETURNS HOOK ===============
+
+export function useOfflineReturns(returnType?: 'sale' | 'purchase') {
+  const [returns, setReturns] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [fromCache, setFromCache] = useState(false);
+  const isOnline = useIsOnline();
+  const { t } = useLanguage();
+  
+  const fetchReturns = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const result = await offlineDataService.getReturns(returnType);
+      setReturns(result.returns);
+      setFromCache(result.fromCache);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load returns');
+    } finally {
+      setLoading(false);
+    }
+  }, [returnType]);
+  
+  useEffect(() => {
+    fetchReturns();
+  }, [fetchReturns]);
+  
+  const createReturn = useCallback(async (data: any) => {
+    const result = await offlineDataService.createReturn(data);
+    if (result.offline) {
+      toast.info(t('offline.savedLocally'));
+    }
+    await fetchReturns();
+    return result;
+  }, [fetchReturns, t]);
+  
+  return {
+    returns,
+    loading,
+    error,
+    fromCache,
+    isOnline,
+    refetch: fetchReturns,
+    createReturn,
+  };
+}
+
+// =============== OFFLINE STOCK ADJUSTMENTS HOOK ===============
+
+export function useOfflineStockAdjustments() {
+  const [adjustments, setAdjustments] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [fromCache, setFromCache] = useState(false);
+  const isOnline = useIsOnline();
+  const { t } = useLanguage();
+  
+  const fetchAdjustments = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const result = await offlineDataService.getStockAdjustments();
+      setAdjustments(result.adjustments);
+      setFromCache(result.fromCache);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load adjustments');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  
+  useEffect(() => {
+    fetchAdjustments();
+  }, [fetchAdjustments]);
+  
+  const createAdjustment = useCallback(async (data: any) => {
+    const result = await offlineDataService.createStockAdjustment(data);
+    if (result.offline) {
+      toast.info(t('offline.savedLocally'));
+    }
+    await fetchAdjustments();
+    return result;
+  }, [fetchAdjustments, t]);
+  
+  return {
+    adjustments,
+    loading,
+    error,
+    fromCache,
+    isOnline,
+    refetch: fetchAdjustments,
+    createAdjustment,
+  };
+}
+
+// =============== OFFLINE CASH REGISTER HOOK ===============
+
+export function useOfflineCashRegister() {
+  const [registers, setRegisters] = useState<any[]>([]);
+  const [todayRegister, setTodayRegister] = useState<any | null>(null);
+  const [hasOpenRegister, setHasOpenRegister] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [fromCache, setFromCache] = useState(false);
+  const isOnline = useIsOnline();
+  const { t } = useLanguage();
+  
+  const fetchRegisters = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const result = await offlineDataService.getCashRegisters();
+      setRegisters(result.registers);
+      setTodayRegister(result.todayRegister);
+      setHasOpenRegister(result.hasOpenRegister);
+      setFromCache(result.fromCache);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load cash registers');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  
+  useEffect(() => {
+    fetchRegisters();
+  }, [fetchRegisters]);
+  
+  const openRegister = useCallback(async (openingCash: number, notes?: string) => {
+    const result = await offlineDataService.openCashRegister(openingCash, notes);
+    if (result.offline) {
+      toast.info(t('offline.savedLocally'));
+    }
+    await fetchRegisters();
+    return result;
+  }, [fetchRegisters, t]);
+  
+  const closeRegister = useCallback(async (closingCash: number, notes?: string) => {
+    const result = await offlineDataService.closeCashRegister(closingCash, notes);
+    if (result.offline) {
+      toast.info(t('offline.savedLocally'));
+    }
+    await fetchRegisters();
+    return result;
+  }, [fetchRegisters, t]);
+  
+  return {
+    registers,
+    todayRegister,
+    hasOpenRegister,
+    loading,
+    error,
+    fromCache,
+    isOnline,
+    refetch: fetchRegisters,
+    openRegister,
+    closeRegister,
+  };
+}
+
 // =============== OFFLINE CATEGORIES HOOK ===============
 
 export function useOfflineCategories() {
