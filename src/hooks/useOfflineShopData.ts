@@ -771,24 +771,44 @@ export function useOfflineDashboard(range: 'today' | 'week' | 'month' = 'today')
   const isOnline = useIsOnline();
   const { currentShop } = useShop();
   const [platform, setPlatform] = useState<string>('');
+  const [initialized, setInitialized] = useState(false);
 
-  // Initialize smart data service
+  // Initialize smart data service when shop changes
   useEffect(() => {
-    if (currentShop?.id) {
-      const userId = localStorage.getItem('autofloy_user_id') || '';
-      smartDataService.init(currentShop.id, userId);
-      setPlatform(getPlatformName());
-    }
+    const initService = async () => {
+      if (currentShop?.id) {
+        const userId = localStorage.getItem('autofloy_user_id') || '';
+        try {
+          await smartDataService.init(currentShop.id, userId);
+          setPlatform(getPlatformName());
+          setInitialized(true);
+          console.log('[useOfflineDashboard] Smart data service initialized');
+        } catch (error) {
+          console.error('[useOfflineDashboard] Failed to initialize:', error);
+          setInitialized(true); // Still set to true to allow fallback
+        }
+      }
+    };
+    
+    initService();
   }, [currentShop?.id]);
 
   const refetch = useCallback(async () => {
     if (!currentShop?.id) {
+      console.log('[useOfflineDashboard] No shop ID, skipping fetch');
       setLoading(false);
+      return;
+    }
+    
+    if (!initialized) {
+      console.log('[useOfflineDashboard] Not yet initialized, waiting...');
       return;
     }
     
     setLoading(true);
     try {
+      console.log(`[useOfflineDashboard] Fetching dashboard for range: ${range}`);
+      
       // Use smart data service which handles:
       // - Browser: Server-first
       // - PWA/APK/EXE + Online: Server-first, save to local
@@ -823,20 +843,24 @@ export function useOfflineDashboard(range: 'today' | 'week' | 'month' = 'today')
           platform,
           fromLocal: dashboardData.fromLocal || false,
         };
+        console.log('[useOfflineDashboard] Dashboard data mapped successfully');
         setData(mappedData);
         setFromCache(dashboardData.fromLocal || false);
       }
     } catch (error) {
-      console.error('Dashboard fetch error:', error);
+      console.error('[useOfflineDashboard] Dashboard fetch error:', error);
       setData(null);
     } finally {
       setLoading(false);
     }
-  }, [range, currentShop?.id, platform]);
+  }, [range, currentShop?.id, platform, initialized]);
 
+  // Refetch when dependencies change
   useEffect(() => {
-    refetch();
-  }, [refetch]);
+    if (initialized) {
+      refetch();
+    }
+  }, [refetch, initialized]);
 
   return {
     data,

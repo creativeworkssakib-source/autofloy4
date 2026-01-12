@@ -53,6 +53,18 @@ class RealtimeSyncManager {
    * Initialize real-time sync
    */
   async init(shopId: string, userId: string): Promise<void> {
+    // Skip if already initialized with same shopId
+    if (this.shopId === shopId && this.isConnected) {
+      console.log('[RealtimeSync] Already initialized with same shopId');
+      return;
+    }
+    
+    // Disconnect existing subscriptions if shopId changed
+    if (this.shopId && this.shopId !== shopId) {
+      console.log('[RealtimeSync] Shop changed, disconnecting old subscriptions');
+      this.disconnect();
+    }
+    
     this.shopId = shopId;
     this.userId = userId;
     
@@ -103,29 +115,42 @@ class RealtimeSyncManager {
       return; // Already subscribed
     }
     
-    const channel = supabase
-      .channel(`realtime-${table}-${this.shopId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: table,
-          filter: `shop_id=eq.${this.shopId}`,
-        },
-        (payload) => {
-          this.handleRealtimeUpdate(table, payload);
-        }
-      )
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          console.log(`[RealtimeSync] Subscribed to ${table}`);
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error(`[RealtimeSync] Error subscribing to ${table}`);
-        }
-      });
+    // Build filter based on table
+    // Most tables filter by shop_id, some by user_id
+    const filter = `shop_id=eq.${this.shopId}`;
     
-    this.subscriptions.set(table, channel);
+    try {
+      const channel = supabase
+        .channel(`realtime-${table}-${this.shopId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: table,
+            filter: filter,
+          },
+          (payload) => {
+            this.handleRealtimeUpdate(table, payload);
+          }
+        )
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            console.log(`[RealtimeSync] Subscribed to ${table}`);
+          } else if (status === 'CHANNEL_ERROR') {
+            console.error(`[RealtimeSync] Error subscribing to ${table}`);
+            // Remove failed subscription so we can retry
+            this.subscriptions.delete(table);
+          } else if (status === 'TIMED_OUT') {
+            console.warn(`[RealtimeSync] Subscription timed out for ${table}`);
+            this.subscriptions.delete(table);
+          }
+        });
+      
+      this.subscriptions.set(table, channel);
+    } catch (error) {
+      console.error(`[RealtimeSync] Failed to subscribe to ${table}:`, error);
+    }
   }
   
   /**
