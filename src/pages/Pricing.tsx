@@ -269,11 +269,14 @@ const Pricing = () => {
               </div>
 
               {/* Dot Indicators */}
-              <div className="flex justify-center gap-1.5 mt-1">
-                {plans.map((_, index) => (
+              <div className="flex justify-center gap-1.5 mt-1" role="tablist" aria-label="Pricing plans navigation">
+                {plans.map((plan, index) => (
                   <button
                     key={index}
                     onClick={() => scrollToCard(index)}
+                    aria-label={`Go to ${plan.name} plan`}
+                    aria-selected={activeIndex === index}
+                    role="tab"
                     className={`transition-all duration-300 rounded-full ${
                       activeIndex === index
                         ? "w-6 h-1.5 bg-gradient-to-r from-primary to-secondary"
