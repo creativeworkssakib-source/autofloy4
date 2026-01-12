@@ -547,157 +547,204 @@ class OfflineSyncOrchestrator {
     let pulled = 0;
     
     try {
-      // Pull products
+      // Pull products - BATCH OPTIMIZED
       try {
         const { products } = await offlineShopService.getProducts();
-        for (const product of products) {
-          const local = await offlineDB.getProductById(product.id);
-          if (!local?._locallyModified && !local?._locallyCreated) {
-            await offlineDB.saveProduct({
-              ...product,
-              shop_id: this.shopId!,
-              user_id: this.userId || '',
-              _locallyModified: false,
-              _locallyCreated: false,
-              _locallyDeleted: false,
-            });
-            pulled++;
-          }
+        const localProducts = await offlineDB.getProducts(this.shopId!);
+        const localMap = new Map(localProducts.map(p => [p.id, p]));
+        
+        const toSave = products
+          .filter(p => {
+            const local = localMap.get(p.id);
+            return !local?._locallyModified && !local?._locallyCreated;
+          })
+          .map(p => ({
+            ...p,
+            shop_id: this.shopId!,
+            user_id: this.userId || '',
+            _locallyModified: false,
+            _locallyCreated: false,
+            _locallyDeleted: false,
+          }));
+        
+        if (toSave.length > 0) {
+          await offlineDB.bulkSaveProducts(toSave);
+          pulled += toSave.length;
         }
       } catch (e) { console.error('[SyncOrchestrator] Failed to pull products:', e); }
       
       this.syncProgress = 50;
       this.notifyListeners();
       
-      // Pull categories
+      // Pull categories - BATCH OPTIMIZED
       try {
         const { categories } = await offlineShopService.getCategories();
         const localCats = await offlineDB.getCategories(this.shopId!);
-        for (const cat of categories) {
-          const local = localCats.find(c => c.id === cat.id);
-          if (!local?._locallyModified && !local?._locallyCreated) {
-            await offlineDB.saveCategory({
-              ...cat,
-              shop_id: this.shopId!,
-              user_id: this.userId || '',
-              _locallyModified: false,
-              _locallyCreated: false,
-              _locallyDeleted: false,
-            });
-            pulled++;
-          }
+        const localMap = new Map(localCats.map(c => [c.id, c]));
+        
+        const toSave = categories
+          .filter(c => {
+            const local = localMap.get(c.id);
+            return !local?._locallyModified && !local?._locallyCreated;
+          })
+          .map(c => ({
+            ...c,
+            shop_id: this.shopId!,
+            user_id: this.userId || '',
+            _locallyModified: false,
+            _locallyCreated: false,
+            _locallyDeleted: false,
+          }));
+        
+        if (toSave.length > 0) {
+          await offlineDB.bulkSaveCategories(toSave);
+          pulled += toSave.length;
         }
       } catch (e) { console.error('[SyncOrchestrator] Failed to pull categories:', e); }
       
-      // Pull customers
+      // Pull customers - BATCH OPTIMIZED
       try {
         const { customers } = await offlineShopService.getCustomers();
-        for (const cust of customers) {
-          const local = await offlineDB.getCustomerById(cust.id);
-          if (!local?._locallyModified && !local?._locallyCreated) {
-            await offlineDB.saveCustomer({
-              ...cust,
-              shop_id: this.shopId!,
-              user_id: this.userId || '',
-              _locallyModified: false,
-              _locallyCreated: false,
-              _locallyDeleted: false,
-            });
-            pulled++;
-          }
+        const localCusts = await offlineDB.getCustomers(this.shopId!);
+        const localMap = new Map(localCusts.map(c => [c.id, c]));
+        
+        const toSave = customers
+          .filter(c => {
+            const local = localMap.get(c.id);
+            return !local?._locallyModified && !local?._locallyCreated;
+          })
+          .map(c => ({
+            ...c,
+            shop_id: this.shopId!,
+            user_id: this.userId || '',
+            _locallyModified: false,
+            _locallyCreated: false,
+            _locallyDeleted: false,
+          }));
+        
+        if (toSave.length > 0) {
+          await offlineDB.bulkSaveCustomers(toSave);
+          pulled += toSave.length;
         }
       } catch (e) { console.error('[SyncOrchestrator] Failed to pull customers:', e); }
       
       this.syncProgress = 60;
       this.notifyListeners();
       
-      // Pull suppliers
+      // Pull suppliers - BATCH OPTIMIZED
       try {
         const { suppliers } = await offlineShopService.getSuppliers();
-        for (const supp of suppliers) {
-          const local = await offlineDB.getSupplierById(supp.id);
-          if (!local?._locallyModified && !local?._locallyCreated) {
-            await offlineDB.saveSupplier({
-              ...supp,
-              shop_id: this.shopId!,
-              user_id: this.userId || '',
-              _locallyModified: false,
-              _locallyCreated: false,
-              _locallyDeleted: false,
-            });
-            pulled++;
-          }
+        const localSupps = await offlineDB.getSuppliers(this.shopId!);
+        const localMap = new Map(localSupps.map(s => [s.id, s]));
+        
+        const toSave = suppliers
+          .filter(s => {
+            const local = localMap.get(s.id);
+            return !local?._locallyModified && !local?._locallyCreated;
+          })
+          .map(s => ({
+            ...s,
+            shop_id: this.shopId!,
+            user_id: this.userId || '',
+            _locallyModified: false,
+            _locallyCreated: false,
+            _locallyDeleted: false,
+          }));
+        
+        if (toSave.length > 0) {
+          await offlineDB.bulkSaveSuppliers(toSave);
+          pulled += toSave.length;
         }
       } catch (e) { console.error('[SyncOrchestrator] Failed to pull suppliers:', e); }
       
-      // Pull sales
+      // Pull sales - BATCH OPTIMIZED
       try {
         const { sales } = await offlineShopService.getSales({});
-        for (const sale of sales) {
-          const local = await offlineDB.getSaleById(sale.id);
-          if (!local?._locallyModified && !local?._locallyCreated) {
-            await offlineDB.saveSale({
-              ...sale,
-              shop_id: this.shopId!,
-              user_id: this.userId || '',
-              _locallyModified: false,
-              _locallyCreated: false,
-              _locallyDeleted: false,
-            });
-            pulled++;
-          }
+        const localSales = await offlineDB.getSales(this.shopId!);
+        const localMap = new Map(localSales.map(s => [s.id, s]));
+        
+        const toSave = sales
+          .filter(s => {
+            const local = localMap.get(s.id);
+            return !local?._locallyModified && !local?._locallyCreated;
+          })
+          .map(s => ({
+            ...s,
+            shop_id: this.shopId!,
+            user_id: this.userId || '',
+            _locallyModified: false,
+            _locallyCreated: false,
+            _locallyDeleted: false,
+          }));
+        
+        if (toSave.length > 0) {
+          await offlineDB.bulkSaveSales(toSave);
+          pulled += toSave.length;
         }
       } catch (e) { console.error('[SyncOrchestrator] Failed to pull sales:', e); }
       
       this.syncProgress = 65;
       this.notifyListeners();
       
-      // Pull purchases
+      // Pull purchases - BATCH OPTIMIZED
       try {
         const { purchases } = await offlineShopService.getPurchases();
-        for (const purchase of purchases) {
-          const local = await offlineDB.getPurchaseById(purchase.id);
-          if (!local?._locallyModified && !local?._locallyCreated) {
-            await offlineDB.savePurchase({
-              ...purchase,
-              shop_id: this.shopId!,
-              user_id: this.userId || '',
-              _locallyModified: false,
-              _locallyCreated: false,
-              _locallyDeleted: false,
-            });
-            pulled++;
-          }
+        const localPurchases = await offlineDB.getPurchases(this.shopId!);
+        const localMap = new Map(localPurchases.map(p => [p.id, p]));
+        
+        const toSave = purchases
+          .filter(p => {
+            const local = localMap.get(p.id);
+            return !local?._locallyModified && !local?._locallyCreated;
+          })
+          .map(p => ({
+            ...p,
+            shop_id: this.shopId!,
+            user_id: this.userId || '',
+            _locallyModified: false,
+            _locallyCreated: false,
+            _locallyDeleted: false,
+          }));
+        
+        if (toSave.length > 0) {
+          await offlineDB.bulkSavePurchases(toSave);
+          pulled += toSave.length;
         }
       } catch (e) { console.error('[SyncOrchestrator] Failed to pull purchases:', e); }
       
       this.syncProgress = 70;
       this.notifyListeners();
       
-      // Pull expenses
+      // Pull expenses - BATCH OPTIMIZED
       try {
         const { expenses } = await offlineShopService.getExpenses({});
         const localExps = await offlineDB.getExpenses(this.shopId!);
-        for (const exp of expenses) {
-          const local = localExps.find(e => e.id === exp.id);
-          if (!local?._locallyModified && !local?._locallyCreated) {
-            await offlineDB.saveExpense({
-              ...exp,
-              shop_id: this.shopId!,
-              user_id: this.userId || '',
-              _locallyModified: false,
-              _locallyCreated: false,
-              _locallyDeleted: false,
-            });
-            pulled++;
-          }
+        const localMap = new Map(localExps.map(e => [e.id, e]));
+        
+        const toSave = expenses
+          .filter(e => {
+            const local = localMap.get(e.id);
+            return !local?._locallyModified && !local?._locallyCreated;
+          })
+          .map(e => ({
+            ...e,
+            shop_id: this.shopId!,
+            user_id: this.userId || '',
+            _locallyModified: false,
+            _locallyCreated: false,
+            _locallyDeleted: false,
+          }));
+        
+        if (toSave.length > 0) {
+          await offlineDB.bulkSaveExpenses(toSave);
+          pulled += toSave.length;
         }
       } catch (e) { console.error('[SyncOrchestrator] Failed to pull expenses:', e); }
       
       this.syncProgress = 75;
       this.notifyListeners();
       
-      // Pull loans
+      // Pull loans (individual save - usually small number)
       try {
         const token = localStorage.getItem("autofloy_token");
         if (token) {
@@ -729,7 +776,7 @@ class OfflineSyncOrchestrator {
       this.syncProgress = 80;
       this.notifyListeners();
       
-      // Pull cash transactions
+      // Pull cash transactions (individual save - usually small number)
       try {
         const { transactions: cashTxs } = await offlineShopService.getCashTransactions({});
         const localCashTxs = await offlineDB.getCashTransactions(this.shopId!);
