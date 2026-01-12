@@ -1,6 +1,10 @@
 /**
  * Comprehensive Offline Shop Hooks
  * All hooks needed for complete offline shop functionality
+ * 
+ * Uses SmartDataService for platform-aware data access:
+ * - Browser: Direct Supabase (server-first)
+ * - PWA/APK/EXE: Local-first with real-time sync
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -10,6 +14,8 @@ import { ShopPurchase, ShopSupplier, ShopStockAdjustment, ShopReturn, ShopLoan, 
 import { generateOfflineId } from '@/lib/offlineUtils';
 import { useIsOnline } from './useOnlineStatus';
 import { useShop } from '@/contexts/ShopContext';
+import { smartDataService } from '@/lib/smartDataService';
+import { shouldUseLocalFirst, getPlatformName } from '@/lib/platformDetection';
 
 // =============== PURCHASES ===============
 
@@ -764,156 +770,159 @@ export function useOfflineDashboard(range: 'today' | 'week' | 'month' = 'today')
   const [fromCache, setFromCache] = useState(false);
   const isOnline = useIsOnline();
   const { currentShop } = useShop();
+  const [platform, setPlatform] = useState<string>('');
+
+  // Initialize smart data service
+  useEffect(() => {
+    if (currentShop?.id) {
+      const userId = localStorage.getItem('autofloy_user_id') || '';
+      smartDataService.init(currentShop.id, userId);
+      setPlatform(getPlatformName());
+    }
+  }, [currentShop?.id]);
 
   const refetch = useCallback(async () => {
     setLoading(true);
     try {
-      // If online, try to get data from server first
-      if (isOnline) {
-        try {
-          const serverData = await offlineShopService.getDashboard(range);
-          if (serverData) {
-            // Map server data to our expected format
-            const mappedData = {
-              totalSales: serverData.period?.totalSales || serverData.totalSales || 0,
-              totalExpenses: serverData.period?.totalExpenses || serverData.totalExpenses || 0,
-              totalPurchases: serverData.period?.totalPurchases || serverData.totalPurchases || 0,
-              totalReturns: serverData.returns?.totalRefundAmount || serverData.totalReturns || 0,
-              profit: serverData.period?.netProfit || serverData.profit || 0,
-              salesCount: serverData.recentSales?.length || serverData.period?.customersServed || 0,
-              customersCount: serverData.totalCustomers || serverData.customersCount || 0,
-              productsCount: serverData.totalProducts || serverData.productsCount || 0,
-              lowStockItems: serverData.lowStockProducts || serverData.lowStockItems || [],
-              lowStockCount: serverData.lowStockProducts?.length || serverData.lowStockCount || 0,
-              recentSales: serverData.recentSales || [],
-              recentProducts: serverData.recentProducts || [],
-              totalDue: serverData.lifetime?.totalDue || serverData.totalDue || 0,
-              returnsSummary: serverData.returns || serverData.returnsSummary || {
-                totalCount: 0,
-                totalRefundAmount: 0,
-                processedCount: 0,
-                pendingCount: 0,
-                topReasons: [],
-              },
-            };
-            setData(mappedData);
-            setFromCache(false);
-            setLoading(false);
-            return;
-          }
-        } catch (serverError) {
-          console.warn('Server fetch failed, falling back to local data:', serverError);
-        }
-      }
-
-      // Fallback to local calculation if offline or server fails
-      const now = new Date();
-      let startDate: string;
-      const endDate = now.toISOString().split('T')[0];
+      // Use smart data service which handles platform detection automatically
+      const dashboardData = await smartDataService.getDashboard(range);
       
-      if (range === 'today') {
-        startDate = endDate;
-      } else if (range === 'week') {
-        const weekAgo = new Date(now);
-        weekAgo.setDate(weekAgo.getDate() - 7);
-        startDate = weekAgo.toISOString().split('T')[0];
-      } else {
-        const monthAgo = new Date(now);
-        monthAgo.setMonth(monthAgo.getMonth() - 1);
-        startDate = monthAgo.toISOString().split('T')[0];
+      if (dashboardData) {
+        // Map server data to our expected format
+        const mappedData = {
+          totalSales: dashboardData.period?.totalSales || dashboardData.totalSales || 0,
+          totalExpenses: dashboardData.period?.totalExpenses || dashboardData.totalExpenses || 0,
+          totalPurchases: dashboardData.period?.totalPurchases || dashboardData.totalPurchases || 0,
+          totalReturns: dashboardData.returns?.totalRefundAmount || dashboardData.totalReturns || 0,
+          profit: dashboardData.period?.netProfit || dashboardData.profit || 0,
+          salesCount: dashboardData.recentSales?.length || dashboardData.period?.customersServed || dashboardData.salesCount || 0,
+          customersCount: dashboardData.totalCustomers || dashboardData.customersCount || 0,
+          productsCount: dashboardData.totalProducts || dashboardData.productsCount || 0,
+          lowStockItems: dashboardData.lowStockProducts || dashboardData.lowStockItems || [],
+          lowStockCount: dashboardData.lowStockProducts?.length || dashboardData.lowStockCount || 0,
+          recentSales: dashboardData.recentSales || [],
+          recentProducts: dashboardData.recentProducts || [],
+          totalDue: dashboardData.lifetime?.totalDue || dashboardData.totalDue || 0,
+          totalLoanAmount: dashboardData.totalLoanAmount || 0,
+          activeLoansCount: dashboardData.activeLoansCount || 0,
+          returnsSummary: dashboardData.returns || dashboardData.returnsSummary || {
+            totalCount: 0,
+            totalRefundAmount: 0,
+            processedCount: 0,
+            pendingCount: 0,
+            topReasons: [],
+          },
+          platform, // Include platform info
+          fromLocal: dashboardData.fromLocal || false,
+        };
+        setData(mappedData);
+        setFromCache(dashboardData.fromLocal || !isOnline);
+        setLoading(false);
+        return;
       }
-
-      // Fetch all data from local DB
-      const [salesResult, expensesResult, purchasesResult, productsResult, customersResult, returnsResult] = await Promise.all([
-        offlineDataService.getSales(startDate, endDate),
-        offlineDataService.getExpenses(startDate, endDate),
-        offlineDataService.getPurchases(startDate, endDate),
-        offlineDataService.getProducts(),
-        offlineDataService.getCustomers(),
-        offlineDataService.getReturns(),
-      ]);
-
-      const sales = salesResult.sales || [];
-      const expenses = expensesResult.expenses || [];
-      const purchases = purchasesResult.purchases || [];
-      const products = productsResult.products || [];
-      const customers = customersResult.customers || [];
-      const returns = returnsResult.returns || [];
-
-      // Calculate stats
-      const totalSales = sales.reduce((sum: number, s: any) => sum + Number(s.total || 0), 0);
-      const totalExpenses = expenses.reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
-      const totalPurchases = purchases.reduce((sum: number, p: any) => sum + Number(p.total || 0), 0);
-      const totalReturns = returns.reduce((sum: number, r: any) => sum + Number(r.total_amount || 0), 0);
-      const profit = totalSales - totalExpenses - totalReturns;
-
-      // Calculate total due from customers
-      const totalDue = customers.reduce((sum: number, c: any) => sum + Number(c.total_due || 0), 0);
-
-      // Low stock items
-      const lowStockItems = products.filter((p: any) => 
-        p.stock_quantity <= (p.min_stock_alert || 5) && p.is_active
-      );
-
-      // Recent sales (last 5)
-      const recentSales = [...sales]
-        .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-        .slice(0, 5);
-
-      // Recent products (last 5)
-      const recentProducts = [...products]
-        .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-        .slice(0, 5);
-
-      // Returns summary
-      const returnsByReason = returns.reduce((acc: any, r: any) => {
-        const reason = r.reason || 'Other';
-        if (!acc[reason]) {
-          acc[reason] = { count: 0, amount: 0 };
-        }
-        acc[reason].count += 1;
-        acc[reason].amount += Number(r.total_amount || r.refund_amount || 0);
-        return acc;
-      }, {} as Record<string, { count: number; amount: number }>);
-
-      const topReturnReasons = Object.entries(returnsByReason)
-        .map(([reason, data]: [string, any]) => ({ reason, count: data.count, amount: data.amount }))
-        .sort((a: any, b: any) => b.count - a.count)
-        .slice(0, 5);
-
-      const processedReturns = returns.filter((r: any) => r.status === 'processed' || r.status === 'completed');
-      const pendingReturns = returns.filter((r: any) => r.status === 'pending' || !r.status);
-
-      setData({
-        totalSales,
-        totalExpenses,
-        totalPurchases,
-        totalReturns,
-        profit,
-        salesCount: sales.length,
-        customersCount: customers.length,
-        productsCount: products.length,
-        lowStockItems,
-        lowStockCount: lowStockItems.length,
-        recentSales,
-        recentProducts,
-        totalDue,
-        returnsSummary: {
-          totalCount: returns.length,
-          totalRefundAmount: totalReturns,
-          processedCount: processedReturns.length,
-          pendingCount: pendingReturns.length,
-          topReasons: topReturnReasons,
-        },
-      });
-      
-      setFromCache(true);
     } catch (error) {
-      console.error('Failed to calculate dashboard data:', error);
-      setData(null);
-    } finally {
-      setLoading(false);
+      console.error('Dashboard fetch error:', error);
     }
+
+    // Fallback to local calculation if smart service fails
+    const now = new Date();
+    let startDate: string;
+    const endDate = now.toISOString().split('T')[0];
+    
+    if (range === 'today') {
+      startDate = endDate;
+    } else if (range === 'week') {
+      const weekAgo = new Date(now);
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      startDate = weekAgo.toISOString().split('T')[0];
+    } else {
+      const monthAgo = new Date(now);
+      monthAgo.setMonth(monthAgo.getMonth() - 1);
+      startDate = monthAgo.toISOString().split('T')[0];
+    }
+
+    // Fetch all data from local DB
+    const [salesResult, expensesResult, purchasesResult, productsResult, customersResult, returnsResult] = await Promise.all([
+      offlineDataService.getSales(startDate, endDate),
+      offlineDataService.getExpenses(startDate, endDate),
+      offlineDataService.getPurchases(startDate, endDate),
+      offlineDataService.getProducts(),
+      offlineDataService.getCustomers(),
+      offlineDataService.getReturns(),
+    ]);
+
+    const sales = salesResult.sales || [];
+    const expenses = expensesResult.expenses || [];
+    const purchases = purchasesResult.purchases || [];
+    const products = productsResult.products || [];
+    const customers = customersResult.customers || [];
+    const returns = returnsResult.returns || [];
+
+    // Calculate stats
+    const totalSales = sales.reduce((sum: number, s: any) => sum + Number(s.total || 0), 0);
+    const totalExpenses = expenses.reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
+    const totalPurchases = purchases.reduce((sum: number, p: any) => sum + Number(p.total || 0), 0);
+    const totalReturns = returns.reduce((sum: number, r: any) => sum + Number(r.total_amount || 0), 0);
+    const profit = totalSales - totalExpenses - totalReturns;
+    const totalDue = customers.reduce((sum: number, c: any) => sum + Number(c.total_due || 0), 0);
+
+    const lowStockItems = products.filter((p: any) => 
+      p.stock_quantity <= (p.min_stock_alert || 5) && p.is_active
+    );
+
+    const recentSales = [...sales]
+      .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, 5);
+
+    const recentProducts = [...products]
+      .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, 5);
+
+    const returnsByReason = returns.reduce((acc: any, r: any) => {
+      const reason = r.reason || 'Other';
+      if (!acc[reason]) {
+        acc[reason] = { count: 0, amount: 0 };
+      }
+      acc[reason].count += 1;
+      acc[reason].amount += Number(r.total_amount || r.refund_amount || 0);
+      return acc;
+    }, {} as Record<string, { count: number; amount: number }>);
+
+    const topReturnReasons = Object.entries(returnsByReason)
+      .map(([reason, data]: [string, any]) => ({ reason, count: data.count, amount: data.amount }))
+      .sort((a: any, b: any) => b.count - a.count)
+      .slice(0, 5);
+
+    const processedReturns = returns.filter((r: any) => r.status === 'processed' || r.status === 'completed');
+    const pendingReturns = returns.filter((r: any) => r.status === 'pending' || !r.status);
+
+    setData({
+      totalSales,
+      totalExpenses,
+      totalPurchases,
+      totalReturns,
+      profit,
+      salesCount: sales.length,
+      customersCount: customers.length,
+      productsCount: products.length,
+      lowStockItems,
+      lowStockCount: lowStockItems.length,
+      recentSales,
+      recentProducts,
+      totalDue,
+      returnsSummary: {
+        totalCount: returns.length,
+        totalRefundAmount: totalReturns,
+        processedCount: processedReturns.length,
+        pendingCount: pendingReturns.length,
+        topReasons: topReturnReasons,
+      },
+      platform,
+      fromLocal: true,
+    });
+    
+    setFromCache(true);
+    setLoading(false);
   }, [range, currentShop?.id, isOnline]);
 
   useEffect(() => {

@@ -1239,6 +1239,154 @@ class OfflineDB {
     await db.put('syncMetadata', metadata);
   }
 
+  // =============== HARD DELETE METHODS ===============
+  // These permanently remove records (used when server confirms deletion)
+
+  async hardDeleteProduct(id: string): Promise<void> {
+    const db = this.ensureDb();
+    await db.delete('products', id);
+  }
+
+  async hardDeleteCategory(id: string): Promise<void> {
+    const db = this.ensureDb();
+    await db.delete('categories', id);
+  }
+
+  async hardDeleteCustomer(id: string): Promise<void> {
+    const db = this.ensureDb();
+    await db.delete('customers', id);
+  }
+
+  async hardDeleteSupplier(id: string): Promise<void> {
+    const db = this.ensureDb();
+    await db.delete('suppliers', id);
+  }
+
+  async hardDeleteSale(id: string): Promise<void> {
+    const db = this.ensureDb();
+    // Also delete associated sale items
+    const items = await db.getAllFromIndex('saleItems', 'by-sale', id);
+    const tx = db.transaction(['sales', 'saleItems'], 'readwrite');
+    await tx.objectStore('sales').delete(id);
+    for (const item of items) {
+      await tx.objectStore('saleItems').delete(item.id);
+    }
+    await tx.done;
+  }
+
+  async hardDeletePurchase(id: string): Promise<void> {
+    const db = this.ensureDb();
+    // Also delete associated purchase items
+    const items = await db.getAllFromIndex('purchaseItems', 'by-purchase', id);
+    const tx = db.transaction(['purchases', 'purchaseItems'], 'readwrite');
+    await tx.objectStore('purchases').delete(id);
+    for (const item of items) {
+      await tx.objectStore('purchaseItems').delete(item.id);
+    }
+    await tx.done;
+  }
+
+  async hardDeleteExpense(id: string): Promise<void> {
+    const db = this.ensureDb();
+    await db.delete('expenses', id);
+  }
+
+  async hardDeleteLoan(id: string): Promise<void> {
+    const db = this.ensureDb();
+    await db.delete('loans', id);
+  }
+
+  async hardDeleteReturn(id: string): Promise<void> {
+    const db = this.ensureDb();
+    await db.delete('returns', id);
+  }
+
+  async hardDeleteDailyCashRegister(id: string): Promise<void> {
+    const db = this.ensureDb();
+    await db.delete('dailyCashRegister', id);
+  }
+
+  async hardDeleteCashTransaction(id: string): Promise<void> {
+    const db = this.ensureDb();
+    await db.delete('cashTransactions', id);
+  }
+
+  async hardDeleteStockAdjustment(id: string): Promise<void> {
+    const db = this.ensureDb();
+    await db.delete('stockAdjustments', id);
+  }
+
+  // =============== CLEANUP OLD RECORDS ===============
+  // Removes old synced records to prevent memory bloat
+
+  async cleanupOldRecords(cutoffDate: string): Promise<number> {
+    const db = this.ensureDb();
+    let deletedCount = 0;
+    
+    // Clean old sales that are synced (not locally modified)
+    const sales = await db.getAll('sales');
+    const salesTx = db.transaction('sales', 'readwrite');
+    for (const sale of sales) {
+      if (!sale._locallyModified && !sale._locallyCreated && sale.sale_date < cutoffDate) {
+        await salesTx.store.delete(sale.id);
+        deletedCount++;
+      }
+    }
+    await salesTx.done;
+    
+    // Clean old expenses
+    const expenses = await db.getAll('expenses');
+    const expTx = db.transaction('expenses', 'readwrite');
+    for (const expense of expenses) {
+      if (!expense._locallyModified && !expense._locallyCreated && expense.expense_date < cutoffDate) {
+        await expTx.store.delete(expense.id);
+        deletedCount++;
+      }
+    }
+    await expTx.done;
+    
+    // Clean old cash transactions
+    const cashTrans = await db.getAll('cashTransactions');
+    const cashTx = db.transaction('cashTransactions', 'readwrite');
+    for (const trans of cashTrans) {
+      if (!trans._locallyModified && !trans._locallyCreated && trans.transaction_date < cutoffDate) {
+        await cashTx.store.delete(trans.id);
+        deletedCount++;
+      }
+    }
+    await cashTx.done;
+    
+    // Clean old purchases
+    const purchases = await db.getAll('purchases');
+    const purchTx = db.transaction('purchases', 'readwrite');
+    for (const purchase of purchases) {
+      if (!purchase._locallyModified && !purchase._locallyCreated && purchase.purchase_date < cutoffDate) {
+        await purchTx.store.delete(purchase.id);
+        deletedCount++;
+      }
+    }
+    await purchTx.done;
+    
+    // Clean old cash registers (keep last 7 days regardless)
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const registerCutoff = sevenDaysAgo.toISOString().split('T')[0];
+    
+    const registers = await db.getAll('dailyCashRegister');
+    const regTx = db.transaction('dailyCashRegister', 'readwrite');
+    for (const register of registers) {
+      if (!register._locallyModified && !register._locallyCreated && 
+          register.register_date < registerCutoff && register.status === 'closed') {
+        await regTx.store.delete(register.id);
+        deletedCount++;
+      }
+    }
+    await regTx.done;
+    
+    console.log(`[OfflineDB] Cleaned up ${deletedCount} old records`);
+    return deletedCount;
+  }
+
   // =============== UTILITY METHODS ===============
 
   async clearAllData(): Promise<void> {
