@@ -391,6 +391,54 @@ export function useOfflineExpenses(startDate?: string, endDate?: string) {
   };
 }
 
+// =============== OFFLINE PURCHASES HOOK ===============
+
+export function useOfflinePurchases(startDate?: string, endDate?: string) {
+  const [purchases, setPurchases] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [fromCache, setFromCache] = useState(false);
+  const isOnline = useIsOnline();
+  const { t } = useLanguage();
+  
+  const fetchPurchases = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const result = await offlineDataService.getPurchases(startDate, endDate);
+      setPurchases(result.purchases);
+      setFromCache(result.fromCache);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load purchases');
+    } finally {
+      setLoading(false);
+    }
+  }, [startDate, endDate]);
+  
+  useEffect(() => {
+    fetchPurchases();
+  }, [fetchPurchases]);
+  
+  const createPurchase = useCallback(async (data: any) => {
+    const result = await offlineDataService.createPurchase(data);
+    if (result.offline) {
+      toast.info(t('offline.savedLocally'));
+    }
+    await fetchPurchases();
+    return result;
+  }, [fetchPurchases, t]);
+  
+  return {
+    purchases,
+    loading,
+    error,
+    fromCache,
+    isOnline,
+    refetch: fetchPurchases,
+    createPurchase,
+  };
+}
+
 // =============== OFFLINE CASH TRANSACTIONS HOOK ===============
 
 export function useOfflineCashTransactions(startDate?: string, endDate?: string) {
