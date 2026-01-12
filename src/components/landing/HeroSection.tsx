@@ -34,9 +34,9 @@ const HeroSection = memo(() => {
         <div className="flex flex-col items-center gap-12">
           {/* Top Content - Text */}
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
+            transition={{ duration: 0.3 }}
             className="text-center max-w-4xl"
           >
             {/* Badge */}
@@ -94,9 +94,9 @@ const HeroSection = memo(() => {
 
           {/* Bottom Content - Hero Conversation Illustration */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
+            initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.2, duration: 0.5 }}
+            transition={{ delay: 0.1, duration: 0.3 }}
             className="relative flex justify-center"
           >
             {/* Glow Effect */}
