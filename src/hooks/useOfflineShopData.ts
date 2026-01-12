@@ -768,7 +768,45 @@ export function useOfflineDashboard(range: 'today' | 'week' | 'month' = 'today')
   const refetch = useCallback(async () => {
     setLoading(true);
     try {
-      // Get date range
+      // If online, try to get data from server first
+      if (isOnline) {
+        try {
+          const serverData = await offlineShopService.getDashboard(range);
+          if (serverData) {
+            // Map server data to our expected format
+            const mappedData = {
+              totalSales: serverData.period?.totalSales || serverData.totalSales || 0,
+              totalExpenses: serverData.period?.totalExpenses || serverData.totalExpenses || 0,
+              totalPurchases: serverData.period?.totalPurchases || serverData.totalPurchases || 0,
+              totalReturns: serverData.returns?.totalRefundAmount || serverData.totalReturns || 0,
+              profit: serverData.period?.netProfit || serverData.profit || 0,
+              salesCount: serverData.recentSales?.length || serverData.period?.customersServed || 0,
+              customersCount: serverData.totalCustomers || serverData.customersCount || 0,
+              productsCount: serverData.totalProducts || serverData.productsCount || 0,
+              lowStockItems: serverData.lowStockProducts || serverData.lowStockItems || [],
+              lowStockCount: serverData.lowStockProducts?.length || serverData.lowStockCount || 0,
+              recentSales: serverData.recentSales || [],
+              recentProducts: serverData.recentProducts || [],
+              totalDue: serverData.lifetime?.totalDue || serverData.totalDue || 0,
+              returnsSummary: serverData.returns || serverData.returnsSummary || {
+                totalCount: 0,
+                totalRefundAmount: 0,
+                processedCount: 0,
+                pendingCount: 0,
+                topReasons: [],
+              },
+            };
+            setData(mappedData);
+            setFromCache(false);
+            setLoading(false);
+            return;
+          }
+        } catch (serverError) {
+          console.warn('Server fetch failed, falling back to local data:', serverError);
+        }
+      }
+
+      // Fallback to local calculation if offline or server fails
       const now = new Date();
       let startDate: string;
       const endDate = now.toISOString().split('T')[0];
@@ -808,6 +846,9 @@ export function useOfflineDashboard(range: 'today' | 'week' | 'month' = 'today')
       const totalPurchases = purchases.reduce((sum: number, p: any) => sum + Number(p.total || 0), 0);
       const totalReturns = returns.reduce((sum: number, r: any) => sum + Number(r.total_amount || 0), 0);
       const profit = totalSales - totalExpenses - totalReturns;
+
+      // Calculate total due from customers
+      const totalDue = customers.reduce((sum: number, c: any) => sum + Number(c.total_due || 0), 0);
 
       // Low stock items
       const lowStockItems = products.filter((p: any) => 
@@ -856,6 +897,7 @@ export function useOfflineDashboard(range: 'today' | 'week' | 'month' = 'today')
         lowStockCount: lowStockItems.length,
         recentSales,
         recentProducts,
+        totalDue,
         returnsSummary: {
           totalCount: returns.length,
           totalRefundAmount: totalReturns,
@@ -865,14 +907,14 @@ export function useOfflineDashboard(range: 'today' | 'week' | 'month' = 'today')
         },
       });
       
-      setFromCache(salesResult.fromCache || expensesResult.fromCache);
+      setFromCache(true);
     } catch (error) {
       console.error('Failed to calculate dashboard data:', error);
       setData(null);
     } finally {
       setLoading(false);
     }
-  }, [range, currentShop?.id]);
+  }, [range, currentShop?.id, isOnline]);
 
   useEffect(() => {
     refetch();
