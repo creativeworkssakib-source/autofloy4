@@ -89,25 +89,35 @@ async getProducts(): Promise<{ products: ShopProduct[]; fromCache: boolean }> {
     await this.init();
     const shopId = this.ensureShopId();
     
-    // If online, get from server first and save to local
+    // If online, get from server first and save to local using BATCH operation
     if (this.isOnline()) {
       try {
         const { products } = await offlineShopService.getProducts();
-        // Save to local DB
-        for (const product of products) {
-          const localProduct = await offlineDB.getProductById(product.id);
-          // Only update if not locally modified
-          if (!localProduct?._locallyModified && !localProduct?._locallyCreated) {
-            await offlineDB.saveProduct({
-              ...product,
-              shop_id: shopId,
-              user_id: this.userId || '',
-              _locallyModified: false,
-              _locallyCreated: false,
-              _locallyDeleted: false,
-            } as ShopProduct);
-          }
+        
+        // Get all local products once for comparison (faster than individual lookups)
+        const localProducts = await offlineDB.getProducts(shopId);
+        const localMap = new Map(localProducts.map(p => [p.id, p]));
+        
+        // Filter products that need to be saved (not locally modified)
+        const toSave = products
+          .filter(p => {
+            const local = localMap.get(p.id);
+            return !local?._locallyModified && !local?._locallyCreated;
+          })
+          .map(p => ({
+            ...p,
+            shop_id: shopId,
+            user_id: this.userId || '',
+            _locallyModified: false,
+            _locallyCreated: false,
+            _locallyDeleted: false,
+          } as ShopProduct));
+        
+        // BATCH SAVE - much faster than individual saves
+        if (toSave.length > 0) {
+          await offlineDB.bulkSaveProducts(toSave);
         }
+        
         return { products, fromCache: false };
       } catch (error) {
         console.error('Server fetch failed, falling back to local:', error);
@@ -281,21 +291,31 @@ async getProducts(): Promise<{ products: ShopProduct[]; fromCache: boolean }> {
     if (this.isOnline()) {
       try {
         const { categories } = await offlineShopService.getCategories();
-        // Save to local DB
-        for (const cat of categories) {
-          const local = await offlineDB.getCategories(shopId);
-          const existing = local.find(c => c.id === cat.id);
-          if (!existing?._locallyModified && !existing?._locallyCreated) {
-            await offlineDB.saveCategory({
-              ...cat,
-              shop_id: shopId,
-              user_id: this.userId || '',
-              _locallyModified: false,
-              _locallyCreated: false,
-              _locallyDeleted: false,
-            } as ShopCategory);
-          }
+        
+        // Get all local categories once for comparison
+        const localCategories = await offlineDB.getCategories(shopId);
+        const localMap = new Map(localCategories.map(c => [c.id, c]));
+        
+        // Filter categories that need to be saved
+        const toSave = categories
+          .filter(cat => {
+            const local = localMap.get(cat.id);
+            return !local?._locallyModified && !local?._locallyCreated;
+          })
+          .map(cat => ({
+            ...cat,
+            shop_id: shopId,
+            user_id: this.userId || '',
+            _locallyModified: false,
+            _locallyCreated: false,
+            _locallyDeleted: false,
+          } as ShopCategory));
+        
+        // BATCH SAVE
+        if (toSave.length > 0) {
+          await offlineDB.bulkSaveCategories(toSave);
         }
+        
         return { categories, fromCache: false };
       } catch (error) {
         console.error('Server fetch failed, falling back to local:', error);
@@ -349,23 +369,35 @@ async getProducts(): Promise<{ products: ShopProduct[]; fromCache: boolean }> {
     await this.init();
     const shopId = this.ensureShopId();
     
-    // If online, get from server first and save to local
+    // If online, get from server first and save to local using BATCH
     if (this.isOnline()) {
       try {
         const { customers } = await offlineShopService.getCustomers();
-        for (const cust of customers) {
-          const existing = await offlineDB.getCustomerById(cust.id);
-          if (!existing?._locallyModified && !existing?._locallyCreated) {
-            await offlineDB.saveCustomer({
-              ...cust,
-              shop_id: shopId,
-              user_id: this.userId || '',
-              _locallyModified: false,
-              _locallyCreated: false,
-              _locallyDeleted: false,
-            } as ShopCustomer);
-          }
+        
+        // Get all local customers once for comparison
+        const localCustomers = await offlineDB.getCustomers(shopId);
+        const localMap = new Map(localCustomers.map(c => [c.id, c]));
+        
+        // Filter customers that need to be saved
+        const toSave = customers
+          .filter(cust => {
+            const local = localMap.get(cust.id);
+            return !local?._locallyModified && !local?._locallyCreated;
+          })
+          .map(cust => ({
+            ...cust,
+            shop_id: shopId,
+            user_id: this.userId || '',
+            _locallyModified: false,
+            _locallyCreated: false,
+            _locallyDeleted: false,
+          } as ShopCustomer));
+        
+        // BATCH SAVE
+        if (toSave.length > 0) {
+          await offlineDB.bulkSaveCustomers(toSave);
         }
+        
         return { customers, fromCache: false };
       } catch (error) {
         console.error('Server fetch failed, falling back to local:', error);
@@ -479,24 +511,35 @@ async getProducts(): Promise<{ products: ShopProduct[]; fromCache: boolean }> {
     await this.init();
     const shopId = this.ensureShopId();
     
-    // If online, get from server first (server-first approach)
+    // If online, get from server first (server-first approach) using BATCH
     if (this.isOnline()) {
       try {
         const { suppliers } = await offlineShopService.getSuppliers();
-        // Save to local DB
-        for (const supp of suppliers) {
-          const existing = await offlineDB.getSupplierById(supp.id);
-          if (!existing?._locallyModified && !existing?._locallyCreated) {
-            await offlineDB.saveSupplier({
-              ...supp,
-              shop_id: shopId,
-              user_id: this.userId || '',
-              _locallyModified: false,
-              _locallyCreated: false,
-              _locallyDeleted: false,
-            } as ShopSupplier);
-          }
+        
+        // Get all local suppliers once for comparison
+        const localSuppliers = await offlineDB.getSuppliers(shopId);
+        const localMap = new Map(localSuppliers.map(s => [s.id, s]));
+        
+        // Filter suppliers that need to be saved
+        const toSave = suppliers
+          .filter(supp => {
+            const local = localMap.get(supp.id);
+            return !local?._locallyModified && !local?._locallyCreated;
+          })
+          .map(supp => ({
+            ...supp,
+            shop_id: shopId,
+            user_id: this.userId || '',
+            _locallyModified: false,
+            _locallyCreated: false,
+            _locallyDeleted: false,
+          } as ShopSupplier));
+        
+        // BATCH SAVE
+        if (toSave.length > 0) {
+          await offlineDB.bulkSaveSuppliers(toSave);
         }
+        
         return { suppliers, fromCache: false };
       } catch (error) {
         console.error('Server fetch failed, falling back to local:', error);
@@ -631,23 +674,35 @@ async getProducts(): Promise<{ products: ShopProduct[]; fromCache: boolean }> {
     await this.init();
     const shopId = this.ensureShopId();
     
-    // If online, get from server first and save to local
+    // If online, get from server first and save to local using BATCH
     if (this.isOnline()) {
       try {
         const { sales } = await offlineShopService.getSales({ startDate, endDate });
-        for (const sale of sales) {
-          const existing = await offlineDB.getSaleById(sale.id);
-          if (!existing?._locallyModified && !existing?._locallyCreated) {
-            await offlineDB.saveSale({
-              ...sale,
-              shop_id: shopId,
-              user_id: this.userId || '',
-              _locallyModified: false,
-              _locallyCreated: false,
-              _locallyDeleted: false,
-            } as ShopSale);
-          }
+        
+        // Get all local sales once for comparison
+        const localSales = await offlineDB.getSales(shopId, startDate, endDate);
+        const localMap = new Map(localSales.map(s => [s.id, s]));
+        
+        // Filter sales that need to be saved
+        const toSave = sales
+          .filter(sale => {
+            const local = localMap.get(sale.id);
+            return !local?._locallyModified && !local?._locallyCreated;
+          })
+          .map(sale => ({
+            ...sale,
+            shop_id: shopId,
+            user_id: this.userId || '',
+            _locallyModified: false,
+            _locallyCreated: false,
+            _locallyDeleted: false,
+          } as ShopSale));
+        
+        // BATCH SAVE
+        if (toSave.length > 0) {
+          await offlineDB.bulkSaveSales(toSave);
         }
+        
         return { sales, fromCache: false };
       } catch (error) {
         console.error('Server fetch failed, falling back to local:', error);

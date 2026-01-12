@@ -702,6 +702,15 @@ class OfflineDB {
     }
   }
 
+  async bulkSaveCategories(categories: ShopCategory[]): Promise<void> {
+    const db = this.ensureDb();
+    const tx = db.transaction('categories', 'readwrite');
+    await Promise.all([
+      ...categories.map(c => tx.store.put(c)),
+      tx.done,
+    ]);
+  }
+
   // =============== CUSTOMERS ===============
 
   async getCustomers(shopId: string): Promise<ShopCustomer[]> {
@@ -735,6 +744,15 @@ class OfflineDB {
       customer._locallyModified = true;
       await db.put('customers', customer);
     }
+  }
+
+  async bulkSaveCustomers(customers: ShopCustomer[]): Promise<void> {
+    const db = this.ensureDb();
+    const tx = db.transaction('customers', 'readwrite');
+    await Promise.all([
+      ...customers.map(c => tx.store.put(c)),
+      tx.done,
+    ]);
   }
 
   async updateCustomerDue(id: string, dueChange: number): Promise<void> {
@@ -775,6 +793,15 @@ class OfflineDB {
       supplier._locallyModified = true;
       await db.put('suppliers', supplier);
     }
+  }
+
+  async bulkSaveSuppliers(suppliers: ShopSupplier[]): Promise<void> {
+    const db = this.ensureDb();
+    const tx = db.transaction('suppliers', 'readwrite');
+    await Promise.all([
+      ...suppliers.map(s => tx.store.put(s)),
+      tx.done,
+    ]);
   }
 
   async updateSupplierDue(id: string, dueChange: number): Promise<void> {
@@ -847,6 +874,23 @@ class OfflineDB {
     return db.getAllFromIndex('saleItems', 'by-sale', saleId);
   }
 
+  async bulkSaveSales(sales: ShopSale[]): Promise<void> {
+    const db = this.ensureDb();
+    const tx = db.transaction(['sales', 'saleItems'], 'readwrite');
+    const salesStore = tx.objectStore('sales');
+    const itemsStore = tx.objectStore('saleItems');
+    
+    for (const sale of sales) {
+      await salesStore.put(sale);
+      if (sale.items && sale.items.length > 0) {
+        for (const item of sale.items) {
+          await itemsStore.put(item);
+        }
+      }
+    }
+    await tx.done;
+  }
+
   // =============== PURCHASES ===============
 
   async getPurchases(shopId: string, startDate?: string, endDate?: string): Promise<ShopPurchase[]> {
@@ -900,6 +944,23 @@ class OfflineDB {
     }
   }
 
+  async bulkSavePurchases(purchases: ShopPurchase[]): Promise<void> {
+    const db = this.ensureDb();
+    const tx = db.transaction(['purchases', 'purchaseItems'], 'readwrite');
+    const purchasesStore = tx.objectStore('purchases');
+    const itemsStore = tx.objectStore('purchaseItems');
+    
+    for (const purchase of purchases) {
+      await purchasesStore.put(purchase);
+      if (purchase.items && purchase.items.length > 0) {
+        for (const item of purchase.items) {
+          await itemsStore.put(item);
+        }
+      }
+    }
+    await tx.done;
+  }
+
   // =============== EXPENSES ===============
 
   async getExpenses(shopId: string, startDate?: string, endDate?: string): Promise<ShopExpense[]> {
@@ -930,6 +991,15 @@ class OfflineDB {
       expense._locallyModified = true;
       await db.put('expenses', expense);
     }
+  }
+
+  async bulkSaveExpenses(expenses: ShopExpense[]): Promise<void> {
+    const db = this.ensureDb();
+    const tx = db.transaction('expenses', 'readwrite');
+    await Promise.all([
+      ...expenses.map(e => tx.store.put(e)),
+      tx.done,
+    ]);
   }
 
   // =============== CASH TRANSACTIONS ===============
