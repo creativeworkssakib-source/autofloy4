@@ -109,6 +109,10 @@ const HeroSection = memo(() => {
                 alt="AI Robot and Human Conversation"
                 className="relative w-full drop-shadow-2xl"
                 loading="eager"
+                width={1920}
+                height={1080}
+                decoding="async"
+                fetchPriority="high"
               />
 
               {/* AI Label on Robot */}
