@@ -175,19 +175,19 @@ const ShopReports = () => {
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                       <div className="p-4 bg-muted rounded-lg">
                         <p className="text-sm text-muted-foreground">{t("shop.totalSales")}</p>
-                        <p className="text-2xl font-bold">{formatCurrency(reportData.summary.totalSales)}</p>
+                        <p className="text-2xl font-bold">{formatCurrency(reportData.summary.totalAmount || 0)}</p>
                       </div>
                       <div className="p-4 bg-muted rounded-lg">
-                        <p className="text-sm text-muted-foreground">{t("shop.totalProfit")}</p>
-                        <p className="text-2xl font-bold text-green-500">{formatCurrency(reportData.summary.totalProfit)}</p>
+                        <p className="text-sm text-muted-foreground">{t("shop.averageSale")}</p>
+                        <p className="text-2xl font-bold text-green-500">{formatCurrency(reportData.summary.avgSale || 0)}</p>
                       </div>
                       <div className="p-4 bg-muted rounded-lg">
                         <p className="text-sm text-muted-foreground">{t("shop.totalOrders")}</p>
-                        <p className="text-2xl font-bold">{reportData.summary.count}</p>
+                        <p className="text-2xl font-bold">{reportData.summary.count || 0}</p>
                       </div>
                       <div className="p-4 bg-muted rounded-lg">
-                        <p className="text-sm text-muted-foreground">{language === "bn" ? "মোট বাকি" : "Total Due"}</p>
-                        <p className="text-2xl font-bold text-red-500">{formatCurrency(reportData.summary.totalDue || 0)}</p>
+                        <p className="text-sm text-muted-foreground">{language === "bn" ? "মোট আইটেম" : "Total Items"}</p>
+                        <p className="text-2xl font-bold">{reportData.summary.totalItems || 0}</p>
                       </div>
                     </div>
                   </div>
@@ -217,7 +217,7 @@ const ShopReports = () => {
                   <div className="space-y-4">
                     <div className="p-4 bg-muted rounded-lg">
                       <p className="text-sm text-muted-foreground">{t("shop.totalExpenses")}</p>
-                      <p className="text-2xl font-bold text-orange-500">{formatCurrency(reportData.summary.totalExpenses)}</p>
+                      <p className="text-2xl font-bold text-orange-500">{formatCurrency(reportData.summary.totalAmount || 0)}</p>
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                       {Object.entries(reportData.summary.byCategory || {}).map(([cat, amount]) => (

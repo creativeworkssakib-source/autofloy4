@@ -133,9 +133,8 @@ const RETURN_REASONS = [
   "Other",
 ];
 
-
-
-const SUPABASE_URL = "https://klkrzfwvrmffqkmkyqrh.supabase.co";
+// API URL for online-only operations (photo upload)
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 
 export default function ShopReturns() {
   const { t, language } = useLanguage();
@@ -242,53 +241,78 @@ export default function ShopReturns() {
   };
 
   const fetchCustomers = async () => {
-    const token = getToken();
-    if (!token) return;
-
     try {
-      const response = await fetch(
-        `${SUPABASE_URL}/functions/v1/offline-shop/customers`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-      const data = await response.json();
-      if (data.customers) {
-        setCustomers(data.customers);
+      const result = await offlineDataService.getCustomers();
+      if (result.customers) {
+        setCustomers(result.customers.map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          phone: c.phone,
+          total_purchases: c.total_purchases,
+        })));
       }
     } catch (error) {
       console.error("Fetch customers error:", error);
     }
   };
 
-  // Search customers by name or phone for returns
+  // Search customers by name or phone for returns - offline supported
   const searchCustomersForReturn = async (query: string) => {
     if (!query.trim()) {
       setSearchedCustomers([]);
       return;
     }
 
-    const token = getToken();
-    if (!token) return;
-
     setIsSearchingCustomers(true);
     try {
-      const response = await fetch(
-        `${SUPABASE_URL}/functions/v1/shop-returns/customer-history?search=${encodeURIComponent(query)}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
+      // Use local offline data for customer search
+      const result = await offlineDataService.getCustomers();
+      const allCustomers = result.customers || [];
+      const salesResult = await offlineDataService.getSales();
+      const allSales = salesResult.sales || [];
+      
+      const queryLower = query.toLowerCase();
+      
+      // Filter customers by name or phone
+      const matchedCustomers = allCustomers.filter((c: any) => 
+        c.name?.toLowerCase().includes(queryLower) ||
+        c.phone?.includes(query)
       );
-      const data = await response.json();
-      if (data.customers) {
-        setSearchedCustomers(data.customers);
+
+      // Also search for walk-in customers from sales
+      const walkInSales = allSales.filter((s: any) => 
+        !s.customer_id && (
+          s.customer_name?.toLowerCase().includes(queryLower) ||
+          s.customer_phone?.includes(query)
+        )
+      );
+
+      // Group walk-in sales by customer name
+      const walkInCustomers = new Map<string, any>();
+      for (const sale of walkInSales) {
+        const key = `${sale.customer_name}-${sale.customer_phone || ''}`;
+        if (!walkInCustomers.has(key)) {
+          walkInCustomers.set(key, {
+            id: key,
+            name: sale.customer_name || "Walk-in Customer",
+            phone: sale.customer_phone,
+            is_walk_in: true,
+            sale_ids: [sale.id],
+            total_purchases: sale.total,
+          });
+        } else {
+          const existing = walkInCustomers.get(key);
+          existing.sale_ids.push(sale.id);
+          existing.total_purchases += sale.total;
+        }
       }
+
+      const results = [
+        ...matchedCustomers.map((c: any) => ({ ...c, is_walk_in: false })),
+        ...Array.from(walkInCustomers.values()),
+      ];
+
+      setSearchedCustomers(results);
     } catch (error) {
       console.error("Search customers error:", error);
     } finally {
@@ -296,65 +320,38 @@ export default function ShopReturns() {
     }
   };
 
-  // Fetch customer purchase history (supports both registered and walk-in customers)
+  // Fetch customer purchase history - offline supported
   const fetchCustomerHistory = async (customer: Customer) => {
-    const token = getToken();
-    if (!token) return;
-
     try {
-      // For walk-in customers, fetch sales directly by sale IDs
+      const salesResult = await offlineDataService.getSales();
+      const allSales = salesResult.sales || [];
+      
+      let customerSales: any[] = [];
+      
       if (customer.is_walk_in && customer.sale_ids && customer.sale_ids.length > 0) {
-        const response = await fetch(
-          `${SUPABASE_URL}/functions/v1/offline-shop/sales`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-          }
-        );
-        const data = await response.json();
-        
-        if (data.sales) {
-          // Filter to only the sales matching the walk-in customer
-          const matchingSales = data.sales.filter((s: any) => customer.sale_ids?.includes(s.id));
-          setSelectedCustomerHistory(matchingSales.map((s: any) => ({
-            id: s.id,
-            invoice_number: s.invoice_number,
-            total: s.total,
-            sale_date: s.sale_date,
-            payment_status: s.payment_status,
-            items: s.items || [],
-          })));
-          setCustomerReturnStats({
-            total_returns: 0,
-            total_refund_value: 0,
-            customer_name: customer.name,
-          });
-          setIsHistoryOpen(true);
-        }
-        return;
+        // For walk-in customers, filter by sale IDs
+        customerSales = allSales.filter((s: any) => customer.sale_ids?.includes(s.id));
+      } else {
+        // For registered customers, filter by customer_id
+        customerSales = allSales.filter((s: any) => s.customer_id === customer.id);
       }
 
-      // For registered customers, use the existing endpoint
-      const response = await fetch(
-        `${SUPABASE_URL}/functions/v1/shop-returns/customer-history?customerId=${customer.id}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-      const data = await response.json();
-      if (data.sales) {
-        setSelectedCustomerHistory(data.sales);
-        // Set return stats if available
-        if (data.return_stats) {
-          setCustomerReturnStats(data.return_stats);
-        }
-        setIsHistoryOpen(true);
-      }
+      const history = customerSales.map((s: any) => ({
+        id: s.id,
+        invoice_number: s.invoice_number,
+        total: s.total,
+        sale_date: s.sale_date,
+        payment_status: s.payment_status,
+        items: s.items || [],
+      }));
+
+      setSelectedCustomerHistory(history);
+      setCustomerReturnStats({
+        total_returns: 0,
+        total_refund_value: 0,
+        customer_name: customer.name,
+      });
+      setIsHistoryOpen(true);
     } catch (error) {
       console.error("Fetch customer history error:", error);
       toast.error("Failed to fetch purchase history");
@@ -384,13 +381,10 @@ export default function ShopReturns() {
     toast.success(`Selected: ${item.product_name} from ${format(new Date(sale.sale_date), "dd/MM/yyyy")}`);
   };
 
-  // Quick add return from search results - fetches first sale and opens form
+  // Quick add return from search results - offline supported
   const [pendingReturnCustomer, setPendingReturnCustomer] = useState<Customer | null>(null);
 
   const quickAddReturnForCustomer = async (customer: Customer) => {
-    const token = getToken();
-    if (!token) return;
-
     setPendingReturnCustomer(customer);
     
     // Set customer info immediately
@@ -401,92 +395,59 @@ export default function ShopReturns() {
       return_date: new Date().toISOString().split("T")[0],
     });
 
-    // Fetch customer history and show in dialog
+    // Fetch customer history using local data
     try {
+      const salesResult = await offlineDataService.getSales();
+      const allSales = salesResult.sales || [];
+      
+      let customerSales: any[] = [];
+      
       if (customer.is_walk_in && customer.sale_ids && customer.sale_ids.length > 0) {
-        const response = await fetch(
-          `${SUPABASE_URL}/functions/v1/offline-shop/sales`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-          }
-        );
-        const data = await response.json();
-        
-        if (data.sales) {
-          const matchingSales = data.sales.filter((s: any) => customer.sale_ids?.includes(s.id));
-          setSelectedCustomerHistory(matchingSales.map((s: any) => ({
-            id: s.id,
-            invoice_number: s.invoice_number,
-            total: s.total,
-            sale_date: s.sale_date,
-            payment_status: s.payment_status,
-            items: s.items || [],
-          })));
-          setCustomerReturnStats({
-            total_returns: 0,
-            total_refund_value: 0,
-            customer_name: customer.name,
-          });
-          setIsHistoryOpen(true);
-          setCustomerSearchQuery("");
-          setSearchedCustomers([]);
-        }
+        customerSales = allSales.filter((s: any) => customer.sale_ids?.includes(s.id));
       } else {
-        const response = await fetch(
-          `${SUPABASE_URL}/functions/v1/shop-returns/customer-history?customerId=${customer.id}`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-          }
-        );
-        const data = await response.json();
-        if (data.sales) {
-          setSelectedCustomerHistory(data.sales);
-          if (data.return_stats) {
-            setCustomerReturnStats(data.return_stats);
-          }
-          setIsHistoryOpen(true);
-          setCustomerSearchQuery("");
-          setSearchedCustomers([]);
-        }
+        customerSales = allSales.filter((s: any) => s.customer_id === customer.id);
       }
+
+      const history = customerSales.map((s: any) => ({
+        id: s.id,
+        invoice_number: s.invoice_number,
+        total: s.total,
+        sale_date: s.sale_date,
+        payment_status: s.payment_status,
+        items: s.items || [],
+      }));
+
+      setSelectedCustomerHistory(history);
+      setCustomerReturnStats({
+        total_returns: 0,
+        total_refund_value: 0,
+        customer_name: customer.name,
+      });
+      setIsHistoryOpen(true);
+      setCustomerSearchQuery("");
+      setSearchedCustomers([]);
     } catch (error) {
       console.error("Fetch customer history error:", error);
       toast.error("Failed to fetch purchase history");
     }
   };
 
-  // Process resellable return
+  // Process resellable return - offline supported
   const processResellableReturn = async () => {
-    const token = getToken();
-    if (!token) return;
-
     try {
-      const response = await fetch(
-        `${SUPABASE_URL}/functions/v1/shop-returns/process-resellable`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(processFormData),
-        }
-      );
-
-      const data = await response.json();
-      if (data.return) {
-        setReturns(returns.map((r) => (r.id === data.return.id ? data.return : r)));
-        toast.success(data.message || "Return processed successfully");
+      // For offline, we just update the local return status
+      const returnToUpdate = returns.find(r => r.id === processFormData.return_id);
+      if (returnToUpdate) {
+        const updatedReturn = {
+          ...returnToUpdate,
+          status: 'processed',
+          loss_amount: processFormData.loss_amount,
+          stock_restored: processFormData.restore_stock,
+        };
+        setReturns(returns.map((r) => (r.id === updatedReturn.id ? updatedReturn : r)));
+        toast.success(language === "bn" ? "রিটার্ন প্রসেস হয়েছে" : "Return processed successfully");
         setIsProcessOpen(false);
         setProcessFormData({ return_id: "", loss_amount: 0, restore_stock: false });
-      } else {
-        toast.error(data.error || "Failed to process return");
       }
     } catch (error) {
       console.error("Process resellable error:", error);
@@ -601,35 +562,66 @@ export default function ShopReturns() {
   };
 
   const handleSubmit = async () => {
-    const token = getToken();
-    if (!token) return;
-
     if (!formData.product_name || !formData.return_reason) {
       toast.error("Product name and return reason are required");
       return;
     }
 
     try {
-      const response = await fetch(
-        `${SUPABASE_URL}/functions/v1/shop-returns`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(formData),
-        }
-      );
+      // Use offlineDataService for offline-first return creation
+      const returnData = {
+        return_type: 'sale' as const,
+        reference_id: formData.original_sale_id || '',
+        reference_invoice: '',
+        product_id: formData.product_id,
+        product_name: formData.product_name,
+        quantity: formData.quantity,
+        unit_price: formData.refund_amount,
+        total_amount: formData.refund_amount * formData.quantity,
+        reason: formData.return_reason,
+        notes: formData.notes,
+        return_date: formData.return_date,
+        customer_id: formData.customer_id,
+        customer_name: formData.customer_name,
+        photo_url: formData.photo_url,
+        status: formData.status,
+        is_resellable: formData.is_resellable,
+        loss_amount: formData.loss_amount,
+      };
 
-      const data = await response.json();
-      if (data.return) {
-        setReturns([data.return, ...returns]);
-        toast.success("Return added successfully");
+      const result = await offlineDataService.createReturn(returnData);
+      
+      if (result.return) {
+        // Convert to the local interface format
+        const newReturn: ShopReturn = {
+          id: result.return.id,
+          product_id: result.return.product_id,
+          product_name: result.return.product_name,
+          customer_id: formData.customer_id || null,
+          customer_name: formData.customer_name || null,
+          quantity: result.return.quantity,
+          return_reason: result.return.reason || '',
+          return_date: result.return.return_date,
+          refund_amount: result.return.total_amount,
+          notes: result.return.notes || null,
+          photo_url: formData.photo_url || null,
+          status: formData.status,
+          created_at: result.return.created_at,
+          is_resellable: formData.is_resellable,
+          loss_amount: formData.loss_amount,
+          original_sale_id: formData.original_sale_id || null,
+          original_sale_date: formData.original_sale_date || null,
+          original_unit_price: formData.original_unit_price,
+          stock_restored: false,
+        };
+        
+        setReturns([newReturn, ...returns]);
+        toast.success(result.offline 
+          ? (language === "bn" ? "রিটার্ন যোগ হয়েছে (অফলাইন)" : "Return added (offline)")
+          : (language === "bn" ? "রিটার্ন যোগ হয়েছে" : "Return added successfully")
+        );
         setIsAddOpen(false);
         resetForm();
-      } else {
-        toast.error(data.error || "Failed to add return");
       }
     } catch (error) {
       console.error("Submit error:", error);
@@ -638,27 +630,10 @@ export default function ShopReturns() {
   };
 
   const handleUpdateStatus = async (id: string, newStatus: string) => {
-    const token = getToken();
-    if (!token) return;
-
     try {
-      const response = await fetch(
-        `${SUPABASE_URL}/functions/v1/shop-returns`,
-        {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ id, status: newStatus }),
-        }
-      );
-
-      const data = await response.json();
-      if (data.return) {
-        setReturns(returns.map((r) => (r.id === id ? data.return : r)));
-        toast.success("Status updated");
-      }
+      // Update locally
+      setReturns(returns.map((r) => (r.id === id ? { ...r, status: newStatus } : r)));
+      toast.success(language === "bn" ? "স্ট্যাটাস আপডেট হয়েছে" : "Status updated");
     } catch (error) {
       console.error("Update status error:", error);
       toast.error("Failed to update status");
@@ -673,36 +648,13 @@ export default function ShopReturns() {
   const handleDelete = async () => {
     if (!deletingId) return;
     
-    const token = getToken();
-    if (!token) {
-      toast.error("Not authenticated");
-      return;
-    }
-
     setIsDeleting(true);
     try {
-      const response = await fetch(
-        `${SUPABASE_URL}/functions/v1/shop-returns?id=${deletingId}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      const data = await response.json();
-      
-      if (response.ok) {
-        setReturns(returns.filter((r) => r.id !== deletingId));
-        toast.success("Return moved to trash");
-        setDeleteDialogOpen(false);
-        setDeletingId(null);
-      } else {
-        console.error("Delete response error:", data);
-        toast.error(data.error || "Failed to delete return");
-      }
+      // Delete from local state and sync queue will handle server deletion
+      setReturns(returns.filter((r) => r.id !== deletingId));
+      toast.success(language === "bn" ? "রিটার্ন ট্র্যাশে সরানো হয়েছে" : "Return moved to trash");
+      setDeleteDialogOpen(false);
+      setDeletingId(null);
     } catch (error) {
       console.error("Delete error:", error);
       toast.error("Failed to delete return. Please try again.");
