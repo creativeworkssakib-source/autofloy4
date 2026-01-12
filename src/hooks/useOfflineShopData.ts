@@ -637,9 +637,9 @@ export function useOfflineCashRegister() {
 
   const deleteQuickExpense = useCallback(async (expenseId: string) => {
     try {
-      await offlineDataService.deleteQuickExpense(expenseId);
+      const result = await offlineDataService.deleteQuickExpense(expenseId);
       await refetch();
-      return { offline: true };
+      return result;
     } catch (error) {
       throw error;
     }

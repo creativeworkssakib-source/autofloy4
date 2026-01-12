@@ -177,6 +177,7 @@ const ShopSales = () => {
     isOnline,
     refetch: loadData,
     createSale: createOfflineSale,
+    deleteSales: deleteOfflineSales,
   } = useOfflineSales(
     currentDateRange.from.toISOString().split('T')[0],
     currentDateRange.to.toISOString().split('T')[0]
@@ -238,7 +239,7 @@ const ShopSales = () => {
     if (selectedIds.length === 0) return;
     setIsBulkDeleting(true);
     try {
-      const result = await offlineShopService.deleteSales(selectedIds);
+      const result = await deleteOfflineSales(selectedIds);
       const deletedCount = result.deleted?.length || 0;
       toast.success(
         language === "bn"
@@ -246,7 +247,6 @@ const ShopSales = () => {
           : `${deletedCount} sale(s) moved to trash`
       );
       setSelectedIds([]);
-      loadData();
     } catch (error) {
       toast.error(t("shop.errorOccurred"));
     } finally {

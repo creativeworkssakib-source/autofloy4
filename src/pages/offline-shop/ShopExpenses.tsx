@@ -22,7 +22,6 @@ import { useShop } from "@/contexts/ShopContext";
 import { DeleteConfirmDialog } from "@/components/offline-shop/DeleteConfirmDialog";
 import DateRangeFilter, { DateRangePreset, DateRange, getDateRangeFromPreset } from "@/components/offline-shop/DateRangeFilter";
 import { isWithinInterval } from "date-fns";
-import { offlineShopService } from "@/services/offlineShopService";
 
 interface Expense {
   id: string;
@@ -37,7 +36,7 @@ interface Expense {
 const ShopExpenses = () => {
   const { t, language } = useLanguage();
   const { currentShop } = useShop();
-  const { expenses, loading: isLoading, fromCache, isOnline, refetch, createExpense } = useOfflineExpenses();
+  const { expenses, loading: isLoading, fromCache, isOnline, refetch, createExpense, deleteExpense } = useOfflineExpenses();
   const { settings } = useOfflineSettings();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -100,10 +99,8 @@ const ShopExpenses = () => {
     if (!deletingId) return;
     setIsDeleting(true);
     try {
-      // For delete we still use offlineShopService since it's not yet in offlineDataService
-      await offlineShopService.deleteExpense(deletingId);
+      await deleteExpense(deletingId);
       toast.success(language === "bn" ? "খরচ ট্র্যাশে সরানো হয়েছে" : "Expense moved to trash");
-      refetch();
       setDeleteDialogOpen(false);
       setDeletingId(null);
     } catch (error) {

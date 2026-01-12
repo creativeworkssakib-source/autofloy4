@@ -202,6 +202,31 @@ async getProducts(): Promise<{ products: ShopProduct[]; fromCache: boolean }> {
     return { offline: true };
   }
   
+  async deleteProducts(ids: string[]): Promise<{ deleted: string[]; offline: boolean }> {
+    await this.init();
+    const deleted: string[] = [];
+    
+    for (const id of ids) {
+      await offlineDB.deleteProduct(id);
+      await syncQueue.add('delete', 'products', id, { id });
+      deleted.push(id);
+    }
+    
+    if (this.isOnline()) {
+      try {
+        await offlineShopService.deleteProducts(ids);
+        for (const id of ids) {
+          await syncQueue.deleteByRecordId('products', id);
+        }
+        return { deleted, offline: false };
+      } catch (error) {
+        console.error('Failed to sync products deletion:', error);
+      }
+    }
+    
+    return { deleted, offline: true };
+  }
+  
   async updateProductStock(id: string, quantityChange: number): Promise<void> {
     await this.init();
     await offlineDB.updateProductStock(id, quantityChange);
@@ -543,6 +568,31 @@ async getProducts(): Promise<{ products: ShopProduct[]; fromCache: boolean }> {
     return { offline: true };
   }
   
+  async deleteSuppliers(ids: string[]): Promise<{ deleted: string[]; offline: boolean }> {
+    await this.init();
+    const deleted: string[] = [];
+    
+    for (const id of ids) {
+      await offlineDB.deleteSupplier(id);
+      await syncQueue.add('delete', 'suppliers', id, { id });
+      deleted.push(id);
+    }
+    
+    if (this.isOnline()) {
+      try {
+        await offlineShopService.deleteSuppliers(ids);
+        for (const id of ids) {
+          await syncQueue.deleteByRecordId('suppliers', id);
+        }
+        return { deleted, offline: false };
+      } catch (error) {
+        console.error('Failed to sync suppliers deletion:', error);
+      }
+    }
+    
+    return { deleted, offline: true };
+  }
+  
 // =============== SALES ===============
   
   async getSales(startDate?: string, endDate?: string): Promise<{ sales: ShopSale[]; fromCache: boolean }> {
@@ -710,6 +760,31 @@ async getProducts(): Promise<{ products: ShopProduct[]; fromCache: boolean }> {
     }
     
     return { offline: true };
+  }
+  
+  async deleteSales(ids: string[]): Promise<{ deleted: string[]; offline: boolean }> {
+    await this.init();
+    const deleted: string[] = [];
+    
+    for (const id of ids) {
+      await offlineDB.deleteSale(id);
+      await syncQueue.add('delete', 'sales', id, { id });
+      deleted.push(id);
+    }
+    
+    if (this.isOnline()) {
+      try {
+        await offlineShopService.deleteSales(ids);
+        for (const id of ids) {
+          await syncQueue.deleteByRecordId('sales', id);
+        }
+        return { deleted, offline: false };
+      } catch (error) {
+        console.error('Failed to sync sales deletion:', error);
+      }
+    }
+    
+    return { deleted, offline: true };
   }
   
   // =============== PURCHASES ===============
@@ -1387,40 +1462,62 @@ async getProducts(): Promise<{ products: ShopProduct[]; fromCache: boolean }> {
     return { register: updatedRegister, offline: true, message: 'Shop closed (will sync when online)' };
   }
   
-  async addQuickExpense(amount: number, description?: string): Promise<{ offline: boolean }> {
+  async addQuickExpense(amount: number, description?: string): Promise<{ expense: any; offline: boolean }> {
     await this.init();
+    const shopId = this.ensureShopId();
     
-    // Quick expenses are temporary and stored on the open register
-    // For now, just call the API if online, otherwise store locally
-    if (this.isOnline()) {
-      try {
-        await offlineShopService.addQuickExpense(amount, description);
-        return { offline: false };
-      } catch (error) {
-        console.error('Failed to add quick expense:', error);
-      }
-    }
-    
-    // Store in local cash transactions as fallback
-    await this.createCashTransaction({
-      type: 'out',
+    // Create a quick expense as a cash transaction (so it works offline)
+    const now = new Date().toISOString();
+    const expense = {
+      id: generateOfflineId(),
+      shop_id: shopId,
+      user_id: this.userId || '',
+      type: 'out' as const,
       source: 'quick_expense',
       amount,
       notes: description || 'Quick expense',
-    });
+      transaction_date: now.split('T')[0],
+      created_at: now,
+      _locallyCreated: true,
+      _locallyModified: false,
+      _locallyDeleted: false,
+    };
     
-    return { offline: true };
+    await offlineDB.saveCashTransaction(expense as ShopCashTransaction);
+    await syncQueue.add('create', 'cashTransactions', expense.id, expense);
+    
+    // If online, also try the dedicated quick expense API
+    if (this.isOnline()) {
+      try {
+        const result = await offlineShopService.addQuickExpense(amount, description);
+        // Update local with server ID
+        const updated = { ...expense, id: result.expense?.id || expense.id, _locallyCreated: false };
+        await offlineDB.deleteCashTransaction(expense.id);
+        await offlineDB.saveCashTransaction(updated as ShopCashTransaction);
+        await syncQueue.deleteByRecordId('cashTransactions', expense.id);
+        return { expense: updated, offline: false };
+      } catch (error) {
+        console.error('Failed to sync quick expense:', error);
+      }
+    }
+    
+    return { expense, offline: true };
   }
   
   async deleteQuickExpense(expenseId: string): Promise<{ offline: boolean }> {
     await this.init();
     
+    // Delete from local cash transactions
+    await offlineDB.deleteCashTransaction(expenseId);
+    await syncQueue.add('delete', 'cashTransactions', expenseId, { id: expenseId });
+    
     if (this.isOnline()) {
       try {
         await offlineShopService.deleteQuickExpense(expenseId);
+        await syncQueue.deleteByRecordId('cashTransactions', expenseId);
         return { offline: false };
       } catch (error) {
-        console.error('Failed to delete quick expense:', error);
+        console.error('Failed to sync quick expense deletion:', error);
       }
     }
     
