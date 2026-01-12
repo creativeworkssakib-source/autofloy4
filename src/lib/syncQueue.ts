@@ -17,8 +17,7 @@ export type SyncTable =
   | 'stockBatches' 
   | 'settings'
   | 'dailyCashRegister'
-  | 'loans'
-  | 'loanPayments';
+  | 'loans';
 
 class SyncQueue {
   /**
