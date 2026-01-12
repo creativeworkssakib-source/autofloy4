@@ -138,6 +138,7 @@ const ShopProducts = () => {
     createProduct: createOfflineProduct,
     updateProduct: updateOfflineProduct,
     deleteProduct: deleteOfflineProduct,
+    deleteProducts: deleteOfflineProducts,
   } = useOfflineProducts();
   
   const {
@@ -223,18 +224,9 @@ const ShopProducts = () => {
   const handleBulkDelete = async () => {
     try {
       setIsBulkDeleting(true);
-      const res = await offlineShopService.deleteProducts(selectedProductIds);
+      const res = await deleteOfflineProducts(selectedProductIds);
 
       const deletedCount = res.deleted?.length ?? 0;
-      const failedCount = res.failed?.length ?? 0;
-
-      if (failedCount > 0) {
-        toast.error(
-          language === "en"
-            ? `${failedCount} products failed to delete`
-            : `${failedCount}টি প্রোডাক্ট ডিলিট হয়নি`
-        );
-      }
 
       if (deletedCount > 0) {
         toast.success(
@@ -243,8 +235,7 @@ const ShopProducts = () => {
             : `${deletedCount}টি প্রোডাক্ট ট্র্যাশে গেছে`
         );
       }
-
-      loadData();
+      setSelectedProductIds([]);
     } catch (error) {
       toast.error(t("shop.errorOccurred"));
     } finally {

@@ -161,6 +161,15 @@ export function useOfflineProducts() {
     return result;
   }, [fetchProducts, t]);
   
+  const deleteProducts = useCallback(async (ids: string[]) => {
+    const result = await offlineDataService.deleteProducts(ids);
+    if (result.offline) {
+      toast.info(t('offline.savedLocally'));
+    }
+    await fetchProducts();
+    return result;
+  }, [fetchProducts, t]);
+  
   const getProductByBarcode = useCallback(async (barcode: string) => {
     return offlineDataService.getProductByBarcode(barcode);
   }, []);
@@ -175,6 +184,7 @@ export function useOfflineProducts() {
     createProduct,
     updateProduct,
     deleteProduct,
+    deleteProducts,
     getProductByBarcode,
   };
 }
@@ -302,6 +312,15 @@ export function useOfflineSuppliers() {
     return result;
   }, [fetchSuppliers, t]);
   
+  const deleteSuppliers = useCallback(async (ids: string[]) => {
+    const result = await offlineDataService.deleteSuppliers(ids);
+    if (result.offline) {
+      toast.info(t('offline.savedLocally'));
+    }
+    await fetchSuppliers();
+    return result;
+  }, [fetchSuppliers, t]);
+  
   return {
     suppliers,
     loading,
@@ -312,6 +331,7 @@ export function useOfflineSuppliers() {
     createSupplier,
     updateSupplier,
     deleteSupplier,
+    deleteSuppliers,
   };
 }
 
@@ -361,6 +381,15 @@ export function useOfflineSales(startDate?: string, endDate?: string) {
     return result;
   }, [fetchSales, t]);
   
+  const deleteSales = useCallback(async (ids: string[]) => {
+    const result = await offlineDataService.deleteSales(ids);
+    if (result.offline) {
+      toast.info(t('offline.savedLocally'));
+    }
+    await fetchSales();
+    return result;
+  }, [fetchSales, t]);
+  
   return {
     sales,
     loading,
@@ -370,6 +399,7 @@ export function useOfflineSales(startDate?: string, endDate?: string) {
     refetch: fetchSales,
     createSale,
     deleteSale,
+    deleteSales,
   };
 }
 
