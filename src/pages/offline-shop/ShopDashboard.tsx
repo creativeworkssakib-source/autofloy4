@@ -25,9 +25,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import ShopLayout from "@/components/offline-shop/ShopLayout";
-import { offlineShopService } from "@/services/offlineShopService";
+import { useOfflineDashboard, useOfflineTrash } from "@/hooks/useOfflineShopData";
 import { useOfflineSettings, useSyncStatus } from "@/hooks/useOfflineData";
-import { useIsOnline } from "@/hooks/useOnlineStatus";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useShop } from "@/contexts/ShopContext";
 import { ProductPerformanceSection } from "@/components/analytics/ProductPerformanceSection";
@@ -80,35 +79,43 @@ const ShopDashboard = () => {
   const { t, language } = useLanguage();
   const { currentShop } = useShop();
   const { settings } = useOfflineSettings();
-  const isOnline = useIsOnline();
   const { pendingCount, isSyncing, triggerSync } = useSyncStatus();
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [trashCount, setTrashCount] = useState(0);
+  
+  // Use offline-first dashboard hook
+  const { data: dashboardData, loading: isLoading, fromCache, isOnline, refetch: loadDashboard } = useOfflineDashboard('today');
+  const { trash, refetch: refetchTrash } = useOfflineTrash();
+  const trashCount = trash?.length || 0;
 
-  const loadDashboard = async () => {
-    setIsLoading(true);
-    try {
-      const [dashboardResult, trashResult] = await Promise.all([
-        offlineShopService.getDashboard(),
-        offlineShopService.getTrash().catch(() => ({ trash: [] }))
-      ]);
-      setData(dashboardResult);
-      setTrashCount(trashResult.trash?.length || 0);
-    } catch (error) {
-      console.error("Dashboard load error:", error);
-      toast.error(t("common.loading"));
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Refetch when shop changes
-  useEffect(() => {
-    if (currentShop?.id) {
-      loadDashboard();
-    }
-  }, [currentShop?.id]);
+  // Map hook data to expected format
+  const data: DashboardData | null = dashboardData ? {
+    period: {
+      totalSales: dashboardData.totalSales || 0,
+      totalPurchases: dashboardData.totalPurchases || 0,
+      grossProfit: dashboardData.profit || 0,
+      totalExpenses: dashboardData.totalExpenses || 0,
+      netProfit: dashboardData.profit || 0,
+      customersServed: dashboardData.salesCount || 0,
+    },
+    lifetime: {
+      totalSales: dashboardData.totalSales || 0,
+      totalProfit: dashboardData.profit || 0,
+      totalProducts: dashboardData.productsCount || 0,
+      totalSuppliers: 0,
+      totalDue: 0,
+    },
+    totalProducts: dashboardData.productsCount || 0,
+    totalCustomers: dashboardData.customersCount || 0,
+    lowStockProducts: dashboardData.lowStockItems || [],
+    recentSales: dashboardData.recentSales || [],
+    recentProducts: dashboardData.recentProducts || [],
+    returns: dashboardData.returnsSummary || {
+      totalCount: 0,
+      totalRefundAmount: 0,
+      processedCount: 0,
+      pendingCount: 0,
+      topReasons: [],
+    },
+  } : null;
 
   const currency = settings?.currency || "BDT";
   const formatCurrency = (amount: number) => {
