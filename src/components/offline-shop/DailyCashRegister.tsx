@@ -728,6 +728,11 @@ export function DailyCashRegister() {
               <History className="h-5 w-5" />
               {t.history} - {t.last7Days}
             </DialogTitle>
+            <DialogDescription>
+              {language === "bn" 
+                ? "গত সাত দিনের ক্যাশ রেজিস্টার হিস্ট্রি দেখুন।"
+                : "View cash register history for the last seven days."}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-4">
             {registers.length === 0 ? (

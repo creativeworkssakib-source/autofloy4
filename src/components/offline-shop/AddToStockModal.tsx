@@ -257,6 +257,11 @@ const AddToStockModal = ({ isOpen, onClose, products, onSuccess }: AddToStockMod
               <Package className="h-5 w-5" />
               {language === "bn" ? "স্টকে যোগ করুন" : "Add to Stock"}
             </DialogTitle>
+            <DialogDescription>
+              {language === "bn" 
+                ? "ক্রয় থেকে নতুন প্রোডাক্ট স্টকে যোগ করুন"
+                : "Add new products from purchases to stock"}
+            </DialogDescription>
           </DialogHeader>
           <div className="text-center py-12 text-muted-foreground">
             <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />

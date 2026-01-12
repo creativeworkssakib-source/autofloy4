@@ -1320,6 +1320,9 @@ const ShopProducts = () => {
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>{language === "bn" ? "বারকোড দেখুন" : "View Barcode"}</DialogTitle>
+            <DialogDescription>
+              {language === "bn" ? "প্রোডাক্টের বারকোড স্ক্যান বা প্রিন্ট করুন" : "Scan or print product barcode"}
+            </DialogDescription>
           </DialogHeader>
           {viewBarcodeProduct && (
             <div className="flex flex-col items-center py-4">
