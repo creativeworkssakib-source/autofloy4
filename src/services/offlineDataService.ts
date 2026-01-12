@@ -1394,14 +1394,16 @@ async getProducts(): Promise<{ products: ShopProduct[]; fromCache: boolean }> {
           }
         }
         
-        // Return server data
-        const todayRegister = serverRegisters.find((r: any) => r.register_date === today) || null;
-        const hasOpen = serverRegisters.some((r: any) => r.status === 'open');
+        // IMPORTANT: Use the enriched todayRegister from API response directly
+        // The API enriches todayRegister with live sales, expenses, quick_expenses etc.
+        // Don't search from registers array - it doesn't have live data
+        const enrichedTodayRegister = result.todayRegister || null;
+        const hasOpen = result.hasOpenRegister || serverRegisters.some((r: any) => r.status === 'open');
         
         return {
           registers: serverRegisters,
-          todayRegister,
-          hasOpenRegister: hasOpen || result.hasOpenRegister || false,
+          todayRegister: enrichedTodayRegister,
+          hasOpenRegister: hasOpen,
           fromCache: false,
         };
       } catch (error) {
