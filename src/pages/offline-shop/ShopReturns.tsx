@@ -17,6 +17,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -816,6 +817,7 @@ export default function ShopReturns() {
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Add Product Return</DialogTitle>
+                <DialogDescription>Record a product return from a customer</DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
                 
@@ -1552,6 +1554,7 @@ export default function ShopReturns() {
           <DialogContent className="max-w-lg">
             <DialogHeader>
               <DialogTitle>Return Details</DialogTitle>
+              <DialogDescription>View detailed information about this return</DialogDescription>
             </DialogHeader>
             {selectedReturn && (
               <div className="space-y-4">
@@ -1638,6 +1641,7 @@ export default function ShopReturns() {
                   <Badge variant="secondary">{formData.customer_name}</Badge>
                 )}
               </DialogTitle>
+              <DialogDescription>View purchase history to process returns</DialogDescription>
             </DialogHeader>
 
             {/* Customer Return Stats */}
@@ -1742,6 +1746,7 @@ export default function ShopReturns() {
                 <Package className="h-5 w-5" />
                 Process Return
               </DialogTitle>
+              <DialogDescription>Process this return and update inventory</DialogDescription>
             </DialogHeader>
             {selectedReturn && (
               <div className="space-y-4">

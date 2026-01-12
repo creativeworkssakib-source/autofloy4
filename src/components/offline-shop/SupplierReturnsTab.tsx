@@ -14,6 +14,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -990,6 +991,7 @@ export default function SupplierReturnsTab() {
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Supplier Return Details</DialogTitle>
+            <DialogDescription>View detailed information about this supplier return</DialogDescription>
           </DialogHeader>
           {selectedReturn && (
             <div className="space-y-4">

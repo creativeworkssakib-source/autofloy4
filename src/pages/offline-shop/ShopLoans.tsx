@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -593,6 +594,9 @@ const ShopLoans = () => {
                 <DialogTitle>
                   {isEditing ? t.editLoan : t.addLoan}
                 </DialogTitle>
+                <DialogDescription>
+                  {language === "bn" ? "লোনের তথ্য পূরণ করুন" : "Fill in loan details"}
+                </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
@@ -902,6 +906,9 @@ const ShopLoans = () => {
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{t.loanDetails}</DialogTitle>
+            <DialogDescription>
+              {language === "bn" ? "লোনের সম্পূর্ণ তথ্য" : "Complete loan information"}
+            </DialogDescription>
           </DialogHeader>
           {selectedLoan && (
             <div className="space-y-4">
@@ -1021,6 +1028,9 @@ const ShopLoans = () => {
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>{t.installmentPayment}</DialogTitle>
+            <DialogDescription>
+              {language === "bn" ? "কিস্তি পরিশোধ করুন" : "Make an installment payment"}
+            </DialogDescription>
           </DialogHeader>
           {selectedLoan && (
             <form onSubmit={handlePayment} className="space-y-4">

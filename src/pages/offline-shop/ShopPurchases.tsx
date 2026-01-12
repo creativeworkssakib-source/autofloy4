@@ -1277,6 +1277,9 @@ const ShopPurchases = () => {
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>{t("shop.purchaseDetails")}</DialogTitle>
+            <DialogDescription>
+              {language === "bn" ? "ক্রয়ের বিস্তারিত তথ্য" : "View purchase details and items"}
+            </DialogDescription>
           </DialogHeader>
           {viewingPurchase && (
             <div className="space-y-4">
