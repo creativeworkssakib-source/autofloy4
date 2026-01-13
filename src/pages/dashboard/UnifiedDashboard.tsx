@@ -23,7 +23,6 @@ import {
   Star,
   Link2,
   Store,
-  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -75,17 +74,13 @@ const UnifiedDashboard = () => {
   const [offlineData, setOfflineData] = useState<any>(null);
   
   const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [mobileTab, setMobileTab] = useState<"online" | "offline">("online");
-  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Load all dashboard data
-  const loadAllData = useCallback(async (showLoading = true) => {
-    if (showLoading && !onlineStats && !offlineData) {
+  // Load all dashboard data - runs silently in background
+  const loadAllData = useCallback(async (showInitialLoading = true) => {
+    if (showInitialLoading && !onlineStats && !offlineData) {
       setIsLoading(true);
-    } else if (!showLoading) {
-      setIsRefreshing(true);
     }
     
     try {
@@ -100,19 +95,13 @@ const UnifiedDashboard = () => {
       setConnectedPages(pagesData?.filter(p => p.is_connected) || []);
       setRecentLogs(logsData || []);
       if (shopData) setOfflineData(shopData);
-      setLastUpdate(new Date());
     } catch (error) {
-      console.error("Failed to load dashboard data:", error);
+      // Silent failure - no user notification needed
+      console.error("[Dashboard] Background sync failed:", error);
     } finally {
       setIsLoading(false);
-      setIsRefreshing(false);
     }
   }, [onlineStats, offlineData]);
-
-  // Manual refresh handler
-  const handleRefresh = useCallback(() => {
-    loadAllData(false);
-  }, [loadAllData]);
 
   // Initial load and auto-refresh every 30 seconds
   useEffect(() => {
@@ -453,7 +442,7 @@ const UnifiedDashboard = () => {
           className="flex flex-col md:flex-row md:items-center justify-between gap-4"
         >
           <div>
-            <div className="flex items-center gap-3 mb-1">
+          <div className="flex items-center gap-3 mb-1">
               <span className="text-lg text-muted-foreground">
                 {t("dashboard.welcome")}, <span className="font-semibold text-foreground">{user?.name || 'User'}</span>!
               </span>
@@ -477,38 +466,19 @@ const UnifiedDashboard = () => {
                 </motion.div>
               )}
             </div>
-            <div className="flex items-center gap-2">
-              <p className="text-muted-foreground">
-                {syncEnabled 
-                  ? t("dashboard.unifiedOverview")
-                  : t("dashboard.onlineOverview")
-                }
-              </p>
-              {lastUpdate && (
-                <span className="text-xs text-muted-foreground">
-                  • {formatDistanceToNow(lastUpdate, { addSuffix: true })}
-                </span>
-              )}
-            </div>
+            <p className="text-muted-foreground">
+              {syncEnabled 
+                ? t("dashboard.unifiedOverview")
+                : t("dashboard.onlineOverview")
+              }
+            </p>
           </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-              className="gap-1.5"
-            >
-              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-              {isRefreshing ? 'Syncing...' : 'Refresh'}
-            </Button>
-            <Button variant="gradient" asChild>
-              <Link to="/dashboard/automations">
-                <Plus className="w-4 h-4 mr-2" />
-                {t("dashboard.newAutomation")}
-              </Link>
-            </Button>
-          </div>
+          <Button variant="gradient" asChild>
+            <Link to="/dashboard/automations">
+              <Plus className="w-4 h-4 mr-2" />
+              {t("dashboard.newAutomation")}
+            </Link>
+          </Button>
         </motion.div>
 
         {/* KPIs */}
