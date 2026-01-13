@@ -1,8 +1,18 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode, useRef } from 'react';
-import { offlineSyncOrchestrator, SyncStatus } from '@/lib/offlineSyncOrchestrator';
 import { useShop } from '@/contexts/ShopContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { isInstalled } from '@/lib/platformDetection';
+
+// Define the SyncStatus interface inline to avoid importing the heavy module
+interface SyncStatus {
+  isOnline: boolean;
+  isSyncing: boolean;
+  lastSyncAt: Date | null;
+  pendingChanges: number;
+  syncProgress: number;
+  lastError: string | null;
+  syncDirection: 'push' | 'pull' | 'idle';
+}
 
 interface SyncContextType {
   syncStatus: SyncStatus;
@@ -40,6 +50,7 @@ export function SyncProvider({ children }: SyncProviderProps) {
   const initRef = useRef(false);
   const shopIdRef = useRef<string | null>(null);
   const userIdRef = useRef<string | null>(null);
+  const orchestratorRef = useRef<any>(null);
 
   // Initialize sync orchestrator when shop and user are available
   useEffect(() => {
@@ -67,30 +78,39 @@ export function SyncProvider({ children }: SyncProviderProps) {
     let unsubscribe: (() => void) | null = null;
     let isMounted = true;
 
-    // Initialize the sync orchestrator
-    offlineSyncOrchestrator.init(currentShop.id, user.id)
-      .then(() => {
-        if (!isMounted) return;
-        
-        initRef.current = true;
-        
-        // Subscribe to sync status updates after successful init
-        unsubscribe = offlineSyncOrchestrator.subscribe(status => {
+    // Dynamically import the sync orchestrator only when needed
+    import('@/lib/offlineSyncOrchestrator').then(({ offlineSyncOrchestrator }) => {
+      if (!isMounted) return;
+      
+      orchestratorRef.current = offlineSyncOrchestrator;
+      
+      // Initialize the sync orchestrator
+      offlineSyncOrchestrator.init(currentShop.id, user.id)
+        .then(() => {
+          if (!isMounted) return;
+          
+          initRef.current = true;
+          
+          // Subscribe to sync status updates after successful init
+          unsubscribe = offlineSyncOrchestrator.subscribe((status: SyncStatus) => {
+            if (isMounted) {
+              setSyncStatus(status);
+            }
+          });
+        })
+        .catch((error: Error) => {
+          console.error('[SyncProvider] Failed to initialize sync:', error);
           if (isMounted) {
-            setSyncStatus(status);
+            // Update status with error
+            setSyncStatus(prev => ({
+              ...prev,
+              lastError: error instanceof Error ? error.message : 'Sync initialization failed',
+            }));
           }
         });
-      })
-      .catch(error => {
-        console.error('[SyncProvider] Failed to initialize sync:', error);
-        if (isMounted) {
-          // Update status with error
-          setSyncStatus(prev => ({
-            ...prev,
-            lastError: error instanceof Error ? error.message : 'Sync initialization failed',
-          }));
-        }
-      });
+    }).catch((error) => {
+      console.error('[SyncProvider] Failed to load sync module:', error);
+    });
 
     return () => {
       isMounted = false;
@@ -105,8 +125,8 @@ export function SyncProvider({ children }: SyncProviderProps) {
   // Cleanup on full unmount
   useEffect(() => {
     return () => {
-      if (initRef.current) {
-        offlineSyncOrchestrator.cleanup();
+      if (initRef.current && orchestratorRef.current) {
+        orchestratorRef.current.cleanup();
         initRef.current = false;
         shopIdRef.current = null;
         userIdRef.current = null;
@@ -144,7 +164,9 @@ export function SyncProvider({ children }: SyncProviderProps) {
       return;
     }
     
-    await offlineSyncOrchestrator.forceSync();
+    if (orchestratorRef.current) {
+      await orchestratorRef.current.forceSync();
+    }
   }, []);
 
   return (
