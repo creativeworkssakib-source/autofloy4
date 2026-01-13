@@ -69,12 +69,12 @@ class PlatformDetector {
       return this.cachedPlatform;
     }
 
-    // Default to browser
+    // Default to browser - now also supports local caching for faster loads
     this.cachedPlatform = {
       type: 'browser',
       isInstalled: false,
       isNative: false,
-      useLocalFirst: false, // Browser uses server-first
+      useLocalFirst: true, // CHANGED: Browser now also uses cache-first for speed
       name: 'Browser',
     };
     return this.cachedPlatform;

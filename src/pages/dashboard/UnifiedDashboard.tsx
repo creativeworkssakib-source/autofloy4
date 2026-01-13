@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import {
@@ -23,6 +23,7 @@ import {
   Star,
   Link2,
   Store,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -74,35 +75,64 @@ const UnifiedDashboard = () => {
   const [offlineData, setOfflineData] = useState<any>(null);
   
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [mobileTab, setMobileTab] = useState<"online" | "offline">("online");
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  useEffect(() => {
-    const loadAllData = async () => {
+  // Load all dashboard data
+  const loadAllData = useCallback(async (showLoading = true) => {
+    if (showLoading && !onlineStats && !offlineData) {
       setIsLoading(true);
-      try {
-        // Load all data in parallel - online and offline
-        const [statsData, pagesData, logsData, shopData] = await Promise.all([
-          fetchDashboardStats(),
-          fetchConnectedAccounts("facebook"),
-          fetchExecutionLogs(5),
-          offlineShopService.getDashboard("today").catch(() => null),
-        ]);
-        
-        setOnlineStats(statsData);
-        setConnectedPages(pagesData.filter(p => p.is_connected));
-        setRecentLogs(logsData);
-        setOfflineData(shopData);
-      } catch (error) {
-        console.error("Failed to load dashboard data:", error);
-      } finally {
-        setIsLoading(false);
+    } else if (!showLoading) {
+      setIsRefreshing(true);
+    }
+    
+    try {
+      const [statsData, pagesData, logsData, shopData] = await Promise.all([
+        fetchDashboardStats().catch(() => null),
+        fetchConnectedAccounts("facebook").catch(() => []),
+        fetchExecutionLogs(5).catch(() => []),
+        offlineShopService.getDashboard("today").catch(() => null),
+      ]);
+      
+      if (statsData) setOnlineStats(statsData);
+      setConnectedPages(pagesData?.filter(p => p.is_connected) || []);
+      setRecentLogs(logsData || []);
+      if (shopData) setOfflineData(shopData);
+      setLastUpdate(new Date());
+    } catch (error) {
+      console.error("Failed to load dashboard data:", error);
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }, [onlineStats, offlineData]);
+
+  // Manual refresh handler
+  const handleRefresh = useCallback(() => {
+    loadAllData(false);
+  }, [loadAllData]);
+
+  // Initial load and auto-refresh every 30 seconds
+  useEffect(() => {
+    if (!syncLoading) {
+      loadAllData(true);
+      
+      // Set up 30 second auto-refresh
+      refreshIntervalRef.current = setInterval(() => {
+        if (navigator.onLine) {
+          loadAllData(false);
+        }
+      }, 30000);
+    }
+    
+    return () => {
+      if (refreshIntervalRef.current) {
+        clearInterval(refreshIntervalRef.current);
       }
     };
-
-    if (!syncLoading) {
-      loadAllData();
-    }
-  }, [syncLoading]);
+  }, [syncLoading, loadAllData]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-BD", {
@@ -447,19 +477,38 @@ const UnifiedDashboard = () => {
                 </motion.div>
               )}
             </div>
-            <p className="text-muted-foreground">
-              {syncEnabled 
-                ? t("dashboard.unifiedOverview")
-                : t("dashboard.onlineOverview")
-              }
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="text-muted-foreground">
+                {syncEnabled 
+                  ? t("dashboard.unifiedOverview")
+                  : t("dashboard.onlineOverview")
+                }
+              </p>
+              {lastUpdate && (
+                <span className="text-xs text-muted-foreground">
+                  • {formatDistanceToNow(lastUpdate, { addSuffix: true })}
+                </span>
+              )}
+            </div>
           </div>
-          <Button variant="gradient" asChild>
-            <Link to="/dashboard/automations">
-              <Plus className="w-4 h-4 mr-2" />
-              {t("dashboard.newAutomation")}
-            </Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="gap-1.5"
+            >
+              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              {isRefreshing ? 'Syncing...' : 'Refresh'}
+            </Button>
+            <Button variant="gradient" asChild>
+              <Link to="/dashboard/automations">
+                <Plus className="w-4 h-4 mr-2" />
+                {t("dashboard.newAutomation")}
+              </Link>
+            </Button>
+          </div>
         </motion.div>
 
         {/* KPIs */}

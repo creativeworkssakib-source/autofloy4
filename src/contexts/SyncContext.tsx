@@ -53,6 +53,7 @@ export function SyncProvider({ children }: SyncProviderProps) {
   const orchestratorRef = useRef<any>(null);
 
   // Initialize sync orchestrator when shop and user are available
+  // NOW WORKS FOR ALL PLATFORMS including browser
   useEffect(() => {
     // Skip if no shop or user
     if (!currentShop?.id || !user?.id) {
@@ -64,11 +65,7 @@ export function SyncProvider({ children }: SyncProviderProps) {
       return;
     }
 
-    // Only initialize for installed apps (PWA/APK/EXE)
-    if (!isInstalled()) {
-      console.log('[SyncProvider] Browser mode - sync not needed');
-      return;
-    }
+    // Initialize for ALL platforms now (browser included for caching)
 
     console.log('[SyncProvider] Initializing sync for shop:', currentShop.id);
     
@@ -154,11 +151,7 @@ export function SyncProvider({ children }: SyncProviderProps) {
   }, []);
 
   const forceSync = useCallback(async () => {
-    if (!isInstalled()) {
-      console.log('[SyncProvider] Force sync not available in browser mode');
-      return;
-    }
-    
+    // Force sync now works for all platforms
     if (!initRef.current) {
       console.log('[SyncProvider] Cannot force sync - not initialized');
       return;
