@@ -37,6 +37,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useSyncSettings } from "@/hooks/useSyncSettings";
 import { fetchDashboardStats, fetchConnectedAccounts, fetchExecutionLogs, DashboardStats, ConnectedAccount, ExecutionLog } from "@/services/apiService";
 import { ProductPerformanceSection } from "@/components/analytics/ProductPerformanceSection";
+import { AppDownloadSection } from "@/components/dashboard/AppDownloadSection";
 import { offlineShopService } from "@/services/offlineShopService";
 import { formatDistanceToNow } from "date-fns";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -511,6 +512,9 @@ const UnifiedDashboard = () => {
             </motion.div>
           ))}
         </div>
+
+        {/* App Download Section */}
+        <AppDownloadSection />
 
         {/* Single Product Performance Section - Shows combined when synced, online when not */}
         <motion.div
