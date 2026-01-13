@@ -102,7 +102,7 @@ const FeaturesSection = memo(() => {
       <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         {/* Section Header */}
         <div className="text-center max-w-3xl mx-auto mb-16">
-          <span className="inline-block px-4 py-1.5 rounded-full bg-primary/10 text-primary text-sm font-medium mb-4">
+          <span className="inline-block px-4 py-1.5 rounded-full bg-primary/10 text-primary-accessible text-sm font-medium mb-4">
             {t("features.badge")}
           </span>
           <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-6">
@@ -150,7 +150,7 @@ const FeaturesSection = memo(() => {
         {/* Offline Shop Features */}
         <div>
           <h3 className="text-xl md:text-2xl font-bold mb-6 text-center">
-            <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-success/10 text-success">
+            <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-success/10 text-success-accessible">
               <Store className="w-5 h-5" />
               {t("features.offlineShopBusiness")}
             </span>
@@ -170,7 +170,7 @@ const FeaturesSection = memo(() => {
                 <p className="text-muted-foreground text-sm mb-3">{feature.description}</p>
                 <Link
                   to={`/features/${feature.slug}`}
-                  className="inline-flex items-center text-success font-medium text-sm group/link"
+                  className="inline-flex items-center text-success-accessible font-medium text-sm group/link"
                   aria-label={`${t("features.learnMore")} ${feature.title}`}
                 >
                   <span>{t("features.learnMore")}</span>

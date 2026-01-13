@@ -30,8 +30,12 @@
     --muted-foreground: 220 9% 46%;
     
     /* Success, Warning & Error */
-    --success: 160 84% 39%;
+    --success: 160 84% 29%;
     --success-foreground: 0 0% 100%;
+    
+    /* Accessible text colors for badges/links (darker for contrast) */
+    --primary-accessible: 217 100% 40%;
+    --success-accessible: 160 84% 22%;
     
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
@@ -94,8 +98,12 @@
     --muted: 240 5% 18%;
     --muted-foreground: 240 5% 65%;
     
-    --success: 160 84% 45%;
+    --success: 160 84% 35%;
     --success-foreground: 0 0% 100%;
+    
+    /* Accessible text colors for badges/links (darker for contrast) */
+    --primary-accessible: 217 100% 50%;
+    --success-accessible: 160 84% 28%;
     
     --warning: 38 92% 55%;
     --warning-foreground: 0 0% 100%;

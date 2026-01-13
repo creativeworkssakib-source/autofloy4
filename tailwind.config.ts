@@ -34,6 +34,7 @@ export default {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
           glow: "hsl(var(--primary-glow))",
+          accessible: "hsl(var(--primary-accessible))",
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
@@ -46,6 +47,7 @@ export default {
         success: {
           DEFAULT: "hsl(var(--success))",
           foreground: "hsl(var(--success-foreground))",
+          accessible: "hsl(var(--success-accessible))",
         },
         warning: {
           DEFAULT: "hsl(var(--warning))",
