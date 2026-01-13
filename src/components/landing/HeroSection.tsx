@@ -1,6 +1,6 @@
 import { useState, useMemo, memo } from "react";
 import { Link } from "react-router-dom";
-import { motion } from "framer-motion";
+
 import { ArrowRight, Play, Sparkles, Check, Zap, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import heroConversation from "@/assets/hero-conversation-clean.png";
@@ -88,11 +88,8 @@ const HeroSection = memo(() => {
           </div>
 
           {/* Bottom Content - Hero Conversation Illustration */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.1, duration: 0.3 }}
-            className="relative flex justify-center"
+          <div
+            className="relative flex justify-center animate-fade-in"
           >
             {/* Glow Effect */}
             <div className="absolute inset-0 bg-gradient-to-r from-primary/15 to-secondary/15 blur-3xl rounded-full scale-75" />
@@ -153,7 +150,7 @@ const HeroSection = memo(() => {
                 </div>
               </div>
             </div>
-          </motion.div>
+          </div>
         </div>
       </div>
 
