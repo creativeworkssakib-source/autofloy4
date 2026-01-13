@@ -539,229 +539,167 @@ class OfflineSyncOrchestrator {
   }
 
   /**
-   * Pull latest data from server to local
+   * Pull latest data from server to local with DELETION DETECTION
+   * Key principle: LocalDB = Supabase
+   * If server has 79 items and local has 80, delete the extra one from local
    */
   private async pullServerData(): Promise<{ pulled: number }> {
     if (!this.shopId) return { pulled: 0 };
     
     let pulled = 0;
+    const shopId = this.shopId;
+    const userId = this.userId || '';
     
     try {
-      // Pull products - BATCH OPTIMIZED
+      // Pull products with deletion detection
       try {
         const { products } = await offlineShopService.getProducts();
-        const localProducts = await offlineDB.getProducts(this.shopId!);
-        const localMap = new Map(localProducts.map(p => [p.id, p]));
-        
-        const toSave = products
-          .filter(p => {
-            const local = localMap.get(p.id);
-            return !local?._locallyModified && !local?._locallyCreated;
-          })
-          .map(p => ({
-            ...p,
-            shop_id: this.shopId!,
-            user_id: this.userId || '',
-            _locallyModified: false,
-            _locallyCreated: false,
-            _locallyDeleted: false,
-          }));
-        
-        if (toSave.length > 0) {
-          await offlineDB.bulkSaveProducts(toSave);
-          pulled += toSave.length;
-        }
+        const syncResult = await this.syncTableWithDeletions(
+          'products',
+          products,
+          shopId,
+          userId,
+          offlineDB.getProducts.bind(offlineDB),
+          offlineDB.bulkSaveProducts.bind(offlineDB),
+          offlineDB.hardDeleteProduct.bind(offlineDB)
+        );
+        pulled += syncResult.saved;
       } catch (e) { console.error('[SyncOrchestrator] Failed to pull products:', e); }
       
       this.syncProgress = 50;
       this.notifyListeners();
       
-      // Pull categories - BATCH OPTIMIZED
+      // Pull categories with deletion detection
       try {
         const { categories } = await offlineShopService.getCategories();
-        const localCats = await offlineDB.getCategories(this.shopId!);
-        const localMap = new Map(localCats.map(c => [c.id, c]));
-        
-        const toSave = categories
-          .filter(c => {
-            const local = localMap.get(c.id);
-            return !local?._locallyModified && !local?._locallyCreated;
-          })
-          .map(c => ({
-            ...c,
-            shop_id: this.shopId!,
-            user_id: this.userId || '',
-            _locallyModified: false,
-            _locallyCreated: false,
-            _locallyDeleted: false,
-          }));
-        
-        if (toSave.length > 0) {
-          await offlineDB.bulkSaveCategories(toSave);
-          pulled += toSave.length;
-        }
+        const syncResult = await this.syncTableWithDeletions(
+          'categories',
+          categories,
+          shopId,
+          userId,
+          offlineDB.getCategories.bind(offlineDB),
+          offlineDB.bulkSaveCategories.bind(offlineDB),
+          offlineDB.hardDeleteCategory.bind(offlineDB)
+        );
+        pulled += syncResult.saved;
       } catch (e) { console.error('[SyncOrchestrator] Failed to pull categories:', e); }
       
-      // Pull customers - BATCH OPTIMIZED
+      // Pull customers with deletion detection
       try {
         const { customers } = await offlineShopService.getCustomers();
-        const localCusts = await offlineDB.getCustomers(this.shopId!);
-        const localMap = new Map(localCusts.map(c => [c.id, c]));
-        
-        const toSave = customers
-          .filter(c => {
-            const local = localMap.get(c.id);
-            return !local?._locallyModified && !local?._locallyCreated;
-          })
-          .map(c => ({
-            ...c,
-            shop_id: this.shopId!,
-            user_id: this.userId || '',
-            _locallyModified: false,
-            _locallyCreated: false,
-            _locallyDeleted: false,
-          }));
-        
-        if (toSave.length > 0) {
-          await offlineDB.bulkSaveCustomers(toSave);
-          pulled += toSave.length;
-        }
+        const syncResult = await this.syncTableWithDeletions(
+          'customers',
+          customers,
+          shopId,
+          userId,
+          offlineDB.getCustomers.bind(offlineDB),
+          offlineDB.bulkSaveCustomers.bind(offlineDB),
+          offlineDB.hardDeleteCustomer.bind(offlineDB)
+        );
+        pulled += syncResult.saved;
       } catch (e) { console.error('[SyncOrchestrator] Failed to pull customers:', e); }
       
       this.syncProgress = 60;
       this.notifyListeners();
       
-      // Pull suppliers - BATCH OPTIMIZED
+      // Pull suppliers with deletion detection
       try {
         const { suppliers } = await offlineShopService.getSuppliers();
-        const localSupps = await offlineDB.getSuppliers(this.shopId!);
-        const localMap = new Map(localSupps.map(s => [s.id, s]));
-        
-        const toSave = suppliers
-          .filter(s => {
-            const local = localMap.get(s.id);
-            return !local?._locallyModified && !local?._locallyCreated;
-          })
-          .map(s => ({
-            ...s,
-            shop_id: this.shopId!,
-            user_id: this.userId || '',
-            _locallyModified: false,
-            _locallyCreated: false,
-            _locallyDeleted: false,
-          }));
-        
-        if (toSave.length > 0) {
-          await offlineDB.bulkSaveSuppliers(toSave);
-          pulled += toSave.length;
-        }
+        const syncResult = await this.syncTableWithDeletions(
+          'suppliers',
+          suppliers,
+          shopId,
+          userId,
+          offlineDB.getSuppliers.bind(offlineDB),
+          offlineDB.bulkSaveSuppliers.bind(offlineDB),
+          offlineDB.hardDeleteSupplier.bind(offlineDB)
+        );
+        pulled += syncResult.saved;
       } catch (e) { console.error('[SyncOrchestrator] Failed to pull suppliers:', e); }
       
-      // Pull sales - BATCH OPTIMIZED
+      // Pull sales with deletion detection
       try {
         const { sales } = await offlineShopService.getSales({});
-        const localSales = await offlineDB.getSales(this.shopId!);
-        const localMap = new Map(localSales.map(s => [s.id, s]));
-        
-        const toSave = sales
-          .filter(s => {
-            const local = localMap.get(s.id);
-            return !local?._locallyModified && !local?._locallyCreated;
-          })
-          .map(s => ({
-            ...s,
-            shop_id: this.shopId!,
-            user_id: this.userId || '',
-            _locallyModified: false,
-            _locallyCreated: false,
-            _locallyDeleted: false,
-          }));
-        
-        if (toSave.length > 0) {
-          await offlineDB.bulkSaveSales(toSave);
-          pulled += toSave.length;
-        }
+        const syncResult = await this.syncTableWithDeletions(
+          'sales',
+          sales,
+          shopId,
+          userId,
+          offlineDB.getSales.bind(offlineDB),
+          offlineDB.bulkSaveSales.bind(offlineDB),
+          offlineDB.hardDeleteSale.bind(offlineDB)
+        );
+        pulled += syncResult.saved;
       } catch (e) { console.error('[SyncOrchestrator] Failed to pull sales:', e); }
       
       this.syncProgress = 65;
       this.notifyListeners();
       
-      // Pull purchases - BATCH OPTIMIZED
+      // Pull purchases with deletion detection
       try {
         const { purchases } = await offlineShopService.getPurchases();
-        const localPurchases = await offlineDB.getPurchases(this.shopId!);
-        const localMap = new Map(localPurchases.map(p => [p.id, p]));
-        
-        const toSave = purchases
-          .filter(p => {
-            const local = localMap.get(p.id);
-            return !local?._locallyModified && !local?._locallyCreated;
-          })
-          .map(p => ({
-            ...p,
-            shop_id: this.shopId!,
-            user_id: this.userId || '',
-            _locallyModified: false,
-            _locallyCreated: false,
-            _locallyDeleted: false,
-          }));
-        
-        if (toSave.length > 0) {
-          await offlineDB.bulkSavePurchases(toSave);
-          pulled += toSave.length;
-        }
+        const syncResult = await this.syncTableWithDeletions(
+          'purchases',
+          purchases,
+          shopId,
+          userId,
+          offlineDB.getPurchases.bind(offlineDB),
+          offlineDB.bulkSavePurchases.bind(offlineDB),
+          offlineDB.hardDeletePurchase.bind(offlineDB)
+        );
+        pulled += syncResult.saved;
       } catch (e) { console.error('[SyncOrchestrator] Failed to pull purchases:', e); }
       
       this.syncProgress = 70;
       this.notifyListeners();
       
-      // Pull expenses - BATCH OPTIMIZED
+      // Pull expenses with deletion detection
       try {
         const { expenses } = await offlineShopService.getExpenses({});
-        const localExps = await offlineDB.getExpenses(this.shopId!);
-        const localMap = new Map(localExps.map(e => [e.id, e]));
-        
-        const toSave = expenses
-          .filter(e => {
-            const local = localMap.get(e.id);
-            return !local?._locallyModified && !local?._locallyCreated;
-          })
-          .map(e => ({
-            ...e,
-            shop_id: this.shopId!,
-            user_id: this.userId || '',
-            _locallyModified: false,
-            _locallyCreated: false,
-            _locallyDeleted: false,
-          }));
-        
-        if (toSave.length > 0) {
-          await offlineDB.bulkSaveExpenses(toSave);
-          pulled += toSave.length;
-        }
+        const syncResult = await this.syncTableWithDeletions(
+          'expenses',
+          expenses,
+          shopId,
+          userId,
+          offlineDB.getExpenses.bind(offlineDB),
+          offlineDB.bulkSaveExpenses.bind(offlineDB),
+          offlineDB.hardDeleteExpense.bind(offlineDB)
+        );
+        pulled += syncResult.saved;
       } catch (e) { console.error('[SyncOrchestrator] Failed to pull expenses:', e); }
       
       this.syncProgress = 75;
       this.notifyListeners();
       
-      // Pull loans (individual save - usually small number)
+      // Pull loans (usually small number)
       try {
         const token = localStorage.getItem("autofloy_token");
         if (token) {
           const baseUrl = import.meta.env.VITE_SUPABASE_URL;
-          const res = await fetch(`${baseUrl}/functions/v1/shop-loans?shop_id=${this.shopId}`, {
+          const res = await fetch(`${baseUrl}/functions/v1/shop-loans?shop_id=${shopId}`, {
             headers: { 'Authorization': `Bearer ${token}` },
           });
           if (res.ok) {
-            const { loans } = await res.json();
-            const localLoans = await offlineDB.getLoans(this.shopId!);
-            for (const loan of loans || []) {
+            const { loans: serverLoans } = await res.json();
+            const localLoans = await offlineDB.getLoans(shopId);
+            const serverIds = new Set((serverLoans || []).map((l: any) => l.id));
+            
+            // Delete loans that server has deleted
+            for (const local of localLoans) {
+              if (!serverIds.has(local.id) && !local._locallyCreated && !local._locallyModified) {
+                await offlineDB.hardDeleteLoan(local.id);
+                console.log('[SyncOrchestrator] Deleted loan:', local.id);
+              }
+            }
+            
+            // Save/update loans from server
+            for (const loan of serverLoans || []) {
               const local = localLoans.find(l => l.id === loan.id);
               if (!local?._locallyModified && !local?._locallyCreated) {
                 await offlineDB.saveLoan({
                   ...loan,
-                  shop_id: this.shopId!,
-                  user_id: this.userId || '',
+                  shop_id: shopId,
+                  user_id: userId,
                   _locallyModified: false,
                   _locallyCreated: false,
                   _locallyDeleted: false,
@@ -776,17 +714,27 @@ class OfflineSyncOrchestrator {
       this.syncProgress = 80;
       this.notifyListeners();
       
-      // Pull cash transactions (individual save - usually small number)
+      // Pull cash transactions
       try {
         const { transactions: cashTxs } = await offlineShopService.getCashTransactions({});
-        const localCashTxs = await offlineDB.getCashTransactions(this.shopId!);
+        const localCashTxs = await offlineDB.getCashTransactions(shopId);
+        const serverIds = new Set((cashTxs || []).map((t: any) => t.id));
+        
+        // Delete transactions that server has deleted
+        for (const local of localCashTxs) {
+          if (!serverIds.has(local.id) && !local._locallyCreated && !local._locallyModified) {
+            await offlineDB.hardDeleteCashTransaction(local.id);
+          }
+        }
+        
+        // Save/update from server
         for (const tx of cashTxs || []) {
           const local = localCashTxs.find(t => t.id === tx.id);
           if (!local?._locallyModified && !local?._locallyCreated) {
             await offlineDB.saveCashTransaction({
               ...tx,
-              shop_id: this.shopId!,
-              user_id: this.userId || '',
+              shop_id: shopId,
+              user_id: userId,
               _locallyModified: false,
               _locallyCreated: false,
               _locallyDeleted: false,
@@ -805,8 +753,8 @@ class OfflineSyncOrchestrator {
         if (settings) {
           await offlineDB.saveSettings({
             ...settings,
-            shop_id: this.shopId!,
-            user_id: this.userId || '',
+            shop_id: shopId,
+            user_id: userId,
           });
           pulled++;
         }
@@ -821,11 +769,71 @@ class OfflineSyncOrchestrator {
         lastOnlineCheck: Date.now(),
       });
       
+      console.log('[SyncOrchestrator] Pull complete - synced:', pulled);
       return { pulled };
     } catch (error) {
       console.error('[SyncOrchestrator] Error pulling server data:', error);
       return { pulled };
     }
+  }
+  
+  /**
+   * Sync a table with deletion detection
+   * If server has deleted an item, delete it from local too
+   */
+  private async syncTableWithDeletions<T extends { id: string }>(
+    tableName: string,
+    serverData: T[],
+    shopId: string,
+    userId: string,
+    getLocal: (shopId: string) => Promise<any[]>,
+    bulkSave: (items: any[]) => Promise<void>,
+    hardDelete: (id: string) => Promise<void>
+  ): Promise<{ saved: number; deleted: number }> {
+    let saved = 0;
+    let deleted = 0;
+    
+    try {
+      // Get local data
+      const localData = await getLocal(shopId);
+      const serverIds = new Set(serverData.map(item => item.id));
+      const localMap = new Map(localData.map(item => [item.id, item]));
+      
+      // Find items to delete (in local but not on server AND not locally created/modified)
+      for (const local of localData) {
+        if (!serverIds.has(local.id) && !local._locallyCreated && !local._locallyModified) {
+          await hardDelete(local.id);
+          deleted++;
+          console.log(`[SyncOrchestrator] Deleted ${tableName}:`, local.id);
+        }
+      }
+      
+      // Save/update items from server (skip locally modified ones)
+      const toSave = serverData
+        .filter(item => {
+          const local = localMap.get(item.id);
+          return !local?._locallyModified && !local?._locallyCreated;
+        })
+        .map(item => ({
+          ...item,
+          shop_id: shopId,
+          user_id: userId,
+          _locallyModified: false,
+          _locallyCreated: false,
+          _locallyDeleted: false,
+        }));
+      
+      if (toSave.length > 0) {
+        await bulkSave(toSave);
+        saved = toSave.length;
+      }
+      
+      console.log(`[SyncOrchestrator] ${tableName}: saved ${saved}, deleted ${deleted}`);
+    } catch (error) {
+      console.error(`[SyncOrchestrator] Error syncing ${tableName}:`, error);
+    }
+    
+    return { saved, deleted };
   }
 
   /**

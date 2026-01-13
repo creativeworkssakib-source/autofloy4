@@ -7,7 +7,7 @@
  * - PWA/APK/EXE: Local-first with real-time sync
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { offlineDataService } from '@/services/offlineDataService';
 import { offlineShopService } from '@/services/offlineShopService';
 import { ShopPurchase, ShopSupplier, ShopStockAdjustment, ShopReturn, ShopLoan, ShopDailyCashRegister } from '@/lib/offlineDB';
@@ -884,6 +884,7 @@ export function useOfflineDashboard(range: 'today' | 'week' | 'month' = 'today')
   const { currentShop } = useShop();
   const [platform, setPlatform] = useState<string>('');
   const [initialized, setInitialized] = useState(false);
+  const fetchingRef = useRef(false);
 
   // Initialize smart data service when shop changes
   useEffect(() => {
@@ -917,14 +918,25 @@ export function useOfflineDashboard(range: 'today' | 'week' | 'month' = 'today')
       return;
     }
     
-    setLoading(true);
+    // Prevent concurrent fetches
+    if (fetchingRef.current) {
+      console.log('[useOfflineDashboard] Already fetching, skipping...');
+      return;
+    }
+    
+    fetchingRef.current = true;
+    
+    // Only show loading if we have no data yet
+    if (!data) {
+      setLoading(true);
+    }
+    
     try {
       console.log(`[useOfflineDashboard] Fetching dashboard for range: ${range}`);
       
       // Use smart data service which handles:
+      // - PWA/APK/EXE: LOCAL FIRST for instant UI, then background sync
       // - Browser: Server-first
-      // - PWA/APK/EXE + Online: Server-first, save to local
-      // - PWA/APK/EXE + Offline: Local-first
       const dashboardData = await smartDataService.getDashboard(range);
       
       if (dashboardData) {
@@ -961,11 +973,15 @@ export function useOfflineDashboard(range: 'today' | 'week' | 'month' = 'today')
       }
     } catch (error) {
       console.error('[useOfflineDashboard] Dashboard fetch error:', error);
-      setData(null);
+      // Only clear data if we have nothing yet
+      if (!data) {
+        setData(null);
+      }
     } finally {
       setLoading(false);
+      fetchingRef.current = false;
     }
-  }, [range, currentShop?.id, platform, initialized]);
+  }, [range, currentShop?.id, platform, initialized, data]);
 
   // Refetch when dependencies change
   useEffect(() => {
