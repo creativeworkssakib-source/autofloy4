@@ -219,7 +219,7 @@ const BenefitsSection = memo(() => {
               <div className="text-3xl lg:text-4xl font-bold mb-2">
                 <Counter from={0} to={benefit.value} prefix={benefit.prefix} suffix={benefit.suffix} duration={2} />
               </div>
-              <h4 className="text-lg font-semibold mb-1">{benefit.label}</h4>
+              <h3 className="text-lg font-semibold mb-1">{benefit.label}</h3>
               <p className="text-sm text-muted-foreground">{benefit.description}</p>
             </div>
           ))}
