@@ -69,11 +69,15 @@ export function OfflineReadyIndicator() {
  * Install PWA Prompt Component
  * 
  * Shows an install prompt for PWA on supported browsers
+ * Only shows ONCE - saves state to localStorage
  */
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
+
+const PWA_INSTALL_DISMISSED_KEY = 'pwa_install_dismissed';
+const PWA_INSTALL_COMPLETED_KEY = 'pwa_install_completed';
 
 export function InstallPWAPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
@@ -82,10 +86,19 @@ export function InstallPWAPrompt() {
   const { toast } = useToast();
 
   useEffect(() => {
-    // Check if already installed
+    // Check if already installed (standalone mode)
     if (window.matchMedia('(display-mode: standalone)').matches) {
       setIsInstalled(true);
+      localStorage.setItem(PWA_INSTALL_COMPLETED_KEY, 'true');
       return;
+    }
+
+    // Check if user already dismissed or installed
+    const wasDismissed = localStorage.getItem(PWA_INSTALL_DISMISSED_KEY) === 'true';
+    const wasInstalled = localStorage.getItem(PWA_INSTALL_COMPLETED_KEY) === 'true';
+    
+    if (wasDismissed || wasInstalled) {
+      return; // Don't show prompt ever again
     }
 
     // Listen for install prompt
@@ -101,6 +114,7 @@ export function InstallPWAPrompt() {
       setIsInstalled(true);
       setShowPrompt(false);
       setDeferredPrompt(null);
+      localStorage.setItem(PWA_INSTALL_COMPLETED_KEY, 'true');
       toast({
         title: "অ্যাপ ইনস্টল হয়েছে!",
         description: "এখন অফলাইনেও ব্যবহার করতে পারবেন।",
@@ -123,7 +137,11 @@ export function InstallPWAPrompt() {
     const { outcome } = await deferredPrompt.userChoice;
     
     if (outcome === 'accepted') {
+      localStorage.setItem(PWA_INSTALL_COMPLETED_KEY, 'true');
       console.log('User accepted the install prompt');
+    } else {
+      // User dismissed the browser prompt, mark as dismissed
+      localStorage.setItem(PWA_INSTALL_DISMISSED_KEY, 'true');
     }
     setDeferredPrompt(null);
     setShowPrompt(false);
@@ -131,7 +149,8 @@ export function InstallPWAPrompt() {
 
   const handleDismiss = () => {
     setShowPrompt(false);
-    // Don't show again for this session
+    // Mark as dismissed permanently
+    localStorage.setItem(PWA_INSTALL_DISMISSED_KEY, 'true');
   };
 
   if (isInstalled || !showPrompt || !deferredPrompt) return null;
