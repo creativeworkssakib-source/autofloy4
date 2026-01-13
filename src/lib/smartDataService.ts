@@ -1,14 +1,21 @@
 /**
- * Smart Data Service v2
+ * Smart Data Service v3
  * 
- * Provides a unified interface for data access that automatically chooses
- * the right strategy based on platform and online status:
+ * IMPROVED SYNC STRATEGY:
  * 
- * - Browser: Direct Supabase access (server-first, no local storage)
- * - PWA/APK/EXE Online: Server-first, save to local, show from local after sync
- * - PWA/APK/EXE Offline: Local-first, queue for sync when online
+ * 1. INSTANT UI: Show local data IMMEDIATELY while syncing in background
+ * 2. BIDIRECTIONAL SYNC: LocalDB = Supabase always
+ *    - When online: Pull all server data to local, detecting deletions
+ *    - Push pending local changes to server
+ * 3. 30-SECOND SYNC: Every 30s while online, check for changes
+ * 4. USER SEES NOTHING: Sync happens silently in background
  * 
- * Key principle: When online, data ALWAYS goes through server first to maintain consistency
+ * Flow:
+ * - User opens dashboard → Instant data from localDB
+ * - Background: Check Supabase for changes
+ * - If changes found → Update localDB → UI auto-refreshes
+ * - When offline → Use localDB, queue changes
+ * - When back online → Push pending, pull latest
  */
 
 import { offlineDB } from './offlineDB';
@@ -22,6 +29,7 @@ type DataListener = (data: any) => void;
 interface SmartDataOptions {
   forceLocal?: boolean;
   skipCache?: boolean;
+  backgroundSync?: boolean; // New: trigger background sync but return cached data immediately
 }
 
 class SmartDataService {
@@ -33,27 +41,25 @@ class SmartDataService {
   private dataCache: Map<string, { data: any; timestamp: number }> = new Map();
   private readonly CACHE_TTL = 30000; // 30 seconds cache TTL
   private initialSyncDone = false;
+  private syncInterval: NodeJS.Timeout | null = null;
+  private readonly SYNC_INTERVAL_MS = 30000; // 30 seconds
+  private isSyncing = false;
   
   /**
    * Initialize the smart data service
-   * Returns a promise that resolves when initialization is complete
    */
   async init(shopId: string, userId: string): Promise<void> {
-    // If already initialized with same shopId, return immediately
     if (this.initialized && this.shopId === shopId) {
       return;
     }
     
-    // If currently initializing, wait for that to complete
     if (this.initializingPromise) {
       await this.initializingPromise;
-      // Check again if we're now initialized with correct shopId
       if (this.initialized && this.shopId === shopId) {
         return;
       }
     }
     
-    // Start new initialization
     this.initializingPromise = this.doInit(shopId, userId);
     await this.initializingPromise;
     this.initializingPromise = null;
@@ -62,7 +68,6 @@ class SmartDataService {
   private async doInit(shopId: string, userId: string): Promise<void> {
     console.log('[SmartData] Initializing with shopId:', shopId);
     
-    // Clear cache if shopId changed
     if (this.shopId && this.shopId !== shopId) {
       this.clearCache();
       this.initialSyncDone = false;
@@ -71,27 +76,27 @@ class SmartDataService {
     this.shopId = shopId;
     this.userId = userId;
     
-    // Initialize offline DB
+    // Initialize offline DB first
     await offlineDB.init();
     
-    // For installed apps (PWA/APK/EXE), set up real-time sync
+    // For installed apps, set up continuous sync
     if (shouldUseLocalFirst()) {
       await realtimeSyncManager.init(shopId, userId);
       
-      // Start auto-sync for background syncing when online
-      syncManager.startAutoSync(60000); // Every 60 seconds
+      // Start our own sync loop (more aggressive than syncManager)
+      this.startSyncLoop();
       
-      // Subscribe to real-time updates to clear cache
+      // Subscribe to real-time updates
       realtimeSyncManager.subscribe(() => {
         this.clearCache();
         this.notifyAllListeners();
       });
       
-      // If online, do initial full sync to populate local DB
+      // If online, do initial full sync in BACKGROUND
       if (navigator.onLine && !this.initialSyncDone) {
-        console.log('[SmartData] Online - performing initial sync');
-        // Don't await - let it run in background
-        this.performInitialSync();
+        console.log('[SmartData] Online - starting background initial sync');
+        // Don't await - let it run in background while showing cached data
+        this.performInitialSync().catch(console.error);
       }
       
       console.log('[SmartData] Initialized for installed app (PWA/APK/EXE)');
@@ -109,14 +114,29 @@ class SmartDataService {
   }
   
   /**
-   * Ensure service is initialized before any operation
+   * Start 30-second sync loop
+   */
+  private startSyncLoop(): void {
+    if (this.syncInterval) {
+      clearInterval(this.syncInterval);
+    }
+    
+    this.syncInterval = setInterval(async () => {
+      if (navigator.onLine && !this.isSyncing && this.shopId) {
+        console.log('[SmartData] 30-second sync tick');
+        await this.performBidirectionalSync();
+      }
+    }, this.SYNC_INTERVAL_MS);
+  }
+  
+  /**
+   * Ensure service is initialized
    */
   private async ensureInitialized(): Promise<boolean> {
     if (this.initialized && this.shopId) {
       return true;
     }
     
-    // Try to get from localStorage
     const shopId = localStorage.getItem('autofloy_current_shop_id');
     const userId = localStorage.getItem('autofloy_user_id');
     
@@ -136,11 +156,238 @@ class SmartDataService {
     
     try {
       console.log('[SmartData] Starting initial sync...');
-      await syncManager.fullSync(this.shopId);
+      this.isSyncing = true;
+      
+      // First push any pending local changes
+      await syncManager.sync();
+      
+      // Then pull everything from server with deletion detection
+      await this.pullAllServerData();
+      
       this.initialSyncDone = true;
       console.log('[SmartData] Initial sync complete');
+      
+      // Notify listeners to refresh
+      this.clearCache();
+      this.notifyAllListeners();
     } catch (error) {
       console.error('[SmartData] Initial sync failed:', error);
+    } finally {
+      this.isSyncing = false;
+    }
+  }
+  
+  /**
+   * Perform bidirectional sync - LocalDB = Supabase
+   */
+  private async performBidirectionalSync(): Promise<void> {
+    if (this.isSyncing || !this.shopId) return;
+    
+    try {
+      this.isSyncing = true;
+      console.log('[SmartData] Starting bidirectional sync');
+      
+      // Step 1: Push local pending changes to server
+      const pushResult = await syncManager.sync();
+      console.log('[SmartData] Push result:', pushResult);
+      
+      // Step 2: Pull server data with deletion detection
+      await this.pullAllServerData();
+      
+      // Notify listeners of data change
+      this.clearCache();
+      this.notifyAllListeners();
+      
+      console.log('[SmartData] Bidirectional sync complete');
+    } catch (error) {
+      console.error('[SmartData] Bidirectional sync failed:', error);
+    } finally {
+      this.isSyncing = false;
+    }
+  }
+  
+  /**
+   * Pull ALL server data and detect deletions
+   * Key: If server has 79 items and local has 80, delete the extra one from local
+   */
+  private async pullAllServerData(): Promise<void> {
+    if (!this.shopId) return;
+    
+    const shopId = this.shopId;
+    const userId = this.userId || '';
+    
+    try {
+      // Fetch all data from server in parallel
+      const [
+        productsRes,
+        categoriesRes,
+        customersRes,
+        suppliersRes,
+        salesRes,
+        purchasesRes,
+        expensesRes,
+      ] = await Promise.allSettled([
+        offlineShopService.getProducts(),
+        offlineShopService.getCategories(),
+        offlineShopService.getCustomers(),
+        offlineShopService.getSuppliers(),
+        offlineShopService.getSales({}),
+        offlineShopService.getPurchases(),
+        offlineShopService.getExpenses({}),
+      ]);
+      
+      // Process products with deletion detection
+      if (productsRes.status === 'fulfilled') {
+        await this.syncTableWithDeletions(
+          'products',
+          productsRes.value.products,
+          shopId,
+          userId,
+          offlineDB.getProducts.bind(offlineDB),
+          offlineDB.bulkSaveProducts.bind(offlineDB),
+          offlineDB.hardDeleteProduct.bind(offlineDB)
+        );
+      }
+      
+      // Process categories
+      if (categoriesRes.status === 'fulfilled') {
+        await this.syncTableWithDeletions(
+          'categories',
+          categoriesRes.value.categories,
+          shopId,
+          userId,
+          offlineDB.getCategories.bind(offlineDB),
+          offlineDB.bulkSaveCategories.bind(offlineDB),
+          offlineDB.hardDeleteCategory.bind(offlineDB)
+        );
+      }
+      
+      // Process customers
+      if (customersRes.status === 'fulfilled') {
+        await this.syncTableWithDeletions(
+          'customers',
+          customersRes.value.customers,
+          shopId,
+          userId,
+          offlineDB.getCustomers.bind(offlineDB),
+          offlineDB.bulkSaveCustomers.bind(offlineDB),
+          offlineDB.hardDeleteCustomer.bind(offlineDB)
+        );
+      }
+      
+      // Process suppliers
+      if (suppliersRes.status === 'fulfilled') {
+        await this.syncTableWithDeletions(
+          'suppliers',
+          suppliersRes.value.suppliers,
+          shopId,
+          userId,
+          offlineDB.getSuppliers.bind(offlineDB),
+          offlineDB.bulkSaveSuppliers.bind(offlineDB),
+          offlineDB.hardDeleteSupplier.bind(offlineDB)
+        );
+      }
+      
+      // Process sales
+      if (salesRes.status === 'fulfilled') {
+        await this.syncTableWithDeletions(
+          'sales',
+          salesRes.value.sales,
+          shopId,
+          userId,
+          offlineDB.getSales.bind(offlineDB),
+          offlineDB.bulkSaveSales.bind(offlineDB),
+          offlineDB.hardDeleteSale.bind(offlineDB)
+        );
+      }
+      
+      // Process purchases
+      if (purchasesRes.status === 'fulfilled') {
+        await this.syncTableWithDeletions(
+          'purchases',
+          purchasesRes.value.purchases,
+          shopId,
+          userId,
+          offlineDB.getPurchases.bind(offlineDB),
+          offlineDB.bulkSavePurchases.bind(offlineDB),
+          offlineDB.hardDeletePurchase.bind(offlineDB)
+        );
+      }
+      
+      // Process expenses
+      if (expensesRes.status === 'fulfilled') {
+        await this.syncTableWithDeletions(
+          'expenses',
+          expensesRes.value.expenses,
+          shopId,
+          userId,
+          offlineDB.getExpenses.bind(offlineDB),
+          offlineDB.bulkSaveExpenses.bind(offlineDB),
+          offlineDB.hardDeleteExpense.bind(offlineDB)
+        );
+      }
+      
+      console.log('[SmartData] All tables synced with deletion detection');
+    } catch (error) {
+      console.error('[SmartData] Error pulling server data:', error);
+    }
+  }
+  
+  /**
+   * Sync a table with deletion detection
+   * If server has deleted an item, delete it from local too
+   */
+  private async syncTableWithDeletions<T extends { id: string }>(
+    tableName: string,
+    serverData: T[],
+    shopId: string,
+    userId: string,
+    getLocal: (shopId: string) => Promise<any[]>,
+    bulkSave: (items: any[]) => Promise<void>,
+    hardDelete: (id: string) => Promise<void>
+  ): Promise<void> {
+    try {
+      // Get local data
+      const localData = await getLocal(shopId);
+      const serverIds = new Set(serverData.map(item => item.id));
+      const localMap = new Map(localData.map(item => [item.id, item]));
+      
+      // Find items to delete (in local but not on server AND not locally created)
+      const toDelete: string[] = [];
+      for (const local of localData) {
+        if (!serverIds.has(local.id) && !local._locallyCreated && !local._locallyModified) {
+          toDelete.push(local.id);
+        }
+      }
+      
+      // Delete items that server has deleted
+      for (const id of toDelete) {
+        console.log(`[SmartData] Deleting ${tableName} ${id} (deleted from server)`);
+        await hardDelete(id);
+      }
+      
+      // Save/update items from server (skip locally modified ones)
+      const toSave = serverData
+        .filter(item => {
+          const local = localMap.get(item.id);
+          return !local?._locallyModified && !local?._locallyCreated;
+        })
+        .map(item => ({
+          ...item,
+          shop_id: shopId,
+          user_id: userId,
+          _locallyModified: false,
+          _locallyCreated: false,
+          _locallyDeleted: false,
+        }));
+      
+      if (toSave.length > 0) {
+        await bulkSave(toSave);
+      }
+      
+      console.log(`[SmartData] ${tableName}: saved ${toSave.length}, deleted ${toDelete.length}`);
+    } catch (error) {
+      console.error(`[SmartData] Error syncing ${tableName}:`, error);
     }
   }
   
@@ -150,28 +397,11 @@ class SmartDataService {
   private handleOnline = async (): Promise<void> => {
     console.log('[SmartData] Online - syncing data');
     
-    // Clear cache to get fresh data
-    this.clearCache();
+    // Small delay to ensure connection is stable
+    await new Promise(resolve => setTimeout(resolve, 2000));
     
-    if (shouldUseLocalFirst() && this.shopId) {
-      try {
-        // First push any pending local changes to server
-        console.log('[SmartData] Pushing pending local changes...');
-        const pushResult = await syncManager.sync();
-        console.log('[SmartData] Push sync complete:', pushResult);
-        
-        // Then pull fresh data from server to local DB
-        console.log('[SmartData] Pulling fresh data from server...');
-        await syncManager.fullSync(this.shopId);
-        console.log('[SmartData] Full sync complete');
-      } catch (error) {
-        console.error('[SmartData] Sync error:', error);
-        // Continue anyway to notify listeners
-      }
-    }
-    
-    // Notify all listeners to refresh their data
-    this.notifyAllListeners();
+    // Perform bidirectional sync
+    await this.performBidirectionalSync();
   };
   
   /**
@@ -183,10 +413,9 @@ class SmartDataService {
   };
   
   /**
-   * Get dashboard data with smart strategy
+   * Get dashboard data - INSTANT from cache, background sync
    */
   async getDashboard(range: 'today' | 'week' | 'month' = 'today'): Promise<any> {
-    // Ensure we're initialized
     const ready = await this.ensureInitialized();
     if (!ready) {
       console.warn('[SmartData] Not initialized, returning empty dashboard');
@@ -194,51 +423,63 @@ class SmartDataService {
     }
     
     const cacheKey = `dashboard-${this.shopId}-${range}`;
-    
-    // Check cache first
-    const cached = this.getFromCache(cacheKey);
-    if (cached) return cached;
-    
     const isLocalFirstPlatform = shouldUseLocalFirst();
     const isOnline = navigator.onLine;
     
-    console.log(`[SmartData] getDashboard - Platform: ${isLocalFirstPlatform ? 'PWA/APK/EXE' : 'Browser'}, Online: ${isOnline}`);
+    // STRATEGY: For installed apps, ALWAYS show local data first for instant UI
+    if (isLocalFirstPlatform && this.shopId) {
+      // Try to get cached data first for INSTANT response
+      const cached = this.getFromCache(cacheKey);
+      if (cached) {
+        // Trigger background sync if online
+        if (isOnline && !this.isSyncing) {
+          this.performBidirectionalSync().catch(console.error);
+        }
+        return cached;
+      }
+      
+      // No cache - try to get from local DB for fast response
+      try {
+        const localData = await this.calculateLocalDashboard(range);
+        this.setCache(cacheKey, { ...localData, fromLocal: true });
+        
+        // Trigger background sync if online
+        if (isOnline && !this.isSyncing) {
+          this.performBidirectionalSync().catch(console.error);
+        }
+        
+        return { ...localData, fromLocal: true };
+      } catch (localError) {
+        console.warn('[SmartData] Local dashboard failed:', localError);
+      }
+    }
     
-    // STRATEGY:
-    // 1. Browser: Always server-first
-    // 2. PWA/APK/EXE + Online: Server-first, save to local
-    // 3. PWA/APK/EXE + Offline: Local-first
-    
+    // Browser or local failed - try server
     if (isOnline) {
       try {
-        // Always try server first when online
         console.log('[SmartData] Fetching dashboard from server...');
         const serverData = await offlineShopService.getDashboard(range);
         
         if (serverData) {
-          console.log('[SmartData] Got server dashboard data:', Object.keys(serverData));
+          console.log('[SmartData] Got server dashboard data');
           this.setCache(cacheKey, { ...serverData, fromLocal: false });
           return { ...serverData, fromLocal: false };
         }
       } catch (error) {
         console.warn('[SmartData] Server fetch failed:', error);
         
-        // If local-first platform, fall back to local data
+        // Fall back to local for installed apps
         if (isLocalFirstPlatform && this.shopId) {
-          console.log('[SmartData] Falling back to local dashboard');
           const localData = await this.calculateLocalDashboard(range);
           return { ...localData, fromLocal: true };
         }
         throw error;
       }
     } else if (isLocalFirstPlatform && this.shopId) {
-      // Offline + local-first platform: use local data
-      console.log('[SmartData] Offline - using local dashboard');
+      // Offline + installed app: use local data
       return this.calculateLocalDashboard(range);
     }
     
-    // Browser + Offline: return empty dashboard
-    console.warn('[SmartData] Browser offline - returning empty dashboard');
     return this.getEmptyDashboard();
   }
   
