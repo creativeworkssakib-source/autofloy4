@@ -224,7 +224,7 @@ serve(async (req) => {
           );
 
           const { error: emailError } = await resend.emails.send({
-            from: "AutoFloy <noreply@autofloy.com>",
+            from: "AutoFloy <onboarding@resend.dev>",
             to: [user.email],
             subject: `🎉 Congratulations! Your ${planName} Plan is Now Active!`,
             html: emailHtml,
