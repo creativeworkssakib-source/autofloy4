@@ -79,30 +79,26 @@ class SmartDataService {
     // Initialize offline DB first
     await offlineDB.init();
     
-    // For installed apps, set up continuous sync
-    if (shouldUseLocalFirst()) {
-      await realtimeSyncManager.init(shopId, userId);
-      
-      // Start our own sync loop (more aggressive than syncManager)
-      this.startSyncLoop();
-      
-      // Subscribe to real-time updates
-      realtimeSyncManager.subscribe(() => {
-        this.clearCache();
-        this.notifyAllListeners();
-      });
-      
-      // If online, do initial full sync in BACKGROUND
-      if (navigator.onLine && !this.initialSyncDone) {
-        console.log('[SmartData] Online - starting background initial sync');
-        // Don't await - let it run in background while showing cached data
-        this.performInitialSync().catch(console.error);
-      }
-      
-      console.log('[SmartData] Initialized for installed app (PWA/APK/EXE)');
-    } else {
-      console.log('[SmartData] Initialized for browser (server-first only)');
+    // Now initialize sync for ALL platforms (including browser for fast cache)
+    await realtimeSyncManager.init(shopId, userId);
+    
+    // Start our own sync loop (aggressive sync every 30 seconds)
+    this.startSyncLoop();
+    
+    // Subscribe to real-time updates
+    realtimeSyncManager.subscribe(() => {
+      this.clearCache();
+      this.notifyAllListeners();
+    });
+    
+    // If online, do initial full sync in BACKGROUND
+    if (navigator.onLine && !this.initialSyncDone) {
+      console.log('[SmartData] Online - starting background initial sync');
+      // Don't await - let it run in background while showing cached data
+      this.performInitialSync().catch(console.error);
     }
+    
+    console.log('[SmartData] Initialized with cache-first strategy');
     
     // Listen for online/offline events
     window.removeEventListener('online', this.handleOnline);
@@ -414,6 +410,7 @@ class SmartDataService {
   
   /**
    * Get dashboard data - INSTANT from cache, background sync
+   * Now works for ALL platforms (browser included)
    */
   async getDashboard(range: 'today' | 'week' | 'month' = 'today'): Promise<any> {
     const ready = await this.ensureInitialized();
@@ -423,22 +420,24 @@ class SmartDataService {
     }
     
     const cacheKey = `dashboard-${this.shopId}-${range}`;
-    const isLocalFirstPlatform = shouldUseLocalFirst();
     const isOnline = navigator.onLine;
     
-    // STRATEGY: For installed apps, ALWAYS show local data first for instant UI
-    if (isLocalFirstPlatform && this.shopId) {
-      // Try to get cached data first for INSTANT response
-      const cached = this.getFromCache(cacheKey);
-      if (cached) {
-        // Trigger background sync if online
-        if (isOnline && !this.isSyncing) {
-          this.performBidirectionalSync().catch(console.error);
-        }
-        return cached;
+    // STRATEGY: ALWAYS show local/cached data first for instant UI
+    // Then sync in background
+    
+    // Step 1: Try to get cached data first for INSTANT response
+    const cached = this.getFromCache(cacheKey);
+    if (cached) {
+      console.log('[SmartData] Returning cached dashboard - instant!');
+      // Trigger background sync if online
+      if (isOnline && !this.isSyncing) {
+        this.performBidirectionalSync().catch(console.error);
       }
-      
-      // No cache - try to get from local DB for fast response
+      return cached;
+    }
+    
+    // Step 2: Try to get from local DB for fast response
+    if (this.shopId) {
       try {
         const localData = await this.calculateLocalDashboard(range);
         this.setCache(cacheKey, { ...localData, fromLocal: true });
@@ -454,7 +453,7 @@ class SmartDataService {
       }
     }
     
-    // Browser or local failed - try server
+    // Step 3: Fall back to server if no local data
     if (isOnline) {
       try {
         console.log('[SmartData] Fetching dashboard from server...');
@@ -467,17 +466,8 @@ class SmartDataService {
         }
       } catch (error) {
         console.warn('[SmartData] Server fetch failed:', error);
-        
-        // Fall back to local for installed apps
-        if (isLocalFirstPlatform && this.shopId) {
-          const localData = await this.calculateLocalDashboard(range);
-          return { ...localData, fromLocal: true };
-        }
         throw error;
       }
-    } else if (isLocalFirstPlatform && this.shopId) {
-      // Offline + installed app: use local data
-      return this.calculateLocalDashboard(range);
     }
     
     return this.getEmptyDashboard();

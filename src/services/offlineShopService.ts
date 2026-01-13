@@ -19,13 +19,32 @@ const CACHE_KEYS = {
 // Check if online
 const isOnline = () => typeof navigator !== 'undefined' && navigator.onLine;
 
-// Get cached data
-const getCached = <T>(key: string): T | null => {
+// Cache with TTL support
+interface CacheEntry<T> {
+  data: T;
+  timestamp: number;
+  ttl: number;
+}
+
+const CACHE_TTL = 60000; // 60 seconds default TTL for faster revalidation
+
+// Get cached data with TTL check
+const getCached = <T>(key: string, maxAge: number = CACHE_TTL): T | null => {
   try {
     const cached = localStorage.getItem(key);
     if (cached) {
-      const data = JSON.parse(cached);
-      return data;
+      const entry = JSON.parse(cached) as CacheEntry<T>;
+      // Check if cache has TTL info
+      if (entry.timestamp && entry.ttl) {
+        const age = Date.now() - entry.timestamp;
+        if (age > entry.ttl) {
+          // Expired but return stale data while revalidating
+          console.log(`[OfflineShopService] Cache stale for ${key}, returning while revalidating`);
+        }
+        return entry.data;
+      }
+      // Legacy cache without TTL
+      return entry as unknown as T;
     }
   } catch (e) {
     console.error(`[OfflineShopService] Failed to get cache for ${key}:`, e);
@@ -33,18 +52,77 @@ const getCached = <T>(key: string): T | null => {
   return null;
 };
 
-// Save to cache
-const setCache = <T>(key: string, data: T): void => {
+// Save to cache with TTL
+const setCache = <T>(key: string, data: T, ttl: number = CACHE_TTL): void => {
   try {
-    localStorage.setItem(key, JSON.stringify(data));
+    const entry: CacheEntry<T> = {
+      data,
+      timestamp: Date.now(),
+      ttl,
+    };
+    localStorage.setItem(key, JSON.stringify(entry));
   } catch (e) {
     console.error(`[OfflineShopService] Failed to set cache for ${key}:`, e);
   }
 };
 
 class OfflineShopService {
+  private revalidationInProgress = new Set<string>();
+  
   private getShopId(): string | null {
     return localStorage.getItem(CURRENT_SHOP_KEY);
+  }
+
+  /**
+   * Revalidate cache in background without blocking the response
+   */
+  private async revalidateInBackground<T>(
+    resource: string,
+    options: RequestInit = {},
+    queryParams?: Record<string, string>,
+    cacheKey?: string
+  ): Promise<void> {
+    if (!cacheKey || this.revalidationInProgress.has(cacheKey)) {
+      return; // Already revalidating
+    }
+    
+    this.revalidationInProgress.add(cacheKey);
+    
+    try {
+      const token = authService.getToken();
+      if (!token) return;
+      
+      const shopId = this.getShopId();
+      let url = `${SUPABASE_URL}/functions/v1/offline-shop/${resource}`;
+      const allParams = { ...queryParams };
+      if (shopId) {
+        allParams.shop_id = shopId;
+      }
+      if (Object.keys(allParams).length > 0) {
+        const params = new URLSearchParams(allParams);
+        url += `?${params.toString()}`;
+      }
+      
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          ...(shopId && { "X-Shop-Id": shopId }),
+          ...options.headers,
+        },
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setCache(cacheKey, data);
+        console.log(`[OfflineShopService] Background revalidation complete for ${resource}`);
+      }
+    } catch (error) {
+      console.warn(`[OfflineShopService] Background revalidation failed for ${resource}:`, error);
+    } finally {
+      this.revalidationInProgress.delete(cacheKey);
+    }
   }
 
   private async request<T>(
@@ -55,29 +133,31 @@ class OfflineShopService {
   ): Promise<T> {
     const isGetRequest = !options.method || options.method === 'GET';
     
-    // If offline, try to return cached data for GET requests
+    // CACHE-FIRST STRATEGY: Return cached data immediately for GET requests
+    if (isGetRequest && cacheKey) {
+      const cached = getCached<T>(cacheKey);
+      if (cached !== null) {
+        console.log(`[OfflineShopService] Returning cached data for ${resource}`);
+        
+        // If online, revalidate in background
+        if (isOnline()) {
+          this.revalidateInBackground(resource, options, queryParams, cacheKey);
+        }
+        
+        return cached;
+      }
+    }
+    
+    // If offline and no cache, throw error for non-GET
     if (!isOnline()) {
       if (isGetRequest && cacheKey) {
-        const cached = getCached<T>(cacheKey);
-        if (cached !== null) {
-          console.log(`[OfflineShopService] Offline - returning cached data for ${resource}`);
-          return cached;
-        }
+        throw new Error("অফলাইন মোডে এবং কোনো ক্যাশ নেই।");
       }
-      // For non-GET requests or no cache, throw error
       throw new Error("অফলাইন মোডে এই কাজ করা যাবে না। ইন্টারনেট সংযোগ প্রয়োজন।");
     }
     
     const token = authService.getToken();
     if (!token) {
-      // If we have cached data, return it even without token
-      if (isGetRequest && cacheKey) {
-        const cached = getCached<T>(cacheKey);
-        if (cached !== null) {
-          console.log(`[OfflineShopService] No token - returning cached data for ${resource}`);
-          return cached;
-        }
-      }
       throw new Error("Unauthorized");
     }
 
