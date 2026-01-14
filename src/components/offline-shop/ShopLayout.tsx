@@ -1,4 +1,4 @@
-import { ReactNode, useState, useEffect, useRef } from "react";
+import { ReactNode, useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { 
   LayoutDashboard, 
@@ -39,7 +39,6 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useSiteSettings } from "@/contexts/SiteSettingsContext";
 import { DynamicDocumentTitle } from "@/components/DynamicDocumentTitle";
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
 import { BusinessModeSwitcher } from "@/components/dashboard/BusinessModeSwitcher";
 import { SyncStatusBadge } from "@/components/dashboard/SyncStatusBadge";
 import { ShopSelector } from "@/components/offline-shop/ShopSelector";
@@ -70,34 +69,6 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
 
   // Check if offline shop is disabled by admin
   const isOfflineShopDisabled = settings.offline_shop_enabled === false;
-
-  // Initialize offline data service only once
-  const initRef = useRef(false);
-  
-  useEffect(() => {
-    if (initRef.current) return;
-    if (!user?.id || !currentShop?.id) return;
-    
-    initRef.current = true;
-    
-    // Lazy load sync services to prevent blocking
-    import('@/services/offlineDataService').then(({ offlineDataService }) => {
-      offlineDataService.init().then(() => {
-        offlineDataService.setUserId(user.id);
-        offlineDataService.setShopId(currentShop.id);
-      }).catch(console.error);
-    });
-    
-    import('@/services/syncManager').then(({ syncManager }) => {
-      syncManager.startAutoSync(30000);
-    });
-    
-    return () => {
-      import('@/services/syncManager').then(({ syncManager }) => {
-        syncManager.stopAutoSync();
-      });
-    };
-  }, [user?.id, currentShop?.id]);
 
   // Show offline expired modal when needed
   useEffect(() => {
