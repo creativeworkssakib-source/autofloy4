@@ -459,7 +459,6 @@ export type Database = {
           last_account_deleted_at: string | null
           last_plan: string | null
           last_subscription_status: string | null
-          subscription_expires_at: string | null
           total_signups: number
           trial_used: boolean
           updated_at: string
@@ -472,7 +471,6 @@ export type Database = {
           last_account_deleted_at?: string | null
           last_plan?: string | null
           last_subscription_status?: string | null
-          subscription_expires_at?: string | null
           total_signups?: number
           trial_used?: boolean
           updated_at?: string
@@ -485,7 +483,6 @@ export type Database = {
           last_account_deleted_at?: string | null
           last_plan?: string | null
           last_subscription_status?: string | null
-          subscription_expires_at?: string | null
           total_signups?: number
           trial_used?: boolean
           updated_at?: string

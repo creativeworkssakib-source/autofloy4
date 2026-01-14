@@ -1,13 +1,9 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode, useRef } from 'react';
+import { useShop } from '@/contexts/ShopContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { isInstalled } from '@/lib/platformDetection';
 
-/**
- * SIMPLIFIED Sync Context
- * - NO auto-sync
- * - NO event listeners for online/offline
- * - ONLY manual sync via user button click
- * - Prevents UI freezes caused by background sync
- */
-
+// Define the SyncStatus interface inline to avoid importing the heavy module
 interface SyncStatus {
   isOnline: boolean;
   isSyncing: boolean;
@@ -46,62 +42,128 @@ interface SyncProviderProps {
   children: ReactNode;
 }
 
-// Global debounce for force sync - 60 seconds minimum
-let lastForceSyncTime = 0;
-const FORCE_SYNC_DEBOUNCE_MS = 60000;
-
 export function SyncProvider({ children }: SyncProviderProps) {
+  const { currentShop } = useShop();
+  const { user } = useAuth();
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(defaultSyncStatus);
-  const isSyncingRef = useRef(false);
+  const [isOfflineCapable] = useState(() => isInstalled());
+  const initRef = useRef(false);
+  const shopIdRef = useRef<string | null>(null);
+  const userIdRef = useRef<string | null>(null);
+  const orchestratorRef = useRef<any>(null);
 
-  // NO useEffect for online/offline events - removed to prevent background activity
+  // Initialize sync orchestrator when shop and user are available
+  // NOW WORKS FOR ALL PLATFORMS including browser
+  useEffect(() => {
+    // Skip if no shop or user
+    if (!currentShop?.id || !user?.id) {
+      return;
+    }
+
+    // Skip if already initialized with same shop and user
+    if (initRef.current && shopIdRef.current === currentShop.id && userIdRef.current === user.id) {
+      return;
+    }
+
+    // Initialize for ALL platforms now (browser included for caching)
+
+    console.log('[SyncProvider] Initializing sync for shop:', currentShop.id);
+    
+    shopIdRef.current = currentShop.id;
+    userIdRef.current = user.id;
+
+    let unsubscribe: (() => void) | null = null;
+    let isMounted = true;
+
+    // Dynamically import the sync orchestrator only when needed
+    import('@/lib/offlineSyncOrchestrator').then(({ offlineSyncOrchestrator }) => {
+      if (!isMounted) return;
+      
+      orchestratorRef.current = offlineSyncOrchestrator;
+      
+      // Initialize the sync orchestrator
+      offlineSyncOrchestrator.init(currentShop.id, user.id)
+        .then(() => {
+          if (!isMounted) return;
+          
+          initRef.current = true;
+          
+          // Subscribe to sync status updates after successful init
+          unsubscribe = offlineSyncOrchestrator.subscribe((status: SyncStatus) => {
+            if (isMounted) {
+              setSyncStatus(status);
+            }
+          });
+        })
+        .catch((error: Error) => {
+          console.error('[SyncProvider] Failed to initialize sync:', error);
+          if (isMounted) {
+            // Update status with error
+            setSyncStatus(prev => ({
+              ...prev,
+              lastError: error instanceof Error ? error.message : 'Sync initialization failed',
+            }));
+          }
+        });
+    }).catch((error) => {
+      console.error('[SyncProvider] Failed to load sync module:', error);
+    });
+
+    return () => {
+      isMounted = false;
+      if (unsubscribe) {
+        unsubscribe();
+      }
+      // Only cleanup if shop/user actually changes (not on every render)
+      // We'll handle full cleanup on unmount
+    };
+  }, [currentShop?.id, user?.id]);
+
+  // Cleanup on full unmount
+  useEffect(() => {
+    return () => {
+      if (initRef.current && orchestratorRef.current) {
+        orchestratorRef.current.cleanup();
+        initRef.current = false;
+        shopIdRef.current = null;
+        userIdRef.current = null;
+      }
+    };
+  }, []);
+
+  // Update online status independently
+  useEffect(() => {
+    const handleOnline = () => {
+      setSyncStatus(prev => ({ ...prev, isOnline: true }));
+    };
+    
+    const handleOffline = () => {
+      setSyncStatus(prev => ({ ...prev, isOnline: false }));
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   const forceSync = useCallback(async () => {
-    const now = Date.now();
-    
-    // Strong debounce - 60 seconds minimum
-    if (now - lastForceSyncTime < FORCE_SYNC_DEBOUNCE_MS) {
-      console.log('[SyncProvider] Force sync debounced, wait', Math.ceil((FORCE_SYNC_DEBOUNCE_MS - (now - lastForceSyncTime)) / 1000), 'seconds');
+    // Force sync now works for all platforms
+    if (!initRef.current) {
+      console.log('[SyncProvider] Cannot force sync - not initialized');
       return;
     }
     
-    // Prevent concurrent syncs
-    if (isSyncingRef.current) {
-      console.log('[SyncProvider] Sync already in progress');
-      return;
-    }
-    
-    lastForceSyncTime = now;
-    isSyncingRef.current = true;
-    setSyncStatus(prev => ({ ...prev, isSyncing: true, isOnline: navigator.onLine }));
-    
-    try {
-      // Lazy load to prevent blocking
-      const { syncManager } = await import('@/services/syncManager');
-      await syncManager.sync();
-      
-      setSyncStatus(prev => ({ 
-        ...prev, 
-        isSyncing: false, 
-        lastSyncAt: new Date(),
-        lastError: null,
-        isOnline: navigator.onLine,
-      }));
-    } catch (error) {
-      console.error('[SyncProvider] Force sync failed:', error);
-      setSyncStatus(prev => ({ 
-        ...prev, 
-        isSyncing: false,
-        lastError: error instanceof Error ? error.message : 'Sync failed',
-        isOnline: navigator.onLine,
-      }));
-    } finally {
-      isSyncingRef.current = false;
+    if (orchestratorRef.current) {
+      await orchestratorRef.current.forceSync();
     }
   }, []);
 
   return (
-    <SyncContext.Provider value={{ syncStatus, forceSync, isOfflineCapable: false }}>
+    <SyncContext.Provider value={{ syncStatus, forceSync, isOfflineCapable }}>
       {children}
     </SyncContext.Provider>
   );

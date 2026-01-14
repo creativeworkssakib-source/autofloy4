@@ -883,75 +883,64 @@ export function useOfflineDashboard(range: 'today' | 'week' | 'month' = 'today')
   const isOnline = useIsOnline();
   const { currentShop } = useShop();
   const [platform, setPlatform] = useState<string>('');
-  const hasFetchedRef = useRef(false);
-  const lastShopIdRef = useRef<string | null>(null);
-  const lastRangeRef = useRef<string>(range);
+  const [initialized, setInitialized] = useState(false);
+  const fetchingRef = useRef(false);
 
-  // LIVE refetch function - always fetches fresh data
-  const refetch = useCallback(async () => {
-    const shopId = currentShop?.id;
-    console.log('[useOfflineDashboard] refetch called, shopId:', shopId, 'range:', range, 'online:', navigator.onLine);
+  // Initialize smart data service when shop changes
+  useEffect(() => {
+    const initService = async () => {
+      if (currentShop?.id) {
+        const userId = localStorage.getItem('autofloy_user_id') || '';
+        try {
+          await smartDataService.init(currentShop.id, userId);
+          setPlatform(getPlatformName());
+          setInitialized(true);
+          console.log('[useOfflineDashboard] Smart data service initialized');
+        } catch (error) {
+          console.error('[useOfflineDashboard] Failed to initialize:', error);
+          setInitialized(true); // Still set to true to allow fallback
+        }
+      }
+    };
     
-    if (!shopId) {
-      console.log('[useOfflineDashboard] No shopId, skipping fetch');
+    initService();
+  }, [currentShop?.id]);
+
+  const refetch = useCallback(async () => {
+    if (!currentShop?.id) {
+      console.log('[useOfflineDashboard] No shop ID, skipping fetch');
       setLoading(false);
       return;
     }
     
-    setLoading(true);
+    if (!initialized) {
+      console.log('[useOfflineDashboard] Not yet initialized, waiting...');
+      return;
+    }
+    
+    // Prevent concurrent fetches
+    if (fetchingRef.current) {
+      console.log('[useOfflineDashboard] Already fetching, skipping...');
+      return;
+    }
+    
+    fetchingRef.current = true;
+    
+    // Only show loading if we have no data yet
+    if (!data) {
+      setLoading(true);
+    }
     
     try {
-      setPlatform(getPlatformName());
+      console.log(`[useOfflineDashboard] Fetching dashboard for range: ${range}`);
       
-      // ALWAYS fetch LIVE from server when online - no cache
-      if (navigator.onLine) {
-        console.log(`[useOfflineDashboard] Fetching LIVE data from Supabase for ${range}...`);
-        const serverData = await offlineShopService.getDashboardLive(range);
-        console.log('[useOfflineDashboard] Server response:', serverData ? 'SUCCESS' : 'EMPTY');
-        
-        if (serverData) {
-          const mappedData = {
-            totalSales: serverData.period?.totalSales || serverData.totalSales || 0,
-            totalExpenses: serverData.period?.totalExpenses || serverData.totalExpenses || 0,
-            totalPurchases: serverData.period?.totalPurchases || serverData.totalPurchases || 0,
-            totalReturns: serverData.returns?.totalRefundAmount || serverData.totalReturns || 0,
-            profit: serverData.period?.netProfit || serverData.period?.grossProfit || serverData.profit || 0,
-            salesCount: serverData.period?.customersServed || serverData.recentSales?.length || serverData.salesCount || 0,
-            customersCount: serverData.totalCustomers || serverData.customersCount || 0,
-            productsCount: serverData.totalProducts || serverData.productsCount || 0,
-            lowStockItems: serverData.lowStockProducts || serverData.lowStockItems || [],
-            lowStockCount: serverData.lowStockProducts?.length || serverData.lowStockCount || 0,
-            recentSales: serverData.recentSales || [],
-            recentProducts: serverData.recentProducts || [],
-            totalDue: serverData.lifetime?.totalDue || serverData.totalDue || 0,
-            totalLoanAmount: serverData.totalLoanAmount || 0,
-            activeLoansCount: serverData.activeLoansCount || 0,
-            returnsSummary: serverData.returns || serverData.returnsSummary || {
-              totalCount: 0,
-              totalRefundAmount: 0,
-              processedCount: 0,
-              pendingCount: 0,
-              topReasons: [],
-            },
-            platform: getPlatformName(),
-            fromLocal: false,
-          };
-          setData(mappedData);
-          setFromCache(false);
-          hasFetchedRef.current = true;
-          console.log(`[useOfflineDashboard] Got LIVE data for ${range}`);
-          return;
-        }
-      }
-      
-      // Offline - use smartDataService which handles cache/local fallback
-      console.log('[useOfflineDashboard] Offline or server failed, using cache...');
-      const userId = localStorage.getItem('autofloy_user_id') || '';
-      await smartDataService.init(shopId, userId);
-      
+      // Use smart data service which handles:
+      // - PWA/APK/EXE: LOCAL FIRST for instant UI, then background sync
+      // - Browser: Server-first
       const dashboardData = await smartDataService.getDashboard(range);
       
       if (dashboardData) {
+        // Map server data to our expected format
         const mappedData = {
           totalSales: dashboardData.period?.totalSales || dashboardData.totalSales || 0,
           totalExpenses: dashboardData.period?.totalExpenses || dashboardData.totalExpenses || 0,
@@ -975,33 +964,31 @@ export function useOfflineDashboard(range: 'today' | 'week' | 'month' = 'today')
             pendingCount: 0,
             topReasons: [],
           },
-          platform: getPlatformName(),
+          platform,
           fromLocal: dashboardData.fromLocal || false,
         };
+        console.log('[useOfflineDashboard] Dashboard data mapped successfully');
         setData(mappedData);
         setFromCache(dashboardData.fromLocal || false);
-        hasFetchedRef.current = true;
       }
     } catch (error) {
       console.error('[useOfflineDashboard] Dashboard fetch error:', error);
+      // Only clear data if we have nothing yet
+      if (!data) {
+        setData(null);
+      }
     } finally {
       setLoading(false);
+      fetchingRef.current = false;
     }
-  }, [range, currentShop?.id]);
+  }, [range, currentShop?.id, platform, initialized, data]);
 
-  // Fetch on mount and when shop/range changes
+  // Refetch when dependencies change
   useEffect(() => {
-    const shopId = currentShop?.id;
-    
-    if (shopId && (shopId !== lastShopIdRef.current || range !== lastRangeRef.current)) {
-      lastShopIdRef.current = shopId;
-      lastRangeRef.current = range;
-      hasFetchedRef.current = false;
-      refetch();
-    } else if (shopId && !hasFetchedRef.current) {
+    if (initialized) {
       refetch();
     }
-  }, [currentShop?.id, range, refetch]);
+  }, [refetch, initialized]);
 
   return {
     data,

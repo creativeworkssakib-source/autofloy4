@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Globe, Store, ChevronDown, Link2 } from "lucide-react";
+import { Globe, Store, ChevronDown, Link2, Unlink } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -92,7 +94,7 @@ export const BusinessModeSwitcher = ({
           <ChevronDown className="w-3 h-3" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-64 z-[100] bg-popover border shadow-lg">
+      <DropdownMenuContent align="start" className="w-64">
         <DropdownMenuItem
           onClick={() => handleModeChange("online")}
           className={cn(

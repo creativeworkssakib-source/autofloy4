@@ -21,7 +21,6 @@ import {
   Mail,
   Webhook,
   Zap,
-  MessageSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -52,7 +51,6 @@ const navItems = [
   { name: "Appearance", href: "/admin/appearance", icon: Palette },
   { name: "SEO Settings", href: "/admin/seo", icon: Search },
   { name: "Email Templates", href: "/admin/email-templates", icon: Mail },
-  { name: "SMS Settings", href: "/admin/sms-settings", icon: MessageSquare },
   { name: "Webhooks", href: "/admin/webhooks", icon: Webhook },
   { name: "API Integrations", href: "/admin/api-integrations", icon: Zap },
   { name: "Site Settings", href: "/admin/settings", icon: Settings },

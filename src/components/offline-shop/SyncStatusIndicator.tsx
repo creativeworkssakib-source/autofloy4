@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Cloud, CloudOff, RefreshCw, Check, AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -51,24 +51,14 @@ export function SyncStatusIndicator({ compact = false, showButton = true, classN
   const { language } = useLanguage();
   const t = translations[language] || translations.en;
   const [isForcing, setIsForcing] = useState(false);
-  const lastClickTime = useRef(0);
 
   const handleForceSync = async () => {
-    // Debounce clicks - prevent multiple clicks within 5 seconds
-    const now = Date.now();
-    if (now - lastClickTime.current < 5000) {
-      console.log('[SyncStatusIndicator] Click debounced');
-      return;
-    }
-    lastClickTime.current = now;
-    
     if (isForcing || syncStatus.isSyncing) return;
     setIsForcing(true);
     try {
       await forceSync();
     } finally {
-      // Delay resetting to prevent rapid re-clicks
-      setTimeout(() => setIsForcing(false), 2000);
+      setIsForcing(false);
     }
   };
 

@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
+import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import { 
   TrendingUp, 
@@ -88,22 +89,8 @@ const ShopDashboard = () => {
 
   const isLoading = isTodayLoading || isMonthLoading;
   
-  // Debounce for sync button
-  const lastSyncClickRef = React.useRef(0);
-  
   const loadDashboard = async () => {
     await Promise.all([loadTodayDashboard(), loadMonthDashboard()]);
-  };
-  
-  // Throttled sync function
-  const handleSyncClick = async () => {
-    const now = Date.now();
-    if (now - lastSyncClickRef.current < 30000) {
-      console.log('[ShopDashboard] Sync click throttled');
-      return;
-    }
-    lastSyncClickRef.current = now;
-    await triggerSync();
   };
 
   // Map hook data to expected format - today's data for period, month data for lifetime
@@ -214,7 +201,7 @@ const ShopDashboard = () => {
             {pendingCount > 0 && isOnline && !isSyncing && (
               <Button 
                 variant="outline" 
-                onClick={handleSyncClick} 
+                onClick={() => triggerSync()} 
                 disabled={isSyncing}
                 size="sm"
               >
@@ -228,15 +215,7 @@ const ShopDashboard = () => {
                 {language === "bn" ? "সিংক হচ্ছে..." : "Syncing..."}
               </Badge>
             )}
-            <Button 
-              variant="outline" 
-              onClick={() => {
-                console.log('[ShopDashboard] Refresh clicked');
-                loadDashboard();
-              }} 
-              size="sm" 
-              className="sm:size-default"
-            >
+            <Button variant="outline" onClick={loadDashboard} disabled={isLoading} size="sm" className="sm:size-default">
               <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
               {t("common.refresh")}
             </Button>
@@ -268,49 +247,59 @@ const ShopDashboard = () => {
             );
             
             return (
-              <div key={stat.title}>
+              <motion.div
+                key={stat.title}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.1 }}
+              >
                 {isClickable ? (
                   <Link to="/offline-shop/due-customers">{cardContent}</Link>
                 ) : (
                   cardContent
                 )}
-              </div>
+              </motion.div>
             );
           })}
         </div>
 
         {/* Trash Bin Alert */}
         {trashCount > 0 && (
-          <Link to="/offline-shop/trash">
-            <Card className="border-orange-500/50 bg-orange-500/5 hover:bg-orange-500/10 transition-colors cursor-pointer">
-              <CardContent className="py-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="p-3 rounded-full bg-orange-500/20">
-                      <Trash2 className="h-6 w-6 text-orange-500" />
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <Link to="/offline-shop/trash">
+              <Card className="border-orange-500/50 bg-orange-500/5 hover:bg-orange-500/10 transition-colors cursor-pointer">
+                <CardContent className="py-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-3 rounded-full bg-orange-500/20">
+                        <Trash2 className="h-6 w-6 text-orange-500" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-orange-600 dark:text-orange-400">
+                          {language === "bn" ? "ট্র্যাশ বিনে আইটেম আছে" : "Items in Trash Bin"}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {language === "bn" 
+                            ? `${trashCount}টি আইটেম স্থায়ীভাবে ডিলিট করার জন্য অপেক্ষা করছে`
+                            : `${trashCount} item(s) waiting to be permanently deleted`
+                          }
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium text-orange-600 dark:text-orange-400">
-                        {language === "bn" ? "ট্র্যাশ বিনে আইটেম আছে" : "Items in Trash Bin"}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {language === "bn" 
-                          ? `${trashCount}টি আইটেম স্থায়ীভাবে ডিলিট করার জন্য অপেক্ষা করছে`
-                          : `${trashCount} item(s) waiting to be permanently deleted`
-                        }
-                      </p>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="border-orange-500/50 text-orange-600">
+                        {trashCount}
+                      </Badge>
+                      <ArrowRight className="h-5 w-5 text-orange-500" />
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="border-orange-500/50 text-orange-600">
-                      {trashCount}
-                    </Badge>
-                    <ArrowRight className="h-5 w-5 text-orange-500" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </Link>
+                </CardContent>
+              </Card>
+            </Link>
+          </motion.div>
         )}
 
         {/* Quick Stats */}

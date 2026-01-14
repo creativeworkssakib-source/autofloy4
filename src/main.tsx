@@ -1,14 +1,19 @@
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
-import { requestPersistentStorage } from "./lib/serviceWorkerRegistration";
+import { register as registerSW } from "./lib/serviceWorkerRegistration";
 
-// Request persistent storage for better offline support
-requestPersistentStorage().then((persisted) => {
-  console.log('[App] Persistent storage:', persisted ? 'granted' : 'not available');
+// Register service worker for offline support
+registerSW({
+  onSuccess: () => {
+    console.log("App ready for offline use");
+  },
+  onUpdate: () => {
+    console.log("New version available! Refresh to update.");
+  },
+  onOfflineReady: () => {
+    console.log("App is ready to work offline");
+  },
 });
-
-// Note: Service worker registration is handled by usePWAStatus hook via vite-plugin-pwa
-// This prevents duplicate registrations and ensures proper update handling
 
 createRoot(document.getElementById("root")!).render(<App />);

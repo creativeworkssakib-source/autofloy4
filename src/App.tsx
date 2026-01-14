@@ -101,7 +101,6 @@ const AdminEmailTemplates = lazy(() => import("./pages/admin/AdminEmailTemplates
 const AdminApiIntegrations = lazy(() => import("./pages/admin/AdminApiIntegrations"));
 const AdminPaymentRequests = lazy(() => import("./pages/admin/AdminPaymentRequests"));
 const AdminPaymentMethods = lazy(() => import("./pages/admin/AdminPaymentMethods"));
-const AdminSmsSettings = lazy(() => import("./pages/admin/AdminSmsSettings"));
 
 
 // Loading fallback component
@@ -431,11 +430,6 @@ const App = () => (
                   <Route path="/admin/payment-methods" element={
                     <AdminProtectedRoute>
                       <AdminPaymentMethods />
-                    </AdminProtectedRoute>
-                  } />
-                  <Route path="/admin/sms-settings" element={
-                    <AdminProtectedRoute>
-                      <AdminSmsSettings />
                     </AdminProtectedRoute>
                   } />
                   

@@ -87,15 +87,18 @@ class SyncManager {
   }
   
   // =============== AUTO SYNC ===============
-  // AUTO SYNC IS COMPLETELY DISABLED to prevent UI freezes
-  // Sync should ONLY be triggered manually by user action (Refresh button)
   
-  private autoSyncStarted = false;
-  
-  // DISABLED: Auto sync causes UI freezes - do not use
-  startAutoSync(_intervalMs: number = 120000): void {
-    console.log('[SyncManager] Auto sync is DISABLED to prevent UI freezes');
-    // DO NOTHING - auto sync is disabled
+  startAutoSync(intervalMs: number = 30000): void {
+    if (this.syncInterval) return;
+    
+    this.syncInterval = setInterval(() => {
+      if (navigator.onLine && !this.isSyncing) {
+        this.sync();
+      }
+    }, intervalMs);
+    
+    // Also listen for online event
+    window.addEventListener('online', this.handleOnline);
   }
   
   stopAutoSync(): void {
@@ -103,8 +106,28 @@ class SyncManager {
       clearInterval(this.syncInterval);
       this.syncInterval = null;
     }
-    this.autoSyncStarted = false;
+    window.removeEventListener('online', this.handleOnline);
   }
+  
+  private handleOnline = async (): Promise<void> => {
+    // Wait a bit for connection to stabilize
+    setTimeout(async () => {
+      if (navigator.onLine && !this.isSyncing) {
+        console.log('[SyncManager] Online - starting auto sync');
+        
+        // First, push any pending local changes to server
+        const result = await this.sync();
+        console.log('[SyncManager] Push sync complete:', result);
+        
+        // Then, pull latest data from server
+        const shopId = localStorage.getItem('autofloy_current_shop_id');
+        if (shopId && result.success) {
+          console.log('[SyncManager] Pulling latest data from server');
+          await this.fullSync(shopId);
+        }
+      }
+    }, 2000);
+  };
   
   // =============== SYNC OPERATIONS ===============
   

@@ -17,16 +17,9 @@ export default defineConfig(({ mode }) => ({
     react(),
     mode === "development" && componentTagger(),
     VitePWA({
-      registerType: 'autoUpdate', // Auto update silently
-      injectRegister: 'auto', // Auto register service worker
-      includeAssets: [
-        'favicon.svg',
-        'favicon.ico', 
-        'robots.txt',
-        'pwa-192x192.png',
-        'pwa-512x512.png',
-        'placeholder.svg',
-      ],
+      registerType: 'autoUpdate',
+      injectRegister: 'script-defer',
+      includeAssets: ['favicon.svg', 'favicon.ico', 'robots.txt', 'pwa-192x192.png', 'pwa-512x512.png'],
       manifest: {
         name: 'AutoFloy Shop - Complete Business Solution',
         short_name: 'AutoFloy',
@@ -75,154 +68,73 @@ export default defineConfig(({ mode }) => ({
         ]
       },
       workbox: {
-        // Pre-cache all static assets
-        globPatterns: [
-          '**/*.{js,css,html,ico,png,svg,woff2,woff,ttf,json}'
-        ],
-        globIgnores: [
-          '**/node_modules/**/*',
-          'sw.js',
-          'workbox-*.js',
-        ],
-        maximumFileSizeToCacheInBytes: 15 * 1024 * 1024, // 15MB
-
-        // Navigation fallback
-        navigateFallback: '/index.html',
-        navigateFallbackDenylist: [
-          /^\/api/,
-          /^\/functions/,
-          /^\/rest/,
-          /^\/auth/,
-          /\.json$/,
-        ],
-
-        // Clean old caches
-        cleanupOutdatedCaches: true,
+        // Cache all static assets
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,woff,ttf,json}'],
+        maximumFileSizeToCacheInBytes: 10 * 1024 * 1024, // 10MB
         
-        // Auto update - skip waiting and claim clients immediately
-        skipWaiting: true,
-        clientsClaim: true,
-
+        // Important: Include index.html for navigation
+        navigateFallback: 'index.html',
+        navigateFallbackDenylist: [/^\/api/, /^\/functions/],
+        
         // Runtime caching strategies
         runtimeCaching: [
-          // Cache Google Fonts stylesheets
+          // Cache Google Fonts
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-            handler: 'StaleWhileRevalidate',
+            handler: 'CacheFirst',
             options: {
-              cacheName: 'google-fonts-stylesheets',
-              expiration: {
-                maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 365, // 1 year
-              },
+              cacheName: 'google-fonts-cache',
+              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
             },
           },
-          // Cache Google Fonts webfonts
           {
             urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
             handler: 'CacheFirst',
             options: {
-              cacheName: 'google-fonts-webfonts',
-              expiration: {
-                maxEntries: 30,
-                maxAgeSeconds: 60 * 60 * 24 * 365, // 1 year
-              },
-              cacheableResponse: {
-                statuses: [0, 200],
-              },
+              cacheName: 'gstatic-fonts-cache',
+              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
             },
           },
-          // Supabase Edge Functions - Network first with offline fallback
+          // API calls - Network First with cache fallback
           {
             urlPattern: /^https:\/\/.*\.supabase\.co\/functions\/.*/i,
             handler: 'NetworkFirst',
             options: {
-              cacheName: 'supabase-functions-cache',
-              expiration: {
-                maxEntries: 200,
-                maxAgeSeconds: 60 * 60 * 24 * 7, // 7 days
-              },
+              cacheName: 'api-cache',
+              expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 }, // 24 hours
               networkTimeoutSeconds: 10,
               cacheableResponse: {
                 statuses: [0, 200],
               },
             },
           },
-          // Supabase REST API
+          // REST API calls
           {
             urlPattern: /^https:\/\/.*\.supabase\.co\/rest\/.*/i,
             handler: 'NetworkFirst',
             options: {
-              cacheName: 'supabase-rest-cache',
-              expiration: {
-                maxEntries: 200,
-                maxAgeSeconds: 60 * 60 * 24 * 7, // 7 days
-              },
+              cacheName: 'rest-api-cache',
+              expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 },
               networkTimeoutSeconds: 10,
               cacheableResponse: {
                 statuses: [0, 200],
               },
             },
           },
-          // Supabase Storage - Cache images and files
+          // Image caching
           {
-            urlPattern: /^https:\/\/.*\.supabase\.co\/storage\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'supabase-storage-cache',
-              expiration: {
-                maxEntries: 100,
-                maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
-              },
-              cacheableResponse: {
-                statuses: [0, 200],
-              },
-            },
-          },
-          // Local images - Cache first
-          {
-            urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|ico)$/i,
+            urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp)$/i,
             handler: 'CacheFirst',
             options: {
               cacheName: 'image-cache',
-              expiration: {
-                maxEntries: 200,
-                maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
-              },
-            },
-          },
-          // JS and CSS chunks - Cache first (versioned by hash)
-          {
-            urlPattern: /\.(?:js|css)$/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'static-resources',
-              expiration: {
-                maxEntries: 100,
-                maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
-              },
-            },
-          },
-          // JSON data files
-          {
-            urlPattern: /\.json$/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'json-cache',
-              expiration: {
-                maxEntries: 50,
-                maxAgeSeconds: 60 * 60 * 24, // 1 day
-              },
-              networkTimeoutSeconds: 5,
+              expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 * 30 }, // 30 days
             },
           },
         ],
       },
       // Dev options
       devOptions: {
-        enabled: false, // Enable in dev for testing: set to true
-        type: 'module',
-        navigateFallback: '/index.html',
+        enabled: false, // Enable in dev if needed for testing
       },
     }),
   ].filter(Boolean),
