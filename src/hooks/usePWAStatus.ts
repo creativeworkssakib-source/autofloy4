@@ -46,22 +46,14 @@ export function usePWAStatus(): PWAStatus {
     offlineReady: [offlineReady],
     updateServiceWorker,
   } = useRegisterSW({
-    immediate: true,
-    onRegisteredSW(swUrl, registration) {
-      console.log('[PWA Hook] Service Worker registered at:', swUrl);
+    onRegistered(registration) {
+      console.log('[PWA Hook] Service Worker registered');
       
       // Check for updates periodically
       if (registration) {
-        // Initial check after 10 seconds
-        setTimeout(() => {
-          registration.update().catch(console.error);
-        }, 10000);
-        
-        // Then check every 30 minutes
         setInterval(() => {
-          console.log('[PWA Hook] Checking for updates...');
-          registration.update().catch(console.error);
-        }, 30 * 60 * 1000);
+          registration.update();
+        }, 60 * 60 * 1000); // Every hour
       }
     },
     onRegisterError(error) {
@@ -87,11 +79,19 @@ export function usePWAStatus(): PWAStatus {
     const mediaQuery = window.matchMedia('(display-mode: standalone)');
     const handler = () => checkInstalled();
     
-    // Use modern API only (deprecated listeners removed)
-    mediaQuery.addEventListener('change', handler);
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener('change', handler);
+    } else {
+      // Fallback for older browsers
+      mediaQuery.addListener(handler);
+    }
 
     return () => {
-      mediaQuery.removeEventListener('change', handler);
+      if (mediaQuery.removeEventListener) {
+        mediaQuery.removeEventListener('change', handler);
+      } else {
+        mediaQuery.removeListener(handler);
+      }
     };
   }, []);
 
