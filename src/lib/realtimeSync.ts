@@ -51,27 +51,17 @@ class RealtimeSyncManager {
   
   /**
    * Initialize real-time sync
+   * DISABLED: Real-time subscriptions cause UI freezes
+   * All sync is now manual only
    */
   async init(shopId: string, userId: string): Promise<void> {
-    // Skip if already initialized with same shopId
-    if (this.shopId === shopId && this.isConnected) {
-      console.log('[RealtimeSync] Already initialized with same shopId');
-      return;
-    }
-    
-    // Disconnect existing subscriptions if shopId changed
-    if (this.shopId && this.shopId !== shopId) {
-      console.log('[RealtimeSync] Shop changed, disconnecting old subscriptions');
-      this.disconnect();
-    }
-    
+    console.log('[RealtimeSync] DISABLED - Manual sync only to prevent UI freezes');
     this.shopId = shopId;
     this.userId = userId;
-    
-    // Only set up real-time for installed apps (PWA/APK/EXE)
-    if (platformDetector.shouldUseLocalFirst()) {
-      await this.setupSubscriptions();
-    }
+    // DISABLED: No subscriptions to prevent background activity
+    // if (platformDetector.shouldUseLocalFirst()) {
+    //   await this.setupSubscriptions();
+    // }
   }
   
   /**
