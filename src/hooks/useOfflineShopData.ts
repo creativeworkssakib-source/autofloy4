@@ -890,7 +890,10 @@ export function useOfflineDashboard(range: 'today' | 'week' | 'month' = 'today')
   // LIVE refetch function - always fetches fresh data
   const refetch = useCallback(async () => {
     const shopId = currentShop?.id;
+    console.log('[useOfflineDashboard] refetch called, shopId:', shopId, 'range:', range, 'online:', navigator.onLine);
+    
     if (!shopId) {
+      console.log('[useOfflineDashboard] No shopId, skipping fetch');
       setLoading(false);
       return;
     }
@@ -902,8 +905,9 @@ export function useOfflineDashboard(range: 'today' | 'week' | 'month' = 'today')
       
       // ALWAYS fetch LIVE from server when online - no cache
       if (navigator.onLine) {
-        console.log(`[useOfflineDashboard] Fetching LIVE data for ${range}...`);
+        console.log(`[useOfflineDashboard] Fetching LIVE data from Supabase for ${range}...`);
         const serverData = await offlineShopService.getDashboardLive(range);
+        console.log('[useOfflineDashboard] Server response:', serverData ? 'SUCCESS' : 'EMPTY');
         
         if (serverData) {
           const mappedData = {

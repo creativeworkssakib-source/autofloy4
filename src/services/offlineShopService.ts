@@ -165,7 +165,7 @@ class OfflineShopService {
     }
 
     try {
-      console.log(`[OfflineShopService] Fetching LIVE data for ${resource}...`);
+      console.log(`[OfflineShopService] Fetching LIVE data from: ${url}`);
       const response = await fetch(url, {
         ...options,
         headers: {
@@ -230,6 +230,7 @@ class OfflineShopService {
 
   // Dashboard LIVE - always fetch fresh from server (no cache-first)
   async getDashboardLive(range: "today" | "week" | "month" = "today") {
+    console.log(`[OfflineShopService] getDashboardLive called for range: ${range}`);
     return this.requestLive<any>("dashboard", {}, { range }, CACHE_KEYS.dashboard);
   }
 
