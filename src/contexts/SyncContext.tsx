@@ -1,7 +1,13 @@
-import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode, useRef } from 'react';
-import { isInstalled } from '@/lib/platformDetection';
+import React, { createContext, useContext, useState, useCallback, ReactNode, useRef } from 'react';
 
-// Define the SyncStatus interface inline to avoid importing the heavy module
+/**
+ * SIMPLIFIED Sync Context
+ * - NO auto-sync
+ * - NO event listeners for online/offline
+ * - ONLY manual sync via user button click
+ * - Prevents UI freezes caused by background sync
+ */
+
 interface SyncStatus {
   isOnline: boolean;
   isSyncing: boolean;
@@ -40,40 +46,22 @@ interface SyncProviderProps {
   children: ReactNode;
 }
 
-// Global debounce for force sync
+// Global debounce for force sync - 60 seconds minimum
 let lastForceSyncTime = 0;
-const FORCE_SYNC_DEBOUNCE_MS = 30000; // 30 seconds minimum between force syncs
+const FORCE_SYNC_DEBOUNCE_MS = 60000;
 
 export function SyncProvider({ children }: SyncProviderProps) {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(defaultSyncStatus);
-  const [isOfflineCapable] = useState(() => isInstalled());
   const isSyncingRef = useRef(false);
 
-  // Update online status independently - simple and non-blocking
-  useEffect(() => {
-    const handleOnline = () => {
-      setSyncStatus(prev => ({ ...prev, isOnline: true }));
-    };
-    
-    const handleOffline = () => {
-      setSyncStatus(prev => ({ ...prev, isOnline: false }));
-    };
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
+  // NO useEffect for online/offline events - removed to prevent background activity
 
   const forceSync = useCallback(async () => {
     const now = Date.now();
     
-    // Debounce to prevent rapid calls
+    // Strong debounce - 60 seconds minimum
     if (now - lastForceSyncTime < FORCE_SYNC_DEBOUNCE_MS) {
-      console.log('[SyncProvider] Force sync debounced');
+      console.log('[SyncProvider] Force sync debounced, wait', Math.ceil((FORCE_SYNC_DEBOUNCE_MS - (now - lastForceSyncTime)) / 1000), 'seconds');
       return;
     }
     
@@ -85,7 +73,7 @@ export function SyncProvider({ children }: SyncProviderProps) {
     
     lastForceSyncTime = now;
     isSyncingRef.current = true;
-    setSyncStatus(prev => ({ ...prev, isSyncing: true }));
+    setSyncStatus(prev => ({ ...prev, isSyncing: true, isOnline: navigator.onLine }));
     
     try {
       // Lazy load to prevent blocking
@@ -96,14 +84,16 @@ export function SyncProvider({ children }: SyncProviderProps) {
         ...prev, 
         isSyncing: false, 
         lastSyncAt: new Date(),
-        lastError: null 
+        lastError: null,
+        isOnline: navigator.onLine,
       }));
     } catch (error) {
       console.error('[SyncProvider] Force sync failed:', error);
       setSyncStatus(prev => ({ 
         ...prev, 
         isSyncing: false,
-        lastError: error instanceof Error ? error.message : 'Sync failed'
+        lastError: error instanceof Error ? error.message : 'Sync failed',
+        isOnline: navigator.onLine,
       }));
     } finally {
       isSyncingRef.current = false;
@@ -111,7 +101,7 @@ export function SyncProvider({ children }: SyncProviderProps) {
   }, []);
 
   return (
-    <SyncContext.Provider value={{ syncStatus, forceSync, isOfflineCapable }}>
+    <SyncContext.Provider value={{ syncStatus, forceSync, isOfflineCapable: false }}>
       {children}
     </SyncContext.Provider>
   );

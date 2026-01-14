@@ -87,30 +87,15 @@ class SyncManager {
   }
   
   // =============== AUTO SYNC ===============
-  // Auto sync is now DISABLED by default to prevent UI freezes
-  // Sync should be triggered manually by user action (Refresh button)
+  // AUTO SYNC IS COMPLETELY DISABLED to prevent UI freezes
+  // Sync should ONLY be triggered manually by user action (Refresh button)
   
   private autoSyncStarted = false;
   
-  startAutoSync(intervalMs: number = 120000): void {
-    // Increased interval to 2 minutes and added guard
-    if (this.syncInterval || this.autoSyncStarted) {
-      console.log('[SyncManager] Auto sync already started, skipping');
-      return;
-    }
-    
-    this.autoSyncStarted = true;
-    console.log('[SyncManager] Starting auto sync with interval:', intervalMs, 'ms');
-    
-    this.syncInterval = setInterval(() => {
-      if (navigator.onLine && !this.isSyncing) {
-        console.log('[SyncManager] Auto sync triggered');
-        this.sync();
-      }
-    }, intervalMs);
-    
-    // Listen for online event but with debounce
-    window.addEventListener('online', this.handleOnline);
+  // DISABLED: Auto sync causes UI freezes - do not use
+  startAutoSync(_intervalMs: number = 120000): void {
+    console.log('[SyncManager] Auto sync is DISABLED to prevent UI freezes');
+    // DO NOTHING - auto sync is disabled
   }
   
   stopAutoSync(): void {
@@ -119,27 +104,7 @@ class SyncManager {
       this.syncInterval = null;
     }
     this.autoSyncStarted = false;
-    window.removeEventListener('online', this.handleOnline);
   }
-  
-  private lastOnlineSync = 0;
-  private handleOnline = async (): Promise<void> => {
-    const now = Date.now();
-    // Debounce online sync - only once per 30 seconds
-    if (now - this.lastOnlineSync < 30000) {
-      console.log('[SyncManager] Online sync debounced');
-      return;
-    }
-    this.lastOnlineSync = now;
-    
-    // Wait longer for connection to stabilize
-    setTimeout(async () => {
-      if (navigator.onLine && !this.isSyncing) {
-        console.log('[SyncManager] Online - starting sync');
-        await this.sync();
-      }
-    }, 5000);
-  };
   
   // =============== SYNC OPERATIONS ===============
   
