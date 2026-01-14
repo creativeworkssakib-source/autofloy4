@@ -116,41 +116,37 @@ const Dashboard = () => {
   const [shopLoading, setShopLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
 
-  const loadData = async (showLoading = true) => {
-    if (showLoading) {
-      setIsLoading(true);
-      setShopLoading(true);
+  const loadData = async () => {
+    setIsLoading(true);
+    setShopLoading(true);
+    try {
+      const [statsData, pagesData, logsData] = await Promise.all([
+        fetchDashboardStats(),
+        fetchConnectedAccounts("facebook"),
+        fetchExecutionLogs(50),
+      ]);
+      setStats(statsData);
+      setConnectedPages(pagesData.filter(p => p.is_connected));
+      setAllLogs(logsData);
+    } catch (error) {
+      console.error("Failed to load dashboard data:", error);
+    } finally {
+      setIsLoading(false);
     }
-    
-    // Load all data in parallel for faster response
-    const [statsResult, pagesResult, logsResult, shopResult] = await Promise.allSettled([
-      fetchDashboardStats(),
-      fetchConnectedAccounts("facebook"),
-      fetchExecutionLogs(50),
-      offlineShopService.getDashboard("month"),
-    ]);
-    
-    // Update state with results
-    if (statsResult.status === 'fulfilled' && statsResult.value) {
-      setStats(statsResult.value);
+
+    // Load shop data separately
+    try {
+      const shopDashboard = await offlineShopService.getDashboard("month");
+      setShopData(shopDashboard);
+    } catch (error) {
+      console.error("Failed to load shop data:", error);
+    } finally {
+      setShopLoading(false);
     }
-    if (pagesResult.status === 'fulfilled') {
-      setConnectedPages(pagesResult.value.filter(p => p.is_connected));
-    }
-    if (logsResult.status === 'fulfilled') {
-      setAllLogs(logsResult.value);
-    }
-    if (shopResult.status === 'fulfilled') {
-      setShopData(shopResult.value);
-    }
-    
-    setIsLoading(false);
-    setShopLoading(false);
   };
 
   useEffect(() => {
-    // Initial load - don't show loading if we have cached data
-    loadData(false);
+    loadData();
   }, []);
 
   const totalPages = Math.ceil(allLogs.length / LOGS_PER_PAGE);
@@ -293,7 +289,7 @@ const Dashboard = () => {
             </p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => loadData(true)} disabled={isLoading || shopLoading}>
+            <Button variant="outline" onClick={loadData} disabled={isLoading || shopLoading}>
               <RefreshCw className={`w-4 h-4 mr-2 ${(isLoading || shopLoading) ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
