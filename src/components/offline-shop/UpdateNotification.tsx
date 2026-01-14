@@ -1,36 +1,58 @@
 /**
  * PWA Update Notification Component
  * 
- * Shows a compact notification when app updates are available.
+ * Shows a notification when app updates are available.
  * Works with vite-plugin-pwa.
  */
 
-import { useState } from 'react';
-import { RefreshCw, X, Download } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { RefreshCw, X, Download, Wifi, WifiOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { usePWAStatus } from '@/hooks/usePWAStatus';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { syncManager } from '@/services/syncManager';
 import { toast } from 'sonner';
 
 export const UpdateNotification = () => {
   const { language } = useLanguage();
-  const { needRefresh, isOnline, update, dismissUpdate } = usePWAStatus();
+  const { needRefresh, isOnline, isOfflineReady, update, dismissUpdate } = usePWAStatus();
   
   const [isUpdating, setIsUpdating] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+  const [showOfflineReady, setShowOfflineReady] = useState(false);
+
+  // Show offline ready notification once
+  useEffect(() => {
+    if (isOfflineReady && !localStorage.getItem('pwa_offline_ready_shown')) {
+      setShowOfflineReady(true);
+      localStorage.setItem('pwa_offline_ready_shown', 'true');
+      
+      // Auto-hide after 5 seconds
+      const timer = setTimeout(() => {
+        setShowOfflineReady(false);
+      }, 5000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [isOfflineReady]);
 
   const handleUpdate = async () => {
-    if (isUpdating) return;
-    
     setIsUpdating(true);
     
     try {
-      toast.info(
-        language === 'bn' 
-          ? 'আপডেট হচ্ছে...' 
-          : 'Updating...'
-      );
+      // First sync any pending data
+      if (isOnline) {
+        toast.info(
+          language === 'bn' 
+            ? 'ডেটা সিঙ্ক করা হচ্ছে...' 
+            : 'Syncing data...'
+        );
+        
+        await syncManager.sync();
+      }
       
+      // Then apply the update
       await update();
     } catch (error) {
       console.error('Update failed:', error);
@@ -48,77 +70,92 @@ export const UpdateNotification = () => {
     dismissUpdate();
   };
 
-  // Don't show if no update needed or already dismissed
+  // Show offline ready notification
+  if (showOfflineReady && !needRefresh) {
+    return (
+      <Alert className="fixed bottom-4 right-4 left-4 sm:left-auto sm:w-96 z-50 bg-green-500/10 border-green-500 shadow-lg animate-in slide-in-from-bottom-4">
+        <Wifi className="h-4 w-4 text-green-500" />
+        <AlertTitle className="font-semibold text-green-600">
+          {language === 'bn' ? 'অফলাইন রেডি!' : 'Offline Ready!'}
+        </AlertTitle>
+        <AlertDescription className="mt-2">
+          <p className="text-sm text-muted-foreground">
+            {language === 'bn' 
+              ? 'অ্যাপ এখন অফলাইনে কাজ করতে প্রস্তুত। ইন্টারনেট ছাড়াও ব্যবহার করতে পারবেন।'
+              : 'App is now ready to work offline. You can use it without internet.'
+            }
+          </p>
+          <Button 
+            size="sm" 
+            variant="ghost" 
+            onClick={() => setShowOfflineReady(false)}
+            className="mt-2"
+          >
+            <X className="h-4 w-4 mr-1" />
+            {language === 'bn' ? 'বন্ধ করুন' : 'Dismiss'}
+          </Button>
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  // Show update notification
   if (!needRefresh || dismissed) return null;
 
   return (
-    <>
-      {/* Backdrop with blur */}
-      <div 
-        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40"
-        onClick={handleDismiss}
-      />
-      
-      {/* Compact notification card */}
-      <div className="fixed bottom-4 right-4 z-50 w-72 bg-card border border-border rounded-lg shadow-xl animate-in slide-in-from-bottom-4 duration-300">
-        {/* Header with close button */}
-        <div className="flex items-center justify-between p-3 border-b border-border">
-          <div className="flex items-center gap-2">
-            <Download className="h-4 w-4 text-primary" />
-            <span className="font-medium text-sm">
-              {language === 'bn' ? 'আপডেট পাওয়া গেছে!' : 'Update Available!'}
-            </span>
-          </div>
-          <Button 
-            size="icon" 
-            variant="ghost" 
-            onClick={handleDismiss}
-            disabled={isUpdating}
-            className="h-6 w-6"
-          >
-            <X className="h-3.5 w-3.5" />
-          </Button>
-        </div>
+    <Alert className="fixed bottom-4 right-4 left-4 sm:left-auto sm:w-96 z-50 bg-primary/10 border-primary shadow-lg animate-in slide-in-from-bottom-4">
+      <Download className="h-4 w-4" />
+      <AlertTitle className="font-semibold">
+        {language === 'bn' ? 'নতুন আপডেট পাওয়া গেছে!' : 'Update Available!'}
+      </AlertTitle>
+      <AlertDescription className="mt-2">
+        <p className="text-sm text-muted-foreground mb-3">
+          {language === 'bn' 
+            ? 'অ্যাপের নতুন ভার্সন পাওয়া গেছে। আপডেট করতে নিচের বাটনে ক্লিক করুন।'
+            : 'A new version is available. Click the button below to update.'
+          }
+        </p>
         
-        {/* Content */}
-        <div className="p-3">
-          <p className="text-xs text-muted-foreground mb-3">
+        {!isOnline && (
+          <div className="flex items-center gap-2 text-sm text-amber-600 mb-3">
+            <WifiOff className="h-4 w-4" />
             {language === 'bn' 
-              ? 'নতুন ভার্সন পাওয়া গেছে। আপডেট করতে ক্লিক করুন।'
-              : 'A new version is available. Click to update.'
+              ? 'অফলাইন আছেন - অনলাইন হলে আপডেট করুন'
+              : 'You are offline - update when online'
             }
-          </p>
-          
+          </div>
+        )}
+        
+        <div className="flex gap-2">
           <Button 
             size="sm" 
             onClick={handleUpdate}
             disabled={isUpdating || !isOnline}
-            className="w-full h-8 text-xs"
+            className="flex-1"
           >
             {isUpdating ? (
               <>
-                <RefreshCw className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
                 {language === 'bn' ? 'আপডেট হচ্ছে...' : 'Updating...'}
               </>
             ) : (
               <>
-                <Download className="h-3.5 w-3.5 mr-1.5" />
+                <Download className="h-4 w-4 mr-2" />
                 {language === 'bn' ? 'এখনই আপডেট করুন' : 'Update Now'}
               </>
             )}
           </Button>
-          
-          {!isOnline && (
-            <p className="text-xs text-amber-600 mt-2 text-center">
-              {language === 'bn' 
-                ? 'অফলাইন - অনলাইন হলে আপডেট করুন'
-                : 'Offline - update when online'
-              }
-            </p>
-          )}
+          <Button 
+            size="sm" 
+            variant="ghost" 
+            onClick={handleDismiss}
+            disabled={isUpdating}
+          >
+            <X className="h-4 w-4" />
+          </Button>
         </div>
-      </div>
-    </>
+      </AlertDescription>
+    </Alert>
   );
 };
 
