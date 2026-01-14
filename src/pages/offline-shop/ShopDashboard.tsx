@@ -228,7 +228,15 @@ const ShopDashboard = () => {
                 {language === "bn" ? "সিংক হচ্ছে..." : "Syncing..."}
               </Badge>
             )}
-            <Button variant="outline" onClick={loadDashboard} disabled={isLoading} size="sm" className="sm:size-default">
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                console.log('[ShopDashboard] Refresh clicked');
+                loadDashboard();
+              }} 
+              size="sm" 
+              className="sm:size-default"
+            >
               <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
               {t("common.refresh")}
             </Button>
