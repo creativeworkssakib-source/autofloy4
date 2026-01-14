@@ -249,7 +249,10 @@ export function PrintBarcodeModal({
                   min={1}
                   max={100}
                   value={copiesPerProduct}
-                  onChange={(e) => setCopiesPerProduct(parseInt(e.target.value) || 1)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setCopiesPerProduct(val === "" ? 1 : parseInt(val) || 1);
+                  }}
                 />
               </div>
             </div>

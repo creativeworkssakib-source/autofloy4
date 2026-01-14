@@ -1020,7 +1020,10 @@ const ShopSales = () => {
                       <Input
                         type="number"
                         value={item.quantity}
-                        onChange={(e) => updateReturnQuantity(item.product_id, parseInt(e.target.value) || 0)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          updateReturnQuantity(item.product_id, val === "" ? 0 : parseInt(val) || 0);
+                        }}
                         className="w-20 h-8"
                         min={0}
                         max={item.max_qty}
