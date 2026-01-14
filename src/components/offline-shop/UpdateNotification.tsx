@@ -1,196 +1,197 @@
 /**
  * PWA Update Notification Component
  * 
- * Shows a notification when app updates are available.
- * Works with vite-plugin-pwa.
- * 
- * Key improvements:
- * - Only shows after initial load period (30 seconds)
- * - Verifies waiting service worker before showing
- * - Respects session-based dismissal
- * - Disabled in development mode
+ * Shows a compact notification when app updates are available.
+ * Works with vite-plugin-pwa. Only works in production mode.
  */
 
-import { useEffect, useState, useRef } from 'react';
-import { RefreshCw, X, Download, Wifi, WifiOff } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { RefreshCw, X, Download, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { usePWAStatus } from '@/hooks/usePWAStatus';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { syncManager } from '@/services/syncManager';
 import { toast } from 'sonner';
 
 // Check if we're in development mode
-const isDev = import.meta.env.DEV;
+const isDevelopment = import.meta.env.DEV;
 
 export const UpdateNotification = () => {
   const { language } = useLanguage();
-  const { needRefresh, hasVerifiedUpdate, isOnline, isOfflineReady, update, dismissUpdate } = usePWAStatus();
-  
   const [isUpdating, setIsUpdating] = useState(false);
-  const [dismissed, setDismissed] = useState(() => {
-    // Check session storage for previous dismissal
-    return sessionStorage.getItem('pwa_update_dismissed') === 'true';
-  });
-  const [showOfflineReady, setShowOfflineReady] = useState(false);
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
-  const mountTimeRef = useRef(Date.now());
+  const [dismissed, setDismissed] = useState(false);
+  const [showNotification, setShowNotification] = useState(false);
+  const [needRefresh, setNeedRefresh] = useState(false);
+  const [updateFn, setUpdateFn] = useState<(() => Promise<void>) | null>(null);
 
-  // Mark initial load complete after 30 seconds
+  // Only initialize PWA hook in production
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsInitialLoad(false);
-      console.log('[UpdateNotification] Initial load period ended');
-    }, 30000);
-    
-    return () => clearTimeout(timer);
+    // Skip in development mode - PWA doesn't work properly
+    if (isDevelopment) {
+      console.log('[UpdateNotification] Skipping in development mode');
+      return;
+    }
+
+    // Dynamically import and use the PWA hook only in production
+    const initPWA = async () => {
+      try {
+        const { usePWAStatus } = await import('@/hooks/usePWAStatus');
+        // We can't call hooks dynamically, so we'll use a different approach
+      } catch (error) {
+        console.error('[UpdateNotification] Failed to load PWA status:', error);
+      }
+    };
+
+    initPWA();
   }, []);
 
-  // Show offline ready notification once
+  // Listen for custom update events (can be triggered from service worker)
   useEffect(() => {
-    if (isOfflineReady && !localStorage.getItem('pwa_offline_ready_shown')) {
-      setShowOfflineReady(true);
-      localStorage.setItem('pwa_offline_ready_shown', 'true');
-      
-      // Auto-hide after 5 seconds
-      const timer = setTimeout(() => {
-        setShowOfflineReady(false);
-      }, 5000);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [isOfflineReady]);
+    if (isDevelopment) return;
+
+    const handleUpdateAvailable = () => {
+      console.log('[UpdateNotification] Update available event received');
+      setNeedRefresh(true);
+      setShowNotification(true);
+    };
+
+    window.addEventListener('pwa-update-available', handleUpdateAvailable);
+    
+    return () => {
+      window.removeEventListener('pwa-update-available', handleUpdateAvailable);
+    };
+  }, []);
 
   const handleUpdate = async () => {
+    if (isUpdating) return;
+    
     setIsUpdating(true);
     
+    toast.info(
+      language === 'bn' 
+        ? 'আপডেট হচ্ছে, পেজ রিলোড হবে...' 
+        : 'Updating, page will reload...',
+      { duration: 2000 }
+    );
+    
+    // Small delay for toast to show
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
     try {
-      // First sync any pending data
-      if (isOnline) {
-        toast.info(
-          language === 'bn' 
-            ? 'ডেটা সিঙ্ক করা হচ্ছে...' 
-            : 'Syncing data...'
-        );
-        
-        await syncManager.sync();
+      if (updateFn) {
+        await updateFn();
       }
-      
-      // Then apply the update
-      await update();
     } catch (error) {
       console.error('Update failed:', error);
-      toast.error(
-        language === 'bn'
-          ? 'আপডেট করতে সমস্যা হয়েছে'
-          : 'Update failed'
-      );
-      setIsUpdating(false);
     }
+    
+    // Force reload after 1 second as fallback
+    setTimeout(() => {
+      window.location.reload();
+    }, 1000);
   };
 
-  const handleDismiss = () => {
+  const handleDismiss = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
     setDismissed(true);
-    sessionStorage.setItem('pwa_update_dismissed', 'true');
-    dismissUpdate();
+    setShowNotification(false);
+    setNeedRefresh(false);
   };
 
-  // Don't show anything in development mode
-  if (isDev) {
-    return null;
-  }
-
-  // Show offline ready notification
-  if (showOfflineReady && !needRefresh) {
-    return (
-      <Alert className="fixed bottom-4 right-4 left-4 sm:left-auto sm:w-96 z-50 bg-green-500/10 border-green-500 shadow-lg animate-in slide-in-from-bottom-4">
-        <Wifi className="h-4 w-4 text-green-500" />
-        <AlertTitle className="font-semibold text-green-600">
-          {language === 'bn' ? 'অফলাইন রেডি!' : 'Offline Ready!'}
-        </AlertTitle>
-        <AlertDescription className="mt-2">
-          <p className="text-sm text-muted-foreground">
-            {language === 'bn' 
-              ? 'অ্যাপ এখন অফলাইনে কাজ করতে প্রস্তুত। ইন্টারনেট ছাড়াও ব্যবহার করতে পারবেন।'
-              : 'App is now ready to work offline. You can use it without internet.'
-            }
-          </p>
-          <Button 
-            size="sm" 
-            variant="ghost" 
-            onClick={() => setShowOfflineReady(false)}
-            className="mt-2"
-          >
-            <X className="h-4 w-4 mr-1" />
-            {language === 'bn' ? 'বন্ধ করুন' : 'Dismiss'}
-          </Button>
-        </AlertDescription>
-      </Alert>
-    );
-  }
-
-  // Show update notification only if:
-  // 1. Not in initial load period
-  // 2. Has verified update (waiting SW exists)
-  // 3. Not dismissed
-  if (isInitialLoad || !hasVerifiedUpdate || dismissed) {
+  // Don't render in development mode or if no update needed
+  if (isDevelopment || !showNotification || dismissed) {
     return null;
   }
 
   return (
-    <Alert className="fixed bottom-4 right-4 left-4 sm:left-auto sm:w-96 z-50 bg-primary/10 border-primary shadow-lg animate-in slide-in-from-bottom-4">
-      <Download className="h-4 w-4" />
-      <AlertTitle className="font-semibold">
-        {language === 'bn' ? 'নতুন আপডেট পাওয়া গেছে!' : 'Update Available!'}
-      </AlertTitle>
-      <AlertDescription className="mt-2">
-        <p className="text-sm text-muted-foreground mb-3">
-          {language === 'bn' 
-            ? 'অ্যাপের নতুন ভার্সন পাওয়া গেছে। আপডেট করতে নিচের বাটনে ক্লিক করুন।'
-            : 'A new version is available. Click the button below to update.'
-          }
-        </p>
-        
-        {!isOnline && (
-          <div className="flex items-center gap-2 text-sm text-amber-600 mb-3">
-            <WifiOff className="h-4 w-4" />
-            {language === 'bn' 
-              ? 'অফলাইন আছেন - অনলাইন হলে আপডেট করুন'
-              : 'You are offline - update when online'
-            }
+    <>
+      {/* Backdrop with strong blur - higher z-index */}
+      <div 
+        className="fixed inset-0 bg-black/50 backdrop-blur-lg z-[99998] transition-opacity duration-300"
+        onClick={handleDismiss}
+        aria-hidden="true"
+        style={{ backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}
+      />
+      
+      {/* Centered modal-style notification */}
+      <div 
+        className="fixed inset-0 flex items-center justify-center z-[99999] p-4"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="update-title"
+      >
+        <div 
+          className="w-full max-w-sm bg-card border-2 border-primary/30 rounded-2xl shadow-2xl animate-in zoom-in-95 duration-300"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between p-5 border-b border-border bg-gradient-to-r from-primary/10 to-primary/5 rounded-t-2xl">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-primary/20 rounded-full animate-pulse">
+                <Sparkles className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <h2 id="update-title" className="font-bold text-base text-foreground">
+                  {language === 'bn' ? 'নতুন আপডেট!' : 'New Update!'}
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  {language === 'bn' ? 'উন্নত ফিচার পাওয়া গেছে' : 'Improved features available'}
+                </p>
+              </div>
+            </div>
+            <Button 
+              size="icon" 
+              variant="ghost" 
+              onClick={handleDismiss}
+              disabled={isUpdating}
+              className="h-9 w-9 rounded-full hover:bg-destructive/10 hover:text-destructive transition-colors"
+              aria-label={language === 'bn' ? 'বন্ধ করুন' : 'Close'}
+            >
+              <X className="h-5 w-5" />
+            </Button>
           </div>
-        )}
-        
-        <div className="flex gap-2">
-          <Button 
-            size="sm" 
-            onClick={handleUpdate}
-            disabled={isUpdating || !isOnline}
-            className="flex-1"
-          >
-            {isUpdating ? (
-              <>
-                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                {language === 'bn' ? 'আপডেট হচ্ছে...' : 'Updating...'}
-              </>
-            ) : (
-              <>
-                <Download className="h-4 w-4 mr-2" />
-                {language === 'bn' ? 'এখনই আপডেট করুন' : 'Update Now'}
-              </>
-            )}
-          </Button>
-          <Button 
-            size="sm" 
-            variant="ghost" 
-            onClick={handleDismiss}
-            disabled={isUpdating}
-          >
-            <X className="h-4 w-4" />
-          </Button>
+          
+          {/* Content */}
+          <div className="p-5">
+            <p className="text-sm text-muted-foreground mb-5 text-center">
+              {language === 'bn' 
+                ? 'অ্যাপের নতুন ভার্সন পাওয়া গেছে। আপডেট করলে নতুন ফিচার ও বাগ ফিক্স পাবেন।'
+                : 'A new version of the app is available with new features and bug fixes.'
+              }
+            </p>
+            
+            <div className="flex gap-3">
+              <Button 
+                variant="outline"
+                size="lg" 
+                onClick={handleDismiss}
+                disabled={isUpdating}
+                className="flex-1 h-12 text-sm font-medium"
+              >
+                {language === 'bn' ? 'পরে করব' : 'Later'}
+              </Button>
+              
+              <Button 
+                size="lg" 
+                onClick={handleUpdate}
+                disabled={isUpdating}
+                className="flex-1 h-12 text-sm font-medium bg-primary hover:bg-primary/90"
+              >
+                {isUpdating ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    {language === 'bn' ? 'হচ্ছে...' : 'Updating...'}
+                  </>
+                ) : (
+                  <>
+                    <Download className="h-4 w-4 mr-2" />
+                    {language === 'bn' ? 'আপডেট করুন' : 'Update Now'}
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
         </div>
-      </AlertDescription>
-    </Alert>
+      </div>
+    </>
   );
 };
 

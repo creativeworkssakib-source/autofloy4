@@ -8,7 +8,7 @@ requestPersistentStorage().then((persisted) => {
   console.log('[App] Persistent storage:', persisted ? 'granted' : 'not available');
 });
 
-// Note: Service worker registration is handled by usePWAStatus hook via vite-plugin-pwa
-// This prevents duplicate registrations and ensures proper update handling
+// Service worker registration is now handled by usePWAStatus hook
+// using virtual:pwa-register/react from vite-plugin-pwa
 
 createRoot(document.getElementById("root")!).render(<App />);
