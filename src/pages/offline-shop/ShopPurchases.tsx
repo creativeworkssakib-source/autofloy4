@@ -137,7 +137,7 @@ const ShopPurchases = () => {
   const [supplierId, setSupplierId] = useState("");
   const [supplierName, setSupplierName] = useState("");
   const [supplierContact, setSupplierContact] = useState("");
-  const [paidAmount, setPaidAmount] = useState(0);
+  const [paidAmount, setPaidAmount] = useState<number | "">("");
   const [notes, setNotes] = useState("");
   const [bulkText, setBulkText] = useState("");
   const [showBulkInput, setShowBulkInput] = useState(false);
@@ -420,7 +420,7 @@ const ShopPurchases = () => {
           total: item.total,
           expiry_date: item.expiry_date,
         })),
-        paid_amount: paidAmount || total,
+        paid_amount: (paidAmount === "" ? 0 : paidAmount) || total,
         notes,
       });
       
@@ -448,7 +448,7 @@ const ShopPurchases = () => {
     setSupplierId("");
     setSupplierName("");
     setSupplierContact("");
-    setPaidAmount(0);
+    setPaidAmount("");
     setNotes("");
     setBulkText("");
     setShowBulkInput(false);
@@ -1252,8 +1252,11 @@ const ShopPurchases = () => {
               <Label>{t("shop.paidAmount")}</Label>
               <Input
                 type="number"
-                value={paidAmount || total}
-                onChange={(e) => setPaidAmount(parseFloat(e.target.value) || 0)}
+                value={paidAmount === "" ? "" : (paidAmount || total)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setPaidAmount(val === "" ? "" : parseFloat(val) || 0);
+                }}
               />
             </div>
 
@@ -1369,7 +1372,10 @@ const ShopPurchases = () => {
                 <Input
                   type="number"
                   value={paymentAmount}
-                  onChange={(e) => setPaymentAmount(parseFloat(e.target.value) || 0)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setPaymentAmount(val === "" ? 0 : parseFloat(val) || 0);
+                  }}
                   max={paymentPurchase ? Number(paymentPurchase.due_amount) : undefined}
                 />
               </div>
