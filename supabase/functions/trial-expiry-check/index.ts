@@ -87,7 +87,7 @@ serve(async (req) => {
 
         try {
           const { error: emailError } = await resend.emails.send({
-            from: "AutoFloy <noreply@autofloy.com>",
+            from: "AutoFloy <noreply@fileforge.site>",
             to: [user.email],
             subject: `⏰ Your AutoFloy Trial Expires in ${hoursRemaining} Hours!`,
             html: emailHtml,

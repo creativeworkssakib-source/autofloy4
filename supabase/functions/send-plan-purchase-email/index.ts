@@ -109,7 +109,7 @@ serve(async (req) => {
 
     try {
       const { data: emailData, error: emailError } = await resend.emails.send({
-        from: "AutoFloy <noreply@autofloy.com>",
+        from: "AutoFloy <noreply@fileforge.site>",
         to: [user.email],
         subject: `✅ Payment Confirmed - ${planName} Plan Activated!`,
         html: emailHtml,

@@ -37,6 +37,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useSyncSettings } from "@/hooks/useSyncSettings";
 import { fetchDashboardStats, fetchConnectedAccounts, fetchExecutionLogs, DashboardStats, ConnectedAccount, ExecutionLog } from "@/services/apiService";
 import { ProductPerformanceSection } from "@/components/analytics/ProductPerformanceSection";
+
 import { offlineShopService } from "@/services/offlineShopService";
 import { formatDistanceToNow } from "date-fns";
 import { useIsMobile } from "@/hooks/use-mobile";

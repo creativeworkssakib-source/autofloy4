@@ -112,7 +112,7 @@ serve(async (req) => {
 
     // Send email with OTP
     const emailResponse = await resend.emails.send({
-      from: "Autofloy <noreply@autofloy.com>",
+      from: "AutoFloy <noreply@fileforge.site>",
       to: [user.email],
       subject: "⚠️ Account Deletion Verification Code",
       html: `
