@@ -209,9 +209,9 @@ const ShopSales = () => {
   const [isProcessingReturn, setIsProcessingReturn] = useState(false);
 
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [discount, setDiscount] = useState(0);
+  const [discount, setDiscount] = useState<number | "">("");
   const [discountType, setDiscountType] = useState<"fixed" | "percent">("fixed");
-  const [paidAmount, setPaidAmount] = useState(0);
+  const [paidAmount, setPaidAmount] = useState<number | "">("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
@@ -322,9 +322,11 @@ const ShopSales = () => {
 
   const subtotal = cart.reduce((sum, item) => sum + item.total, 0);
   const taxAmount = shopSettings?.tax_rate ? (subtotal * shopSettings.tax_rate) / 100 : 0;
-  const discountAmount = discountType === "percent" ? (subtotal * discount) / 100 : discount;
+  const discountValue = discount === "" ? 0 : discount;
+  const discountAmount = discountType === "percent" ? (subtotal * discountValue) / 100 : discountValue;
   const total = subtotal + taxAmount - discountAmount;
-  const dueAmount = total - (paidAmount || total);
+  const paidValue = paidAmount === "" ? 0 : paidAmount;
+  const dueAmount = total - (paidValue || total);
 
   const handleSubmit = async () => {
     if (cart.length === 0) {
@@ -339,7 +341,7 @@ const ShopSales = () => {
         items: cart,
         discount: discountAmount,
         tax: taxAmount,
-        paid_amount: paidAmount || total,
+        paid_amount: paidValue || total,
         payment_method: paymentMethod,
       });
 
@@ -353,7 +355,7 @@ const ShopSales = () => {
         subtotal,
         discount: discountAmount,
         tax: taxAmount,
-        paid_amount: paidAmount || total,
+        paid_amount: paidValue || total,
         due_amount: dueAmount,
         payment_method: paymentMethod,
         payment_status: dueAmount > 0 ? 'partial' : 'paid',
@@ -383,9 +385,9 @@ const ShopSales = () => {
 
   const resetForm = () => {
     setCart([]);
-    setDiscount(0);
+    setDiscount("");
     setDiscountType("fixed");
-    setPaidAmount(0);
+    setPaidAmount("");
     setPaymentMethod("cash");
     setCustomerName("");
     setCustomerPhone("");
@@ -855,7 +857,10 @@ const ShopSales = () => {
                     <Input
                       type="number"
                       value={discount}
-                      onChange={(e) => setDiscount(parseFloat(e.target.value) || 0)}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setDiscount(val === "" ? "" : parseFloat(val) || 0);
+                      }}
                       className="flex-1"
                       min={0}
                       max={discountType === "percent" ? 100 : undefined}
@@ -882,8 +887,11 @@ const ShopSales = () => {
                 <Label>{t("shop.paidAmount")}</Label>
                 <Input
                   type="number"
-                  value={paidAmount || total}
-                  onChange={(e) => setPaidAmount(parseFloat(e.target.value) || 0)}
+                  value={paidAmount === "" ? "" : (paidAmount || total)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setPaidAmount(val === "" ? "" : parseFloat(val) || 0);
+                  }}
                 />
               </div>
 
@@ -907,10 +915,10 @@ const ShopSales = () => {
                   <span>{t("shop.total")}:</span>
                   <span>{formatCurrency(total)}</span>
                 </div>
-                {paidAmount > 0 && paidAmount < total && (
+                {paidValue > 0 && paidValue < total && (
                   <div className="flex justify-between text-destructive">
                     <span>{t("common.due")}:</span>
-                    <span>{formatCurrency(total - paidAmount)}</span>
+                    <span>{formatCurrency(total - paidValue)}</span>
                   </div>
                 )}
               </div>
