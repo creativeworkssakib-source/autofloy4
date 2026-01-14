@@ -883,64 +883,41 @@ export function useOfflineDashboard(range: 'today' | 'week' | 'month' = 'today')
   const isOnline = useIsOnline();
   const { currentShop } = useShop();
   const [platform, setPlatform] = useState<string>('');
-  const [initialized, setInitialized] = useState(false);
   const fetchingRef = useRef(false);
+  const hasFetchedRef = useRef(false);
+  const lastShopIdRef = useRef<string | null>(null);
+  const lastRangeRef = useRef<string>(range);
 
-  // Initialize smart data service when shop changes
-  useEffect(() => {
-    const initService = async () => {
-      if (currentShop?.id) {
-        const userId = localStorage.getItem('autofloy_user_id') || '';
-        try {
-          await smartDataService.init(currentShop.id, userId);
-          setPlatform(getPlatformName());
-          setInitialized(true);
-          console.log('[useOfflineDashboard] Smart data service initialized');
-        } catch (error) {
-          console.error('[useOfflineDashboard] Failed to initialize:', error);
-          setInitialized(true); // Still set to true to allow fallback
-        }
-      }
-    };
-    
-    initService();
-  }, [currentShop?.id]);
-
+  // Stable refetch function - NO dependencies that change frequently
   const refetch = useCallback(async () => {
-    if (!currentShop?.id) {
-      console.log('[useOfflineDashboard] No shop ID, skipping fetch');
+    const shopId = currentShop?.id;
+    if (!shopId) {
       setLoading(false);
-      return;
-    }
-    
-    if (!initialized) {
-      console.log('[useOfflineDashboard] Not yet initialized, waiting...');
       return;
     }
     
     // Prevent concurrent fetches
     if (fetchingRef.current) {
-      console.log('[useOfflineDashboard] Already fetching, skipping...');
       return;
     }
     
     fetchingRef.current = true;
     
-    // Only show loading if we have no data yet
-    if (!data) {
+    // Only show loading on first fetch
+    if (!hasFetchedRef.current) {
       setLoading(true);
     }
     
     try {
-      console.log(`[useOfflineDashboard] Fetching dashboard for range: ${range}`);
+      // Initialize smart data service if needed
+      const userId = localStorage.getItem('autofloy_user_id') || '';
+      await smartDataService.init(shopId, userId);
+      setPlatform(getPlatformName());
       
-      // Use smart data service which handles:
-      // - PWA/APK/EXE: LOCAL FIRST for instant UI, then background sync
-      // - Browser: Server-first
+      // Get dashboard data
       const dashboardData = await smartDataService.getDashboard(range);
       
       if (dashboardData) {
-        // Map server data to our expected format
         const mappedData = {
           totalSales: dashboardData.period?.totalSales || dashboardData.totalSales || 0,
           totalExpenses: dashboardData.period?.totalExpenses || dashboardData.totalExpenses || 0,
@@ -964,31 +941,36 @@ export function useOfflineDashboard(range: 'today' | 'week' | 'month' = 'today')
             pendingCount: 0,
             topReasons: [],
           },
-          platform,
+          platform: getPlatformName(),
           fromLocal: dashboardData.fromLocal || false,
         };
-        console.log('[useOfflineDashboard] Dashboard data mapped successfully');
         setData(mappedData);
         setFromCache(dashboardData.fromLocal || false);
+        hasFetchedRef.current = true;
       }
     } catch (error) {
       console.error('[useOfflineDashboard] Dashboard fetch error:', error);
-      // Only clear data if we have nothing yet
-      if (!data) {
-        setData(null);
-      }
     } finally {
       setLoading(false);
       fetchingRef.current = false;
     }
-  }, [range, currentShop?.id, platform, initialized, data]);
+  }, [range, currentShop?.id]); // Only depend on stable values
 
-  // Refetch when dependencies change
+  // Single useEffect - only runs when shop or range changes
   useEffect(() => {
-    if (initialized) {
+    const shopId = currentShop?.id;
+    
+    // Only refetch if shop or range actually changed
+    if (shopId && (shopId !== lastShopIdRef.current || range !== lastRangeRef.current)) {
+      lastShopIdRef.current = shopId;
+      lastRangeRef.current = range;
+      hasFetchedRef.current = false; // Reset to allow loading state
+      refetch();
+    } else if (shopId && !hasFetchedRef.current) {
+      // Initial fetch
       refetch();
     }
-  }, [refetch, initialized]);
+  }, [currentShop?.id, range, refetch]);
 
   return {
     data,
