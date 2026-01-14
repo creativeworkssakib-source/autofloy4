@@ -158,9 +158,10 @@ serve(async (req) => {
 
     const canUseTrial = trialCheck?.can_use_trial !== false;
     const isReturningUser = trialCheck?.is_returning_user === true;
-    const lastPlan = trialCheck?.last_plan || "free";
+    const lastPlan = trialCheck?.last_plan || "none";
+    const lastSubscriptionExpiresAt = trialCheck?.subscription_expires_at ? new Date(trialCheck.subscription_expires_at) : null;
     
-    console.log(`Email ${email} trial check: canUseTrial=${canUseTrial}, isReturning=${isReturningUser}`);
+    console.log(`Email ${email} trial check: canUseTrial=${canUseTrial}, isReturning=${isReturningUser}, lastPlan=${lastPlan}, expiresAt=${lastSubscriptionExpiresAt}`);
     
     // Get client IP for rate limiting
     const clientIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || 
@@ -260,13 +261,28 @@ serve(async (req) => {
     let subscriptionPlan = "trial";
     let isTrialActive = true;
     let userTrialEndDate: string | null = trialEndDate.toISOString();
+    let subscriptionExpiresAt: string | null = null;
 
     if (!canUseTrial) {
-      // Returning user - restore to their last plan status (without trial)
-      subscriptionPlan = lastPlan === "trial" ? "free" : lastPlan;
-      isTrialActive = false;
-      userTrialEndDate = null;
-      console.log(`Returning user ${email}: assigning plan=${subscriptionPlan}, no trial`);
+      // Returning user - check if their previous plan has expired
+      const isPlanExpired = lastSubscriptionExpiresAt ? lastSubscriptionExpiresAt < now : true;
+      
+      if (isPlanExpired) {
+        // Plan expired - set to "none" (no active subscription)
+        subscriptionPlan = "none";
+        isTrialActive = false;
+        userTrialEndDate = null;
+        subscriptionExpiresAt = null;
+        console.log(`Returning user ${email}: plan expired, setting to none`);
+      } else {
+        // Plan still valid - but user deleted account, so they lose the plan
+        // Set to "none" as punishment for early deletion
+        subscriptionPlan = "none";
+        isTrialActive = false;
+        userTrialEndDate = null;
+        subscriptionExpiresAt = null;
+        console.log(`Returning user ${email}: had valid plan but deleted, setting to none`);
+      }
     }
 
     // Insert user with appropriate trial status
