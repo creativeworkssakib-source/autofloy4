@@ -880,31 +880,43 @@ export function useOfflineDashboard(range: 'today' | 'week' | 'month' = 'today')
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [fromCache, setFromCache] = useState(false);
+  const [initialized, setInitialized] = useState(false);
   const isOnline = useIsOnline();
   const { currentShop } = useShop();
-  const [platform, setPlatform] = useState<string>('');
-  const [initialized, setInitialized] = useState(false);
+  
+  // Use refs for mutable state that doesn't trigger re-renders
+  const platformRef = useRef<string>('');
   const fetchingRef = useRef(false);
-  const hasDataRef = useRef(false); // Track if we have data without causing re-renders
+  const initialFetchDoneRef = useRef(false);
 
   // Initialize smart data service when shop changes
   useEffect(() => {
+    let cancelled = false;
+    
     const initService = async () => {
       if (currentShop?.id) {
         const userId = localStorage.getItem('autofloy_user_id') || '';
         try {
           await smartDataService.init(currentShop.id, userId);
-          setPlatform(getPlatformName());
-          setInitialized(true);
-          console.log('[useOfflineDashboard] Smart data service initialized');
+          platformRef.current = getPlatformName();
+          if (!cancelled) {
+            setInitialized(true);
+            console.log('[useOfflineDashboard] Smart data service initialized');
+          }
         } catch (error) {
           console.error('[useOfflineDashboard] Failed to initialize:', error);
-          setInitialized(true); // Still set to true to allow fallback
+          if (!cancelled) {
+            setInitialized(true); // Still set to true to allow fallback
+          }
         }
       }
     };
     
     initService();
+    
+    return () => {
+      cancelled = true;
+    };
   }, [currentShop?.id]);
 
   const refetch = useCallback(async () => {
@@ -927,21 +939,17 @@ export function useOfflineDashboard(range: 'today' | 'week' | 'month' = 'today')
     
     fetchingRef.current = true;
     
-    // Only show loading if we have no data yet
-    if (!hasDataRef.current) {
+    // Only show loading on first fetch
+    if (!initialFetchDoneRef.current) {
       setLoading(true);
     }
     
     try {
       console.log(`[useOfflineDashboard] Fetching dashboard for range: ${range}`);
       
-      // Use smart data service which handles:
-      // - PWA/APK/EXE: LOCAL FIRST for instant UI, then background sync
-      // - Browser: Server-first
       const dashboardData = await smartDataService.getDashboard(range);
       
       if (dashboardData) {
-        // Map server data to our expected format
         const mappedData = {
           totalSales: dashboardData.period?.totalSales || dashboardData.totalSales || 0,
           totalExpenses: dashboardData.period?.totalExpenses || dashboardData.totalExpenses || 0,
@@ -965,41 +973,28 @@ export function useOfflineDashboard(range: 'today' | 'week' | 'month' = 'today')
             pendingCount: 0,
             topReasons: [],
           },
-          platform,
+          platform: platformRef.current,
           fromLocal: dashboardData.fromLocal || false,
         };
         console.log('[useOfflineDashboard] Dashboard data mapped successfully');
-        hasDataRef.current = true;
+        initialFetchDoneRef.current = true;
         setData(mappedData);
         setFromCache(dashboardData.fromLocal || false);
       }
     } catch (error) {
       console.error('[useOfflineDashboard] Dashboard fetch error:', error);
-      // Only clear data if we have nothing yet
-      if (!hasDataRef.current) {
-        setData(null);
-      }
     } finally {
       setLoading(false);
       fetchingRef.current = false;
     }
-  }, [range, currentShop?.id, platform, initialized]); // REMOVED 'data' from dependencies to prevent infinite loop
+  }, [range, currentShop?.id, initialized]);
 
-  // Refetch when dependencies change - only once per initialization
+  // Initial fetch only
   useEffect(() => {
-    if (initialized && !hasDataRef.current) {
+    if (initialized && !initialFetchDoneRef.current) {
       refetch();
     }
-  }, [initialized]); // eslint-disable-line react-hooks/exhaustive-deps
-  
-  // Also refetch when range changes, but only if already initialized
-  useEffect(() => {
-    if (initialized && hasDataRef.current) {
-      // Reset and refetch when range changes
-      hasDataRef.current = false;
-      refetch();
-    }
-  }, [range]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [initialized, refetch]);
 
   return {
     data,
