@@ -116,18 +116,19 @@ const Dashboard = () => {
   const [shopLoading, setShopLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
 
-  const loadData = async (showLoading = true) => {
-    if (showLoading) {
+  const loadData = async (forceRefresh = false) => {
+    // Show loading only on force refresh
+    if (forceRefresh) {
       setIsLoading(true);
       setShopLoading(true);
     }
     
     // Load all data in parallel for faster response
     const [statsResult, pagesResult, logsResult, shopResult] = await Promise.allSettled([
-      fetchDashboardStats(),
-      fetchConnectedAccounts("facebook"),
-      fetchExecutionLogs(50),
-      offlineShopService.getDashboard("month"),
+      fetchDashboardStats(forceRefresh),
+      fetchConnectedAccounts("facebook", forceRefresh),
+      fetchExecutionLogs(50, forceRefresh),
+      offlineShopService.getDashboard("month", forceRefresh),
     ]);
     
     // Update state with results
@@ -149,7 +150,6 @@ const Dashboard = () => {
   };
 
   useEffect(() => {
-    // Initial load - don't show loading if we have cached data
     loadData(false);
   }, []);
 
