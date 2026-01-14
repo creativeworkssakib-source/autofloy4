@@ -47,10 +47,14 @@ class OfflineSyncOrchestrator {
   private syncProgress = 0;
   private syncDirection: 'push' | 'pull' | 'idle' = 'idle';
   
-  // Sync configuration
-  private readonly SYNC_INTERVAL_MS = 30000; // 30 seconds
+  // Sync configuration - INCREASED intervals to prevent UI freezes
+  private readonly SYNC_INTERVAL_MS = 180000; // 3 minutes (was 30 seconds)
   private readonly MAX_RETRY_COUNT = 5;
   private readonly BATCH_SIZE = 50;
+  
+  // Debounce flags
+  private lastSyncTime = 0;
+  private syncLoopStarted = false;
 
   /**
    * Initialize the sync orchestrator
@@ -70,47 +74,59 @@ class OfflineSyncOrchestrator {
     
     console.log('[SyncOrchestrator] Initializing for shop:', shopId, 'Platform:', getPlatformType());
     
-    // Initialize offline database
-    await offlineDB.init();
+    // Initialize offline database - wrapped in try-catch to prevent blocking
+    try {
+      await offlineDB.init();
+    } catch (error) {
+      console.error('[SyncOrchestrator] Failed to init offlineDB:', error);
+    }
     
     // Set up offline data service
     offlineDataService.setShopId(shopId);
     offlineDataService.setUserId(userId);
     
     // Start sync loop only for installed apps (PWA/APK/EXE)
-    if (isInstalled()) {
-      console.log('[SyncOrchestrator] Installed app detected, starting sync loop');
-      this.startSyncLoop();
+    // IMPORTANT: Sync loop is now optional and controlled
+    if (isInstalled() && !this.syncLoopStarted) {
+      console.log('[SyncOrchestrator] Installed app detected, sync loop available');
+      // Don't auto-start sync loop - let user trigger manually
+      this.syncLoopStarted = true;
       
       // Add online/offline event listeners
       window.addEventListener('online', this.handleOnline);
       window.addEventListener('offline', this.handleOffline);
       
-      // Perform initial sync if online
-      if (navigator.onLine) {
-        await this.performFullSync();
-      }
+      // DON'T perform initial sync automatically - wait for user action
     } else {
       console.log('[SyncOrchestrator] Browser mode - no local sync needed');
     }
     
     this.isInitialized = true;
-    await this.updatePendingCount();
     this.notifyListeners();
   }
 
   /**
-   * Handle coming online
+   * Handle coming online - with debouncing
    */
   private handleOnline = async (): Promise<void> => {
+    const now = Date.now();
+    // Debounce - only sync once per 60 seconds when coming online
+    if (now - this.lastSyncTime < 60000) {
+      console.log('[SyncOrchestrator] Online sync debounced');
+      return;
+    }
+    
     console.log('[SyncOrchestrator] Device came online');
     this.notifyListeners();
     
-    // Small delay to ensure connection is stable
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // Longer delay to ensure connection is stable
+    await new Promise(resolve => setTimeout(resolve, 5000));
     
-    // Perform full sync
-    await this.performFullSync();
+    // Only sync pending changes, not full sync
+    if (navigator.onLine && !this.isSyncing) {
+      this.lastSyncTime = now;
+      await this.syncPendingChanges();
+    }
   };
 
   /**
@@ -122,12 +138,14 @@ class OfflineSyncOrchestrator {
   };
 
   /**
-   * Start the automatic sync loop
+   * Start the automatic sync loop (now optional, not auto-started)
    */
   private startSyncLoop(): void {
     if (this.syncInterval) {
       clearInterval(this.syncInterval);
     }
+    
+    console.log('[SyncOrchestrator] Starting sync loop with interval:', this.SYNC_INTERVAL_MS, 'ms');
     
     this.syncInterval = setInterval(async () => {
       if (navigator.onLine && !this.isSyncing) {

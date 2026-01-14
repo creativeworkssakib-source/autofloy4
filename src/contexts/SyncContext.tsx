@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode, useRef } from 'react';
 import { isInstalled } from '@/lib/platformDetection';
 
 // Define the SyncStatus interface inline to avoid importing the heavy module
@@ -40,9 +40,14 @@ interface SyncProviderProps {
   children: ReactNode;
 }
 
+// Global debounce for force sync
+let lastForceSyncTime = 0;
+const FORCE_SYNC_DEBOUNCE_MS = 30000; // 30 seconds minimum between force syncs
+
 export function SyncProvider({ children }: SyncProviderProps) {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(defaultSyncStatus);
   const [isOfflineCapable] = useState(() => isInstalled());
+  const isSyncingRef = useRef(false);
 
   // Update online status independently - simple and non-blocking
   useEffect(() => {
@@ -64,8 +69,45 @@ export function SyncProvider({ children }: SyncProviderProps) {
   }, []);
 
   const forceSync = useCallback(async () => {
-    // No-op for now - sync is handled elsewhere
-    console.log('[SyncProvider] Force sync requested');
+    const now = Date.now();
+    
+    // Debounce to prevent rapid calls
+    if (now - lastForceSyncTime < FORCE_SYNC_DEBOUNCE_MS) {
+      console.log('[SyncProvider] Force sync debounced');
+      return;
+    }
+    
+    // Prevent concurrent syncs
+    if (isSyncingRef.current) {
+      console.log('[SyncProvider] Sync already in progress');
+      return;
+    }
+    
+    lastForceSyncTime = now;
+    isSyncingRef.current = true;
+    setSyncStatus(prev => ({ ...prev, isSyncing: true }));
+    
+    try {
+      // Lazy load to prevent blocking
+      const { syncManager } = await import('@/services/syncManager');
+      await syncManager.sync();
+      
+      setSyncStatus(prev => ({ 
+        ...prev, 
+        isSyncing: false, 
+        lastSyncAt: new Date(),
+        lastError: null 
+      }));
+    } catch (error) {
+      console.error('[SyncProvider] Force sync failed:', error);
+      setSyncStatus(prev => ({ 
+        ...prev, 
+        isSyncing: false,
+        lastError: error instanceof Error ? error.message : 'Sync failed'
+      }));
+    } finally {
+      isSyncingRef.current = false;
+    }
   }, []);
 
   return (

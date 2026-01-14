@@ -5,54 +5,119 @@
  * 
  * WHEN ONLINE: Always fetch from Supabase server first (LIVE data)
  * WHEN OFFLINE: Use local IndexedDB data
+ * 
+ * IMPORTANT: Sync is now controlled and throttled to prevent UI freezes
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { offlineDataService } from '@/services/offlineDataService';
 import { offlineShopService } from '@/services/offlineShopService';
-import { syncManager, SyncStatus } from '@/services/syncManager';
 import { useIsOnline } from './useOnlineStatus';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { toast } from 'sonner';
 
+// Simple sync status type (no external dependencies to prevent circular imports)
+interface SimpleSyncStatus {
+  isSyncing: boolean;
+  pendingCount: number;
+  lastSyncAt: Date | null;
+  lastError: string | null;
+  progress: number;
+}
+
+// Global sync state to prevent multiple instances
+let globalSyncState: SimpleSyncStatus = {
+  isSyncing: false,
+  pendingCount: 0,
+  lastSyncAt: null,
+  lastError: null,
+  progress: 0,
+};
+
+// Debounce flag to prevent rapid sync calls
+let lastSyncTime = 0;
+const SYNC_DEBOUNCE_MS = 60000; // Only allow sync every 60 seconds
+
 // =============== SYNC STATUS HOOK ===============
 
 export function useSyncStatus() {
-  const [status, setStatus] = useState<SyncStatus>({
-    isSyncing: false,
-    pendingCount: 0,
-    lastSyncAt: null,
-    lastError: null,
-    progress: 0,
-  });
+  const [status, setStatus] = useState<SimpleSyncStatus>(globalSyncState);
   const isMountedRef = useRef(true);
-  
-  // Safe setState wrapper to prevent updates on unmounted components
-  const safeSetStatus = useCallback((newStatus: SyncStatus) => {
-    if (isMountedRef.current) {
-      setStatus(newStatus);
-    }
-  }, []);
   
   useEffect(() => {
     isMountedRef.current = true;
-    let unsubscribe: (() => void) | null = null;
-    
-    // Subscribe to sync manager status updates only
-    unsubscribe = syncManager.subscribe(safeSetStatus);
-    
     return () => {
       isMountedRef.current = false;
-      if (unsubscribe) unsubscribe();
     };
-  }, [safeSetStatus]);
+  }, []);
   
+  // Manual sync trigger with debouncing
   const triggerSync = useCallback(async () => {
-    return syncManager.sync();
+    const now = Date.now();
+    if (now - lastSyncTime < SYNC_DEBOUNCE_MS) {
+      console.log('[useSyncStatus] Sync debounced, last sync was', (now - lastSyncTime) / 1000, 'seconds ago');
+      return { success: false, synced: 0, failed: 0 };
+    }
+    
+    if (globalSyncState.isSyncing) {
+      console.log('[useSyncStatus] Sync already in progress');
+      return { success: false, synced: 0, failed: 0 };
+    }
+    
+    lastSyncTime = now;
+    globalSyncState = { ...globalSyncState, isSyncing: true };
+    if (isMountedRef.current) setStatus({ ...globalSyncState });
+    
+    try {
+      // Lazy load sync manager only when needed
+      const { syncManager } = await import('@/services/syncManager');
+      const result = await syncManager.sync();
+      
+      globalSyncState = {
+        ...globalSyncState,
+        isSyncing: false,
+        lastSyncAt: new Date(),
+        lastError: null,
+      };
+      if (isMountedRef.current) setStatus({ ...globalSyncState });
+      
+      return result;
+    } catch (error) {
+      globalSyncState = {
+        ...globalSyncState,
+        isSyncing: false,
+        lastError: error instanceof Error ? error.message : 'Sync failed',
+      };
+      if (isMountedRef.current) setStatus({ ...globalSyncState });
+      return { success: false, synced: 0, failed: 0 };
+    }
   }, []);
   
   const triggerFullSync = useCallback(async (shopId: string) => {
-    return syncManager.fullSync(shopId);
+    if (globalSyncState.isSyncing) {
+      return { success: false, tables: [] };
+    }
+    
+    globalSyncState = { ...globalSyncState, isSyncing: true };
+    if (isMountedRef.current) setStatus({ ...globalSyncState });
+    
+    try {
+      const { syncManager } = await import('@/services/syncManager');
+      const result = await syncManager.fullSync(shopId);
+      
+      globalSyncState = {
+        ...globalSyncState,
+        isSyncing: false,
+        lastSyncAt: new Date(),
+      };
+      if (isMountedRef.current) setStatus({ ...globalSyncState });
+      
+      return result;
+    } catch (error) {
+      globalSyncState = { ...globalSyncState, isSyncing: false };
+      if (isMountedRef.current) setStatus({ ...globalSyncState });
+      return { success: false, tables: [] };
+    }
   }, []);
   
   return {
