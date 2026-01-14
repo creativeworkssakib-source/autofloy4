@@ -54,7 +54,6 @@ import { FloatingSyncIndicator } from "./SyncProgressIndicator";
 import { initPWAAutoUpdate } from "./UpdateNotification";
 import { offlineDataService } from "@/services/offlineDataService";
 import { syncManager } from "@/services/syncManager";
-import { appUpdateService } from "@/services/appUpdateService";
 import { useShop } from "@/contexts/ShopContext";
 
 interface ShopLayoutProps {
@@ -90,18 +89,14 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
       // Start auto sync (every 30 seconds)
       syncManager.startAutoSync(30000);
       
-      // Initialize PWA silent auto-update
+      // PWA auto-update is handled by vite-plugin-pwa
       initPWAAutoUpdate();
-      
-      // Start auto update check for settings (every 30 minutes)
-      appUpdateService.startAutoCheck();
     };
     
     initOfflineService();
     
     return () => {
       syncManager.stopAutoSync();
-      appUpdateService.stopAutoCheck();
     };
   }, [user?.id, currentShop?.id]);
 

@@ -17,8 +17,8 @@ export default defineConfig(({ mode }) => ({
     react(),
     mode === "development" && componentTagger(),
     VitePWA({
-      registerType: 'prompt', // Let us control when to update
-      injectRegister: false, // We handle registration manually
+      registerType: 'autoUpdate', // Auto update silently
+      injectRegister: 'auto', // Auto register service worker
       includeAssets: [
         'favicon.svg',
         'favicon.ico', 
@@ -99,10 +99,9 @@ export default defineConfig(({ mode }) => ({
         // Clean old caches
         cleanupOutdatedCaches: true,
         
-        // Don't skip waiting - let user decide when to update
-        // This works with registerType: 'prompt'
-        skipWaiting: false,
-        clientsClaim: false,
+        // Auto update - skip waiting and claim clients immediately
+        skipWaiting: true,
+        clientsClaim: true,
 
         // Runtime caching strategies
         runtimeCaching: [
