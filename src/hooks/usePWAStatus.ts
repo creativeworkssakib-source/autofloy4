@@ -4,7 +4,7 @@
  * React hook to track PWA installation, offline, and update status
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 
 interface PWAStatus {
@@ -19,7 +19,6 @@ interface PWAStatus {
   
   // Update status
   needRefresh: boolean;
-  hasVerifiedUpdate: boolean;
   
   // Methods
   install: () => Promise<boolean>;
@@ -33,9 +32,6 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
 
-// Check if we're in development mode
-const isDev = import.meta.env.DEV;
-
 export function usePWAStatus(): PWAStatus {
   const [isInstalled, setIsInstalled] = useState(false);
   const [isInstallable, setIsInstallable] = useState(false);
@@ -43,9 +39,6 @@ export function usePWAStatus(): PWAStatus {
   const [isOnline, setIsOnline] = useState(() => 
     typeof navigator !== 'undefined' ? navigator.onLine : true
   );
-  const [hasVerifiedUpdate, setHasVerifiedUpdate] = useState(false);
-  const initialLoadRef = useRef(true);
-  const registrationRef = useRef<ServiceWorkerRegistration | null>(null);
 
   // Use vite-plugin-pwa's React hook
   const {
@@ -56,14 +49,13 @@ export function usePWAStatus(): PWAStatus {
     immediate: true,
     onRegisteredSW(swUrl, registration) {
       console.log('[PWA Hook] Service Worker registered at:', swUrl);
-      registrationRef.current = registration || null;
       
-      // Check for updates periodically (only in production)
-      if (registration && !isDev) {
-        // Initial check after 60 seconds (give time for initial load)
+      // Check for updates periodically
+      if (registration) {
+        // Initial check after 10 seconds
         setTimeout(() => {
           registration.update().catch(console.error);
-        }, 60000);
+        }, 10000);
         
         // Then check every 30 minutes
         setInterval(() => {
@@ -76,47 +68,6 @@ export function usePWAStatus(): PWAStatus {
       console.error('[PWA Hook] SW registration error:', error);
     },
   });
-
-  // Verify that needRefresh represents a real update (waiting SW exists)
-  useEffect(() => {
-    // Skip verification during initial load (first 30 seconds)
-    if (initialLoadRef.current) {
-      const timer = setTimeout(() => {
-        initialLoadRef.current = false;
-      }, 30000);
-      return () => clearTimeout(timer);
-    }
-
-    // In development, never show update notification
-    if (isDev) {
-      setHasVerifiedUpdate(false);
-      return;
-    }
-
-    if (needRefresh) {
-      // Verify there's actually a waiting service worker
-      const verifyUpdate = async () => {
-        try {
-          const registration = registrationRef.current || await navigator.serviceWorker?.ready;
-          if (registration?.waiting) {
-            console.log('[PWA Hook] Verified: waiting service worker exists');
-            setHasVerifiedUpdate(true);
-          } else {
-            console.log('[PWA Hook] No waiting service worker found, dismissing false positive');
-            setHasVerifiedUpdate(false);
-            setNeedRefresh(false);
-          }
-        } catch (error) {
-          console.error('[PWA Hook] Error verifying update:', error);
-          setHasVerifiedUpdate(false);
-        }
-      };
-      
-      verifyUpdate();
-    } else {
-      setHasVerifiedUpdate(false);
-    }
-  }, [needRefresh, setNeedRefresh]);
 
   // Check if app is installed
   useEffect(() => {
@@ -234,8 +185,7 @@ export function usePWAStatus(): PWAStatus {
     installPrompt,
     isOnline,
     isOfflineReady: offlineReady,
-    needRefresh: hasVerifiedUpdate, // Only return true if verified
-    hasVerifiedUpdate,
+    needRefresh,
     install,
     update,
     dismissUpdate,
