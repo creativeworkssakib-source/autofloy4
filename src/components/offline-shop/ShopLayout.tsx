@@ -51,7 +51,7 @@ import { FeatureDisabledOverlay } from "@/components/FeatureDisabledOverlay";
 import { OfflineStatusBar } from "./OfflineStatusBar";
 import { OfflineExpiredModal } from "./OfflineExpiredModal";
 import { FloatingSyncIndicator } from "./SyncProgressIndicator";
-import { UpdateNotification } from "./UpdateNotification";
+import { initPWAAutoUpdate } from "./UpdateNotification";
 import { offlineDataService } from "@/services/offlineDataService";
 import { syncManager } from "@/services/syncManager";
 import { appUpdateService } from "@/services/appUpdateService";
@@ -90,8 +90,10 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
       // Start auto sync (every 30 seconds)
       syncManager.startAutoSync(30000);
       
-      // Start auto update check (every 30 minutes)
-      // This ensures APK/EXE/PWA gets latest settings when admin makes changes
+      // Initialize PWA silent auto-update
+      initPWAAutoUpdate();
+      
+      // Start auto update check for settings (every 30 minutes)
       appUpdateService.startAutoCheck();
     };
     
@@ -316,9 +318,6 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
         
         {/* Floating Sync Indicator */}
         <FloatingSyncIndicator />
-        
-        {/* Update Notification */}
-        <UpdateNotification />
         
         {/* Offline Expired Modal */}
         <OfflineExpiredModal 
