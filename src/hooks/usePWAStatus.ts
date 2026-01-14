@@ -2,18 +2,26 @@
  * usePWAStatus Hook
  * 
  * React hook to track PWA installation, offline, and update status
- * Works safely in both development and production environments
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useRegisterSW } from 'virtual:pwa-register/react';
 
 interface PWAStatus {
+  // Installation status
   isInstalled: boolean;
   isInstallable: boolean;
+  installPrompt: BeforeInstallPromptEvent | null;
+  
+  // Offline status
   isOnline: boolean;
   isOfflineReady: boolean;
+  
+  // Update status
   needRefresh: boolean;
   hasVerifiedUpdate: boolean;
+  
+  // Methods
   install: () => Promise<boolean>;
   update: () => Promise<void>;
   dismissUpdate: () => void;
@@ -28,127 +36,146 @@ interface BeforeInstallPromptEvent extends Event {
 // Check if we're in development mode
 const isDev = import.meta.env.DEV;
 
-// Store for install prompt (outside React to avoid HMR issues)
-let storedInstallPrompt: BeforeInstallPromptEvent | null = null;
-let swRegistration: ServiceWorkerRegistration | null = null;
-
 export function usePWAStatus(): PWAStatus {
   const [isInstalled, setIsInstalled] = useState(false);
   const [isInstallable, setIsInstallable] = useState(false);
-  const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
-  const [isOfflineReady, setIsOfflineReady] = useState(false);
-  const [needRefresh, setNeedRefresh] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [isOnline, setIsOnline] = useState(() => 
+    typeof navigator !== 'undefined' ? navigator.onLine : true
+  );
   const [hasVerifiedUpdate, setHasVerifiedUpdate] = useState(false);
+  const initialLoadRef = useRef(true);
+  const registrationRef = useRef<ServiceWorkerRegistration | null>(null);
 
-  // Register service worker (only once)
+  // Use vite-plugin-pwa's React hook
+  const {
+    needRefresh: [needRefresh, setNeedRefresh],
+    offlineReady: [offlineReady],
+    updateServiceWorker,
+  } = useRegisterSW({
+    immediate: true,
+    onRegisteredSW(swUrl, registration) {
+      console.log('[PWA Hook] Service Worker registered at:', swUrl);
+      registrationRef.current = registration || null;
+      
+      // Check for updates periodically (only in production)
+      if (registration && !isDev) {
+        // Initial check after 60 seconds (give time for initial load)
+        setTimeout(() => {
+          registration.update().catch(console.error);
+        }, 60000);
+        
+        // Then check every 30 minutes
+        setInterval(() => {
+          console.log('[PWA Hook] Checking for updates...');
+          registration.update().catch(console.error);
+        }, 30 * 60 * 1000);
+      }
+    },
+    onRegisterError(error) {
+      console.error('[PWA Hook] SW registration error:', error);
+    },
+  });
+
+  // Verify that needRefresh represents a real update (waiting SW exists)
   useEffect(() => {
-    if (isDev || !('serviceWorker' in navigator)) {
-      return;
+    // Skip verification during initial load (first 30 seconds)
+    if (initialLoadRef.current) {
+      const timer = setTimeout(() => {
+        initialLoadRef.current = false;
+      }, 30000);
+      return () => clearTimeout(timer);
     }
 
-    let mounted = true;
-
-    const registerSW = async () => {
-      try {
-        const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
-        swRegistration = registration;
-        
-        if (!mounted) return;
-        
-        if (registration.waiting) {
-          setNeedRefresh(true);
-        }
-        
-        if (registration.active) {
-          setIsOfflineReady(true);
-        }
-        
-        registration.addEventListener('updatefound', () => {
-          const newWorker = registration.installing;
-          if (!newWorker) return;
-          
-          newWorker.addEventListener('statechange', () => {
-            if (!mounted) return;
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              setNeedRefresh(true);
-            } else if (newWorker.state === 'activated') {
-              setIsOfflineReady(true);
-            }
-          });
-        });
-      } catch (error) {
-        console.error('[PWA] SW registration failed:', error);
-      }
-    };
-
-    registerSW();
-
-    return () => { mounted = false; };
-  }, []);
-
-  // Verify update
-  useEffect(() => {
-    if (isDev || !needRefresh) {
+    // In development, never show update notification
+    if (isDev) {
       setHasVerifiedUpdate(false);
       return;
     }
 
-    // Wait 30 seconds before showing update notification
-    const timer = setTimeout(async () => {
-      try {
-        const reg = swRegistration || await navigator.serviceWorker?.ready;
-        if (reg?.waiting) {
-          setHasVerifiedUpdate(true);
+    if (needRefresh) {
+      // Verify there's actually a waiting service worker
+      const verifyUpdate = async () => {
+        try {
+          const registration = registrationRef.current || await navigator.serviceWorker?.ready;
+          if (registration?.waiting) {
+            console.log('[PWA Hook] Verified: waiting service worker exists');
+            setHasVerifiedUpdate(true);
+          } else {
+            console.log('[PWA Hook] No waiting service worker found, dismissing false positive');
+            setHasVerifiedUpdate(false);
+            setNeedRefresh(false);
+          }
+        } catch (error) {
+          console.error('[PWA Hook] Error verifying update:', error);
+          setHasVerifiedUpdate(false);
         }
-      } catch {
-        setHasVerifiedUpdate(false);
-      }
-    }, 30000);
-
-    return () => clearTimeout(timer);
-  }, [needRefresh]);
+      };
+      
+      verifyUpdate();
+    } else {
+      setHasVerifiedUpdate(false);
+    }
+  }, [needRefresh, setNeedRefresh]);
 
   // Check if app is installed
   useEffect(() => {
     const checkInstalled = () => {
       const installed = 
         window.matchMedia('(display-mode: standalone)').matches ||
+        window.matchMedia('(display-mode: fullscreen)').matches ||
+        window.matchMedia('(display-mode: minimal-ui)').matches ||
         (window.navigator as any).standalone === true;
+      
       setIsInstalled(installed);
     };
 
     checkInstalled();
-    const mq = window.matchMedia('(display-mode: standalone)');
-    mq.addEventListener('change', checkInstalled);
-    return () => mq.removeEventListener('change', checkInstalled);
+
+    // Listen for display mode changes
+    const mediaQuery = window.matchMedia('(display-mode: standalone)');
+    const handler = () => checkInstalled();
+    
+    // Use modern API only (deprecated listeners removed)
+    mediaQuery.addEventListener('change', handler);
+
+    return () => {
+      mediaQuery.removeEventListener('change', handler);
+    };
   }, []);
 
   // Handle install prompt
   useEffect(() => {
-    const handlePrompt = (e: Event) => {
+    const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
-      storedInstallPrompt = e as BeforeInstallPromptEvent;
+      setInstallPrompt(e as BeforeInstallPromptEvent);
       setIsInstallable(true);
+      console.log('[PWA Hook] Install prompt captured');
     };
 
-    const handleInstalled = () => {
-      storedInstallPrompt = null;
+    const handleAppInstalled = () => {
+      setInstallPrompt(null);
       setIsInstallable(false);
       setIsInstalled(true);
+      console.log('[PWA Hook] App was installed');
     };
 
-    window.addEventListener('beforeinstallprompt', handlePrompt);
-    window.addEventListener('appinstalled', handleInstalled);
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleAppInstalled);
 
     return () => {
-      window.removeEventListener('beforeinstallprompt', handlePrompt);
-      window.removeEventListener('appinstalled', handleInstalled);
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleAppInstalled);
     };
   }, []);
 
   // Handle online/offline status
   useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
+    const handleOnline = () => {
+      setIsOnline(true);
+      localStorage.setItem('lastOnlineAt', new Date().toISOString());
+    };
+    
     const handleOffline = () => setIsOnline(false);
 
     window.addEventListener('online', handleOnline);
@@ -160,49 +187,54 @@ export function usePWAStatus(): PWAStatus {
     };
   }, []);
 
+  // Install the app
   const install = useCallback(async (): Promise<boolean> => {
-    if (!storedInstallPrompt) return false;
+    if (!installPrompt) {
+      console.log('[PWA Hook] No install prompt available');
+      return false;
+    }
+
     try {
-      await storedInstallPrompt.prompt();
-      const { outcome } = await storedInstallPrompt.userChoice;
+      await installPrompt.prompt();
+      const { outcome } = await installPrompt.userChoice;
+      
+      console.log('[PWA Hook] Install choice:', outcome);
+      
       if (outcome === 'accepted') {
-        storedInstallPrompt = null;
+        setInstallPrompt(null);
         setIsInstallable(false);
         return true;
       }
       return false;
-    } catch {
+    } catch (error) {
+      console.error('[PWA Hook] Install error:', error);
       return false;
     }
-  }, []);
+  }, [installPrompt]);
 
+  // Update the app
   const update = useCallback(async (): Promise<void> => {
     try {
-      const reg = swRegistration || await navigator.serviceWorker?.ready;
-      if (reg?.waiting) {
-        reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-        navigator.serviceWorker.addEventListener('controllerchange', () => {
-          window.location.reload();
-        }, { once: true });
-      } else {
-        window.location.reload();
-      }
-    } catch {
+      await updateServiceWorker(true); // true = reload page
+    } catch (error) {
+      console.error('[PWA Hook] Update error:', error);
+      // Fallback: just reload
       window.location.reload();
     }
-  }, []);
+  }, [updateServiceWorker]);
 
+  // Dismiss update notification
   const dismissUpdate = useCallback(() => {
     setNeedRefresh(false);
-    setHasVerifiedUpdate(false);
-  }, []);
+  }, [setNeedRefresh]);
 
   return {
     isInstalled,
     isInstallable,
+    installPrompt,
     isOnline,
-    isOfflineReady,
-    needRefresh: hasVerifiedUpdate,
+    isOfflineReady: offlineReady,
+    needRefresh: hasVerifiedUpdate, // Only return true if verified
     hasVerifiedUpdate,
     install,
     update,
@@ -214,7 +246,9 @@ export function usePWAStatus(): PWAStatus {
  * Simple hook just for online status
  */
 export function useSimpleOnlineStatus(): boolean {
-  const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  const [isOnline, setIsOnline] = useState(() => 
+    typeof navigator !== 'undefined' ? navigator.onLine : true
+  );
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);

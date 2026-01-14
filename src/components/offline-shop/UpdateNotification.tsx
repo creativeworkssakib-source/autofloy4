@@ -2,13 +2,20 @@
  * PWA Update Notification Component
  * 
  * Shows a notification when app updates are available.
- * Disabled in development mode.
+ * Works with vite-plugin-pwa.
+ * 
+ * Key improvements:
+ * - Only shows after initial load period (30 seconds)
+ * - Verifies waiting service worker before showing
+ * - Respects session-based dismissal
+ * - Disabled in development mode
  */
 
-import { useState, useEffect, Component, ReactNode } from 'react';
-import { RefreshCw, X, Download, WifiOff } from 'lucide-react';
+import { useEffect, useState, useRef } from 'react';
+import { RefreshCw, X, Download, Wifi, WifiOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { usePWAStatus } from '@/hooks/usePWAStatus';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { syncManager } from '@/services/syncManager';
 import { toast } from 'sonner';
@@ -16,105 +23,68 @@ import { toast } from 'sonner';
 // Check if we're in development mode
 const isDev = import.meta.env.DEV;
 
-// Error boundary to prevent crashes
-class UpdateNotificationErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
-  constructor(props: { children: ReactNode }) {
-    super(props);
-    this.state = { hasError: false };
-  }
-
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
-
-  componentDidCatch(error: Error) {
-    console.error('[UpdateNotification] Error caught:', error);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return null; // Silently fail - update notification is not critical
-    }
-    return this.props.children;
-  }
-}
-
-// Inner component that uses hooks
-const UpdateNotificationInner = () => {
+export const UpdateNotification = () => {
   const { language } = useLanguage();
+  const { needRefresh, hasVerifiedUpdate, isOnline, isOfflineReady, update, dismissUpdate } = usePWAStatus();
   
-  const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
-  const [hasUpdate, setHasUpdate] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
-  const [dismissed, setDismissed] = useState(() => sessionStorage.getItem('pwa_update_dismissed') === 'true');
+  const [dismissed, setDismissed] = useState(() => {
+    // Check session storage for previous dismissal
+    return sessionStorage.getItem('pwa_update_dismissed') === 'true';
+  });
+  const [showOfflineReady, setShowOfflineReady] = useState(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const mountTimeRef = useRef(Date.now());
 
-  // Listen for online/offline
+  // Mark initial load complete after 30 seconds
   useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-    
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
-
-  // Check for service worker updates (only in production, after 30 seconds)
-  useEffect(() => {
-    if (isDev || !('serviceWorker' in navigator)) {
-      return;
-    }
-
-    const timer = setTimeout(async () => {
-      try {
-        const registration = await navigator.serviceWorker.ready;
-        if (registration?.waiting) {
-          setHasUpdate(true);
-        }
-        
-        // Listen for future updates
-        registration.addEventListener('updatefound', () => {
-          const newWorker = registration.installing;
-          if (!newWorker) return;
-          
-          newWorker.addEventListener('statechange', () => {
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              setHasUpdate(true);
-            }
-          });
-        });
-      } catch (error) {
-        console.error('[UpdateNotification] SW check failed:', error);
-      }
+    const timer = setTimeout(() => {
+      setIsInitialLoad(false);
+      console.log('[UpdateNotification] Initial load period ended');
     }, 30000);
-
+    
     return () => clearTimeout(timer);
   }, []);
+
+  // Show offline ready notification once
+  useEffect(() => {
+    if (isOfflineReady && !localStorage.getItem('pwa_offline_ready_shown')) {
+      setShowOfflineReady(true);
+      localStorage.setItem('pwa_offline_ready_shown', 'true');
+      
+      // Auto-hide after 5 seconds
+      const timer = setTimeout(() => {
+        setShowOfflineReady(false);
+      }, 5000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [isOfflineReady]);
 
   const handleUpdate = async () => {
     setIsUpdating(true);
     
     try {
+      // First sync any pending data
       if (isOnline) {
-        toast.info(language === 'bn' ? 'ডেটা সিঙ্ক করা হচ্ছে...' : 'Syncing data...');
+        toast.info(
+          language === 'bn' 
+            ? 'ডেটা সিঙ্ক করা হচ্ছে...' 
+            : 'Syncing data...'
+        );
+        
         await syncManager.sync();
       }
       
-      const registration = await navigator.serviceWorker.ready;
-      if (registration?.waiting) {
-        registration.waiting.postMessage({ type: 'SKIP_WAITING' });
-        navigator.serviceWorker.addEventListener('controllerchange', () => {
-          window.location.reload();
-        }, { once: true });
-      } else {
-        window.location.reload();
-      }
+      // Then apply the update
+      await update();
     } catch (error) {
-      console.error('[UpdateNotification] Update failed:', error);
-      toast.error(language === 'bn' ? 'আপডেট করতে সমস্যা হয়েছে' : 'Update failed');
+      console.error('Update failed:', error);
+      toast.error(
+        language === 'bn'
+          ? 'আপডেট করতে সমস্যা হয়েছে'
+          : 'Update failed'
+      );
       setIsUpdating(false);
     }
   };
@@ -122,10 +92,48 @@ const UpdateNotificationInner = () => {
   const handleDismiss = () => {
     setDismissed(true);
     sessionStorage.setItem('pwa_update_dismissed', 'true');
+    dismissUpdate();
   };
 
-  // Don't show in development or if dismissed or no update
-  if (isDev || dismissed || !hasUpdate) {
+  // Don't show anything in development mode
+  if (isDev) {
+    return null;
+  }
+
+  // Show offline ready notification
+  if (showOfflineReady && !needRefresh) {
+    return (
+      <Alert className="fixed bottom-4 right-4 left-4 sm:left-auto sm:w-96 z-50 bg-green-500/10 border-green-500 shadow-lg animate-in slide-in-from-bottom-4">
+        <Wifi className="h-4 w-4 text-green-500" />
+        <AlertTitle className="font-semibold text-green-600">
+          {language === 'bn' ? 'অফলাইন রেডি!' : 'Offline Ready!'}
+        </AlertTitle>
+        <AlertDescription className="mt-2">
+          <p className="text-sm text-muted-foreground">
+            {language === 'bn' 
+              ? 'অ্যাপ এখন অফলাইনে কাজ করতে প্রস্তুত। ইন্টারনেট ছাড়াও ব্যবহার করতে পারবেন।'
+              : 'App is now ready to work offline. You can use it without internet.'
+            }
+          </p>
+          <Button 
+            size="sm" 
+            variant="ghost" 
+            onClick={() => setShowOfflineReady(false)}
+            className="mt-2"
+          >
+            <X className="h-4 w-4 mr-1" />
+            {language === 'bn' ? 'বন্ধ করুন' : 'Dismiss'}
+          </Button>
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  // Show update notification only if:
+  // 1. Not in initial load period
+  // 2. Has verified update (waiting SW exists)
+  // 3. Not dismissed
+  if (isInitialLoad || !hasVerifiedUpdate || dismissed) {
     return null;
   }
 
@@ -183,18 +191,6 @@ const UpdateNotificationInner = () => {
         </div>
       </AlertDescription>
     </Alert>
-  );
-};
-
-// Export with error boundary wrapper
-export const UpdateNotification = () => {
-  // Skip entirely in development
-  if (isDev) return null;
-  
-  return (
-    <UpdateNotificationErrorBoundary>
-      <UpdateNotificationInner />
-    </UpdateNotificationErrorBoundary>
   );
 };
 
