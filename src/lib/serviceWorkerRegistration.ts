@@ -39,7 +39,7 @@ export function register(config?: Config): () => void {
         if ('serviceWorker' in navigator) {
           navigator.serviceWorker.ready.then((registration) => {
             config?.onUpdate?.(registration);
-          });
+          }).catch(console.error);
         }
       },
       onOfflineReady() {
@@ -53,18 +53,23 @@ export function register(config?: Config): () => void {
         if ('serviceWorker' in navigator) {
           navigator.serviceWorker.ready.then((registration) => {
             config?.onSuccess?.(registration);
-          });
+          }).catch(console.error);
         }
       },
-      onRegistered(registration) {
-        console.log('[PWA] Service Worker registered successfully');
+      onRegisteredSW(swUrl, registration) {
+        console.log('[PWA] Service Worker registered at:', swUrl);
         
         if (registration) {
-          // Check for updates periodically
+          // Initial update check after 10 seconds
+          setTimeout(() => {
+            registration.update().catch(console.error);
+          }, 10000);
+          
+          // Check for updates every 30 minutes
           setInterval(() => {
             console.log('[PWA] Checking for updates...');
-            registration.update();
-          }, 60 * 60 * 1000); // Check every hour
+            registration.update().catch(console.error);
+          }, 30 * 60 * 1000);
         }
       },
       onRegisterError(error) {
