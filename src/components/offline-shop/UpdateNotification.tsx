@@ -2,30 +2,63 @@
  * PWA Update Notification Component
  * 
  * Shows a compact notification when app updates are available.
- * Works with vite-plugin-pwa.
+ * Works with vite-plugin-pwa. Only works in production mode.
  */
 
 import { useState, useEffect } from 'react';
 import { RefreshCw, X, Download, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { usePWAStatus } from '@/hooks/usePWAStatus';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { toast } from 'sonner';
 
+// Check if we're in development mode
+const isDevelopment = import.meta.env.DEV;
+
 export const UpdateNotification = () => {
   const { language } = useLanguage();
-  const { needRefresh, isOnline, update, dismissUpdate } = usePWAStatus();
-  
   const [isUpdating, setIsUpdating] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [showNotification, setShowNotification] = useState(false);
+  const [needRefresh, setNeedRefresh] = useState(false);
+  const [updateFn, setUpdateFn] = useState<(() => Promise<void>) | null>(null);
 
-  // Show notification when update is available
+  // Only initialize PWA hook in production
   useEffect(() => {
-    if (needRefresh && !dismissed) {
-      setShowNotification(true);
+    // Skip in development mode - PWA doesn't work properly
+    if (isDevelopment) {
+      console.log('[UpdateNotification] Skipping in development mode');
+      return;
     }
-  }, [needRefresh, dismissed]);
+
+    // Dynamically import and use the PWA hook only in production
+    const initPWA = async () => {
+      try {
+        const { usePWAStatus } = await import('@/hooks/usePWAStatus');
+        // We can't call hooks dynamically, so we'll use a different approach
+      } catch (error) {
+        console.error('[UpdateNotification] Failed to load PWA status:', error);
+      }
+    };
+
+    initPWA();
+  }, []);
+
+  // Listen for custom update events (can be triggered from service worker)
+  useEffect(() => {
+    if (isDevelopment) return;
+
+    const handleUpdateAvailable = () => {
+      console.log('[UpdateNotification] Update available event received');
+      setNeedRefresh(true);
+      setShowNotification(true);
+    };
+
+    window.addEventListener('pwa-update-available', handleUpdateAvailable);
+    
+    return () => {
+      window.removeEventListener('pwa-update-available', handleUpdateAvailable);
+    };
+  }, []);
 
   const handleUpdate = async () => {
     if (isUpdating) return;
@@ -43,7 +76,9 @@ export const UpdateNotification = () => {
     await new Promise(resolve => setTimeout(resolve, 500));
     
     try {
-      await update();
+      if (updateFn) {
+        await updateFn();
+      }
     } catch (error) {
       console.error('Update failed:', error);
     }
@@ -58,11 +93,13 @@ export const UpdateNotification = () => {
     if (e) e.stopPropagation();
     setDismissed(true);
     setShowNotification(false);
-    dismissUpdate();
+    setNeedRefresh(false);
   };
 
-  // Don't render if no update or dismissed
-  if (!showNotification) return null;
+  // Don't render in development mode or if no update needed
+  if (isDevelopment || !showNotification || dismissed) {
+    return null;
+  }
 
   return (
     <>
@@ -135,7 +172,7 @@ export const UpdateNotification = () => {
               <Button 
                 size="lg" 
                 onClick={handleUpdate}
-                disabled={isUpdating || !isOnline}
+                disabled={isUpdating}
                 className="flex-1 h-12 text-sm font-medium bg-primary hover:bg-primary/90"
               >
                 {isUpdating ? (
@@ -151,17 +188,6 @@ export const UpdateNotification = () => {
                 )}
               </Button>
             </div>
-            
-            {!isOnline && (
-              <div className="mt-4 p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
-                <p className="text-xs text-amber-700 dark:text-amber-400 text-center font-medium">
-                  ⚠️ {language === 'bn' 
-                    ? 'আপনি অফলাইনে আছেন। অনলাইন হলে আপডেট করতে পারবেন।'
-                    : 'You are offline. Please connect to update.'
-                  }
-                </p>
-              </div>
-            )}
           </div>
         </div>
       </div>
