@@ -352,7 +352,10 @@ const AddToStockModal = ({ isOpen, onClose, products, onSuccess }: AddToStockMod
                               <Input
                                 type="number"
                                 value={product.quantity}
-                                onChange={(e) => updateProduct(index, "quantity", parseInt(e.target.value) || 0)}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  updateProduct(index, "quantity", val === "" ? 0 : parseInt(val) || 0);
+                                }}
                                 className="mt-1"
                               />
                             </div>
@@ -445,7 +448,10 @@ const AddToStockModal = ({ isOpen, onClose, products, onSuccess }: AddToStockMod
                               <Input
                                 type="number"
                                 value={product.min_stock_alert || 5}
-                                onChange={(e) => updateProduct(index, "min_stock_alert", parseInt(e.target.value) || 5)}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  updateProduct(index, "min_stock_alert", val === "" ? 5 : parseInt(val) || 5);
+                                }}
                                 className="mt-1"
                               />
                             </div>
