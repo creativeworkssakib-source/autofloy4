@@ -87,7 +87,7 @@ async function sendVerificationEmail(
     const emailHtml = getOTPEmailTemplate(otp, displayName || undefined);
 
     const { error: emailError } = await resend.emails.send({
-      from: "AutoFloy <onboarding@resend.dev>",
+      from: "AutoFloy <noreply@fileforge.site>",
       to: [email],
       subject: "🔐 Your AutoFloy Verification Code",
       html: emailHtml,
