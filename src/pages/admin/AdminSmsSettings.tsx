@@ -279,7 +279,7 @@ const AdminSmsSettings = () => {
                   type="number"
                   min="0"
                   value={settings.sms_limit_trial}
-                  onChange={(e) => handleChange('sms_limit_trial', parseInt(e.target.value) || 0)}
+                  onChange={(e) => { const val = e.target.value; handleChange('sms_limit_trial', val === "" ? 0 : parseInt(val) || 0); }}
                 />
               </div>
               <div className="space-y-2">
@@ -289,7 +289,7 @@ const AdminSmsSettings = () => {
                   type="number"
                   min="0"
                   value={settings.sms_limit_starter}
-                  onChange={(e) => handleChange('sms_limit_starter', parseInt(e.target.value) || 0)}
+                  onChange={(e) => { const val = e.target.value; handleChange('sms_limit_starter', val === "" ? 0 : parseInt(val) || 0); }}
                 />
               </div>
               <div className="space-y-2">
@@ -299,7 +299,7 @@ const AdminSmsSettings = () => {
                   type="number"
                   min="0"
                   value={settings.sms_limit_professional}
-                  onChange={(e) => handleChange('sms_limit_professional', parseInt(e.target.value) || 0)}
+                  onChange={(e) => { const val = e.target.value; handleChange('sms_limit_professional', val === "" ? 0 : parseInt(val) || 0); }}
                 />
               </div>
               <div className="space-y-2">
@@ -309,7 +309,7 @@ const AdminSmsSettings = () => {
                   type="number"
                   min="0"
                   value={settings.sms_limit_business}
-                  onChange={(e) => handleChange('sms_limit_business', parseInt(e.target.value) || 0)}
+                  onChange={(e) => { const val = e.target.value; handleChange('sms_limit_business', val === "" ? 0 : parseInt(val) || 0); }}
                 />
               </div>
               <div className="space-y-2">
@@ -319,7 +319,7 @@ const AdminSmsSettings = () => {
                   type="number"
                   min="0"
                   value={settings.sms_limit_lifetime}
-                  onChange={(e) => handleChange('sms_limit_lifetime', parseInt(e.target.value) || 0)}
+                  onChange={(e) => { const val = e.target.value; handleChange('sms_limit_lifetime', val === "" ? 0 : parseInt(val) || 0); }}
                 />
               </div>
             </div>

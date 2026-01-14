@@ -268,7 +268,7 @@ const AdminPricingPlans = () => {
                   <Input
                     type="number"
                     value={formData.original_price_numeric || ''}
-                    onChange={(e) => setFormData({ ...formData, original_price_numeric: parseFloat(e.target.value) || undefined })}
+                    onChange={(e) => { const val = e.target.value; setFormData({ ...formData, original_price_numeric: val === "" ? undefined : parseFloat(val) || undefined }); }}
                     placeholder="1999"
                   />
                 </div>
@@ -277,7 +277,7 @@ const AdminPricingPlans = () => {
                   <Input
                     type="number"
                     value={formData.discount_percent || ''}
-                    onChange={(e) => setFormData({ ...formData, discount_percent: parseInt(e.target.value) || undefined })}
+                    onChange={(e) => { const val = e.target.value; setFormData({ ...formData, discount_percent: val === "" ? undefined : parseInt(val) || undefined }); }}
                     placeholder="25"
                   />
                 </div>

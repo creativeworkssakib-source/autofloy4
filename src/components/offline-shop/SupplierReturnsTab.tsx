@@ -748,7 +748,8 @@ export default function SupplierReturnsTab() {
                           min={1}
                           value={formData.quantity}
                           onChange={(e) => {
-                            const qty = parseInt(e.target.value) || 1;
+                            const val = e.target.value;
+                            const qty = val === "" ? 1 : parseInt(val) || 1;
                             setFormData({ 
                               ...formData, 
                               quantity: qty,

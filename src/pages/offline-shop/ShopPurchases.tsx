@@ -1180,7 +1180,7 @@ const ShopPurchases = () => {
                         type="number"
                         placeholder={language === "bn" ? "পরিমাণ" : "Qty"}
                         value={item.quantity}
-                        onChange={(e) => updateItem(index, "quantity", parseInt(e.target.value) || 1)}
+                        onChange={(e) => { const val = e.target.value; updateItem(index, "quantity", val === "" ? 1 : parseInt(val) || 1); }}
                       />
                       <Input
                         type="number"
@@ -1230,7 +1230,7 @@ const ShopPurchases = () => {
                         type="number"
                         placeholder={t("shop.quantity")}
                         value={item.quantity}
-                        onChange={(e) => updateItem(index, "quantity", parseInt(e.target.value) || 1)}
+                        onChange={(e) => { const val = e.target.value; updateItem(index, "quantity", val === "" ? 1 : parseInt(val) || 1); }}
                       />
                       <Input
                         type="number"

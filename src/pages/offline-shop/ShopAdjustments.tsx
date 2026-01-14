@@ -420,7 +420,7 @@ const ShopAdjustments = () => {
                   type="number"
                   min={1}
                   value={formData.quantity}
-                  onChange={(e) => setFormData({ ...formData, quantity: parseInt(e.target.value) || 1 })}
+                  onChange={(e) => { const val = e.target.value; setFormData({ ...formData, quantity: val === "" ? 1 : parseInt(val) || 1 }); }}
                   required
                 />
               </div>
