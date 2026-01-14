@@ -116,8 +116,23 @@ const Dashboard = () => {
   const [shopLoading, setShopLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
 
+  // Check if we have cached data on mount
+  useEffect(() => {
+    const hasCachedData = 
+      localStorage.getItem("autofloy_cache_dashboard_stats") ||
+      localStorage.getItem("autofloy_cache_dashboard_month");
+    
+    // If we have cached data, don't show loading initially
+    if (hasCachedData) {
+      setIsLoading(false);
+      setShopLoading(false);
+    }
+    
+    loadData(false);
+  }, []);
+
   const loadData = async (forceRefresh = false) => {
-    // Show loading only on force refresh
+    // Only show loading when forcing refresh OR when no cached data exists
     if (forceRefresh) {
       setIsLoading(true);
       setShopLoading(true);
@@ -148,10 +163,6 @@ const Dashboard = () => {
     setIsLoading(false);
     setShopLoading(false);
   };
-
-  useEffect(() => {
-    loadData(false);
-  }, []);
 
   const totalPages = Math.ceil(allLogs.length / LOGS_PER_PAGE);
   const paginatedLogs = allLogs.slice(

@@ -129,21 +129,17 @@ class OfflineShopService {
     resource: string,
     options: RequestInit = {},
     queryParams?: Record<string, string>,
-    cacheKey?: string
+    cacheKey?: string,
+    forceRefresh = false
   ): Promise<T> {
     const isGetRequest = !options.method || options.method === 'GET';
     
-    // CACHE-FIRST STRATEGY: Return cached data immediately for GET requests
-    if (isGetRequest && cacheKey) {
+    // CACHE-FIRST STRATEGY: Return cached data immediately for GET requests (no background fetch)
+    if (isGetRequest && cacheKey && !forceRefresh) {
       const cached = getCached<T>(cacheKey);
       if (cached !== null) {
         console.log(`[OfflineShopService] Returning cached data for ${resource}`);
-        
-        // If online, revalidate in background
-        if (isOnline()) {
-          this.revalidateInBackground(resource, options, queryParams, cacheKey);
-        }
-        
+        // Don't revalidate in background - only fetch fresh when explicitly requested
         return cached;
       }
     }
@@ -225,11 +221,12 @@ class OfflineShopService {
     if (!forceRefresh) {
       const cached = getCached<any>(cacheKey);
       if (cached !== null) {
+        console.log(`[OfflineShopService] Returning cached dashboard data instantly`);
         return cached;
       }
     }
     
-    return this.request<any>("dashboard", {}, { range }, cacheKey);
+    return this.request<any>("dashboard", {}, { range }, cacheKey, forceRefresh);
   }
 
   // Growth Insights
