@@ -51,9 +51,10 @@ import { FeatureDisabledOverlay } from "@/components/FeatureDisabledOverlay";
 import { OfflineStatusBar } from "./OfflineStatusBar";
 import { OfflineExpiredModal } from "./OfflineExpiredModal";
 import { FloatingSyncIndicator } from "./SyncProgressIndicator";
-import { initPWAAutoUpdate } from "./UpdateNotification";
+import { UpdateNotification } from "./UpdateNotification";
 import { offlineDataService } from "@/services/offlineDataService";
 import { syncManager } from "@/services/syncManager";
+import { appUpdateService } from "@/services/appUpdateService";
 import { useShop } from "@/contexts/ShopContext";
 
 interface ShopLayoutProps {
@@ -89,14 +90,16 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
       // Start auto sync (every 30 seconds)
       syncManager.startAutoSync(30000);
       
-      // PWA auto-update is handled by vite-plugin-pwa
-      initPWAAutoUpdate();
+      // Start auto update check (every 30 minutes)
+      // This ensures APK/EXE/PWA gets latest settings when admin makes changes
+      appUpdateService.startAutoCheck();
     };
     
     initOfflineService();
     
     return () => {
       syncManager.stopAutoSync();
+      appUpdateService.stopAutoCheck();
     };
   }, [user?.id, currentShop?.id]);
 
@@ -201,6 +204,12 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
                   <Menu className="h-5 w-5" />
                 </Button>
               </SheetTrigger>
+
+            {/* Business Mode Switcher - Desktop */}
+            <div className="hidden lg:flex items-center gap-3">
+              <BusinessModeSwitcher syncEnabled={syncEnabled} />
+              <SyncStatusBadge syncEnabled={syncEnabled} mode="offline" />
+            </div>
               <SheetContent side="left" className="w-72 p-0">
                 <SheetTitle className="sr-only">{t("shop.offlineShop")} Menu</SheetTitle>
                 <div className="flex h-full flex-col">
@@ -234,12 +243,6 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
                 </div>
               </SheetContent>
             </Sheet>
-
-            {/* Business Mode Switcher - Desktop */}
-            <div className="hidden lg:flex items-center gap-3">
-              <BusinessModeSwitcher syncEnabled={syncEnabled} />
-              <SyncStatusBadge syncEnabled={syncEnabled} mode="offline" />
-            </div>
 
             {/* Breadcrumb */}
             <div className="hidden md:flex items-center gap-2 text-sm">
@@ -313,6 +316,9 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
         
         {/* Floating Sync Indicator */}
         <FloatingSyncIndicator />
+        
+        {/* Update Notification */}
+        <UpdateNotification />
         
         {/* Offline Expired Modal */}
         <OfflineExpiredModal 

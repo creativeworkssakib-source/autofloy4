@@ -4,7 +4,7 @@
  * Shows current PWA status (online/offline, sync status)
  */
 
-import { Wifi, WifiOff, Cloud, CloudOff } from 'lucide-react';
+import { Wifi, WifiOff, Cloud, CloudOff, RefreshCw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import {
   Tooltip,
@@ -26,8 +26,27 @@ export function PWAStatusBadge({
   className = '' 
 }: PWAStatusBadgeProps) {
   const { language } = useLanguage();
-  const { isOnline, isOfflineReady } = usePWAStatus();
+  const { isOnline, isOfflineReady, needRefresh } = usePWAStatus();
   const pendingCount = usePendingSyncCount();
+
+  // Update available
+  if (needRefresh) {
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Badge variant="default" className={`bg-blue-500 ${className}`}>
+              <RefreshCw className="h-3 w-3 mr-1" />
+              {language === 'bn' ? 'আপডেট' : 'Update'}
+            </Badge>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>{language === 'bn' ? 'নতুন ভার্সন পাওয়া গেছে' : 'New version available'}</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
 
   // Online with pending sync
   if (isOnline && showPendingCount && pendingCount > 0) {
