@@ -99,9 +99,10 @@ export default defineConfig(({ mode }) => ({
         // Clean old caches
         cleanupOutdatedCaches: true,
         
-        // Skip waiting to activate immediately
-        skipWaiting: true,
-        clientsClaim: true,
+        // Don't skip waiting - let user decide when to update
+        // This works with registerType: 'prompt'
+        skipWaiting: false,
+        clientsClaim: false,
 
         // Runtime caching strategies
         runtimeCaching: [
