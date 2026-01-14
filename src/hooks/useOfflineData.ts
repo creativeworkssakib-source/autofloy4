@@ -38,30 +38,20 @@ export function useSyncStatus() {
   useEffect(() => {
     isMountedRef.current = true;
     let unsubscribe: (() => void) | null = null;
-    let interval: NodeJS.Timeout | null = null;
     
-    // Wait for offlineDataService to be initialized before accessing sync status
+    // Initialize without blocking
     const initAndSubscribe = async () => {
       try {
-        // Initialize the database if needed
         await offlineDataService.init();
         
         if (!isMountedRef.current) return;
         
         setIsDbReady(true);
         
-        // Start auto sync in background (every 30 seconds when online)
-        syncManager.startAutoSync(30000);
-        
-        // If online, immediately trigger a sync to clear any pending items
-        if (navigator.onLine) {
-          syncManager.sync().catch(() => {});
-        }
-        
         // Subscribe with safe setter
         unsubscribe = syncManager.subscribe(safeSetStatus);
         
-        // Get initial pending count - now safe as DB is initialized
+        // Get initial pending count
         try {
           const initialStatus = await syncManager.getStatusWithCount();
           if (isMountedRef.current) {
@@ -70,13 +60,6 @@ export function useSyncStatus() {
         } catch (e) {
           console.warn('Failed to get initial sync status:', e);
         }
-        
-        // Update pending count periodically
-        interval = setInterval(() => {
-          if (isMountedRef.current) {
-            syncManager.updatePendingCount().catch(() => {});
-          }
-        }, 10000);
       } catch (error) {
         console.warn('Failed to initialize sync status:', error);
       }
@@ -87,8 +70,6 @@ export function useSyncStatus() {
     return () => {
       isMountedRef.current = false;
       if (unsubscribe) unsubscribe();
-      if (interval) clearInterval(interval);
-      // Note: We don't stop auto sync on unmount as other components may need it
     };
   }, [safeSetStatus]);
   
