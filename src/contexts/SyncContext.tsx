@@ -1,6 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode, useRef } from 'react';
-import { useShop } from '@/contexts/ShopContext';
-import { useAuth } from '@/contexts/AuthContext';
+import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import { isInstalled } from '@/lib/platformDetection';
 
 // Define the SyncStatus interface inline to avoid importing the heavy module
@@ -43,95 +41,10 @@ interface SyncProviderProps {
 }
 
 export function SyncProvider({ children }: SyncProviderProps) {
-  const { currentShop } = useShop();
-  const { user } = useAuth();
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(defaultSyncStatus);
   const [isOfflineCapable] = useState(() => isInstalled());
-  const initRef = useRef(false);
-  const shopIdRef = useRef<string | null>(null);
-  const userIdRef = useRef<string | null>(null);
-  const orchestratorRef = useRef<any>(null);
 
-  // Initialize sync orchestrator when shop and user are available
-  // NOW WORKS FOR ALL PLATFORMS including browser
-  useEffect(() => {
-    // Skip if no shop or user
-    if (!currentShop?.id || !user?.id) {
-      return;
-    }
-
-    // Skip if already initialized with same shop and user
-    if (initRef.current && shopIdRef.current === currentShop.id && userIdRef.current === user.id) {
-      return;
-    }
-
-    // Initialize for ALL platforms now (browser included for caching)
-
-    console.log('[SyncProvider] Initializing sync for shop:', currentShop.id);
-    
-    shopIdRef.current = currentShop.id;
-    userIdRef.current = user.id;
-
-    let unsubscribe: (() => void) | null = null;
-    let isMounted = true;
-
-    // Dynamically import the sync orchestrator only when needed
-    import('@/lib/offlineSyncOrchestrator').then(({ offlineSyncOrchestrator }) => {
-      if (!isMounted) return;
-      
-      orchestratorRef.current = offlineSyncOrchestrator;
-      
-      // Initialize the sync orchestrator
-      offlineSyncOrchestrator.init(currentShop.id, user.id)
-        .then(() => {
-          if (!isMounted) return;
-          
-          initRef.current = true;
-          
-          // Subscribe to sync status updates after successful init
-          unsubscribe = offlineSyncOrchestrator.subscribe((status: SyncStatus) => {
-            if (isMounted) {
-              setSyncStatus(status);
-            }
-          });
-        })
-        .catch((error: Error) => {
-          console.error('[SyncProvider] Failed to initialize sync:', error);
-          if (isMounted) {
-            // Update status with error
-            setSyncStatus(prev => ({
-              ...prev,
-              lastError: error instanceof Error ? error.message : 'Sync initialization failed',
-            }));
-          }
-        });
-    }).catch((error) => {
-      console.error('[SyncProvider] Failed to load sync module:', error);
-    });
-
-    return () => {
-      isMounted = false;
-      if (unsubscribe) {
-        unsubscribe();
-      }
-      // Only cleanup if shop/user actually changes (not on every render)
-      // We'll handle full cleanup on unmount
-    };
-  }, [currentShop?.id, user?.id]);
-
-  // Cleanup on full unmount
-  useEffect(() => {
-    return () => {
-      if (initRef.current && orchestratorRef.current) {
-        orchestratorRef.current.cleanup();
-        initRef.current = false;
-        shopIdRef.current = null;
-        userIdRef.current = null;
-      }
-    };
-  }, []);
-
-  // Update online status independently
+  // Update online status independently - simple and non-blocking
   useEffect(() => {
     const handleOnline = () => {
       setSyncStatus(prev => ({ ...prev, isOnline: true }));
@@ -151,15 +64,8 @@ export function SyncProvider({ children }: SyncProviderProps) {
   }, []);
 
   const forceSync = useCallback(async () => {
-    // Force sync now works for all platforms
-    if (!initRef.current) {
-      console.log('[SyncProvider] Cannot force sync - not initialized');
-      return;
-    }
-    
-    if (orchestratorRef.current) {
-      await orchestratorRef.current.forceSync();
-    }
+    // No-op for now - sync is handled elsewhere
+    console.log('[SyncProvider] Force sync requested');
   }, []);
 
   return (

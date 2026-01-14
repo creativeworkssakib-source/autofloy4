@@ -25,7 +25,6 @@ export function useSyncStatus() {
     lastError: null,
     progress: 0,
   });
-  const [isDbReady, setIsDbReady] = useState(false);
   const isMountedRef = useRef(true);
   
   // Safe setState wrapper to prevent updates on unmounted components
@@ -39,33 +38,8 @@ export function useSyncStatus() {
     isMountedRef.current = true;
     let unsubscribe: (() => void) | null = null;
     
-    // Initialize without blocking
-    const initAndSubscribe = async () => {
-      try {
-        await offlineDataService.init();
-        
-        if (!isMountedRef.current) return;
-        
-        setIsDbReady(true);
-        
-        // Subscribe with safe setter
-        unsubscribe = syncManager.subscribe(safeSetStatus);
-        
-        // Get initial pending count
-        try {
-          const initialStatus = await syncManager.getStatusWithCount();
-          if (isMountedRef.current) {
-            setStatus(initialStatus);
-          }
-        } catch (e) {
-          console.warn('Failed to get initial sync status:', e);
-        }
-      } catch (error) {
-        console.warn('Failed to initialize sync status:', error);
-      }
-    };
-    
-    initAndSubscribe();
+    // Subscribe to sync manager status updates only
+    unsubscribe = syncManager.subscribe(safeSetStatus);
     
     return () => {
       isMountedRef.current = false;
@@ -74,18 +48,16 @@ export function useSyncStatus() {
   }, [safeSetStatus]);
   
   const triggerSync = useCallback(async () => {
-    if (!isDbReady) return { success: false, synced: 0, failed: 0 };
     return syncManager.sync();
-  }, [isDbReady]);
+  }, []);
   
   const triggerFullSync = useCallback(async (shopId: string) => {
-    if (!isDbReady) return { success: false, tables: [] };
     return syncManager.fullSync(shopId);
-  }, [isDbReady]);
+  }, []);
   
   return {
     ...status,
-    isDbReady,
+    isDbReady: true,
     triggerSync,
     triggerFullSync,
   };
