@@ -198,9 +198,10 @@ export function VariantManager({
           type="number"
           placeholder="0"
           value={form.price_adjustment}
-          onChange={(e) =>
-            setForm({ ...form, price_adjustment: parseFloat(e.target.value) || 0 })
-          }
+          onChange={(e) => {
+            const val = e.target.value;
+            setForm({ ...form, price_adjustment: val === "" ? 0 : parseFloat(val) || 0 });
+          }}
           className="h-8 w-16"
         />
       </TableCell>

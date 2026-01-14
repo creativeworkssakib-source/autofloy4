@@ -373,7 +373,10 @@ const AdminUserSettings = () => {
                           id="tax_rate"
                           type="number"
                           value={editForm.tax_rate || 0}
-                          onChange={(e) => setEditForm({ ...editForm, tax_rate: parseFloat(e.target.value) || 0 })}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setEditForm({ ...editForm, tax_rate: val === "" ? 0 : parseFloat(val) || 0 });
+                          }}
                         />
                       </div>
                     </div>

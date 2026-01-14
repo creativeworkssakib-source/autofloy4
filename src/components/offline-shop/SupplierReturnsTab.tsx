@@ -764,7 +764,8 @@ export default function SupplierReturnsTab() {
                           min={0}
                           value={formData.unit_cost}
                           onChange={(e) => {
-                            const cost = parseFloat(e.target.value) || 0;
+                            const val = e.target.value;
+                            const cost = val === "" ? 0 : parseFloat(val) || 0;
                             setFormData({ 
                               ...formData, 
                               unit_cost: cost,
@@ -779,7 +780,10 @@ export default function SupplierReturnsTab() {
                           type="number"
                           min={0}
                           value={formData.refund_amount}
-                          onChange={(e) => setFormData({ ...formData, refund_amount: parseFloat(e.target.value) || 0 })}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setFormData({ ...formData, refund_amount: val === "" ? 0 : parseFloat(val) || 0 });
+                          }}
                         />
                       </div>
                     </div>

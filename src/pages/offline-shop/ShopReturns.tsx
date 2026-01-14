@@ -1138,12 +1138,13 @@ export default function ShopReturns() {
                             min={0}
                             step={0.01}
                             value={formData.refund_amount}
-                            onChange={(e) =>
+                            onChange={(e) => {
+                              const val = e.target.value;
                               setFormData({
                                 ...formData,
-                                refund_amount: parseFloat(e.target.value) || 0,
-                              })
-                            }
+                                refund_amount: val === "" ? 0 : parseFloat(val) || 0,
+                              });
+                            }}
                             className="font-bold text-lg"
                           />
                           {formData.original_unit_price > 0 && (
@@ -1239,12 +1240,13 @@ export default function ShopReturns() {
                           min={0}
                           step={0.01}
                           value={formData.loss_amount}
-                          onChange={(e) =>
+                          onChange={(e) => {
+                            const val = e.target.value;
                             setFormData({
                               ...formData,
-                              loss_amount: parseFloat(e.target.value) || 0,
-                            })
-                          }
+                              loss_amount: val === "" ? 0 : parseFloat(val) || 0,
+                            });
+                          }}
                           placeholder="Enter loss amount to deduct from profit..."
                         />
                         <p className="text-xs text-muted-foreground">
@@ -1786,12 +1788,13 @@ export default function ShopReturns() {
                       min={0}
                       step={0.01}
                       value={processFormData.loss_amount}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        const val = e.target.value;
                         setProcessFormData({
                           ...processFormData,
-                          loss_amount: parseFloat(e.target.value) || 0,
-                        })
-                      }
+                          loss_amount: val === "" ? 0 : parseFloat(val) || 0,
+                        });
+                      }}
                       placeholder="Enter loss amount..."
                     />
                     <p className="text-xs text-muted-foreground">
