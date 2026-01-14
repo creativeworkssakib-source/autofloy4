@@ -799,9 +799,10 @@ const ShopSales = () => {
                         <Input
                           type="number"
                           value={item.quantity}
-                          onChange={(e) =>
-                            updateCartItem(item.product_id, "quantity", parseInt(e.target.value) || 1)
-                          }
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            updateCartItem(item.product_id, "quantity", val === "" ? 1 : parseInt(val) || 1);
+                          }}
                           className="w-16 h-8"
                           min={1}
                         />

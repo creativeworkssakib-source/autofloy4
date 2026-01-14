@@ -512,7 +512,7 @@ const AdminUserSettings = () => {
                         id="data_retention_days"
                         type="number"
                         value={editForm.data_retention_days || 30}
-                        onChange={(e) => setEditForm({ ...editForm, data_retention_days: parseInt(e.target.value) || 30 })}
+                        onChange={(e) => { const val = e.target.value; setEditForm({ ...editForm, data_retention_days: val === "" ? 30 : parseInt(val) || 30 }); }}
                         min={1}
                         max={365}
                       />

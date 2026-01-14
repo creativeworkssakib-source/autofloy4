@@ -870,7 +870,7 @@ const AdminSiteSettings = () => {
                           type="number"
                           min={0}
                           value={formData.sms_limit_starter ?? 50}
-                          onChange={(e) => handleChange('sms_limit_starter', parseInt(e.target.value) || 0)}
+                          onChange={(e) => { const val = e.target.value; handleChange('sms_limit_starter', val === "" ? 0 : parseInt(val) || 0); }}
                           placeholder="50"
                         />
                       </div>
@@ -886,7 +886,7 @@ const AdminSiteSettings = () => {
                           type="number"
                           min={0}
                           value={formData.sms_limit_professional ?? 200}
-                          onChange={(e) => handleChange('sms_limit_professional', parseInt(e.target.value) || 0)}
+                          onChange={(e) => { const val = e.target.value; handleChange('sms_limit_professional', val === "" ? 0 : parseInt(val) || 0); }}
                           placeholder="200"
                         />
                       </div>
@@ -902,7 +902,7 @@ const AdminSiteSettings = () => {
                           type="number"
                           min={0}
                           value={formData.sms_limit_business ?? 1000}
-                          onChange={(e) => handleChange('sms_limit_business', parseInt(e.target.value) || 0)}
+                          onChange={(e) => { const val = e.target.value; handleChange('sms_limit_business', val === "" ? 0 : parseInt(val) || 0); }}
                           placeholder="1000"
                         />
                       </div>
