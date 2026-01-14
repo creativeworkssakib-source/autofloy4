@@ -116,34 +116,18 @@ const Dashboard = () => {
   const [shopLoading, setShopLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Check if we have cached data on mount
-  useEffect(() => {
-    const hasCachedData = 
-      localStorage.getItem("autofloy_cache_dashboard_stats") ||
-      localStorage.getItem("autofloy_cache_dashboard_month");
-    
-    // If we have cached data, don't show loading initially
-    if (hasCachedData) {
-      setIsLoading(false);
-      setShopLoading(false);
-    }
-    
-    loadData(false);
-  }, []);
-
-  const loadData = async (forceRefresh = false) => {
-    // Only show loading when forcing refresh OR when no cached data exists
-    if (forceRefresh) {
+  const loadData = async (showLoading = true) => {
+    if (showLoading) {
       setIsLoading(true);
       setShopLoading(true);
     }
     
     // Load all data in parallel for faster response
     const [statsResult, pagesResult, logsResult, shopResult] = await Promise.allSettled([
-      fetchDashboardStats(forceRefresh),
-      fetchConnectedAccounts("facebook", forceRefresh),
-      fetchExecutionLogs(50, forceRefresh),
-      offlineShopService.getDashboard("month", forceRefresh),
+      fetchDashboardStats(),
+      fetchConnectedAccounts("facebook"),
+      fetchExecutionLogs(50),
+      offlineShopService.getDashboard("month"),
     ]);
     
     // Update state with results
@@ -163,6 +147,11 @@ const Dashboard = () => {
     setIsLoading(false);
     setShopLoading(false);
   };
+
+  useEffect(() => {
+    // Initial load - don't show loading if we have cached data
+    loadData(false);
+  }, []);
 
   const totalPages = Math.ceil(allLogs.length / LOGS_PER_PAGE);
   const paginatedLogs = allLogs.slice(

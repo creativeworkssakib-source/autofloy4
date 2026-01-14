@@ -202,32 +202,35 @@ export async function fetchUserProfile(): Promise<UserProfile | null> {
 }
 
 // Connected Accounts - with cache-first strategy
-export async function fetchConnectedAccounts(platform?: string, forceRefresh = false): Promise<ConnectedAccount[]> {
+export async function fetchConnectedAccounts(platform?: string): Promise<ConnectedAccount[]> {
   const cacheKey = `${CACHE_KEYS.connectedAccounts}_${platform || 'all'}`;
   const cached = getCache<ConnectedAccount[]>(cacheKey);
   
-  // Return cached data immediately if not forcing refresh
-  if (cached && !forceRefresh) {
+  const fetchFresh = async () => {
+    try {
+      const url = new URL(`${SUPABASE_URL}/functions/v1/connected-accounts`);
+      if (platform) url.searchParams.set("platform", platform);
+      
+      const response = await fetch(url.toString(), {
+        headers: getAuthHeaders(),
+      });
+      if (!response.ok) return [];
+      const data = await response.json();
+      const accounts = data.accounts || [];
+      setCache(cacheKey, accounts);
+      return accounts;
+    } catch (error) {
+      console.error("Failed to fetch connected accounts:", error);
+      return [];
+    }
+  };
+  
+  if (cached) {
+    fetchFresh();
     return cached;
   }
   
-  // Fetch fresh data
-  try {
-    const url = new URL(`${SUPABASE_URL}/functions/v1/connected-accounts`);
-    if (platform) url.searchParams.set("platform", platform);
-    
-    const response = await fetch(url.toString(), {
-      headers: getAuthHeaders(),
-    });
-    if (!response.ok) return cached || [];
-    const data = await response.json();
-    const accounts = data.accounts || [];
-    setCache(cacheKey, accounts);
-    return accounts;
-  } catch (error) {
-    console.error("Failed to fetch connected accounts:", error);
-    return cached || [];
-  }
+  return fetchFresh();
 }
 
 export async function disconnectAccount(id: string): Promise<boolean> {
@@ -437,56 +440,65 @@ export async function deleteNotification(notificationId: string): Promise<boolea
 }
 
 // Dashboard Stats - with cache-first strategy
-export async function fetchDashboardStats(forceRefresh = false): Promise<DashboardStats | null> {
+export async function fetchDashboardStats(): Promise<DashboardStats | null> {
+  // Return cached data immediately
   const cached = getCache<DashboardStats>(CACHE_KEYS.dashboardStats);
   
-  // Return cached data immediately if not forcing refresh
-  if (cached && !forceRefresh) {
+  // Fetch fresh data in background
+  const fetchFresh = async () => {
+    try {
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/dashboard-stats`, {
+        headers: getAuthHeaders(),
+      });
+      if (!response.ok) return null;
+      const data = await response.json();
+      if (data.stats) {
+        setCache(CACHE_KEYS.dashboardStats, data.stats);
+      }
+      return data.stats;
+    } catch (error) {
+      console.error("Failed to fetch dashboard stats:", error);
+      return null;
+    }
+  };
+  
+  // If we have cache, return it immediately and fetch in background
+  if (cached) {
+    fetchFresh(); // Fire and forget
     return cached;
   }
   
-  // Fetch fresh data
-  try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/dashboard-stats`, {
-      headers: getAuthHeaders(),
-    });
-    if (!response.ok) return cached; // Return cached on error
-    const data = await response.json();
-    if (data.stats) {
-      setCache(CACHE_KEYS.dashboardStats, data.stats);
-      return data.stats;
-    }
-    return cached;
-  } catch (error) {
-    console.error("Failed to fetch dashboard stats:", error);
-    return cached; // Return cached on error
-  }
+  // No cache - wait for fresh data
+  return fetchFresh();
 }
 
 // Execution Logs - with cache-first strategy
-export async function fetchExecutionLogs(limit: number = 5, forceRefresh = false): Promise<ExecutionLog[]> {
+export async function fetchExecutionLogs(limit: number = 5): Promise<ExecutionLog[]> {
   const cacheKey = `${CACHE_KEYS.executionLogs}_${limit}`;
   const cached = getCache<ExecutionLog[]>(cacheKey);
   
-  // Return cached data immediately if not forcing refresh
-  if (cached && !forceRefresh) {
+  const fetchFresh = async () => {
+    try {
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/execution-logs?limit=${limit}`, {
+        headers: getAuthHeaders(),
+      });
+      if (!response.ok) return [];
+      const data = await response.json();
+      const logs = data.logs || [];
+      setCache(cacheKey, logs);
+      return logs;
+    } catch (error) {
+      console.error("Failed to fetch execution logs:", error);
+      return [];
+    }
+  };
+  
+  if (cached) {
+    fetchFresh();
     return cached;
   }
   
-  // Fetch fresh data
-  try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/execution-logs?limit=${limit}`, {
-      headers: getAuthHeaders(),
-    });
-    if (!response.ok) return cached || [];
-    const data = await response.json();
-    const logs = data.logs || [];
-    setCache(cacheKey, logs);
-    return logs;
-  } catch (error) {
-    console.error("Failed to fetch execution logs:", error);
-    return cached || [];
-  }
+  return fetchFresh();
 }
 
 // Business Overview
