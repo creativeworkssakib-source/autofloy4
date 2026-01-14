@@ -883,12 +883,11 @@ export function useOfflineDashboard(range: 'today' | 'week' | 'month' = 'today')
   const isOnline = useIsOnline();
   const { currentShop } = useShop();
   const [platform, setPlatform] = useState<string>('');
-  const fetchingRef = useRef(false);
   const hasFetchedRef = useRef(false);
   const lastShopIdRef = useRef<string | null>(null);
   const lastRangeRef = useRef<string>(range);
 
-  // Stable refetch function - NO dependencies that change frequently
+  // LIVE refetch function - always fetches fresh data
   const refetch = useCallback(async () => {
     const shopId = currentShop?.id;
     if (!shopId) {
@@ -896,25 +895,56 @@ export function useOfflineDashboard(range: 'today' | 'week' | 'month' = 'today')
       return;
     }
     
-    // Prevent concurrent fetches
-    if (fetchingRef.current) {
-      return;
-    }
-    
-    fetchingRef.current = true;
-    
-    // Only show loading on first fetch
-    if (!hasFetchedRef.current) {
-      setLoading(true);
-    }
+    setLoading(true);
     
     try {
-      // Initialize smart data service if needed
-      const userId = localStorage.getItem('autofloy_user_id') || '';
-      await smartDataService.init(shopId, userId);
       setPlatform(getPlatformName());
       
-      // Get dashboard data
+      // ALWAYS fetch LIVE from server when online - no cache
+      if (navigator.onLine) {
+        console.log(`[useOfflineDashboard] Fetching LIVE data for ${range}...`);
+        const serverData = await offlineShopService.getDashboardLive(range);
+        
+        if (serverData) {
+          const mappedData = {
+            totalSales: serverData.period?.totalSales || serverData.totalSales || 0,
+            totalExpenses: serverData.period?.totalExpenses || serverData.totalExpenses || 0,
+            totalPurchases: serverData.period?.totalPurchases || serverData.totalPurchases || 0,
+            totalReturns: serverData.returns?.totalRefundAmount || serverData.totalReturns || 0,
+            profit: serverData.period?.netProfit || serverData.period?.grossProfit || serverData.profit || 0,
+            salesCount: serverData.period?.customersServed || serverData.recentSales?.length || serverData.salesCount || 0,
+            customersCount: serverData.totalCustomers || serverData.customersCount || 0,
+            productsCount: serverData.totalProducts || serverData.productsCount || 0,
+            lowStockItems: serverData.lowStockProducts || serverData.lowStockItems || [],
+            lowStockCount: serverData.lowStockProducts?.length || serverData.lowStockCount || 0,
+            recentSales: serverData.recentSales || [],
+            recentProducts: serverData.recentProducts || [],
+            totalDue: serverData.lifetime?.totalDue || serverData.totalDue || 0,
+            totalLoanAmount: serverData.totalLoanAmount || 0,
+            activeLoansCount: serverData.activeLoansCount || 0,
+            returnsSummary: serverData.returns || serverData.returnsSummary || {
+              totalCount: 0,
+              totalRefundAmount: 0,
+              processedCount: 0,
+              pendingCount: 0,
+              topReasons: [],
+            },
+            platform: getPlatformName(),
+            fromLocal: false,
+          };
+          setData(mappedData);
+          setFromCache(false);
+          hasFetchedRef.current = true;
+          console.log(`[useOfflineDashboard] Got LIVE data for ${range}`);
+          return;
+        }
+      }
+      
+      // Offline - use smartDataService which handles cache/local fallback
+      console.log('[useOfflineDashboard] Offline or server failed, using cache...');
+      const userId = localStorage.getItem('autofloy_user_id') || '';
+      await smartDataService.init(shopId, userId);
+      
       const dashboardData = await smartDataService.getDashboard(range);
       
       if (dashboardData) {
@@ -952,22 +982,19 @@ export function useOfflineDashboard(range: 'today' | 'week' | 'month' = 'today')
       console.error('[useOfflineDashboard] Dashboard fetch error:', error);
     } finally {
       setLoading(false);
-      fetchingRef.current = false;
     }
-  }, [range, currentShop?.id]); // Only depend on stable values
+  }, [range, currentShop?.id]);
 
-  // Single useEffect - only runs when shop or range changes
+  // Fetch on mount and when shop/range changes
   useEffect(() => {
     const shopId = currentShop?.id;
     
-    // Only refetch if shop or range actually changed
     if (shopId && (shopId !== lastShopIdRef.current || range !== lastRangeRef.current)) {
       lastShopIdRef.current = shopId;
       lastRangeRef.current = range;
-      hasFetchedRef.current = false; // Reset to allow loading state
+      hasFetchedRef.current = false;
       refetch();
     } else if (shopId && !hasFetchedRef.current) {
-      // Initial fetch
       refetch();
     }
   }, [currentShop?.id, range, refetch]);
