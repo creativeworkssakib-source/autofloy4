@@ -3,9 +3,15 @@
  * 
  * Shows a notification when app updates are available.
  * Works with vite-plugin-pwa.
+ * 
+ * Key improvements:
+ * - Only shows after initial load period (30 seconds)
+ * - Verifies waiting service worker before showing
+ * - Respects session-based dismissal
+ * - Disabled in development mode
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { RefreshCw, X, Download, Wifi, WifiOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -14,13 +20,31 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { syncManager } from '@/services/syncManager';
 import { toast } from 'sonner';
 
+// Check if we're in development mode
+const isDev = import.meta.env.DEV;
+
 export const UpdateNotification = () => {
   const { language } = useLanguage();
-  const { needRefresh, isOnline, isOfflineReady, update, dismissUpdate } = usePWAStatus();
+  const { needRefresh, hasVerifiedUpdate, isOnline, isOfflineReady, update, dismissUpdate } = usePWAStatus();
   
   const [isUpdating, setIsUpdating] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissed, setDismissed] = useState(() => {
+    // Check session storage for previous dismissal
+    return sessionStorage.getItem('pwa_update_dismissed') === 'true';
+  });
   const [showOfflineReady, setShowOfflineReady] = useState(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const mountTimeRef = useRef(Date.now());
+
+  // Mark initial load complete after 30 seconds
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsInitialLoad(false);
+      console.log('[UpdateNotification] Initial load period ended');
+    }, 30000);
+    
+    return () => clearTimeout(timer);
+  }, []);
 
   // Show offline ready notification once
   useEffect(() => {
@@ -67,8 +91,14 @@ export const UpdateNotification = () => {
 
   const handleDismiss = () => {
     setDismissed(true);
+    sessionStorage.setItem('pwa_update_dismissed', 'true');
     dismissUpdate();
   };
+
+  // Don't show anything in development mode
+  if (isDev) {
+    return null;
+  }
 
   // Show offline ready notification
   if (showOfflineReady && !needRefresh) {
@@ -99,8 +129,13 @@ export const UpdateNotification = () => {
     );
   }
 
-  // Show update notification
-  if (!needRefresh || dismissed) return null;
+  // Show update notification only if:
+  // 1. Not in initial load period
+  // 2. Has verified update (waiting SW exists)
+  // 3. Not dismissed
+  if (isInitialLoad || !hasVerifiedUpdate || dismissed) {
+    return null;
+  }
 
   return (
     <Alert className="fixed bottom-4 right-4 left-4 sm:left-auto sm:w-96 z-50 bg-primary/10 border-primary shadow-lg animate-in slide-in-from-bottom-4">
