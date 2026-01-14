@@ -885,6 +885,7 @@ export function useOfflineDashboard(range: 'today' | 'week' | 'month' = 'today')
   const [platform, setPlatform] = useState<string>('');
   const [initialized, setInitialized] = useState(false);
   const fetchingRef = useRef(false);
+  const hasDataRef = useRef(false); // Track if we have data without causing re-renders
 
   // Initialize smart data service when shop changes
   useEffect(() => {
@@ -927,7 +928,7 @@ export function useOfflineDashboard(range: 'today' | 'week' | 'month' = 'today')
     fetchingRef.current = true;
     
     // Only show loading if we have no data yet
-    if (!data) {
+    if (!hasDataRef.current) {
       setLoading(true);
     }
     
@@ -968,27 +969,37 @@ export function useOfflineDashboard(range: 'today' | 'week' | 'month' = 'today')
           fromLocal: dashboardData.fromLocal || false,
         };
         console.log('[useOfflineDashboard] Dashboard data mapped successfully');
+        hasDataRef.current = true;
         setData(mappedData);
         setFromCache(dashboardData.fromLocal || false);
       }
     } catch (error) {
       console.error('[useOfflineDashboard] Dashboard fetch error:', error);
       // Only clear data if we have nothing yet
-      if (!data) {
+      if (!hasDataRef.current) {
         setData(null);
       }
     } finally {
       setLoading(false);
       fetchingRef.current = false;
     }
-  }, [range, currentShop?.id, platform, initialized, data]);
+  }, [range, currentShop?.id, platform, initialized]); // REMOVED 'data' from dependencies to prevent infinite loop
 
-  // Refetch when dependencies change
+  // Refetch when dependencies change - only once per initialization
   useEffect(() => {
-    if (initialized) {
+    if (initialized && !hasDataRef.current) {
       refetch();
     }
-  }, [refetch, initialized]);
+  }, [initialized]); // eslint-disable-line react-hooks/exhaustive-deps
+  
+  // Also refetch when range changes, but only if already initialized
+  useEffect(() => {
+    if (initialized && hasDataRef.current) {
+      // Reset and refetch when range changes
+      hasDataRef.current = false;
+      refetch();
+    }
+  }, [range]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return {
     data,
