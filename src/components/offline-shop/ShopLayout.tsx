@@ -1,4 +1,4 @@
-import { ReactNode, useState, useEffect } from "react";
+import { ReactNode, useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { 
   LayoutDashboard, 
@@ -48,12 +48,7 @@ import { useOfflineShopTrial, useOfflineGracePeriod } from "@/hooks/useOfflineSh
 import OfflineTrialBanner from "./OfflineTrialBanner";
 import OfflineTrialExpiredOverlay from "./OfflineTrialExpiredOverlay";
 import { FeatureDisabledOverlay } from "@/components/FeatureDisabledOverlay";
-import { OfflineStatusBar } from "./OfflineStatusBar";
 import { OfflineExpiredModal } from "./OfflineExpiredModal";
-import { FloatingSyncIndicator } from "./SyncProgressIndicator";
-import { initPWAAutoUpdate } from "./UpdateNotification";
-import { offlineDataService } from "@/services/offlineDataService";
-import { syncManager } from "@/services/syncManager";
 import { useShop } from "@/contexts/ShopContext";
 
 interface ShopLayoutProps {
@@ -76,27 +71,31 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
   // Check if offline shop is disabled by admin
   const isOfflineShopDisabled = settings.offline_shop_enabled === false;
 
-  // Initialize offline data service with shop and user IDs
+  // Initialize offline data service only once
+  const initRef = useRef(false);
+  
   useEffect(() => {
-    const initOfflineService = async () => {
-      await offlineDataService.init();
-      if (user?.id) {
-        offlineDataService.setUserId(user.id);
-      }
-      if (currentShop?.id) {
-        offlineDataService.setShopId(currentShop.id);
-      }
-      // Start auto sync (every 30 seconds)
-      syncManager.startAutoSync(30000);
-      
-      // PWA auto-update is handled by vite-plugin-pwa
-      initPWAAutoUpdate();
-    };
+    if (initRef.current) return;
+    if (!user?.id || !currentShop?.id) return;
     
-    initOfflineService();
+    initRef.current = true;
+    
+    // Lazy load sync services to prevent blocking
+    import('@/services/offlineDataService').then(({ offlineDataService }) => {
+      offlineDataService.init().then(() => {
+        offlineDataService.setUserId(user.id);
+        offlineDataService.setShopId(currentShop.id);
+      }).catch(console.error);
+    });
+    
+    import('@/services/syncManager').then(({ syncManager }) => {
+      syncManager.startAutoSync(30000);
+    });
     
     return () => {
-      syncManager.stopAutoSync();
+      import('@/services/syncManager').then(({ syncManager }) => {
+        syncManager.stopAutoSync();
+      });
     };
   }, [user?.id, currentShop?.id]);
 
@@ -293,9 +292,6 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
 
           {/* Page Content */}
           <main className="p-3 sm:p-4 lg:p-6 relative">
-            {/* Offline Status Bar */}
-            <OfflineStatusBar className="mb-4" />
-            
             {/* Show frozen overlay if feature is disabled by admin */}
             {isOfflineShopDisabled && (
               <FeatureDisabledOverlay featureName={language === "bn" ? "অফলাইন শপ সিস্টেম" : "Offline Shop System"} featureType="offline" />
@@ -310,9 +306,6 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
             {children}
           </main>
         </div>
-        
-        {/* Floating Sync Indicator */}
-        <FloatingSyncIndicator />
         
         {/* Offline Expired Modal */}
         <OfflineExpiredModal 

@@ -126,7 +126,7 @@ export function ShopSelector() {
             <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-[280px]">
+        <DropdownMenuContent align="start" className="w-[280px] z-[100] bg-popover border shadow-lg">
           <DropdownMenuLabel className="flex items-center justify-between">
             <span>আপনার শপসমূহ</span>
             <Badge variant="secondary" className="text-xs">

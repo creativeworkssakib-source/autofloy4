@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import { 
   TrendingUp, 
@@ -247,59 +246,49 @@ const ShopDashboard = () => {
             );
             
             return (
-              <motion.div
-                key={stat.title}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
-              >
+              <div key={stat.title}>
                 {isClickable ? (
                   <Link to="/offline-shop/due-customers">{cardContent}</Link>
                 ) : (
                   cardContent
                 )}
-              </motion.div>
+              </div>
             );
           })}
         </div>
 
         {/* Trash Bin Alert */}
         {trashCount > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            <Link to="/offline-shop/trash">
-              <Card className="border-orange-500/50 bg-orange-500/5 hover:bg-orange-500/10 transition-colors cursor-pointer">
-                <CardContent className="py-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="p-3 rounded-full bg-orange-500/20">
-                        <Trash2 className="h-6 w-6 text-orange-500" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-orange-600 dark:text-orange-400">
-                          {language === "bn" ? "ট্র্যাশ বিনে আইটেম আছে" : "Items in Trash Bin"}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          {language === "bn" 
-                            ? `${trashCount}টি আইটেম স্থায়ীভাবে ডিলিট করার জন্য অপেক্ষা করছে`
-                            : `${trashCount} item(s) waiting to be permanently deleted`
-                          }
-                        </p>
-                      </div>
+          <Link to="/offline-shop/trash">
+            <Card className="border-orange-500/50 bg-orange-500/5 hover:bg-orange-500/10 transition-colors cursor-pointer">
+              <CardContent className="py-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 rounded-full bg-orange-500/20">
+                      <Trash2 className="h-6 w-6 text-orange-500" />
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="border-orange-500/50 text-orange-600">
-                        {trashCount}
-                      </Badge>
-                      <ArrowRight className="h-5 w-5 text-orange-500" />
+                    <div>
+                      <p className="font-medium text-orange-600 dark:text-orange-400">
+                        {language === "bn" ? "ট্র্যাশ বিনে আইটেম আছে" : "Items in Trash Bin"}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {language === "bn" 
+                          ? `${trashCount}টি আইটেম স্থায়ীভাবে ডিলিট করার জন্য অপেক্ষা করছে`
+                          : `${trashCount} item(s) waiting to be permanently deleted`
+                        }
+                      </p>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
-            </Link>
-          </motion.div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="border-orange-500/50 text-orange-600">
+                      {trashCount}
+                    </Badge>
+                    <ArrowRight className="h-5 w-5 text-orange-500" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
         )}
 
         {/* Quick Stats */}
