@@ -129,28 +129,19 @@ class OfflineShopService {
     resource: string,
     options: RequestInit = {},
     queryParams?: Record<string, string>,
-    cacheKey?: string
+    cacheKey?: string,
+    skipCache: boolean = false
   ): Promise<T> {
     const isGetRequest = !options.method || options.method === 'GET';
     
-    // CACHE-FIRST STRATEGY: Return cached data immediately for GET requests
-    if (isGetRequest && cacheKey) {
-      const cached = getCached<T>(cacheKey);
-      if (cached !== null) {
-        console.log(`[OfflineShopService] Returning cached data for ${resource}`);
-        
-        // If online, revalidate in background
-        if (isOnline()) {
-          this.revalidateInBackground(resource, options, queryParams, cacheKey);
-        }
-        
-        return cached;
-      }
-    }
-    
-    // If offline and no cache, throw error for non-GET
+    // If offline, use cache for GET requests
     if (!isOnline()) {
       if (isGetRequest && cacheKey) {
+        const cached = getCached<T>(cacheKey);
+        if (cached !== null) {
+          console.log(`[OfflineShopService] Offline - returning cached data for ${resource}`);
+          return cached;
+        }
         throw new Error("অফলাইন মোডে এবং কোনো ক্যাশ নেই।");
       }
       throw new Error("অফলাইন মোডে এই কাজ করা যাবে না। ইন্টারনেট সংযোগ প্রয়োজন।");
@@ -174,6 +165,7 @@ class OfflineShopService {
     }
 
     try {
+      console.log(`[OfflineShopService] Fetching LIVE data for ${resource}...`);
       const response = await fetch(url, {
         ...options,
         headers: {
@@ -188,7 +180,7 @@ class OfflineShopService {
 
       if (!response.ok) {
         // If request failed but we have cache, return cached data for GET
-        if (isGetRequest && cacheKey) {
+        if (isGetRequest && cacheKey && !skipCache) {
           const cached = getCached<T>(cacheKey);
           if (cached !== null) {
             console.log(`[OfflineShopService] Request failed - returning cached data for ${resource}`);
@@ -198,15 +190,16 @@ class OfflineShopService {
         throw new Error(data.error || "Request failed");
       }
 
-      // Cache GET responses
+      // Cache GET responses for offline use
       if (isGetRequest && cacheKey) {
         setCache(cacheKey, data);
       }
 
+      console.log(`[OfflineShopService] Got LIVE data for ${resource}`);
       return data;
     } catch (error) {
       // Network error - try cache for GET requests
-      if (isGetRequest && cacheKey) {
+      if (isGetRequest && cacheKey && !skipCache) {
         const cached = getCached<T>(cacheKey);
         if (cached !== null) {
           console.log(`[OfflineShopService] Network error - returning cached data for ${resource}`);
@@ -217,9 +210,27 @@ class OfflineShopService {
     }
   }
 
-  // Dashboard
+  /**
+   * LIVE request - always fetch from server, never use cache first
+   * Used for dashboard and other real-time data
+   */
+  private async requestLive<T>(
+    resource: string,
+    options: RequestInit = {},
+    queryParams?: Record<string, string>,
+    cacheKey?: string
+  ): Promise<T> {
+    return this.request<T>(resource, options, queryParams, cacheKey, true);
+  }
+
+  // Dashboard - with cache (for offline support)
   async getDashboard(range: "today" | "week" | "month" = "today") {
     return this.request<any>("dashboard", {}, { range }, CACHE_KEYS.dashboard);
+  }
+
+  // Dashboard LIVE - always fetch fresh from server (no cache-first)
+  async getDashboardLive(range: "today" | "week" | "month" = "today") {
+    return this.requestLive<any>("dashboard", {}, { range }, CACHE_KEYS.dashboard);
   }
 
   // Growth Insights
@@ -230,6 +241,11 @@ class OfflineShopService {
   // Products
   async getProducts() {
     return this.request<{ products: any[] }>("products", {}, undefined, CACHE_KEYS.products);
+  }
+
+  // Products LIVE - always fetch fresh from server
+  async getProductsLive() {
+    return this.requestLive<{ products: any[] }>("products", {}, undefined, CACHE_KEYS.products);
   }
 
   async createProduct(product: any) {
@@ -265,6 +281,11 @@ class OfflineShopService {
     return this.request<{ categories: any[] }>("categories", {}, undefined, CACHE_KEYS.categories);
   }
 
+  // Categories LIVE
+  async getCategoriesLive() {
+    return this.requestLive<{ categories: any[] }>("categories", {}, undefined, CACHE_KEYS.categories);
+  }
+
   async createCategory(category: { name: string; description?: string }) {
     return this.request<{ category: any }>("categories", {
       method: "POST",
@@ -282,6 +303,11 @@ class OfflineShopService {
   // Customers
   async getCustomers() {
     return this.request<{ customers: any[] }>("customers", {}, undefined, CACHE_KEYS.customers);
+  }
+
+  // Customers LIVE
+  async getCustomersLive() {
+    return this.requestLive<{ customers: any[] }>("customers", {}, undefined, CACHE_KEYS.customers);
   }
 
   async getCustomer(id: string) {
@@ -319,6 +345,11 @@ class OfflineShopService {
   // Suppliers
   async getSuppliers() {
     return this.request<{ suppliers: any[] }>("suppliers", {}, undefined, CACHE_KEYS.suppliers);
+  }
+
+  // Suppliers LIVE
+  async getSuppliersLive() {
+    return this.requestLive<{ suppliers: any[] }>("suppliers", {}, undefined, CACHE_KEYS.suppliers);
   }
 
   async getSupplier(id: string) {
@@ -410,6 +441,7 @@ class OfflineShopService {
   async deleteSale(id: string) {
     return this.deleteSales([id]);
   }
+
   async getSales(params?: { startDate?: string; endDate?: string; customerId?: string; paymentStatus?: string }) {
     const queryParams: Record<string, string> = {};
     if (params?.startDate) queryParams.startDate = params.startDate;
@@ -419,6 +451,17 @@ class OfflineShopService {
     // Only cache if no filters applied
     const cacheKey = Object.keys(queryParams).length === 0 ? CACHE_KEYS.sales : undefined;
     return this.request<{ sales: any[] }>("sales", {}, queryParams, cacheKey);
+  }
+
+  // Sales LIVE - always fetch fresh from server
+  async getSalesLive(params?: { startDate?: string; endDate?: string; customerId?: string; paymentStatus?: string }) {
+    const queryParams: Record<string, string> = {};
+    if (params?.startDate) queryParams.startDate = params.startDate;
+    if (params?.endDate) queryParams.endDate = params.endDate;
+    if (params?.customerId) queryParams.customerId = params.customerId;
+    if (params?.paymentStatus) queryParams.paymentStatus = params.paymentStatus;
+    const cacheKey = Object.keys(queryParams).length === 0 ? CACHE_KEYS.sales : undefined;
+    return this.requestLive<{ sales: any[] }>("sales", {}, queryParams, cacheKey);
   }
 
   async createSale(sale: {
@@ -549,6 +592,16 @@ class OfflineShopService {
     if (params?.category) queryParams.category = params.category;
     const cacheKey = Object.keys(queryParams).length === 0 ? CACHE_KEYS.expenses : undefined;
     return this.request<{ expenses: any[] }>("expenses", {}, queryParams, cacheKey);
+  }
+
+  // Expenses LIVE
+  async getExpensesLive(params?: { startDate?: string; endDate?: string; category?: string }) {
+    const queryParams: Record<string, string> = {};
+    if (params?.startDate) queryParams.startDate = params.startDate;
+    if (params?.endDate) queryParams.endDate = params.endDate;
+    if (params?.category) queryParams.category = params.category;
+    const cacheKey = Object.keys(queryParams).length === 0 ? CACHE_KEYS.expenses : undefined;
+    return this.requestLive<{ expenses: any[] }>("expenses", {}, queryParams, cacheKey);
   }
 
   async createExpense(expense: {

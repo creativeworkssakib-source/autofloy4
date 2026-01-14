@@ -384,10 +384,10 @@ class SmartDataService {
   };
   
   /**
-   * Get dashboard data - NO BACKGROUND SYNC to prevent freezes
-   * Simply fetch from server when online, cache when offline
+   * Get dashboard data - SERVER-FIRST: Always fetch fresh data from Supabase when online
+   * No caching for fresh data - instant real-time updates
    */
-  async getDashboard(range: 'today' | 'week' | 'month' = 'today'): Promise<any> {
+  async getDashboard(range: 'today' | 'week' | 'month' = 'today', forceRefresh: boolean = false): Promise<any> {
     const ready = await this.ensureInitialized();
     if (!ready) {
       console.warn('[SmartData] Not initialized, returning empty dashboard');
@@ -397,31 +397,35 @@ class SmartDataService {
     const cacheKey = `dashboard-${this.shopId}-${range}`;
     const isOnline = navigator.onLine;
     
-    // Step 1: Try to get cached data first for INSTANT response
-    const cached = this.getFromCache(cacheKey);
-    if (cached) {
-      console.log('[SmartData] Returning cached dashboard');
-      // DISABLED: No background sync - manual only
-      return cached;
-    }
-    
-    // Step 2: If online, fetch from server directly (simple, no background sync)
+    // SERVER-FIRST: Always fetch from server when online for REAL-TIME data
     if (isOnline) {
       try {
-        console.log('[SmartData] Fetching dashboard from server...');
-        const serverData = await offlineShopService.getDashboard(range);
+        console.log('[SmartData] Fetching LIVE dashboard from server...');
+        const serverData = await offlineShopService.getDashboardLive(range);
         
         if (serverData) {
-          console.log('[SmartData] Got server dashboard data');
+          console.log('[SmartData] Got LIVE server dashboard data');
           this.setCache(cacheKey, { ...serverData, fromLocal: false });
           return { ...serverData, fromLocal: false };
         }
       } catch (error) {
-        console.warn('[SmartData] Server fetch failed, trying local:', error);
+        console.warn('[SmartData] Server fetch failed, trying cache:', error);
+        // Fallback to cache only if server fails
+        const cached = this.getFromCache(cacheKey);
+        if (cached) {
+          return cached;
+        }
+      }
+    } else {
+      // Offline - use cache
+      const cached = this.getFromCache(cacheKey);
+      if (cached) {
+        console.log('[SmartData] Returning cached dashboard (offline)');
+        return cached;
       }
     }
     
-    // Step 3: Try local DB as fallback
+    // Fallback to local DB calculation
     if (this.shopId) {
       try {
         const localData = await this.calculateLocalDashboard(range);

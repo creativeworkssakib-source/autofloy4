@@ -92,7 +92,8 @@ async getProducts(): Promise<{ products: ShopProduct[]; fromCache: boolean }> {
     // If online, get from server first and save to local using BATCH operation
     if (this.isOnline()) {
       try {
-        const { products } = await offlineShopService.getProducts();
+        // Use LIVE method to always get fresh data from server
+        const { products } = await offlineShopService.getProductsLive();
         
         // Get all local products once for comparison (faster than individual lookups)
         const localProducts = await offlineDB.getProducts(shopId);
@@ -372,7 +373,8 @@ async getProducts(): Promise<{ products: ShopProduct[]; fromCache: boolean }> {
     // If online, get from server first and save to local using BATCH
     if (this.isOnline()) {
       try {
-        const { customers } = await offlineShopService.getCustomers();
+        // Use LIVE method to always get fresh data from server
+        const { customers } = await offlineShopService.getCustomersLive();
         
         // Get all local customers once for comparison
         const localCustomers = await offlineDB.getCustomers(shopId);
@@ -677,7 +679,8 @@ async getProducts(): Promise<{ products: ShopProduct[]; fromCache: boolean }> {
     // If online, get from server first and save to local using BATCH
     if (this.isOnline()) {
       try {
-        const { sales } = await offlineShopService.getSales({ startDate, endDate });
+        // Use LIVE method to always get fresh data from server
+        const { sales } = await offlineShopService.getSalesLive({ startDate, endDate });
         
         // Get all local sales once for comparison
         const localSales = await offlineDB.getSales(shopId, startDate, endDate);
@@ -1013,7 +1016,8 @@ async getProducts(): Promise<{ products: ShopProduct[]; fromCache: boolean }> {
     // If online, get from server first and save to local
     if (this.isOnline()) {
       try {
-        const { expenses } = await offlineShopService.getExpenses({ startDate, endDate });
+        // Use LIVE method to always get fresh data from server
+        const { expenses } = await offlineShopService.getExpensesLive({ startDate, endDate });
         for (const exp of expenses) {
           const allExpenses = await offlineDB.getExpenses(shopId);
           const existing = allExpenses.find(e => e.id === exp.id);
