@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { 
   TrendingUp, 
@@ -88,8 +88,22 @@ const ShopDashboard = () => {
 
   const isLoading = isTodayLoading || isMonthLoading;
   
+  // Debounce for sync button
+  const lastSyncClickRef = React.useRef(0);
+  
   const loadDashboard = async () => {
     await Promise.all([loadTodayDashboard(), loadMonthDashboard()]);
+  };
+  
+  // Throttled sync function
+  const handleSyncClick = async () => {
+    const now = Date.now();
+    if (now - lastSyncClickRef.current < 30000) {
+      console.log('[ShopDashboard] Sync click throttled');
+      return;
+    }
+    lastSyncClickRef.current = now;
+    await triggerSync();
   };
 
   // Map hook data to expected format - today's data for period, month data for lifetime
@@ -200,7 +214,7 @@ const ShopDashboard = () => {
             {pendingCount > 0 && isOnline && !isSyncing && (
               <Button 
                 variant="outline" 
-                onClick={() => triggerSync()} 
+                onClick={handleSyncClick} 
                 disabled={isSyncing}
                 size="sm"
               >

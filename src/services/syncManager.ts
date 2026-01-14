@@ -87,17 +87,29 @@ class SyncManager {
   }
   
   // =============== AUTO SYNC ===============
+  // Auto sync is now DISABLED by default to prevent UI freezes
+  // Sync should be triggered manually by user action (Refresh button)
   
-  startAutoSync(intervalMs: number = 30000): void {
-    if (this.syncInterval) return;
+  private autoSyncStarted = false;
+  
+  startAutoSync(intervalMs: number = 120000): void {
+    // Increased interval to 2 minutes and added guard
+    if (this.syncInterval || this.autoSyncStarted) {
+      console.log('[SyncManager] Auto sync already started, skipping');
+      return;
+    }
+    
+    this.autoSyncStarted = true;
+    console.log('[SyncManager] Starting auto sync with interval:', intervalMs, 'ms');
     
     this.syncInterval = setInterval(() => {
       if (navigator.onLine && !this.isSyncing) {
+        console.log('[SyncManager] Auto sync triggered');
         this.sync();
       }
     }, intervalMs);
     
-    // Also listen for online event
+    // Listen for online event but with debounce
     window.addEventListener('online', this.handleOnline);
   }
   
@@ -106,27 +118,27 @@ class SyncManager {
       clearInterval(this.syncInterval);
       this.syncInterval = null;
     }
+    this.autoSyncStarted = false;
     window.removeEventListener('online', this.handleOnline);
   }
   
+  private lastOnlineSync = 0;
   private handleOnline = async (): Promise<void> => {
-    // Wait a bit for connection to stabilize
+    const now = Date.now();
+    // Debounce online sync - only once per 30 seconds
+    if (now - this.lastOnlineSync < 30000) {
+      console.log('[SyncManager] Online sync debounced');
+      return;
+    }
+    this.lastOnlineSync = now;
+    
+    // Wait longer for connection to stabilize
     setTimeout(async () => {
       if (navigator.onLine && !this.isSyncing) {
-        console.log('[SyncManager] Online - starting auto sync');
-        
-        // First, push any pending local changes to server
-        const result = await this.sync();
-        console.log('[SyncManager] Push sync complete:', result);
-        
-        // Then, pull latest data from server
-        const shopId = localStorage.getItem('autofloy_current_shop_id');
-        if (shopId && result.success) {
-          console.log('[SyncManager] Pulling latest data from server');
-          await this.fullSync(shopId);
-        }
+        console.log('[SyncManager] Online - starting sync');
+        await this.sync();
       }
-    }, 2000);
+    }, 5000);
   };
   
   // =============== SYNC OPERATIONS ===============
