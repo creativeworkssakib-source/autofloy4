@@ -295,7 +295,10 @@ const InvoiceSettings = () => {
                       <Input
                         type="number"
                         value={settings.tax_rate}
-                        onChange={(e) => updateSetting('tax_rate', parseFloat(e.target.value) || 0)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          updateSetting('tax_rate', val === "" ? 0 : parseFloat(val) || 0);
+                        }}
                         placeholder="0"
                         min="0"
                         max="100"

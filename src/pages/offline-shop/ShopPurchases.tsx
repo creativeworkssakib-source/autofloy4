@@ -1186,13 +1186,19 @@ const ShopPurchases = () => {
                         type="number"
                         placeholder={language === "bn" ? "ক্রয় মূল্য" : "Purchase"}
                         value={item.unit_price || ""}
-                        onChange={(e) => updateItem(index, "unit_price", parseFloat(e.target.value) || 0)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          updateItem(index, "unit_price", val === "" ? 0 : parseFloat(val) || 0);
+                        }}
                       />
                       <Input
                         type="number"
                         placeholder={language === "bn" ? "বিক্রয় মূল্য" : "Selling"}
                         value={item.selling_price || ""}
-                        onChange={(e) => updateItem(index, "selling_price", parseFloat(e.target.value) || 0)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          updateItem(index, "selling_price", val === "" ? 0 : parseFloat(val) || 0);
+                        }}
                       />
                       <div className="text-sm text-muted-foreground flex items-center">
                         {language === "bn" ? "মোট:" : "Total:"} {formatCurrency(item.total)}
@@ -1230,7 +1236,10 @@ const ShopPurchases = () => {
                         type="number"
                         placeholder={t("shop.price")}
                         value={item.unit_price || ""}
-                        onChange={(e) => updateItem(index, "unit_price", parseFloat(e.target.value) || 0)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          updateItem(index, "unit_price", val === "" ? 0 : parseFloat(val) || 0);
+                        }}
                       />
                       <Button type="button" variant="ghost" size="icon" onClick={() => removeItem(index)}>
                         <X className="h-4 w-4" />
