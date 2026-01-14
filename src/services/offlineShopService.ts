@@ -218,8 +218,18 @@ class OfflineShopService {
   }
 
   // Dashboard
-  async getDashboard(range: "today" | "week" | "month" = "today") {
-    return this.request<any>("dashboard", {}, { range }, CACHE_KEYS.dashboard);
+  async getDashboard(range: "today" | "week" | "month" = "today", forceRefresh = false) {
+    const cacheKey = `${CACHE_KEYS.dashboard}_${range}`;
+    
+    // Return cached data immediately if not forcing refresh
+    if (!forceRefresh) {
+      const cached = getCached<any>(cacheKey);
+      if (cached !== null) {
+        return cached;
+      }
+    }
+    
+    return this.request<any>("dashboard", {}, { range }, cacheKey);
   }
 
   // Growth Insights
