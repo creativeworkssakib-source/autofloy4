@@ -39,14 +39,13 @@ class SmartDataService {
   private userId: string | null = null;
   private listeners: Map<string, Set<DataListener>> = new Map();
   private dataCache: Map<string, { data: any; timestamp: number }> = new Map();
-  private readonly CACHE_TTL = 30000; // 30 seconds cache TTL
+  private readonly CACHE_TTL = 60000; // 60 seconds cache TTL (increased)
   private initialSyncDone = false;
-  private syncInterval: NodeJS.Timeout | null = null;
-  private readonly SYNC_INTERVAL_MS = 30000; // 30 seconds
   private isSyncing = false;
   
   /**
    * Initialize the smart data service
+   * NO AUTO-SYNC - only manual sync to prevent UI freezes
    */
   async init(shopId: string, userId: string): Promise<void> {
     if (this.initialized && this.shopId === shopId) {
@@ -66,7 +65,7 @@ class SmartDataService {
   }
   
   private async doInit(shopId: string, userId: string): Promise<void> {
-    console.log('[SmartData] Initializing with shopId:', shopId);
+    console.log('[SmartData] Initializing with shopId:', shopId, '- NO AUTO-SYNC');
     
     if (this.shopId && this.shopId !== shopId) {
       this.clearCache();
@@ -79,50 +78,26 @@ class SmartDataService {
     // Initialize offline DB first
     await offlineDB.init();
     
-    // Now initialize sync for ALL platforms (including browser for fast cache)
-    await realtimeSyncManager.init(shopId, userId);
+    // DISABLED: Real-time sync causes UI freezes
+    // await realtimeSyncManager.init(shopId, userId);
     
-    // Start our own sync loop (aggressive sync every 30 seconds)
-    this.startSyncLoop();
+    // DISABLED: No sync loop - manual sync only
+    // this.startSyncLoop();
     
-    // Subscribe to real-time updates
-    realtimeSyncManager.subscribe(() => {
-      this.clearCache();
-      this.notifyAllListeners();
-    });
+    // DISABLED: No realtime subscription
+    // realtimeSyncManager.subscribe(() => {...});
     
-    // If online, do initial full sync in BACKGROUND
-    if (navigator.onLine && !this.initialSyncDone) {
-      console.log('[SmartData] Online - starting background initial sync');
-      // Don't await - let it run in background while showing cached data
-      this.performInitialSync().catch(console.error);
-    }
+    // DISABLED: No initial sync on load - manual only
+    // if (navigator.onLine && !this.initialSyncDone) {
+    //   this.performInitialSync().catch(console.error);
+    // }
     
-    console.log('[SmartData] Initialized with cache-first strategy');
+    // DISABLED: No online/offline event listeners
+    // window.addEventListener('online', this.handleOnline);
+    // window.addEventListener('offline', this.handleOffline);
     
-    // Listen for online/offline events
-    window.removeEventListener('online', this.handleOnline);
-    window.removeEventListener('offline', this.handleOffline);
-    window.addEventListener('online', this.handleOnline);
-    window.addEventListener('offline', this.handleOffline);
-    
+    console.log('[SmartData] Initialized - MANUAL SYNC ONLY');
     this.initialized = true;
-  }
-  
-  /**
-   * Start 30-second sync loop
-   */
-  private startSyncLoop(): void {
-    if (this.syncInterval) {
-      clearInterval(this.syncInterval);
-    }
-    
-    this.syncInterval = setInterval(async () => {
-      if (navigator.onLine && !this.isSyncing && this.shopId) {
-        console.log('[SmartData] 30-second sync tick');
-        await this.performBidirectionalSync();
-      }
-    }, this.SYNC_INTERVAL_MS);
   }
   
   /**
@@ -409,8 +384,8 @@ class SmartDataService {
   };
   
   /**
-   * Get dashboard data - INSTANT from cache, background sync
-   * Now works for ALL platforms (browser included)
+   * Get dashboard data - NO BACKGROUND SYNC to prevent freezes
+   * Simply fetch from server when online, cache when offline
    */
   async getDashboard(range: 'today' | 'week' | 'month' = 'today'): Promise<any> {
     const ready = await this.ensureInitialized();
@@ -422,38 +397,15 @@ class SmartDataService {
     const cacheKey = `dashboard-${this.shopId}-${range}`;
     const isOnline = navigator.onLine;
     
-    // STRATEGY: ALWAYS show local/cached data first for instant UI
-    // Then sync in background
-    
     // Step 1: Try to get cached data first for INSTANT response
     const cached = this.getFromCache(cacheKey);
     if (cached) {
-      console.log('[SmartData] Returning cached dashboard - instant!');
-      // Trigger background sync if online
-      if (isOnline && !this.isSyncing) {
-        this.performBidirectionalSync().catch(console.error);
-      }
+      console.log('[SmartData] Returning cached dashboard');
+      // DISABLED: No background sync - manual only
       return cached;
     }
     
-    // Step 2: Try to get from local DB for fast response
-    if (this.shopId) {
-      try {
-        const localData = await this.calculateLocalDashboard(range);
-        this.setCache(cacheKey, { ...localData, fromLocal: true });
-        
-        // Trigger background sync if online
-        if (isOnline && !this.isSyncing) {
-          this.performBidirectionalSync().catch(console.error);
-        }
-        
-        return { ...localData, fromLocal: true };
-      } catch (localError) {
-        console.warn('[SmartData] Local dashboard failed:', localError);
-      }
-    }
-    
-    // Step 3: Fall back to server if no local data
+    // Step 2: If online, fetch from server directly (simple, no background sync)
     if (isOnline) {
       try {
         console.log('[SmartData] Fetching dashboard from server...');
@@ -465,8 +417,18 @@ class SmartDataService {
           return { ...serverData, fromLocal: false };
         }
       } catch (error) {
-        console.warn('[SmartData] Server fetch failed:', error);
-        throw error;
+        console.warn('[SmartData] Server fetch failed, trying local:', error);
+      }
+    }
+    
+    // Step 3: Try local DB as fallback
+    if (this.shopId) {
+      try {
+        const localData = await this.calculateLocalDashboard(range);
+        this.setCache(cacheKey, { ...localData, fromLocal: true });
+        return { ...localData, fromLocal: true };
+      } catch (localError) {
+        console.warn('[SmartData] Local dashboard failed:', localError);
       }
     }
     
