@@ -69,7 +69,9 @@ import {
   Users,
   WifiOff,
   Cloud,
+  Wallet,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import SupplierReturnsTab from "@/components/offline-shop/SupplierReturnsTab";
 import { DeleteConfirmDialog } from "@/components/offline-shop/DeleteConfirmDialog";
 import { useOfflineReturns, useOfflineProductsSimple } from "@/hooks/useOfflineShopData";
@@ -200,6 +202,7 @@ export default function ShopReturns() {
     original_unit_price: 0,
     is_resellable: false,
     loss_amount: 0,
+    from_cash: true, // New field - deduct from cash register
   });
 
   const [filters, setFilters] = useState({
@@ -589,7 +592,8 @@ export default function ShopReturns() {
         // Pass resellable and loss info
         is_resellable: formData.is_resellable,
         loss_amount: formData.loss_amount,
-        refund_method: 'cash', // Always cash for now
+        refund_method: formData.from_cash ? 'cash' : 'none', // Only deduct from cash if from_cash is ON
+        from_cash: formData.from_cash,
         // Additional data for proper tracking
         product_name: formData.product_name,
         customer_id: formData.customer_id,
@@ -669,6 +673,7 @@ export default function ShopReturns() {
       original_unit_price: 0,
       is_resellable: false,
       loss_amount: 0,
+      from_cash: true,
     });
     setCustomerSearchQuery("");
     setSearchedCustomers([]);
@@ -1239,6 +1244,47 @@ export default function ShopReturns() {
                           This amount will be deducted from the original sale's profit
                         </p>
                       </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* From Cash Toggle */}
+                <Card className="border border-dashed border-amber-300 bg-amber-50/50">
+                  <CardContent className="pt-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-full bg-amber-100">
+                          <Wallet className="h-5 w-5 text-amber-600" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-amber-800">
+                            {language === "bn" ? "ক্যাশ থেকে কাটবে" : "Deduct from Cash"}
+                          </p>
+                          <p className="text-xs text-amber-600">
+                            {formData.is_resellable 
+                              ? (language === "bn" 
+                                ? `রিফান্ড পরিমাণ (৳${(formData.refund_amount || 0).toFixed(0)}) ক্যাশ রেজিস্টার থেকে কাটবে`
+                                : `Refund amount (৳${(formData.refund_amount || 0).toFixed(0)}) will be deducted from cash register`)
+                              : (language === "bn"
+                                ? `লস পরিমাণ (৳${(formData.loss_amount || 0).toFixed(0)}) ক্যাশ রেজিস্টার থেকে কাটবে`
+                                : `Loss amount (৳${(formData.loss_amount || 0).toFixed(0)}) will be deducted from cash register`)
+                            }
+                          </p>
+                        </div>
+                      </div>
+                      <Switch
+                        checked={formData.from_cash}
+                        onCheckedChange={(checked) => setFormData({ ...formData, from_cash: checked })}
+                      />
+                    </div>
+                    {formData.from_cash && (
+                      <p className="mt-3 text-xs text-amber-700 bg-amber-100/80 p-2 rounded-md">
+                        <AlertTriangle className="inline h-3 w-3 mr-1" />
+                        {language === "bn" 
+                          ? "এই টাকা আপনার দৈনিক ক্যাশ রেজিস্টার থেকে কমে যাবে এবং Cash Out এ দেখা যাবে"
+                          : "This amount will be deducted from your daily cash register and shown in Cash Out"
+                        }
+                      </p>
                     )}
                   </CardContent>
                 </Card>
