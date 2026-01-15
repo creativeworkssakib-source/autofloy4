@@ -95,8 +95,6 @@ serve(async (req) => {
         "products",
         "subscriptions",
         "verification_otps",
-        "voice_messages",
-        "image_messages",
         "user_roles",
       ];
 
