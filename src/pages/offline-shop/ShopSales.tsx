@@ -125,6 +125,8 @@ interface Sale {
   payment_status: string;
   sale_date: string;
   notes?: string;
+  customer_name?: string;
+  customer_phone?: string;
   customer?: { id?: string; name: string; phone?: string; email?: string; address?: string };
   items?: Array<{
     product_id?: string;
@@ -138,12 +140,21 @@ interface Sale {
 
 // Helper to extract customer info from sale (from linked customer or notes)
 const getCustomerInfo = (sale: Sale): { name: string; phone?: string; email?: string; address?: string } => {
+  // First check linked customer from shop_customers table
   if (sale.customer?.name) {
     return { 
       name: sale.customer.name, 
       phone: sale.customer.phone,
       email: sale.customer.email,
       address: sale.customer.address
+    };
+  }
+  
+  // Check direct customer_name and customer_phone fields on sale
+  if (sale.customer_name) {
+    return { 
+      name: sale.customer_name, 
+      phone: sale.customer_phone 
     };
   }
   
@@ -215,6 +226,7 @@ const ShopSales = () => {
   const [customerPhone, setCustomerPhone] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const printRef = useRef<HTMLDivElement>(null);
 
@@ -325,6 +337,7 @@ const ShopSales = () => {
   const total = subtotal + taxAmount - discountAmount;
   const paidValue = paidAmount === "" ? 0 : paidAmount;
   const dueAmount = total - (paidValue || total);
+  const changeAmount = paidValue > total ? paidValue - total : 0;
 
   const handleSubmit = async () => {
     if (cart.length === 0) {
@@ -332,14 +345,18 @@ const ShopSales = () => {
       return;
     }
 
+    setIsSubmitting(true);
     try {
+      // Calculate actual paid (if change, only record the total as paid, not the extra)
+      const actualPaid = changeAmount > 0 ? total : (paidValue || total);
+      
       const result = await createOfflineSale({
         customer_name: customerName || undefined,
         customer_phone: customerPhone || undefined,
         items: cart,
         discount: discountAmount,
         tax: taxAmount,
-        paid_amount: paidValue || total,
+        paid_amount: actualPaid,
         payment_method: paymentMethod,
       });
 
@@ -353,8 +370,8 @@ const ShopSales = () => {
         subtotal,
         discount: discountAmount,
         tax: taxAmount,
-        paid_amount: paidValue || total,
-        due_amount: dueAmount,
+        paid_amount: actualPaid,
+        due_amount: dueAmount > 0 ? dueAmount : 0,
         payment_method: paymentMethod,
         payment_status: dueAmount > 0 ? 'partial' : 'paid',
         sale_date: new Date().toISOString(),
@@ -378,6 +395,8 @@ const ShopSales = () => {
     } catch (error) {
       console.error("Sale error:", error);
       toast.error(t("shop.errorOccurred"));
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -906,7 +925,7 @@ const ShopSales = () => {
                 </div>
                 <div className="flex justify-between font-bold text-lg">
                   <span>{t("shop.total")}:</span>
-                  <span>{formatCurrency(total)}</span>
+                  <span className="text-primary">{formatCurrency(total)}</span>
                 </div>
                 {paidValue > 0 && paidValue < total && (
                   <div className="flex justify-between text-destructive">
@@ -914,16 +933,34 @@ const ShopSales = () => {
                     <span>{formatCurrency(total - paidValue)}</span>
                   </div>
                 )}
+                {/* Change/Refund Warning */}
+                {changeAmount > 0 && (
+                  <div className="flex justify-between items-center bg-destructive/10 border border-destructive/30 rounded-lg p-3 mt-2">
+                    <span className="font-medium text-destructive">
+                      {language === "bn" ? "ফেরত দিন:" : "Return Change:"}
+                    </span>
+                    <span className="text-xl font-bold text-destructive">
+                      {formatCurrency(changeAmount)}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsModalOpen(false)}>
+            <Button variant="outline" onClick={() => setIsModalOpen(false)} disabled={isSubmitting}>
               {t("common.cancel")}
             </Button>
-            <Button onClick={handleSubmit} disabled={cart.length === 0}>
-              {t("shop.completeSale")}
+            <Button onClick={handleSubmit} disabled={cart.length === 0 || isSubmitting}>
+              {isSubmitting ? (
+                <>
+                  <span className="animate-spin mr-2">⏳</span>
+                  {language === "bn" ? "প্রক্রিয়াকরণ হচ্ছে..." : "Processing..."}
+                </>
+              ) : (
+                language === "bn" ? "বিক্রয় নিশ্চিত করুন" : "Confirm Sale"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
