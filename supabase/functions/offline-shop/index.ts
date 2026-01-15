@@ -2098,7 +2098,17 @@ serve(async (req) => {
             reference_type: "sale",
             notes: `Sale ${invoiceNumber}`,
           }) : Promise.resolve(),
-          // No need for change_return transaction - we only track actual sale amount
+          // Create change_return transaction if customer received change back
+          (payment_method === 'cash' && change_amount && Number(change_amount) > 0) ? supabase.from("shop_cash_transactions").insert({
+            user_id: userId,
+            shop_id: shopId || null,
+            type: "out",
+            source: "change_return",
+            amount: Number(change_amount),
+            reference_id: sale.id,
+            reference_type: "sale",
+            notes: `Change for ${invoiceNumber}${customer_name ? ` - ${customer_name}` : ''}`,
+          }) : Promise.resolve(),
         ]);
 
         // Add customer info to response for invoice display

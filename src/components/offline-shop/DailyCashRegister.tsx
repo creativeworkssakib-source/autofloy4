@@ -92,9 +92,11 @@ export function DailyCashRegister() {
   const [showCashInModal, setShowCashInModal] = useState(false);
   const [showDueCollectedModal, setShowDueCollectedModal] = useState(false);
   const [showCashOutModal, setShowCashOutModal] = useState(false);
+  const [showChangeReturnsModal, setShowChangeReturnsModal] = useState(false);
   const [cashInBreakdown, setCashInBreakdown] = useState<any>(null);
   const [dueCollectedBreakdown, setDueCollectedBreakdown] = useState<any>(null);
   const [cashOutBreakdown, setCashOutBreakdown] = useState<any>(null);
+  const [changeReturnsData, setChangeReturnsData] = useState<any[]>([]);
   const [loadingBreakdown, setLoadingBreakdown] = useState(false);
   const [openingCash, setOpeningCash] = useState("");
   const [closingCash, setClosingCash] = useState("");
@@ -1192,10 +1194,17 @@ export function DailyCashRegister() {
                       <div className="text-lg font-bold text-amber-600">{formatCurrency(cashOutBreakdown.total_quick_expenses || 0)}</div>
                     </CardContent>
                   </Card>
-                  <Card className="border-purple-500/20 bg-purple-500/5">
+                  <Card 
+                    className="border-purple-500/20 bg-purple-500/5 cursor-pointer hover:bg-purple-500/10 transition-colors"
+                    onClick={() => {
+                      setChangeReturnsData(cashOutBreakdown.change_returns || []);
+                      setShowChangeReturnsModal(true);
+                    }}
+                  >
                     <CardContent className="p-3">
                       <div className="text-xs text-muted-foreground">{t.changeReturn}</div>
                       <div className="text-lg font-bold text-purple-600">{formatCurrency(cashOutBreakdown.total_change_returns || 0)}</div>
+                      <div className="text-[10px] text-muted-foreground mt-1">{language === "bn" ? "বিস্তারিত দেখুন →" : "View details →"}</div>
                     </CardContent>
                   </Card>
                 </div>
@@ -1214,6 +1223,68 @@ export function DailyCashRegister() {
               </>
             ) : (
               <p className="text-center text-muted-foreground py-8">{t.noData}</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Change Returns Details Modal */}
+      <Dialog open={showChangeReturnsModal} onOpenChange={setShowChangeReturnsModal}>
+        <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Coins className="h-5 w-5 text-purple-600" />
+              {language === "bn" ? "ফেরত দেওয়া চেঞ্জ বিস্তারিত" : "Change Return Details"}
+            </DialogTitle>
+            <DialogDescription>
+              {language === "bn" ? "আজকে কাস্টমারদের কত টাকা চেঞ্জ দেওয়া হয়েছে।" : "All change given to customers today."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto">
+            {changeReturnsData && changeReturnsData.length > 0 ? (
+              <div className="space-y-2">
+                {changeReturnsData.map((cr: any, index: number) => (
+                  <div 
+                    key={cr.id || index}
+                    className="flex items-center justify-between p-3 bg-purple-50 dark:bg-purple-950/20 rounded-lg border border-purple-100 dark:border-purple-900/30"
+                  >
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 text-sm font-medium">
+                        <Coins className="h-3.5 w-3.5 text-purple-600" />
+                        {cr.customer_name || (language === "bn" ? "কাস্টমার" : "Customer")}
+                      </div>
+                      {cr.invoice_number && (
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          {t.invoice}: {cr.invoice_number}
+                        </div>
+                      )}
+                      <div className="text-xs text-muted-foreground">
+                        {cr.created_at && format(new Date(cr.created_at), "hh:mm a")}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-lg font-bold text-purple-600">
+                        {formatCurrency(Number(cr.amount || 0))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <div className="mt-4 pt-4 border-t">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-muted-foreground">
+                      {language === "bn" ? "মোট চেঞ্জ দেওয়া হয়েছে" : "Total Change Given"}
+                    </span>
+                    <span className="text-lg font-bold text-purple-600">
+                      {formatCurrency(changeReturnsData.reduce((sum: number, cr: any) => sum + Number(cr.amount || 0), 0))}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <Coins className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                <p>{language === "bn" ? "আজকে কোনো চেঞ্জ দেওয়া হয়নি" : "No change given today"}</p>
+              </div>
             )}
           </div>
         </DialogContent>
