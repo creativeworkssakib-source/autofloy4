@@ -4556,23 +4556,34 @@ serve(async (req) => {
     // ===== RETURNS =====
     if (resource === "returns") {
       if (req.method === "POST") {
-        const { sale_id, items, refund_amount, refund_method, reason, notes } = await req.json();
-        console.log("Processing return:", { sale_id, items, refund_amount, reason });
+        const { 
+          sale_id, 
+          items, 
+          refund_amount, 
+          refund_method = 'cash', 
+          reason, 
+          notes,
+          is_resellable = false,
+          loss_amount = 0,
+          product_name,
+          customer_id,
+          customer_name,
+        } = await req.json();
+        console.log("Processing return:", { sale_id, items, refund_amount, reason, is_resellable, loss_amount });
 
-        // Get the original sale
-        const { data: sale, error: saleError } = await supabase
-          .from("shop_sales")
-          .select("*, items:shop_sale_items(*)")
-          .eq("id", sale_id)
-          .eq("user_id", userId)
-          .single();
+        // Get the original sale if sale_id is provided
+        let sale: any = null;
+        if (sale_id) {
+          const { data: saleData, error: saleError } = await supabase
+            .from("shop_sales")
+            .select("*, items:shop_sale_items(*)")
+            .eq("id", sale_id)
+            .eq("user_id", userId)
+            .single();
 
-        if (saleError || !sale) {
-          console.error("Sale not found:", saleError);
-          return new Response(JSON.stringify({ error: "Sale not found" }), {
-            status: 404,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
+          if (!saleError && saleData) {
+            sale = saleData;
+          }
         }
 
         // Get settings for return invoice prefix
@@ -4598,15 +4609,24 @@ serve(async (req) => {
         const returnedItems = [];
 
         for (const returnItem of items) {
-          const originalItem = sale.items.find((i: any) => i.product_id === returnItem.product_id);
-          if (!originalItem) continue;
+          let returnQuantity = returnItem.quantity || 1;
+          let itemRefund = refund_amount || 0;
+          let productName = product_name || "Unknown Product";
 
-          const returnQuantity = Math.min(returnItem.quantity, originalItem.quantity);
-          const itemRefund = returnQuantity * originalItem.unit_price;
+          // If we have sale data, find the original item
+          if (sale && sale.items) {
+            const originalItem = sale.items.find((i: any) => i.product_id === returnItem.product_id);
+            if (originalItem) {
+              returnQuantity = Math.min(returnItem.quantity, originalItem.quantity);
+              itemRefund = returnQuantity * originalItem.unit_price;
+              productName = originalItem.product_name || productName;
+            }
+          }
+          
           totalRefund += itemRefund;
 
-          // Restore stock
-          if (returnItem.product_id) {
+          // Only restore stock if the product is resellable
+          if (is_resellable && returnItem.product_id) {
             const { data: product } = await supabase
               .from("shop_products")
               .select("stock_quantity, name")
@@ -4617,56 +4637,121 @@ serve(async (req) => {
               await supabase
                 .from("shop_products")
                 .update({ 
-                  stock_quantity: product.stock_quantity + returnQuantity,
+                  stock_quantity: (product.stock_quantity || 0) + returnQuantity,
                   updated_at: new Date().toISOString()
                 })
                 .eq("id", returnItem.product_id);
 
-              // Create stock adjustment record for return
-              await supabase.from("shop_stock_adjustments").insert({
-                user_id: userId,
-                product_id: returnItem.product_id,
-                product_name: product.name,
-                type: "return",
-                quantity: returnQuantity,
-                reason: reason || "Customer return",
-                notes: `Return from sale ${sale.invoice_number}. ${notes || ""}`,
-                cost_impact: -itemRefund,
-              });
-
-              returnedItems.push({
-                product_name: product.name,
-                quantity: returnQuantity,
-                refund: itemRefund,
-              });
+              productName = product.name || productName;
+              console.log(`Stock restored: +${returnQuantity} for product ${returnItem.product_id}`);
             }
           }
+
+          // Create stock adjustment record for return (regardless of resellable status)
+          if (returnItem.product_id) {
+            const { data: product } = await supabase
+              .from("shop_products")
+              .select("name")
+              .eq("id", returnItem.product_id)
+              .single();
+
+            await supabase.from("shop_stock_adjustments").insert({
+              user_id: userId,
+              product_id: returnItem.product_id,
+              product_name: product?.name || productName,
+              type: is_resellable ? "return" : "damage",
+              quantity: is_resellable ? returnQuantity : 0, // Only count if resellable
+              reason: reason || "Customer return",
+              notes: `${is_resellable ? 'Resellable return' : 'Damaged/Not resellable'}. ${sale ? `From sale ${sale.invoice_number}` : ''}. ${notes || ""}`,
+              cost_impact: is_resellable ? 0 : -(loss_amount || itemRefund), // Loss if damaged
+            });
+          }
+
+          returnedItems.push({
+            product_name: productName,
+            quantity: returnQuantity,
+            refund: itemRefund,
+            is_resellable,
+          });
         }
 
         // Use provided refund amount or calculated total
         const finalRefund = refund_amount || totalRefund;
+        const finalLoss = loss_amount || (is_resellable ? 0 : finalRefund);
 
-        // Create cash out transaction for refund ONLY if refund_method is 'cash'
+        // Create cash out transaction for refund (always for customer returns)
         if (finalRefund > 0 && refund_method === 'cash') {
           await supabase.from("shop_cash_transactions").insert({
             user_id: userId,
             type: "out",
             source: "return",
             amount: finalRefund,
-            reference_id: sale_id,
+            reference_id: sale_id || null,
             reference_type: "return",
-            notes: `Refund for ${sale.invoice_number}. ${reason || ""}`,
+            notes: is_resellable 
+              ? `Refund (resellable) for ${sale?.invoice_number || 'manual return'}. ${reason || ""}`
+              : `Refund (damaged - loss: ৳${finalLoss}) for ${sale?.invoice_number || 'manual return'}. ${reason || ""}`,
+            transaction_date: new Date().toISOString().split("T")[0],
           });
+          console.log(`Cash out created: ৳${finalRefund} for return`);
         }
 
-        console.log("Return processed successfully:", { returnInvoice, finalRefund, returnedItems });
+        // Adjust sale profit if there's a loss
+        if (sale_id && finalLoss > 0) {
+          const { data: saleForProfit } = await supabase
+            .from("shop_sales")
+            .select("total_profit")
+            .eq("id", sale_id)
+            .eq("user_id", userId)
+            .single();
+
+          if (saleForProfit) {
+            await supabase
+              .from("shop_sales")
+              .update({
+                total_profit: Math.max(0, (saleForProfit.total_profit || 0) - finalLoss),
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", sale_id)
+              .eq("user_id", userId);
+            console.log(`Profit adjusted: -৳${finalLoss} for sale ${sale_id}`);
+          }
+        }
+
+        // Also insert into shop_returns table for tracking
+        await supabase.from("shop_returns").insert({
+          user_id: userId,
+          product_id: items[0]?.product_id || null,
+          product_name: returnedItems[0]?.product_name || product_name || "Unknown",
+          customer_id: customer_id || null,
+          customer_name: customer_name || null,
+          quantity: items[0]?.quantity || 1,
+          return_reason: reason || "Customer return",
+          return_date: new Date().toISOString().split("T")[0],
+          refund_amount: finalRefund,
+          notes: notes || null,
+          status: "processed",
+          original_sale_id: sale_id || null,
+          is_resellable,
+          loss_amount: finalLoss,
+          stock_restored: is_resellable,
+        });
+
+        const message = is_resellable 
+          ? `Return created. Stock restored (+${items[0]?.quantity || 1}). Refund: ৳${finalRefund}`
+          : `Return created. Loss: ৳${finalLoss}. Refund: ৳${finalRefund}`;
+
+        console.log("Return processed successfully:", { returnInvoice, finalRefund, finalLoss, is_resellable, returnedItems });
 
         return new Response(JSON.stringify({
           success: true,
           return_invoice: returnInvoice,
           refund_amount: finalRefund,
+          loss_amount: finalLoss,
+          is_resellable,
           returned_items: returnedItems,
-          original_sale: sale.invoice_number,
+          original_sale: sale?.invoice_number || null,
+          message,
         }), {
           status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -4676,10 +4761,9 @@ serve(async (req) => {
       // GET returns history
       if (req.method === "GET") {
         const { data: returns } = await supabase
-          .from("shop_stock_adjustments")
+          .from("shop_returns")
           .select("*")
           .eq("user_id", userId)
-          .eq("type", "return")
           .order("created_at", { ascending: false });
 
         return new Response(JSON.stringify({ returns: returns || [] }), {

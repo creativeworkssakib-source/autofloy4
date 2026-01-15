@@ -576,7 +576,7 @@ export default function ShopReturns() {
     }
 
     try {
-      // Use offlineShopService for return creation
+      // Use offlineShopService for return creation with full data
       const result = await offlineShopService.processReturn({
         sale_id: formData.original_sale_id || '',
         items: [{
@@ -586,9 +586,21 @@ export default function ShopReturns() {
         refund_amount: formData.refund_amount * formData.quantity,
         reason: formData.return_reason,
         notes: formData.notes,
+        // Pass resellable and loss info
+        is_resellable: formData.is_resellable,
+        loss_amount: formData.loss_amount,
+        refund_method: 'cash', // Always cash for now
+        // Additional data for proper tracking
+        product_name: formData.product_name,
+        customer_id: formData.customer_id,
+        customer_name: formData.customer_name,
       });
       
-      toast.success(language === "bn" ? "রিটার্ন যোগ হয়েছে" : "Return added successfully");
+      const message = formData.is_resellable 
+        ? (language === "bn" ? `রিটার্ন যোগ হয়েছে। স্টক ফিরে এসেছে (+${formData.quantity})` : `Return added. Stock restored (+${formData.quantity})`)
+        : (language === "bn" ? `রিটার্ন যোগ হয়েছে। লস: ৳${formData.loss_amount || formData.refund_amount * formData.quantity}` : `Return added. Loss: ৳${formData.loss_amount || formData.refund_amount * formData.quantity}`);
+      
+      toast.success(message);
       setIsAddOpen(false);
       resetForm();
       fetchReturns();
