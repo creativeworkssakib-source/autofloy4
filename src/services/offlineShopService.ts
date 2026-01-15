@@ -660,11 +660,15 @@ class OfflineShopService {
 export interface ScannerDevice {
   id: string;
   name: string;
+  device_name?: string;
   device_id: string;
   device_type: string;
   is_default: boolean;
   is_active: boolean;
   settings?: Record<string, any>;
+  total_scans?: number;
+  avg_scan_speed?: number;
+  last_connected_at?: string;
   created_at: string;
   updated_at: string;
 }

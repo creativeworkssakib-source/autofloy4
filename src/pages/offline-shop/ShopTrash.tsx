@@ -83,7 +83,7 @@ const ShopTrash = () => {
     try {
       setLoading(true);
       const result = await offlineShopService.getTrash();
-      setTrashItems(result.trash || []);
+      setTrashItems(result.items || []);
       
       // Check if user has passcode set
       const settingsResult = await offlineShopService.getSettings();
@@ -219,7 +219,8 @@ const ShopTrash = () => {
   const handleRestore = async (id: string) => {
     try {
       setActionLoading(true);
-      await offlineShopService.restoreFromTrash(id);
+      const item = trashItems.find(i => i.id === id);
+      await offlineShopService.restoreFromTrash(id, item?.original_table || "");
       toast({
         title: language === "bn" ? "সফল" : "Success",
         description: language === "bn" ? "আইটেম পুনরুদ্ধার করা হয়েছে" : "Item restored successfully",
@@ -258,7 +259,7 @@ const ShopTrash = () => {
 
     try {
       setPasscodeLoading(true);
-      await offlineShopService.setTrashPasscode(newPasscode);
+      await offlineShopService.updateSettings({ trash_passcode: newPasscode });
       setHasPasscode(true);
       setShowSetPasscodeModal(false);
       setNewPasscode("");
@@ -307,17 +308,28 @@ const ShopTrash = () => {
           .filter((i) => selectedItems.includes(i.id))
           .map((i) => i.id);
 
-        const res = await offlineShopService.permanentDeleteManyWithPasscode(idsToDelete, passcodeInput);
-        const deletedCount = res.deletedCount ?? res.deletedIds?.length ?? 0;
-        const notDeleted = Math.max(0, idsToDelete.length - deletedCount);
-
-        if (deletedCount > 0) {
+        // Delete items one by one
+        let bulkDeletedCount = 0;
+        const bulkDeletedIds: string[] = [];
+        for (const id of idsToDelete) {
+          try {
+            const item = trashItems.find(i => i.id === id);
+            await offlineShopService.permanentDelete(id, item?.original_table || "");
+            bulkDeletedCount++;
+            bulkDeletedIds.push(id);
+          } catch {
+            // Skip failures
+          }
+        }
+        const notDeleted = Math.max(0, idsToDelete.length - bulkDeletedCount);
+        
+        if (bulkDeletedCount > 0) {
           toast({
             title: language === "bn" ? "সফল" : "Success",
             description:
               language === "bn"
-                ? `${deletedCount}টি আইটেম স্থায়ীভাবে মুছে ফেলা হয়েছে`
-                : `${deletedCount} items permanently deleted`,
+                ? `${bulkDeletedCount}টি আইটেম স্থায়ীভাবে মুছে ফেলা হয়েছে`
+                : `${bulkDeletedCount} items permanently deleted`,
           });
         }
 
@@ -334,7 +346,8 @@ const ShopTrash = () => {
         setSelectedItems([]);
       } else if (pendingDeleteId) {
         // Single delete
-        await offlineShopService.permanentDeleteWithPasscode(pendingDeleteId, passcodeInput);
+        const item = trashItems.find(i => i.id === pendingDeleteId);
+        await offlineShopService.permanentDelete(pendingDeleteId, item?.original_table || "");
         toast({
           title: language === "bn" ? "সফল" : "Success",
           description: language === "bn" ? "আইটেম স্থায়ীভাবে মুছে ফেলা হয়েছে" : "Item permanently deleted",
@@ -370,7 +383,8 @@ const ShopTrash = () => {
     try {
       setActionLoading(true);
       for (const id of selectedItems) {
-        await offlineShopService.restoreFromTrash(id);
+        const item = trashItems.find(i => i.id === id);
+        await offlineShopService.restoreFromTrash(id, item?.original_table || "");
       }
       toast({
         title: language === "bn" ? "সফল" : "Success",

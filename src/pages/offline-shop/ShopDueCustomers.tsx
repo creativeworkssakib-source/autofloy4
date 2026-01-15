@@ -314,21 +314,37 @@ const ShopDueCustomers = () => {
         };
       });
 
-      const result = await offlineShopService.sendDueReminderSms(customersData);
+      // Send SMS for each customer
+      let totalSent = 0;
+      let totalFailed = 0;
       
-      if (result.totalSent > 0) {
+      for (const customer of customersData) {
+        try {
+          await offlineShopService.sendDueReminderSms({
+            saleId: customer.invoiceList?.split(",")[0]?.trim() || "",
+            customerId: customer.customerPhone || "",
+            dueAmount: customer.dueAmount,
+            customerPhone: customer.customerPhone,
+          });
+          totalSent++;
+        } catch {
+          totalFailed++;
+        }
+      }
+      
+      if (totalSent > 0) {
         toast.success(
           language === "bn" 
-            ? `${result.totalSent}টি SMS পাঠানো হয়েছে` 
-            : `${result.totalSent} SMS sent successfully`
+            ? `${totalSent}টি SMS পাঠানো হয়েছে` 
+            : `${totalSent} SMS sent successfully`
         );
       }
       
-      if (result.totalFailed > 0) {
+      if (totalFailed > 0) {
         toast.warning(
           language === "bn" 
-            ? `${result.totalFailed}টি SMS পাঠাতে ব্যর্থ` 
-            : `${result.totalFailed} SMS failed to send`
+            ? `${totalFailed}টি SMS পাঠাতে ব্যর্থ` 
+            : `${totalFailed} SMS failed to send`
         );
       }
       
