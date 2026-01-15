@@ -1926,7 +1926,9 @@ serve(async (req) => {
           due_amount: dueAmount,
           payment_method: payment_method || "cash",
           payment_status: dueAmount > 0 ? "partial" : "paid",
-          notes: notes || (customer_name ? `Customer: ${customer_name}${customer_phone ? ` (${customer_phone})` : ''}` : null),
+          notes: notes || null,
+          customer_name: customer_name || null,
+          customer_phone: customer_phone || null,
         };
 
         // Only add customer_id if provided
