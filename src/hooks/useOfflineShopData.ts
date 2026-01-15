@@ -339,14 +339,18 @@ export function useOfflineDueCustomers() {
         
         if (existing) {
           existing.totalDue += Number(sale.due_amount || 0);
+          existing.totalSales += Number(sale.total || 0);
+          existing.totalPaid += Number(sale.paid_amount || 0);
           existing.salesCount += 1;
           existing.sales.push(sale);
         } else {
           customerMap.set(customerId, {
-            id: customerId,
-            name: sale.customer_name || 'Walk-in Customer',
-            phone: sale.customer_phone || '',
+            customerId: sale.customer_id || null,
+            customerName: sale.customer_name || sale.customer?.name || 'Walk-in Customer',
+            customerPhone: sale.customer_phone || sale.customer?.phone || '',
             totalDue: Number(sale.due_amount || 0),
+            totalSales: Number(sale.total || 0),
+            totalPaid: Number(sale.paid_amount || 0),
             salesCount: 1,
             sales: [sale],
           });
@@ -476,7 +480,31 @@ export function useOfflineReports(type: "sales" | "purchases" | "expenses" | "in
     setLoading(true);
     try {
       const result = await offlineShopService.getReports(type, { startDate, endDate });
-      setData(result);
+      
+      // Normalize the response to have consistent `records` array
+      // API returns: { sales: [...], summary: {...} } or { expenses: [...], summary: {...} } etc.
+      const records = result.sales || result.purchases || result.expenses || result.products || result.customers || [];
+      
+      // Normalize summary structure for UI
+      const summary = result.summary || {};
+      if (type === 'sales') {
+        summary.totalAmount = summary.totalSales || 0;
+        summary.count = summary.count || 0;
+        // Calculate total items
+        summary.totalItems = records.reduce((sum: number, s: any) => {
+          return sum + (s.items || []).reduce((itemSum: number, item: any) => itemSum + (item.quantity || 0), 0);
+        }, 0);
+        // Calculate average sale
+        summary.avgSale = summary.count > 0 ? summary.totalAmount / summary.count : 0;
+      } else if (type === 'expenses') {
+        summary.totalAmount = summary.totalExpenses || 0;
+      } else if (type === 'inventory') {
+        summary.totalProducts = summary.totalProducts || 0;
+        summary.totalValue = summary.totalValue || 0;
+        summary.lowStockCount = summary.lowStockCount || 0;
+      }
+      
+      setData({ records, summary, ...result });
     } catch (error) {
       console.error('Failed to fetch reports:', error);
       setData(null);
@@ -539,7 +567,7 @@ export function useOfflineTrash() {
   const refetch = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await offlineShopService.getTrash();
+      const result = await offlineShopService.getTrash() as { trash?: any[]; items?: any[] };
       // API returns { trash: [] } or { items: [] }
       setTrash(result.trash || result.items || []);
     } catch (error) {
