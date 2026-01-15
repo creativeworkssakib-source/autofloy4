@@ -95,29 +95,29 @@ const ShopDashboard = () => {
     await loadTodayDashboard();
   };
 
-  // Map hook data to expected format - use only today's data (simpler, faster)
+  // Map hook data to expected format - API returns { period: {...}, lifetime: {...}, totalProducts, ... }
   const data: DashboardData | null = todayData ? {
     period: {
-      totalSales: todayData?.totalSales || 0,
-      totalPurchases: todayData?.totalPurchases || 0,
-      grossProfit: todayData?.profit || 0,
-      totalExpenses: todayData?.totalExpenses || 0,
-      netProfit: todayData?.profit || 0,
-      customersServed: todayData?.salesCount || 0,
+      totalSales: todayData?.period?.totalSales || 0,
+      totalPurchases: todayData?.period?.totalPurchases || 0,
+      grossProfit: todayData?.period?.grossProfit || 0,
+      totalExpenses: todayData?.period?.totalExpenses || 0,
+      netProfit: todayData?.period?.netProfit || 0,
+      customersServed: todayData?.period?.customersServed || 0,
     },
     lifetime: {
-      totalSales: todayData?.totalSales || 0,
-      totalProfit: todayData?.profit || 0,
-      totalProducts: todayData?.productsCount || 0,
-      totalSuppliers: 0,
-      totalDue: todayData?.totalDue || 0,
+      totalSales: todayData?.lifetime?.totalSales || 0,
+      totalProfit: todayData?.lifetime?.totalProfit || 0,
+      totalProducts: todayData?.lifetime?.totalProducts || 0,
+      totalSuppliers: todayData?.lifetime?.totalSuppliers || 0,
+      totalDue: todayData?.lifetime?.totalDue || 0,
     },
-    totalProducts: todayData?.productsCount || 0,
-    totalCustomers: todayData?.customersCount || 0,
-    lowStockProducts: todayData?.lowStockItems || [],
+    totalProducts: todayData?.totalProducts || 0,
+    totalCustomers: todayData?.totalCustomers || 0,
+    lowStockProducts: todayData?.lowStockProducts || [],
     recentSales: todayData?.recentSales || [],
     recentProducts: todayData?.recentProducts || [],
-    returns: todayData?.returnsSummary || {
+    returns: todayData?.returns || {
       totalCount: 0,
       totalRefundAmount: 0,
       processedCount: 0,
