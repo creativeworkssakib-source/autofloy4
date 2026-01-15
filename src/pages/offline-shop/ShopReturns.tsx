@@ -268,6 +268,7 @@ export default function ShopReturns() {
   };
 
   // Search customers by name or phone for returns - uses Supabase
+  // Filters out customers who have already returned products
   const searchCustomersForReturn = async (query: string) => {
     if (!query.trim()) {
       setSearchedCustomers([]);
@@ -282,21 +283,40 @@ export default function ShopReturns() {
       const salesResult = await offlineShopService.getSales();
       const allSales = salesResult.sales || [];
       
+      // Get existing returns to filter out customers who already have returns
+      const existingReturnsResult = await offlineShopService.getReturns();
+      const existingReturns = (existingReturnsResult.returns || []) as ShopReturn[];
+      
+      // Create a set of customer IDs and names who have already made returns
+      const customersWithReturns = new Set<string>();
+      const customerNamesWithReturns = new Set<string>();
+      for (const ret of existingReturns) {
+        if (ret.customer_id) {
+          customersWithReturns.add(ret.customer_id);
+        }
+        if (ret.customer_name) {
+          customerNamesWithReturns.add(ret.customer_name.toLowerCase());
+        }
+      }
+      
       const queryLower = query.toLowerCase();
       
-      // Filter customers by name or phone
-      const matchedCustomers = allCustomers.filter((c: any) => 
-        c.name?.toLowerCase().includes(queryLower) ||
-        c.phone?.includes(query)
-      );
+      // Filter customers by name or phone, excluding those with existing returns
+      const matchedCustomers = allCustomers.filter((c: any) => {
+        const matchesQuery = c.name?.toLowerCase().includes(queryLower) || c.phone?.includes(query);
+        const hasExistingReturn = customersWithReturns.has(c.id) || customerNamesWithReturns.has(c.name?.toLowerCase() || '');
+        return matchesQuery && !hasExistingReturn;
+      });
 
-      // Also search for walk-in customers from sales
-      const walkInSales = allSales.filter((s: any) => 
-        !s.customer_id && (
+      // Also search for walk-in customers from sales, excluding those with returns
+      const walkInSales = allSales.filter((s: any) => {
+        const matchesQuery = !s.customer_id && (
           s.customer_name?.toLowerCase().includes(queryLower) ||
           s.customer_phone?.includes(query)
-        )
-      );
+        );
+        const hasExistingReturn = customerNamesWithReturns.has(s.customer_name?.toLowerCase() || '');
+        return matchesQuery && !hasExistingReturn;
+      });
 
       // Group walk-in sales by customer name
       const walkInCustomers = new Map<string, any>();
