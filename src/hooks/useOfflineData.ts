@@ -2,7 +2,7 @@
  * Simplified Data Hook
  * 
  * Provides basic data access using offlineShopService
- * No local database or sync - direct Supabase calls with caching
+ * Direct Supabase calls - no local caching
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -388,7 +388,7 @@ export function useOfflineSettings() {
   }, [refetch]);
 
   const updateSettings = useCallback(async (updates: any) => {
-    const result = await offlineShopService.saveSettings(updates);
+    const result = await offlineShopService.updateSettings(updates);
     await refetch();
     return { settings: result.settings };
   }, [refetch]);
@@ -404,14 +404,7 @@ export function useOfflineSettings() {
 // =============== TRASH ===============
 
 export function useOfflineTrash() {
-  const [trash, setTrash] = useState<any>({
-    products: [],
-    customers: [],
-    suppliers: [],
-    sales: [],
-    expenses: [],
-    purchases: [],
-  });
+  const [trash, setTrash] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { currentShop } = useShop();
 
@@ -419,16 +412,10 @@ export function useOfflineTrash() {
     setLoading(true);
     try {
       const result = await offlineShopService.getTrash();
-      setTrash(result.trash || {
-        products: [],
-        customers: [],
-        suppliers: [],
-        sales: [],
-        expenses: [],
-        purchases: [],
-      });
+      setTrash(result.items || []);
     } catch (error) {
       console.error('Failed to fetch trash:', error);
+      setTrash([]);
     } finally {
       setLoading(false);
     }
@@ -438,13 +425,13 @@ export function useOfflineTrash() {
     refetch();
   }, [refetch]);
 
-  const restoreItem = useCallback(async (id: string) => {
-    await offlineShopService.restoreFromTrash(id);
+  const restoreItem = useCallback(async (id: string, type: string) => {
+    await offlineShopService.restoreFromTrash(id, type);
     await refetch();
   }, [refetch]);
 
-  const permanentDelete = useCallback(async (id: string) => {
-    await offlineShopService.permanentDelete(id);
+  const permanentDelete = useCallback(async (id: string, type: string) => {
+    await offlineShopService.permanentDelete(id, type);
     await refetch();
   }, [refetch]);
 
