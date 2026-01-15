@@ -1319,7 +1319,7 @@ export default function ShopReturns() {
                 <Card className="bg-amber-500/10 border-amber-500/30">
                   <CardContent className="pt-4 pb-3">
                     <p className="text-sm text-amber-700">Total Refunds</p>
-                    <p className="text-2xl font-bold text-amber-700">৳{reportData.totalRefundValue.toFixed(0)}</p>
+                    <p className="text-2xl font-bold text-amber-700">৳{(reportData.totalRefundValue || 0).toFixed(0)}</p>
                   </CardContent>
                 </Card>
                 <Card className="bg-destructive/10 border-destructive/30">
@@ -1328,7 +1328,7 @@ export default function ShopReturns() {
                       <TrendingDown className="h-4 w-4 text-destructive" />
                       <p className="text-sm text-destructive">Total Loss</p>
                     </div>
-                    <p className="text-2xl font-bold text-destructive">৳{reportData.totalLoss.toFixed(0)}</p>
+                    <p className="text-2xl font-bold text-destructive">৳{(reportData.totalLoss || 0).toFixed(0)}</p>
                   </CardContent>
                 </Card>
                 <Card className="bg-green-500/10 border-green-500/30">
@@ -1374,7 +1374,7 @@ export default function ShopReturns() {
                             </div>
                             <div className="text-right">
                               <p className="text-sm font-bold">{product.count} pcs</p>
-                              <p className="text-xs text-muted-foreground">৳{product.refund.toFixed(0)} refund</p>
+                              <p className="text-xs text-muted-foreground">৳{(product.refund || 0).toFixed(0)} refund</p>
                             </div>
                           </div>
                         ))}
@@ -1475,7 +1475,7 @@ export default function ShopReturns() {
                         <TableCell>
                           <span className="text-sm">{ret.return_reason}</span>
                         </TableCell>
-                        <TableCell>৳{ret.refund_amount.toFixed(2)}</TableCell>
+                        <TableCell>৳{(ret.refund_amount || 0).toFixed(2)}</TableCell>
                         <TableCell>
                           {ret.is_resellable || ret.stock_restored ? (
                             <Badge variant="outline" className="text-green-600 border-green-600">
@@ -1556,7 +1556,7 @@ export default function ShopReturns() {
                   <div>
                     <Label className="text-muted-foreground">Refund Amount</Label>
                     <p className="font-medium">
-                      ৳{selectedReturn.refund_amount.toFixed(2)}
+                      ৳{(selectedReturn.refund_amount || 0).toFixed(2)}
                     </p>
                   </div>
                 </div>
@@ -1630,7 +1630,7 @@ export default function ShopReturns() {
                       </div>
                       <div className="text-center">
                         <p className="text-muted-foreground">Total Refunds</p>
-                        <p className="font-bold text-lg text-amber-600">৳{customerReturnStats.total_refund_value.toFixed(2)}</p>
+                        <p className="font-bold text-lg text-amber-600">৳{(customerReturnStats.total_refund_value || 0).toFixed(2)}</p>
                       </div>
                     </div>
                   </div>
