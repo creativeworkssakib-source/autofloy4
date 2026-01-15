@@ -6518,46 +6518,39 @@ serve(async (req) => {
         }
 
         if (type === "cash_out") {
-          // Get cash expenses from shop_cash_transactions (only expenses paid from cash)
-          const { data: expenseTransactions } = await supabase
+          // Get ALL expenses from shop_expenses (not just cash-paid ones)
+          const { data: allExpenses } = await supabase
+            .from("shop_expenses")
+            .select("id, amount, description, category, expense_date, payment_method, created_at")
+            .eq("user_id", userId)
+            .eq("shop_id", shopId)
+            .gte("expense_date", todayStart)
+            .lte("expense_date", todayEnd)
+            .order("created_at", { ascending: false });
+
+          // Check which expenses were paid from cash (have entry in shop_cash_transactions)
+          const { data: cashExpenseIds } = await supabase
             .from("shop_cash_transactions")
-            .select("id, amount, notes, reference_id, created_at, transaction_date")
+            .select("reference_id")
             .eq("user_id", userId)
             .eq("shop_id", shopId)
             .eq("type", "out")
             .eq("source", "expense")
             .gte("transaction_date", todayStart)
-            .lte("transaction_date", todayEnd)
-            .order("created_at", { ascending: false });
+            .lte("transaction_date", todayEnd);
 
-          // Enrich with expense details
-          const expenses = await Promise.all((expenseTransactions || []).map(async (et: any) => {
-            let description = et.notes || '';
-            let category = '';
-            let expenseDate = et.transaction_date || et.created_at;
-            
-            if (et.reference_id) {
-              const { data: expense } = await supabase
-                .from("shop_expenses")
-                .select("description, category, expense_date")
-                .eq("id", et.reference_id)
-                .maybeSingle();
-              
-              if (expense) {
-                description = expense.description || et.notes || '';
-                category = expense.category || '';
-                expenseDate = expense.expense_date || et.transaction_date;
-              }
-            }
-            
-            return {
-              id: et.id,
-              amount: Number(et.amount || 0),
-              description: description,
-              category: category,
-              expense_date: expenseDate,
-              created_at: et.created_at
-            };
+          const cashPaidExpenseIds = new Set((cashExpenseIds || []).map((c: any) => c.reference_id));
+
+          // Enrich expenses with paid_from_cash flag
+          const expenses = (allExpenses || []).map((exp: any) => ({
+            id: exp.id,
+            amount: Number(exp.amount || 0),
+            description: exp.description || '',
+            category: exp.category || '',
+            expense_date: exp.expense_date,
+            payment_method: exp.payment_method || 'cash',
+            paid_from_cash: cashPaidExpenseIds.has(exp.id),
+            created_at: exp.created_at
           }));
 
           // Get cash purchases from shop_cash_transactions (since shop_purchases doesn't have payment_method)
@@ -6658,6 +6651,9 @@ serve(async (req) => {
           }));
 
           const totalExpenses = (expenses || []).reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
+          // Only count expenses paid from cash for actual cash calculation
+          const cashExpenses = (expenses || []).filter((e: any) => e.paid_from_cash);
+          const totalCashExpenses = cashExpenses.reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
           const totalPurchases = (purchases || []).reduce((sum: number, p: any) => sum + Number(p.paid_amount || 0), 0);
           const totalQuickExpenses = (quickExpenses || []).reduce((sum: number, q: any) => sum + Number(q.amount || 0), 0);
           const totalChangeReturns = enrichedChangeReturns.reduce((sum: number, c: any) => sum + Number(c.amount || 0), 0);
@@ -6668,10 +6664,12 @@ serve(async (req) => {
             quick_expenses: quickExpenses || [],
             change_returns: enrichedChangeReturns,
             total_expenses: totalExpenses,
+            total_cash_expenses: totalCashExpenses, // Only cash-paid expenses
             total_purchases: totalPurchases,
             total_quick_expenses: totalQuickExpenses,
             total_change_returns: totalChangeReturns,
-            total: totalExpenses + totalPurchases + totalQuickExpenses + totalChangeReturns
+            // Total cash out only includes cash-paid items
+            total: totalCashExpenses + totalPurchases + totalQuickExpenses + totalChangeReturns
           }), {
             status: 200,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
