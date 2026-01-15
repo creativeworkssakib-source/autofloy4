@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useOfflineCashRegister } from "@/hooks/useOfflineShopData";
+import { offlineShopService } from "@/services/offlineShopService";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,7 +31,7 @@ import {
   BarChart3,
   Plus,
   Trash2,
-  Coffee,
+  Coins,
   X,
   WifiOff,
   Wifi,
@@ -87,6 +88,7 @@ export function DailyCashRegister() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [quickExpenseAmount, setQuickExpenseAmount] = useState("");
   const [quickExpenseDescription, setQuickExpenseDescription] = useState("");
+  const [quickExpenseCategory, setQuickExpenseCategory] = useState("other");
   
   // Get suggested opening cash from last closed register
   const suggestedOpening = registers.find((r: CashRegister) => r.status === "closed")?.closing_cash || 0;
@@ -182,11 +184,39 @@ export function DailyCashRegister() {
   };
 
   const handleAddQuickExpense = async () => {
-    toast.info(language === "bn" ? "এই ফিচারটি এখনো উপলব্ধ নয়" : "This feature is not available yet");
+    if (!quickExpenseAmount || parseFloat(quickExpenseAmount) <= 0) {
+      toast.error(language === "bn" ? "টাকার পরিমাণ দিন" : "Please enter amount");
+      return;
+    }
+    
+    setIsSubmitting(true);
+    try {
+      await offlineShopService.addQuickExpense({
+        amount: parseFloat(quickExpenseAmount),
+        description: quickExpenseDescription || "",
+        category: quickExpenseCategory,
+      });
+      toast.success(language === "bn" ? "খরচ যোগ হয়েছে" : "Expense added");
+      setQuickExpenseAmount("");
+      setQuickExpenseDescription("");
+      setQuickExpenseCategory("other");
+      setShowQuickExpenseModal(false);
+      refetch();
+    } catch (error: any) {
+      toast.error(error.message || "Failed to add expense");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleDeleteQuickExpense = async (expenseId: string) => {
-    toast.info(language === "bn" ? "এই ফিচারটি এখনো উপলব্ধ নয়" : "This feature is not available yet");
+    try {
+      await offlineShopService.deleteQuickExpense(expenseId);
+      toast.success(language === "bn" ? "খরচ মুছে ফেলা হয়েছে" : "Expense deleted");
+      refetch();
+    } catch (error: any) {
+      toast.error(error.message || "Failed to delete expense");
+    }
   };
 
   const getCurrentCashBalance = () => {
@@ -396,7 +426,7 @@ export function DailyCashRegister() {
               <CardHeader className="py-3 px-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Coffee className="h-4 w-4 text-amber-600" />
+                    <Coins className="h-4 w-4 text-amber-600" />
                     <CardTitle className="text-sm">{t.quickExpense}</CardTitle>
                     {Number(todayRegister.total_quick_expenses || 0) > 0 && (
                       <Badge variant="secondary" className="text-xs">
@@ -645,7 +675,7 @@ export function DailyCashRegister() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Coffee className="h-5 w-5 text-amber-600" />
+              <Coins className="h-5 w-5 text-amber-600" />
               {t.quickExpenseTitle}
             </DialogTitle>
             <DialogDescription>
@@ -653,6 +683,34 @@ export function DailyCashRegister() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            {/* Expense Type Selection */}
+            <div className="space-y-2">
+              <Label>{language === "bn" ? "খরচের ধরন" : "Expense Type"}</Label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { id: "tea", label: language === "bn" ? "চা/নাস্তা" : "Tea/Snacks", icon: "🍵" },
+                  { id: "transport", label: language === "bn" ? "যাতায়াত" : "Transport", icon: "🚗" },
+                  { id: "donation", label: language === "bn" ? "ভিক্ষা/দান" : "Donation", icon: "🤲" },
+                  { id: "supplies", label: language === "bn" ? "সরঞ্জাম" : "Supplies", icon: "📦" },
+                  { id: "utilities", label: language === "bn" ? "বিল" : "Utilities", icon: "💡" },
+                  { id: "other", label: language === "bn" ? "অন্যান্য" : "Other", icon: "💰" },
+                ].map((type) => (
+                  <button
+                    key={type.id}
+                    type="button"
+                    onClick={() => setQuickExpenseCategory(type.id)}
+                    className={`flex flex-col items-center justify-center p-3 rounded-lg border-2 transition-all ${
+                      quickExpenseCategory === type.id
+                        ? "border-amber-500 bg-amber-50 dark:bg-amber-500/10"
+                        : "border-muted hover:border-amber-300"
+                    }`}
+                  >
+                    <span className="text-xl mb-1">{type.icon}</span>
+                    <span className="text-xs font-medium">{type.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="quick-amount">{t.amount} (৳)</Label>
               <Input
@@ -668,7 +726,7 @@ export function DailyCashRegister() {
               <Label htmlFor="quick-desc">{t.description}</Label>
               <Input
                 id="quick-desc"
-                placeholder={language === "bn" ? "চা, নাস্তা, ভিক্ষা..." : "Tea, snacks, donation..."}
+                placeholder={language === "bn" ? "বিস্তারিত লিখুন (ঐচ্ছিক)" : "Add details (optional)"}
                 value={quickExpenseDescription}
                 onChange={(e) => setQuickExpenseDescription(e.target.value)}
               />

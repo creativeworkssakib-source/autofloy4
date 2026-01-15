@@ -582,29 +582,32 @@ class OfflineShopService {
   async openCashRegister(openingBalance: number) {
     return this.request<{ register: any; message: string; suggestedOpening: number }>("cash-register", {
       method: "POST",
-      body: JSON.stringify({ action: "open", opening_balance: openingBalance }),
+      body: JSON.stringify({ action: "open", opening_cash: openingBalance }),
     });
   }
 
   async closeCashRegister(closingBalance: number, notes?: string) {
     return this.request<{ register: any }>("cash-register", {
       method: "POST",
-      body: JSON.stringify({ action: "close", closing_balance: closingBalance, notes }),
+      body: JSON.stringify({ action: "close", closing_cash: closingBalance, notes }),
     });
   }
 
   async addQuickExpense(data: { amount: number; description: string; category?: string }) {
-    return this.request<{ expense: any; register: any }>("cash-register/quick-expense", {
+    return this.request<{ expense: any }>("quick-expenses", {
       method: "POST",
       body: JSON.stringify(data),
     });
   }
 
   async deleteQuickExpense(expenseId: string) {
-    return this.request<{ message: string }>("cash-register/quick-expense", {
+    return this.request<{ message: string }>("quick-expenses", {
       method: "DELETE",
-      body: JSON.stringify({ expenseId }),
-    });
+    }, { expense_id: expenseId });
+  }
+
+  async getQuickExpenses() {
+    return this.request<{ expenses: any[]; total: number }>("quick-expenses", {});
   }
 
   // Returns
