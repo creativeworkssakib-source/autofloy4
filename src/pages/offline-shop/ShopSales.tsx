@@ -522,7 +522,7 @@ const ShopSales = () => {
         notes: returnNotes,
       });
 
-      toast.success(`${t("shop.returnComplete")} ${t("shop.invoice")}: ${result.return_invoice}`);
+      toast.success(t("shop.returnComplete"));
       setIsReturnModalOpen(false);
       setReturningSale(null);
       loadData();

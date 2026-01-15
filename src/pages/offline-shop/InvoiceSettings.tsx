@@ -137,7 +137,7 @@ const InvoiceSettings = () => {
         terms_and_conditions: settings.terms_and_conditions,
         invoice_footer: settings.invoice_footer,
       };
-      await offlineShopService.saveSettings(settingsToSave);
+      await offlineShopService.updateSettings(settingsToSave);
       toast.success(language === 'bn' ? 'সেটিংস সংরক্ষিত হয়েছে' : 'Settings saved successfully');
     } catch (error) {
       console.error("Save settings error:", error);

@@ -363,21 +363,37 @@ const ShopFollowupSms = () => {
           : "N/A",
       }));
 
-      const result = await offlineShopService.sendFollowupSms(customersData);
+      // Send SMS for each customer
+      let totalSent = 0;
+      let totalFailed = 0;
       
-      if (result.totalSent > 0) {
+      for (const customer of customersData) {
+        try {
+          await offlineShopService.sendFollowupSms({
+            customerId: customer.customerPhone || "",
+            customerPhone: customer.customerPhone,
+            customerName: customer.customerName,
+            message: customer.message,
+          });
+          totalSent++;
+        } catch {
+          totalFailed++;
+        }
+      }
+      
+      if (totalSent > 0) {
         toast.success(
           language === "bn" 
-            ? `${result.totalSent}টি SMS পাঠানো হয়েছে` 
-            : `${result.totalSent} SMS sent successfully`
+            ? `${totalSent}টি SMS পাঠানো হয়েছে` 
+            : `${totalSent} SMS sent successfully`
         );
       }
       
-      if (result.totalFailed > 0) {
+      if (totalFailed > 0) {
         toast.warning(
           language === "bn" 
-            ? `${result.totalFailed}টি SMS পাঠাতে ব্যর্থ` 
-            : `${result.totalFailed} SMS failed to send`
+            ? `${totalFailed}টি SMS পাঠাতে ব্যর্থ` 
+            : `${totalFailed} SMS failed to send`
         );
       }
       

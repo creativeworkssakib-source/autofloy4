@@ -169,8 +169,8 @@ export function DailyCashRegister() {
     
     setIsSubmitting(true);
     try {
-      const result = await closeRegister(parseFloat(closingCash), notes);
-      toast.success(result.message);
+      await closeRegister(parseFloat(closingCash), notes);
+      toast.success(language === "bn" ? "রেজিস্টার বন্ধ হয়েছে" : "Register closed successfully");
       setShowCloseModal(false);
       setClosingCash("");
       setNotes("");

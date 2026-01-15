@@ -277,7 +277,7 @@ const SyncSettings = () => {
   const handleSaveShopSettings = async () => {
     setIsSavingShop(true);
     try {
-      await offlineShopService.saveSettings(shopSettings);
+      await offlineShopService.updateSettings(shopSettings);
       toast.success(t("shop.settingsSaved"));
     } catch (error) {
       toast.error(t("shop.errorOccurred"));
@@ -310,7 +310,7 @@ const SyncSettings = () => {
         const base64 = event.target?.result as string;
         setShopSettings({ ...shopSettings, logo_url: base64 });
         // Auto-save when logo is uploaded
-        await offlineShopService.saveSettings({ ...shopSettings, logo_url: base64 });
+        await offlineShopService.updateSettings({ ...shopSettings, logo_url: base64 });
         toast.success(t("shop.logoUploaded"));
         setIsUploadingLogo(false);
       };
@@ -327,7 +327,7 @@ const SyncSettings = () => {
 
   const handleRemoveLogo = async () => {
     setShopSettings({ ...shopSettings, logo_url: "" });
-    await offlineShopService.saveSettings({ ...shopSettings, logo_url: "" });
+    await offlineShopService.updateSettings({ ...shopSettings, logo_url: "" });
     toast.success(t("shop.logoRemoved"));
   };
 

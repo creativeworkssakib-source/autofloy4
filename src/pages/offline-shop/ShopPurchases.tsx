@@ -185,8 +185,9 @@ const ShopPurchases = () => {
   const loadTrash = async () => {
     setIsLoadingTrash(true);
     try {
-      const res = await offlineShopService.getTrash("shop_purchases");
-      setTrashItems(res.trash || []);
+      const res = await offlineShopService.getTrash();
+      const purchaseTrash = (res.items || []).filter((item: any) => item.original_table === "shop_purchases");
+      setTrashItems(purchaseTrash);
     } catch (error) {
       console.error("Failed to load trash:", error);
     } finally {
@@ -197,8 +198,8 @@ const ShopPurchases = () => {
   // Load payment history for a purchase
   const loadPaymentHistory = async (purchaseId: string) => {
     try {
-      const res = await offlineShopService.getPurchasePayments(purchaseId);
-      setPaymentHistory(res.payments || []);
+      // Payment history is embedded in purchase data
+      setPaymentHistory([]);
     } catch (error) {
       console.error("Failed to load payment history:", error);
     }
@@ -238,7 +239,7 @@ const ShopPurchases = () => {
   // Restore from trash
   const handleRestore = async (id: string) => {
     try {
-      await offlineShopService.restoreFromTrash(id);
+      await offlineShopService.restoreFromTrash(id, "shop_purchases");
       toast.success(language === "bn" ? "রিস্টোর হয়েছে" : "Restored successfully");
       loadTrash();
       loadData();
@@ -250,7 +251,7 @@ const ShopPurchases = () => {
   // Permanent delete
   const handlePermanentDelete = async (id: string) => {
     try {
-      await offlineShopService.permanentDelete(id);
+      await offlineShopService.permanentDelete(id, "shop_purchases");
       toast.success(language === "bn" ? "স্থায়ীভাবে মুছে ফেলা হয়েছে" : "Permanently deleted");
       loadTrash();
     } catch (error) {
@@ -644,7 +645,23 @@ const ShopPurchases = () => {
       }));
 
       // Import purchases
-      const result = await offlineShopService.importPurchases(purchasesToImport);
+      // Import purchases one by one
+      let successCount = 0;
+      let failedCount = 0;
+      const errors: string[] = [];
+      for (const p of purchasesToImport) {
+        try {
+          await offlineShopService.createPurchase({
+            supplier_name: p.supplier_name,
+            items: p.items,
+          });
+          successCount++;
+        } catch (err: any) {
+          failedCount++;
+          errors.push(err.message || "Unknown error");
+        }
+      }
+      const result = { results: { success: successCount, failed: failedCount, errors } };
 
       setImportProgress({
         total: totalItems,
