@@ -1842,18 +1842,20 @@ serve(async (req) => {
             .eq("id", supplier_id);
         }
 
-        // Create cash transaction
-        await supabase
-          .from("shop_cash_transactions")
-          .insert({
-            user_id: userId,
-            type: "out",
-            source: "supplier_payment",
-            amount,
-            reference_id: supplier_id,
-            reference_type: "supplier",
-            notes: notes || "Supplier payment",
-          });
+        // Create cash transaction ONLY if payment_method is 'cash'
+        if (payment_method === 'cash') {
+          await supabase
+            .from("shop_cash_transactions")
+            .insert({
+              user_id: userId,
+              type: "out",
+              source: "supplier_payment",
+              amount,
+              reference_id: supplier_id,
+              reference_type: "supplier",
+              notes: notes || "Supplier payment",
+            });
+        }
 
         return new Response(JSON.stringify({ payment, new_due: supplier ? Math.max(0, Number(supplier.total_due) - amount) : 0 }), {
           status: 201,
@@ -2083,29 +2085,20 @@ serve(async (req) => {
                 .eq("id", customer_id);
             }
           })() : Promise.resolve(),
-          // Create cash IN transaction for received amount (what customer actually paid)
-          // If received_amount provided (customer paid with change), use that. Otherwise use paid_amount.
-          (received_amount > 0 || paid_amount > 0) ? supabase.from("shop_cash_transactions").insert({
+          // Create cash IN transaction ONLY if payment_method is 'cash'
+          // Use the actual sale amount (paid_amount), NOT received_amount
+          // received_amount includes change which is returned, so we only track what's kept
+          (payment_method === 'cash' && (paid_amount > 0 || total > 0)) ? supabase.from("shop_cash_transactions").insert({
             user_id: userId,
             shop_id: shopId || null,
             type: "in",
             source: "sale",
-            amount: received_amount || paid_amount || total,
+            amount: paid_amount || total, // Actual sale value, not what customer handed over
             reference_id: sale.id,
             reference_type: "sale",
             notes: `Sale ${invoiceNumber}`,
           }) : Promise.resolve(),
-          // Create cash OUT transaction for change returned to customer
-          (change_amount && change_amount > 0) ? supabase.from("shop_cash_transactions").insert({
-            user_id: userId,
-            shop_id: shopId || null,
-            type: "out",
-            source: "change_return",
-            amount: change_amount,
-            reference_id: sale.id,
-            reference_type: "sale",
-            notes: `Change for ${invoiceNumber}`,
-          }) : Promise.resolve(),
+          // No need for change_return transaction - we only track actual sale amount
         ]);
 
         // Add customer info to response for invoice display
@@ -2121,7 +2114,7 @@ serve(async (req) => {
       }
 
       if (req.method === "PUT") {
-        const { id, paid_amount, due_amount, payment_status, notes } = await req.json();
+        const { id, paid_amount, due_amount, payment_status, notes, payment_method } = await req.json();
 
         if (!id) {
           return new Response(JSON.stringify({ error: "Missing sale id" }), {
@@ -2162,8 +2155,8 @@ serve(async (req) => {
 
         if (updateError) throw updateError;
 
-        // If payment was received (due collection), create a cash transaction
-        if (paymentReceived > 0) {
+        // If payment was received (due collection), create a cash transaction ONLY if payment_method is 'cash'
+        if (paymentReceived > 0 && payment_method === 'cash') {
           await supabase.from("shop_cash_transactions").insert({
             user_id: userId,
             shop_id: shopId || null,
@@ -2721,16 +2714,18 @@ serve(async (req) => {
             }
           }
 
-          // Create cash transaction for payment
-          await supabase.from("shop_cash_transactions").insert({
-            user_id: userId,
-            type: "out",
-            source: "purchase_payment",
-            amount: paymentAmount,
-            reference_id: id,
-            reference_type: "purchase_payment",
-            notes: `Payment for purchase from ${purchase.supplier_name || "Supplier"}. ${notes || ""}`,
-          });
+          // Create cash transaction for payment ONLY if payment_method is 'cash'
+          if (payment_method === 'cash') {
+            await supabase.from("shop_cash_transactions").insert({
+              user_id: userId,
+              type: "out",
+              source: "purchase_payment",
+              amount: paymentAmount,
+              reference_id: id,
+              reference_type: "purchase_payment",
+              notes: `Payment for purchase from ${purchase.supplier_name || "Supplier"}. ${notes || ""}`,
+            });
+          }
 
           console.log(`Payment successful: ${paymentAmount}, new_due: ${newDueAmount}`);
 
@@ -3916,7 +3911,7 @@ serve(async (req) => {
 
     // ===== DUE COLLECTION =====
     if (resource === "due-collection" && req.method === "POST") {
-      const { customer_id, amount, notes } = await req.json();
+      const { customer_id, amount, notes, payment_method } = await req.json();
 
       // Update customer due
       const { data: customer } = await supabase
@@ -3932,23 +3927,27 @@ serve(async (req) => {
           .eq("id", customer_id);
       }
 
-      // Create cash transaction
-      const { data, error } = await supabase
-        .from("shop_cash_transactions")
-        .insert({
-          user_id: userId,
-          type: "in",
-          source: "due_collection",
-          amount,
-          reference_id: customer_id,
-          reference_type: "customer",
-          notes: notes || "Due collection",
-        })
-        .select()
-        .single();
+      // Create cash transaction ONLY if payment_method is 'cash'
+      let data = null;
+      if (payment_method === 'cash') {
+        const { data: txData, error: txError } = await supabase
+          .from("shop_cash_transactions")
+          .insert({
+            user_id: userId,
+            type: "in",
+            source: "due_collection",
+            amount,
+            reference_id: customer_id,
+            reference_type: "customer",
+            notes: notes || "Due collection",
+          })
+          .select()
+          .single();
+        if (txError) throw txError;
+        data = txData;
+      }
 
-      if (error) throw error;
-      return new Response(JSON.stringify({ transaction: data }), {
+      return new Response(JSON.stringify({ transaction: data, success: true }), {
         status: 201,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -3956,7 +3955,7 @@ serve(async (req) => {
 
     // ===== DUE PAYMENT (to supplier) =====
     if (resource === "due-payment" && req.method === "POST") {
-      const { supplier_id, amount, notes } = await req.json();
+      const { supplier_id, amount, notes, payment_method } = await req.json();
 
       // Update supplier due
       const { data: supplier } = await supabase
@@ -3972,23 +3971,27 @@ serve(async (req) => {
           .eq("id", supplier_id);
       }
 
-      // Create cash transaction
-      const { data, error } = await supabase
-        .from("shop_cash_transactions")
-        .insert({
-          user_id: userId,
-          type: "out",
-          source: "due_payment",
-          amount,
-          reference_id: supplier_id,
-          reference_type: "supplier",
-          notes: notes || "Due payment to supplier",
-        })
-        .select()
-        .single();
+      // Create cash transaction ONLY if payment_method is 'cash'
+      let data = null;
+      if (payment_method === 'cash') {
+        const { data: txData, error: txError } = await supabase
+          .from("shop_cash_transactions")
+          .insert({
+            user_id: userId,
+            type: "out",
+            source: "due_payment",
+            amount,
+            reference_id: supplier_id,
+            reference_type: "supplier",
+            notes: notes || "Due payment to supplier",
+          })
+          .select()
+          .single();
+        if (txError) throw txError;
+        data = txData;
+      }
 
-      if (error) throw error;
-      return new Response(JSON.stringify({ transaction: data }), {
+      return new Response(JSON.stringify({ transaction: data, success: true }), {
         status: 201,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -4624,8 +4627,8 @@ serve(async (req) => {
         // Use provided refund amount or calculated total
         const finalRefund = refund_amount || totalRefund;
 
-        // Create cash out transaction for refund
-        if (finalRefund > 0) {
+        // Create cash out transaction for refund ONLY if refund_method is 'cash'
+        if (finalRefund > 0 && refund_method === 'cash') {
           await supabase.from("shop_cash_transactions").insert({
             user_id: userId,
             type: "out",
