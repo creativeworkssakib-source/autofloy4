@@ -331,28 +331,56 @@ export function useOfflineDueCustomers() {
         sale.due_amount && Number(sale.due_amount) > 0
       );
       
-      // Group by customer
+      // Group by customer - prioritize phone number for grouping, then customer_id, then customer name
       const customerMap = new Map<string, any>();
       dueSales.forEach((sale: any) => {
-        const customerId = sale.customer_id || sale.customer_phone || 'walk-in';
-        const existing = customerMap.get(customerId);
+        const customerPhone = sale.customer_phone || sale.customer?.phone || '';
+        const customerName = sale.customer_name || sale.customer?.name || 'Walk-in Customer';
+        
+        // Create unique key: if phone exists use phone, otherwise use customer_id or name
+        let groupKey: string;
+        if (customerPhone && customerPhone.length > 5) {
+          // Group by phone number if valid phone exists
+          groupKey = `phone:${customerPhone}`;
+        } else if (sale.customer_id) {
+          // Group by customer_id if exists
+          groupKey = `id:${sale.customer_id}`;
+        } else {
+          // Each sale without phone/id is its own group (different walk-in customers)
+          // Use sale id to keep them separate
+          groupKey = `sale:${sale.id}`;
+        }
+        
+        const existing = customerMap.get(groupKey);
         
         if (existing) {
           existing.totalDue += Number(sale.due_amount || 0);
           existing.totalSales += Number(sale.total || 0);
           existing.totalPaid += Number(sale.paid_amount || 0);
           existing.salesCount += 1;
-          existing.sales.push(sale);
+          existing.sales.push({
+            ...sale,
+            sale_date: sale.sale_date || sale.created_at,
+            items: sale.items || [],
+          });
+          // Sort sales by date descending (newest first)
+          existing.sales.sort((a: any, b: any) => 
+            new Date(b.sale_date || b.created_at).getTime() - new Date(a.sale_date || a.created_at).getTime()
+          );
         } else {
-          customerMap.set(customerId, {
+          customerMap.set(groupKey, {
             customerId: sale.customer_id || null,
-            customerName: sale.customer_name || sale.customer?.name || 'Walk-in Customer',
-            customerPhone: sale.customer_phone || sale.customer?.phone || '',
+            customerName: customerName,
+            customerPhone: customerPhone,
             totalDue: Number(sale.due_amount || 0),
             totalSales: Number(sale.total || 0),
             totalPaid: Number(sale.paid_amount || 0),
             salesCount: 1,
-            sales: [sale],
+            sales: [{
+              ...sale,
+              sale_date: sale.sale_date || sale.created_at,
+              items: sale.items || [],
+            }],
           });
         }
       });

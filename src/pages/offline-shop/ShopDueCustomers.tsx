@@ -73,6 +73,13 @@ interface DueSale {
   customer_id: string | null;
   customer_name: string | null;
   notes: string | null;
+  items?: Array<{
+    product_name?: string;
+    name?: string;
+    quantity?: number;
+    price?: number;
+    total?: number;
+  }>;
 }
 
 interface CustomerDueInfo {
@@ -673,29 +680,27 @@ const ShopDueCustomers = () => {
 
               {/* Sales List */}
               <div>
-                <h4 className="font-medium mb-2">{language === "bn" ? "বাকি বিক্রয় তালিকা" : "Due Sales List"}</h4>
-                <div className="space-y-2">
+                <h4 className="font-medium mb-3 flex items-center gap-2">
+                  <Receipt className="h-4 w-4" />
+                  {language === "bn" ? "বাকি বিক্রয় তালিকা" : "Due Sales List"}
+                  <Badge variant="secondary" className="ml-auto">
+                    {selectedCustomer.salesCount} {language === "bn" ? "টি" : "sales"}
+                  </Badge>
+                </h4>
+                <div className="space-y-3">
                   {selectedCustomer.sales.map((sale) => (
                     <div 
                       key={sale.id} 
-                      className="flex items-center justify-between p-3 bg-muted/30 rounded-lg border"
+                      className="p-4 bg-muted/30 rounded-lg border space-y-3"
                     >
-                      <div className="space-y-1">
+                      {/* Sale Header */}
+                      <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <span className="font-medium">{sale.invoice_number}</span>
+                          <span className="font-medium text-primary">{sale.invoice_number}</span>
                           <Badge variant="outline" className="text-xs">
+                            <Calendar className="h-3 w-3 mr-1" />
                             {format(new Date(sale.sale_date), "dd MMM yyyy")}
                           </Badge>
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          {language === "bn" ? "মোট" : "Total"}: {formatCurrency(sale.total)} | 
-                          {language === "bn" ? " পরিশোধিত" : " Paid"}: {formatCurrency(sale.paid_amount)}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className="text-right">
-                          <p className="text-xs text-muted-foreground">{language === "bn" ? "বাকি" : "Due"}</p>
-                          <p className="font-bold text-destructive">{formatCurrency(sale.due_amount)}</p>
                         </div>
                         <Button
                           size="sm"
@@ -704,6 +709,36 @@ const ShopDueCustomers = () => {
                           <CreditCard className="h-4 w-4 mr-1" />
                           {language === "bn" ? "আদায়" : "Collect"}
                         </Button>
+                      </div>
+                      
+                      {/* Sale Items (if available) */}
+                      {sale.items && Array.isArray(sale.items) && sale.items.length > 0 && (
+                        <div className="pl-2 border-l-2 border-muted-foreground/20 space-y-1">
+                          {sale.items.slice(0, 5).map((item: any, idx: number) => (
+                            <div key={idx} className="flex justify-between text-sm text-muted-foreground">
+                              <span>{item.product_name || item.name || 'Product'} × {item.quantity || 1}</span>
+                              <span>{formatCurrency(item.total || (item.price * (item.quantity || 1)))}</span>
+                            </div>
+                          ))}
+                          {sale.items.length > 5 && (
+                            <p className="text-xs text-muted-foreground">
+                              +{sale.items.length - 5} {language === "bn" ? "আরও আইটেম" : "more items"}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                      
+                      {/* Sale Summary */}
+                      <div className="flex items-center justify-between pt-2 border-t border-dashed">
+                        <div className="text-sm text-muted-foreground">
+                          <span>{language === "bn" ? "মোট" : "Total"}: {formatCurrency(sale.total)}</span>
+                          <span className="mx-2">|</span>
+                          <span className="text-green-600">{language === "bn" ? "পরিশোধিত" : "Paid"}: {formatCurrency(sale.paid_amount)}</span>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-muted-foreground">{language === "bn" ? "বাকি" : "Due"}</p>
+                          <p className="font-bold text-destructive">{formatCurrency(sale.due_amount)}</p>
+                        </div>
                       </div>
                     </div>
                   ))}
