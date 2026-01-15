@@ -1195,138 +1195,17 @@ export function DailyCashRegister() {
                   </Card>
                 </div>
 
-                {/* Expenses List */}
-                {cashOutBreakdown.expenses && cashOutBreakdown.expenses.length > 0 && (
-                  <div className="space-y-2">
-                    <h4 className="text-sm font-medium text-destructive flex items-center gap-2">
-                      <TrendingDown className="h-4 w-4" />
-                      {t.expenses} ({cashOutBreakdown.expenses.length})
-                    </h4>
-                    <div className="space-y-2 max-h-[20vh] overflow-y-auto border rounded-lg p-2">
-                      {cashOutBreakdown.expenses.map((expense: any) => (
-                        <div key={expense.id} className="flex items-center justify-between p-3 bg-destructive/5 rounded-lg border border-destructive/20">
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium text-sm truncate">
-                              {expense.notes || expense.description || (language === "bn" ? "খরচ" : "Expense")}
-                            </div>
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                              <span>{expense.created_at && format(new Date(expense.created_at), "hh:mm a")}</span>
-                            </div>
-                          </div>
-                          <div className="text-destructive font-semibold">
-                            -{formatCurrency(Number(expense.amount || 0))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                {/* Total Summary */}
+                <div className="mt-4 pt-4 border-t">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-muted-foreground">
+                      {language === "bn" ? "মোট ক্যাশ আউট" : "Total Cash Out"}
+                    </span>
+                    <span className="text-lg font-bold text-destructive">
+                      {formatCurrency(cashOutBreakdown.total || 0)}
+                    </span>
                   </div>
-                )}
-
-                {/* Purchases List */}
-                {cashOutBreakdown.purchases && cashOutBreakdown.purchases.length > 0 && (
-                  <div className="space-y-2">
-                    <h4 className="text-sm font-medium text-orange-600 flex items-center gap-2">
-                      <Package className="h-4 w-4" />
-                      {t.purchase} ({cashOutBreakdown.purchases.length})
-                    </h4>
-                    <div className="space-y-2 max-h-[20vh] overflow-y-auto border rounded-lg p-2">
-                      {cashOutBreakdown.purchases.map((purchase: any) => (
-                        <div key={purchase.id} className="flex items-center justify-between p-3 bg-orange-500/5 rounded-lg border border-orange-500/20">
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium text-sm truncate">
-                              {purchase.supplier_name || (language === "bn" ? "সাপ্লায়ার" : "Supplier")}
-                            </div>
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                              {purchase.invoice_number && (
-                                <>
-                                  <span className="flex items-center gap-1">
-                                    <Receipt className="h-3 w-3" />
-                                    {purchase.invoice_number}
-                                  </span>
-                                  <span>•</span>
-                                </>
-                              )}
-                              <span>{purchase.purchase_date && format(new Date(purchase.purchase_date), "hh:mm a")}</span>
-                            </div>
-                          </div>
-                          <div className="text-orange-600 font-semibold">
-                            -{formatCurrency(Number(purchase.paid_amount || 0))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Quick Expenses List */}
-                {cashOutBreakdown.quick_expenses && cashOutBreakdown.quick_expenses.length > 0 && (
-                  <div className="space-y-2">
-                    <h4 className="text-sm font-medium text-amber-600 flex items-center gap-2">
-                      <Coins className="h-4 w-4" />
-                      {t.quickExpenses} ({cashOutBreakdown.quick_expenses.length})
-                    </h4>
-                    <div className="space-y-2 max-h-[20vh] overflow-y-auto border rounded-lg p-2">
-                      {cashOutBreakdown.quick_expenses.map((expense: any) => (
-                        <div key={expense.id} className="flex items-center justify-between p-3 bg-amber-500/5 rounded-lg border border-amber-500/20">
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium text-sm truncate">
-                              {expense.description || (language === "bn" ? "ছোট খরচ" : "Quick Expense")}
-                            </div>
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                              <span>{expense.created_at && format(new Date(expense.created_at), "hh:mm a")}</span>
-                            </div>
-                          </div>
-                          <div className="text-amber-600 font-semibold">
-                            -{formatCurrency(Number(expense.amount || 0))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Change Returns List */}
-                {cashOutBreakdown.change_returns && cashOutBreakdown.change_returns.length > 0 && (
-                  <div className="space-y-2">
-                    <h4 className="text-sm font-medium text-purple-600 flex items-center gap-2">
-                      <RefreshCcw className="h-4 w-4" />
-                      {t.changeReturn} ({cashOutBreakdown.change_returns.length})
-                    </h4>
-                    <div className="space-y-2 max-h-[20vh] overflow-y-auto border rounded-lg p-2">
-                      {cashOutBreakdown.change_returns.map((change: any) => (
-                        <div key={change.id} className="flex items-center justify-between p-3 bg-purple-500/5 rounded-lg border border-purple-500/20">
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium text-sm truncate">
-                              {change.customer_name || (language === "bn" ? "কাস্টমার" : "Customer")}
-                            </div>
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                              {change.invoice_number && (
-                                <>
-                                  <span className="flex items-center gap-1">
-                                    <Receipt className="h-3 w-3" />
-                                    {change.invoice_number}
-                                  </span>
-                                  <span>•</span>
-                                </>
-                              )}
-                              <span>{change.created_at && format(new Date(change.created_at), "hh:mm a")}</span>
-                            </div>
-                          </div>
-                          <div className="text-purple-600 font-semibold">
-                            -{formatCurrency(Number(change.amount || 0))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {(!cashOutBreakdown.expenses || cashOutBreakdown.expenses.length === 0) && 
-                 (!cashOutBreakdown.purchases || cashOutBreakdown.purchases.length === 0) && 
-                 (!cashOutBreakdown.quick_expenses || cashOutBreakdown.quick_expenses.length === 0) &&
-                 (!cashOutBreakdown.change_returns || cashOutBreakdown.change_returns.length === 0) && (
-                  <p className="text-center text-muted-foreground py-8">{t.noData}</p>
-                )}
+                </div>
               </>
             ) : (
               <p className="text-center text-muted-foreground py-8">{t.noData}</p>
