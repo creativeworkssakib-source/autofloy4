@@ -93,10 +93,12 @@ export function DailyCashRegister() {
   const [showDueCollectedModal, setShowDueCollectedModal] = useState(false);
   const [showCashOutModal, setShowCashOutModal] = useState(false);
   const [showExpensesModal, setShowExpensesModal] = useState(false);
+  const [showReturnsModal, setShowReturnsModal] = useState(false);
   const [cashInBreakdown, setCashInBreakdown] = useState<any>(null);
   const [dueCollectedBreakdown, setDueCollectedBreakdown] = useState<any>(null);
   const [cashOutBreakdown, setCashOutBreakdown] = useState<any>(null);
   const [expensesData, setExpensesData] = useState<any[]>([]);
+  const [returnsData, setReturnsData] = useState<any[]>([]);
   const [loadingBreakdown, setLoadingBreakdown] = useState(false);
   const [openingCash, setOpeningCash] = useState("");
   const [closingCash, setClosingCash] = useState("");
@@ -169,6 +171,13 @@ export function DailyCashRegister() {
     changeReturn: language === "bn" ? "ফেরত দেওয়া চেঞ্জ" : "Change Return",
     quickExpenses: language === "bn" ? "ছোট খরচ" : "Quick Expenses",
     supplier: language === "bn" ? "সাপ্লায়ার" : "Supplier",
+    returns: language === "bn" ? "রিটার্ন" : "Returns",
+    returnDetails: language === "bn" ? "রিটার্ন বিস্তারিত" : "Return Details",
+    refund: language === "bn" ? "ফেরত" : "Refund",
+    loss: language === "bn" ? "লস" : "Loss",
+    product: language === "bn" ? "পণ্য" : "Product",
+    reason: language === "bn" ? "কারণ" : "Reason",
+    noReturns: language === "bn" ? "আজকে কোনো রিটার্ন থেকে ক্যাশ আউট হয়নি" : "No cash out from returns today",
   };
 
   const formatCurrency = (amount: number) => {
@@ -1156,7 +1165,7 @@ export function DailyCashRegister() {
             ) : cashOutBreakdown ? (
               <>
                 {/* Summary - Clickable Cards */}
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 gap-3">
                   <Card 
                     className="border-destructive/20 bg-destructive/5 cursor-pointer hover:bg-destructive/10 transition-colors"
                     onClick={() => {
@@ -1192,6 +1201,19 @@ export function DailyCashRegister() {
                     <CardContent className="p-3">
                       <div className="text-xs text-muted-foreground">{t.quickExpenses}</div>
                       <div className="text-lg font-bold text-amber-600">{formatCurrency(cashOutBreakdown.total_quick_expenses || 0)}</div>
+                    </CardContent>
+                  </Card>
+                  <Card 
+                    className="border-purple-500/20 bg-purple-500/5 cursor-pointer hover:bg-purple-500/10 transition-colors"
+                    onClick={() => {
+                      setReturnsData(cashOutBreakdown.returns || []);
+                      setShowReturnsModal(true);
+                    }}
+                  >
+                    <CardContent className="p-3">
+                      <div className="text-xs text-muted-foreground">{t.returns}</div>
+                      <div className="text-lg font-bold text-purple-600">{formatCurrency(cashOutBreakdown.total_returns || 0)}</div>
+                      <div className="text-[10px] text-muted-foreground mt-1">{language === "bn" ? "বিস্তারিত দেখুন →" : "View details →"}</div>
                     </CardContent>
                   </Card>
                 </div>
@@ -1280,6 +1302,77 @@ export function DailyCashRegister() {
                 </div>
               );
             })()}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Returns Details Modal */}
+      <Dialog open={showReturnsModal} onOpenChange={setShowReturnsModal}>
+        <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RefreshCcw className="h-5 w-5 text-purple-600" />
+              {t.returnDetails}
+            </DialogTitle>
+            <DialogDescription>
+              {language === "bn" ? "আজকে রিটার্ন থেকে কত টাকা দেওয়া হয়েছে দেখুন।" : "View all return refunds/losses for today."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto">
+            {returnsData && returnsData.length > 0 ? (
+              <div className="space-y-2">
+                {returnsData.map((returnItem: any, index: number) => (
+                  <div 
+                    key={returnItem.id || index}
+                    className="flex items-center justify-between p-3 bg-purple-500/5 rounded-lg border border-purple-500/10"
+                  >
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 text-sm font-medium">
+                        <Package className="h-3.5 w-3.5 text-purple-600" />
+                        {returnItem.product_name || (language === "bn" ? "পণ্য" : "Product")}
+                      </div>
+                      {returnItem.reason && (
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          {t.reason}: {returnItem.reason}
+                        </div>
+                      )}
+                      {returnItem.customer_name && (
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          {t.customer}: {returnItem.customer_name}
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                        <span>{returnItem.created_at && format(new Date(returnItem.created_at), "hh:mm a")}</span>
+                        <span>•</span>
+                        <Badge variant="outline" className={`text-[10px] px-1 py-0 ${returnItem.is_resellable ? 'border-green-500 text-green-600' : 'border-red-500 text-red-600'}`}>
+                          {returnItem.is_resellable ? t.refund : t.loss}
+                        </Badge>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-lg font-bold text-purple-600">
+                        {formatCurrency(Number(returnItem.cash_amount || 0))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <div className="mt-4 pt-4 border-t">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-muted-foreground">
+                      {language === "bn" ? "মোট রিটার্ন ক্যাশ আউট" : "Total Return Cash Out"}
+                    </span>
+                    <span className="text-lg font-bold text-purple-600">
+                      {formatCurrency(returnsData.reduce((sum: number, r: any) => sum + Number(r.cash_amount || 0), 0))}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <RefreshCcw className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                <p>{t.noReturns}</p>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
