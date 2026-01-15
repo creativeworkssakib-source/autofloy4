@@ -31,7 +31,7 @@ const ShopReports = () => {
   const endDate = format(currentDates.to, 'yyyy-MM-dd');
 
   // Use offline-first reports hook
-  const { reportData, loading: isLoading, fromCache, isOnline, refetch } = useOfflineReports(
+  const { data: reportData, loading: isLoading, refetch } = useOfflineReports(
     activeTab,
     startDate,
     endDate

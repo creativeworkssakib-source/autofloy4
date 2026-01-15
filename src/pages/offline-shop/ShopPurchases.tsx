@@ -28,7 +28,6 @@ import { toast } from "sonner";
 import ShopLayout from "@/components/offline-shop/ShopLayout";
 import AddToStockModal, { PurchasedProduct } from "@/components/offline-shop/AddToStockModal";
 import { offlineShopService } from "@/services/offlineShopService";
-import { offlineDataService } from "@/services/offlineDataService";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useShop } from "@/contexts/ShopContext";
 import * as XLSX from "xlsx";

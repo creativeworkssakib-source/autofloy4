@@ -26,7 +26,8 @@ import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import ShopLayout from "@/components/offline-shop/ShopLayout";
 import { useOfflineDashboard, useOfflineTrash } from "@/hooks/useOfflineShopData";
-import { useOfflineSettings, useSyncStatus } from "@/hooks/useOfflineData";
+import { useOfflineSettings } from "@/hooks/useOfflineData";
+import { useIsOnline } from "@/hooks/useOnlineStatus";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useShop } from "@/contexts/ShopContext";
 
@@ -81,11 +82,10 @@ const ShopDashboard = () => {
   const { t, language } = useLanguage();
   const { currentShop } = useShop();
   const { settings } = useOfflineSettings();
-  const { pendingCount, isSyncing, triggerSync } = useSyncStatus();
+  const isOnline = useIsOnline();
   
   // Use offline-first dashboard hooks - only 'today' for main dashboard data
-  // Removed 'month' hook to reduce double-fetch and improve performance
-  const { data: todayData, loading: isTodayLoading, fromCache, isOnline, refetch: loadTodayDashboard } = useOfflineDashboard('today');
+  const { data: todayData, loading: isTodayLoading, refetch: loadTodayDashboard } = useOfflineDashboard('today');
   
   // Use trash hook but defer loading
   const { trash, refetch: refetchTrash } = useOfflineTrash();
@@ -191,34 +191,9 @@ const ShopDashboard = () => {
                   {language === "bn" ? "অফলাইন" : "Offline"}
                 </Badge>
               )}
-              {/* Only show pending badge when offline and there are pending items */}
-              {!isOnline && pendingCount > 0 && (
-                <Badge variant="secondary" className="flex items-center gap-1">
-                  <Cloud className="h-3 w-3" />
-                  {pendingCount} {language === "bn" ? "পেন্ডিং" : "pending"}
-                </Badge>
-              )}
             </div>
           </div>
           <div className="flex gap-2">
-            {/* Show sync button only when offline items need to sync after coming online */}
-            {pendingCount > 0 && isOnline && !isSyncing && (
-              <Button 
-                variant="outline" 
-                onClick={() => triggerSync()} 
-                disabled={isSyncing}
-                size="sm"
-              >
-                <Cloud className="h-4 w-4 mr-2" />
-                {language === "bn" ? "সিংক করুন" : "Sync Now"}
-              </Button>
-            )}
-            {isSyncing && (
-              <Badge variant="outline" className="flex items-center gap-1">
-                <Cloud className="h-3 w-3 animate-pulse" />
-                {language === "bn" ? "সিংক হচ্ছে..." : "Syncing..."}
-              </Badge>
-            )}
             <Button variant="outline" onClick={loadDashboard} disabled={isLoading} size="sm" className="sm:size-default">
               <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
               {t("common.refresh")}

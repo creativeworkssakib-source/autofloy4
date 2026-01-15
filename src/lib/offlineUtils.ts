@@ -1,5 +1,3 @@
-import { ShopProduct, ShopSale, ShopSaleItem, ShopPurchase, ShopPurchaseItem, ShopCustomer, ShopSupplier, ShopExpense } from './offlineDB';
-
 // =============== ID GENERATION ===============
 
 /**
@@ -108,30 +106,6 @@ export function calculateSaleTotals(
   };
 }
 
-/**
- * Create sale item object
- */
-export function createSaleItem(
-  saleId: string,
-  product: ShopProduct,
-  quantity: number,
-  discount: number = 0
-): ShopSaleItem {
-  const total = (quantity * product.selling_price) - discount;
-  
-  return {
-    id: generateUUID(),
-    sale_id: saleId,
-    product_id: product.id,
-    product_name: product.name,
-    quantity,
-    unit_price: product.selling_price,
-    discount,
-    total: Math.round(total * 100) / 100,
-    created_at: new Date().toISOString(),
-  };
-}
-
 // =============== PURCHASE CALCULATIONS ===============
 
 export interface PurchaseTotals {
@@ -161,209 +135,11 @@ export function calculatePurchaseTotals(
   };
 }
 
-/**
- * Create purchase item object
- */
-export function createPurchaseItem(
-  purchaseId: string,
-  productId: string,
-  productName: string,
-  quantity: number,
-  unitPrice: number,
-  expiryDate?: string
-): ShopPurchaseItem {
-  return {
-    id: generateUUID(),
-    purchase_id: purchaseId,
-    product_id: productId,
-    product_name: productName,
-    quantity,
-    unit_price: unitPrice,
-    total: Math.round(quantity * unitPrice * 100) / 100,
-    expiry_date: expiryDate,
-    created_at: new Date().toISOString(),
-  };
-}
-
-// =============== STOCK OPERATIONS ===============
-
-/**
- * Update product stock quantity
- */
-export function updateProductStock(product: ShopProduct, quantityChange: number): ShopProduct {
-  return {
-    ...product,
-    stock_quantity: Math.max(0, product.stock_quantity + quantityChange),
-    updated_at: new Date().toISOString(),
-    _locallyModified: true,
-  };
-}
-
-/**
- * Check if product is low on stock
- */
-export function isLowStock(product: ShopProduct): boolean {
-  const threshold = product.min_stock_alert || 10;
-  return product.stock_quantity <= threshold;
-}
-
-/**
- * Check if product is out of stock
- */
-export function isOutOfStock(product: ShopProduct): boolean {
-  return product.stock_quantity <= 0;
-}
-
-/**
- * Check if product is expiring soon (within days)
- */
-export function isExpiringSoon(product: ShopProduct, days: number = 30): boolean {
-  if (!product.expiry_date) return false;
-  
-  const expiryDate = new Date(product.expiry_date);
-  const now = new Date();
-  const daysUntilExpiry = Math.floor((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-  
-  return daysUntilExpiry >= 0 && daysUntilExpiry <= days;
-}
-
-/**
- * Check if product is expired
- */
-export function isExpired(product: ShopProduct): boolean {
-  if (!product.expiry_date) return false;
-  return new Date(product.expiry_date) < new Date();
-}
-
 // =============== VALIDATION ===============
 
 export interface ValidationResult {
   isValid: boolean;
   errors: string[];
-}
-
-/**
- * Validate product data
- */
-export function validateProduct(product: Partial<ShopProduct>): ValidationResult {
-  const errors: string[] = [];
-  
-  if (!product.name || product.name.trim().length === 0) {
-    errors.push('Product name is required');
-  }
-  
-  if (product.selling_price === undefined || product.selling_price < 0) {
-    errors.push('Selling price must be 0 or greater');
-  }
-  
-  if (product.purchase_price !== undefined && product.purchase_price < 0) {
-    errors.push('Purchase price must be 0 or greater');
-  }
-  
-  if (product.stock_quantity !== undefined && product.stock_quantity < 0) {
-    errors.push('Stock quantity cannot be negative');
-  }
-  
-  return {
-    isValid: errors.length === 0,
-    errors,
-  };
-}
-
-/**
- * Validate sale data
- */
-export function validateSale(sale: Partial<ShopSale>): ValidationResult {
-  const errors: string[] = [];
-  
-  if (!sale.items || sale.items.length === 0) {
-    errors.push('Sale must have at least one item');
-  }
-  
-  if (sale.total !== undefined && sale.total < 0) {
-    errors.push('Total cannot be negative');
-  }
-  
-  if (sale.paid_amount !== undefined && sale.paid_amount < 0) {
-    errors.push('Paid amount cannot be negative');
-  }
-  
-  if (sale.paid_amount !== undefined && sale.total !== undefined && sale.paid_amount > sale.total) {
-    errors.push('Paid amount cannot exceed total');
-  }
-  
-  return {
-    isValid: errors.length === 0,
-    errors,
-  };
-}
-
-/**
- * Validate customer data
- */
-export function validateCustomer(customer: Partial<ShopCustomer>): ValidationResult {
-  const errors: string[] = [];
-  
-  if (!customer.name || customer.name.trim().length === 0) {
-    errors.push('Customer name is required');
-  }
-  
-  if (customer.phone && !/^[0-9+\-\s()]+$/.test(customer.phone)) {
-    errors.push('Invalid phone number format');
-  }
-  
-  if (customer.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customer.email)) {
-    errors.push('Invalid email format');
-  }
-  
-  return {
-    isValid: errors.length === 0,
-    errors,
-  };
-}
-
-/**
- * Validate supplier data
- */
-export function validateSupplier(supplier: Partial<ShopSupplier>): ValidationResult {
-  const errors: string[] = [];
-  
-  if (!supplier.name || supplier.name.trim().length === 0) {
-    errors.push('Supplier name is required');
-  }
-  
-  if (supplier.phone && !/^[0-9+\-\s()]+$/.test(supplier.phone)) {
-    errors.push('Invalid phone number format');
-  }
-  
-  if (supplier.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(supplier.email)) {
-    errors.push('Invalid email format');
-  }
-  
-  return {
-    isValid: errors.length === 0,
-    errors,
-  };
-}
-
-/**
- * Validate expense data
- */
-export function validateExpense(expense: Partial<ShopExpense>): ValidationResult {
-  const errors: string[] = [];
-  
-  if (!expense.category || expense.category.trim().length === 0) {
-    errors.push('Expense category is required');
-  }
-  
-  if (expense.amount === undefined || expense.amount <= 0) {
-    errors.push('Expense amount must be greater than 0');
-  }
-  
-  return {
-    isValid: errors.length === 0,
-    errors,
-  };
 }
 
 // =============== DATE UTILITIES ===============
@@ -413,34 +189,6 @@ export function formatCurrency(amount: number, currency: string = '৳', locale:
   });
   
   return `${currency}${formatted}`;
-}
-
-// =============== DATA TRANSFORMATION ===============
-
-/**
- * Prepare record for sync (remove local flags)
- */
-export function prepareForSync<T extends { _locallyModified?: boolean; _locallyCreated?: boolean; _locallyDeleted?: boolean }>(
-  record: T
-): Omit<T, '_locallyModified' | '_locallyCreated' | '_locallyDeleted'> {
-  const { _locallyModified, _locallyCreated, _locallyDeleted, ...rest } = record;
-  return rest as Omit<T, '_locallyModified' | '_locallyCreated' | '_locallyDeleted'>;
-}
-
-/**
- * Merge server record with local record (server wins for most fields)
- */
-export function mergeRecords<T extends { updated_at: string }>(
-  localRecord: T,
-  serverRecord: T
-): T {
-  // If server record is newer, use it completely
-  if (new Date(serverRecord.updated_at) > new Date(localRecord.updated_at)) {
-    return serverRecord;
-  }
-  
-  // Otherwise keep local (it has unsaved changes)
-  return localRecord;
 }
 
 // =============== STORAGE UTILITIES ===============

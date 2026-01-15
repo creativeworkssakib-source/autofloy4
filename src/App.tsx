@@ -10,7 +10,6 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { SiteSettingsProvider } from "@/contexts/SiteSettingsContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { ShopProvider } from "@/contexts/ShopContext";
-import { SyncProvider } from "@/contexts/SyncContext";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import AdminProtectedRoute from "@/components/admin/AdminProtectedRoute";
 import { CookieConsentBanner } from "@/components/CookieConsentBanner";
@@ -81,7 +80,7 @@ const ShopPriceCalculator = lazy(() => import("./pages/offline-shop/ShopPriceCal
 const ShopLoans = lazy(() => import("./pages/offline-shop/ShopLoans"));
 const ShopCashRegister = lazy(() => import("./pages/offline-shop/ShopCashRegister"));
 const InvoiceSettings = lazy(() => import("./pages/offline-shop/InvoiceSettings"));
-const OfflineTestPage = lazy(() => import("./pages/offline-shop/OfflineTestPage"));
+
 // Admin pages
 const AdminLogin = lazy(() => import("./pages/admin/AdminLogin"));
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
@@ -131,7 +130,6 @@ const App = () => (
           <LanguageProvider>
             <NotificationProvider>
               <ShopProvider>
-              <SyncProvider>
               <TooltipProvider>
               <Toaster />
               <Sonner />
@@ -339,11 +337,6 @@ const App = () => (
                       <InvoiceSettings />
                     </ProtectedRoute>
                   } />
-                  <Route path="/offline-shop/test" element={
-                    <ProtectedRoute>
-                      <OfflineTestPage />
-                    </ProtectedRoute>
-                  } />
                   
                   {/* Admin routes */}
                   <Route path="/admin/login" element={<AdminLogin />} />
@@ -439,20 +432,19 @@ const App = () => (
                     </AdminProtectedRoute>
                   } />
                   
-                  {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                  {/* Catch-all 404 */}
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </Suspense>
               </BrowserRouter>
-            </TooltipProvider>
-            </SyncProvider>
-            </ShopProvider>
-          </NotificationProvider>
-        </LanguageProvider>
-      </SiteSettingsProvider>
-    </AuthProvider>
-  </QueryClientProvider>
-</ThemeProvider>
+              </TooltipProvider>
+              </ShopProvider>
+            </NotificationProvider>
+          </LanguageProvider>
+        </SiteSettingsProvider>
+      </AuthProvider>
+    </QueryClientProvider>
+  </ThemeProvider>
 );
 
 export default App;

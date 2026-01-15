@@ -91,7 +91,7 @@ const ShopDueCustomers = () => {
   const navigate = useNavigate();
   
   // Use offline hooks
-  const { dueCustomers, loading, fromCache, isOnline, refetch, updateSalePayment, deleteSales } = useOfflineDueCustomers();
+  const { dueCustomers, loading, refetch, updateSalePayment, deleteSales } = useOfflineDueCustomers();
   const { settings } = useOfflineSettings();
   const currency = settings?.currency || "BDT";
   
@@ -197,31 +197,12 @@ const ShopDueCustomers = () => {
     
     setDeleting(true);
     try {
-      const result = await deleteSales(selectedSaleIds);
-      
-      const deletedCount = result.deleted?.length || 0;
-      const failedCount = result.failed?.length || 0;
-      
-      if (deletedCount > 0 && failedCount === 0) {
-        toast.success(
-          language === "bn" 
-            ? `${deletedCount}টি বিক্রয় ট্র্যাশে সরানো হয়েছে` 
-            : `${deletedCount} sale(s) moved to trash`
-        );
-      } else if (deletedCount > 0 && failedCount > 0) {
-        toast.warning(
-          language === "bn" 
-            ? `${deletedCount}টি সফল, ${failedCount}টি ব্যর্থ` 
-            : `${deletedCount} deleted, ${failedCount} failed`
-        );
-      } else if (failedCount > 0) {
-        const errorMsg = result.failed?.[0]?.error || "Delete failed";
-        toast.error(
-          language === "bn" 
-            ? `ডিলিট করতে সমস্যা: ${errorMsg}` 
-            : `Failed to delete: ${errorMsg}`
-        );
-      }
+      await deleteSales(selectedSaleIds);
+      toast.success(
+        language === "bn" 
+          ? `${selectedSaleIds.length}টি বিক্রয় ট্র্যাশে সরানো হয়েছে` 
+          : `${selectedSaleIds.length} sale(s) moved to trash`
+      );
       
       setSelectedSaleIds([]);
       setDeleteDialogOpen(false);

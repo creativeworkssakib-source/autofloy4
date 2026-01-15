@@ -19,7 +19,6 @@ import { Card, CardContent } from '@/components/ui/card';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { useOfflineGracePeriod } from '@/hooks/useOfflineShopTrial';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { syncManager } from '@/services/syncManager';
 import { cn } from '@/lib/utils';
 
 interface OfflineExpiredModalProps {
@@ -32,7 +31,6 @@ export function OfflineExpiredModal({ open, onDismiss }: OfflineExpiredModalProp
   const { isExpired, totalDays } = useOfflineGracePeriod();
   const { t, language } = useLanguage();
   const [isChecking, setIsChecking] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
   
   // Use prop if provided, otherwise use internal logic
   const isOpen = open !== undefined ? open : (isExpired && !isOnline);
@@ -45,16 +43,8 @@ export function OfflineExpiredModal({ open, onDismiss }: OfflineExpiredModalProp
     await new Promise(resolve => setTimeout(resolve, 2000));
     
     if (navigator.onLine) {
-      // We're online! Start sync
-      setIsSyncing(true);
-      try {
-        await syncManager.sync();
-        onDismiss?.();
-      } catch (error) {
-        console.error('Sync failed:', error);
-      } finally {
-        setIsSyncing(false);
-      }
+      // We're online! Dismiss modal
+      onDismiss?.();
     }
     
     setIsChecking(false);
@@ -126,15 +116,13 @@ export function OfflineExpiredModal({ open, onDismiss }: OfflineExpiredModalProp
         <div className="flex flex-col gap-2">
           <Button
             onClick={handleCheckConnection}
-            disabled={isChecking || isSyncing}
+            disabled={isChecking}
             className="w-full"
           >
-            <RefreshCw className={cn('h-4 w-4 mr-2', (isChecking || isSyncing) && 'animate-spin')} />
+            <RefreshCw className={cn('h-4 w-4 mr-2', isChecking && 'animate-spin')} />
             {isChecking 
               ? t('offline.checking')
-              : isSyncing
-                ? t('offline.syncing')
-                : t('offline.checkConnection')
+              : t('offline.checkConnection')
             }
           </Button>
           
