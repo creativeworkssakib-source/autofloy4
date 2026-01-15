@@ -482,7 +482,7 @@ class OfflineShopService {
 
   // Trash
   async getTrash() {
-    return this.request<{ items: any[] }>("trash");
+    return this.request<{ trash?: any[]; items?: any[] }>("trash");
   }
 
   async restoreFromTrash(id: string, type: string) {
