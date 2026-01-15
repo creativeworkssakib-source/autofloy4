@@ -2781,16 +2781,19 @@ serve(async (req) => {
 
       if (req.method === "POST") {
         const body = await req.json();
+        // Extract paid_from_cash before inserting (not a database column)
+        const { paid_from_cash, ...expenseData } = body;
+        
         const { data, error } = await supabase
           .from("shop_expenses")
-          .insert({ ...body, user_id: userId, shop_id: shopId })
+          .insert({ ...expenseData, user_id: userId, shop_id: shopId })
           .select()
           .single();
 
         if (error) throw error;
 
         // Only create cash transaction if paid_from_cash is true
-        if (body.paid_from_cash === true) {
+        if (paid_from_cash === true) {
           await supabase.from("shop_cash_transactions").insert({
             user_id: userId,
             shop_id: shopId,
