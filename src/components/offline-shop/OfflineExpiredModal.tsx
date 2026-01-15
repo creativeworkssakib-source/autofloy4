@@ -50,7 +50,7 @@ export function OfflineExpiredModal({ open, onDismiss }: OfflineExpiredModalProp
     setIsChecking(false);
   };
   
-  const timeSinceOnline = getTimeSinceOnline(language);
+  const timeSinceOnline = getTimeSinceOnline ? getTimeSinceOnline() : null;
   
   return (
     <Dialog open={isOpen}>

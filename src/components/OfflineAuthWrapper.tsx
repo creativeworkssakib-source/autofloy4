@@ -1,27 +1,25 @@
 /**
- * Offline Auth Wrapper
+ * Simplified Auth Wrapper
  * 
- * Handles authentication for offline mode.
- * Users who logged in within the last 7 days can use the app offline.
- * Logout requires internet to log back in.
+ * Just checks if user is authenticated.
+ * All data is live from Supabase - no offline mode.
  */
 
 import { ReactNode } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { Loader2, WifiOff, LogIn, Clock } from "lucide-react";
+import { Loader2, LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
-import { hasValidOfflineAuth, getOfflineAuthRemainingDays, getCachedAuth } from "@/lib/offlineAuth";
 
 interface OfflineAuthWrapperProps {
   children: ReactNode;
 }
 
 export function OfflineAuthWrapper({ children }: OfflineAuthWrapperProps) {
-  const { user, isLoading, isOfflineMode, offlineAuthDaysRemaining } = useAuth();
+  const { user, isLoading } = useAuth();
   const navigate = useNavigate();
 
-  // Show loading state (with timeout fallback)
+  // Show loading state
   if (isLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background">
@@ -31,59 +29,12 @@ export function OfflineAuthWrapper({ children }: OfflineAuthWrapperProps) {
     );
   }
 
-  // If user is authenticated (online or offline), allow access
+  // If user is authenticated, allow access
   if (user) {
     return <>{children}</>;
   }
 
-  // Check if there's valid offline auth but user object is not set yet
-  // Only show loading briefly - if auth context hasn't set user after loading is done,
-  // it means there's an issue
-  const hasOfflineAuth = hasValidOfflineAuth();
-  if (hasOfflineAuth && !isLoading) {
-    // Try to get user from offline auth directly as fallback
-    const offlineAuth = getCachedAuth();
-    if (offlineAuth && offlineAuth.user) {
-      // This is a rare edge case - AuthContext should have set this
-      // But we handle it anyway to prevent infinite loading
-      console.log('[OfflineAuthWrapper] Fallback: using offline auth directly');
-      return <>{children}</>;
-    }
-  }
-
-  // If offline and no valid auth, show offline message
-  if (isOfflineMode) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
-        <div className="max-w-md text-center">
-          <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-muted flex items-center justify-center">
-            <WifiOff className="w-10 h-10 text-muted-foreground" />
-          </div>
-          
-          <h1 className="text-2xl font-bold text-foreground mb-3">
-            আপনি অফলাইনে আছেন
-          </h1>
-          
-          <p className="text-muted-foreground mb-6">
-            লগইন করতে ইন্টারনেট সংযোগ প্রয়োজন। একবার লগইন করলে ৭ দিন পর্যন্ত অফলাইনে ব্যবহার করতে পারবেন।
-          </p>
-          
-          <div className="flex items-center justify-center gap-2 p-4 bg-muted/50 rounded-lg mb-6">
-            <Clock className="w-5 h-5 text-primary" />
-            <span className="text-sm">
-              অফলাইন সেশন মেয়াদ: <strong>৭ দিন</strong>
-            </span>
-          </div>
-          
-          <p className="text-sm text-muted-foreground">
-            ইন্টারনেট সংযোগ হলে স্বয়ংক্রিয়ভাবে লগইন পেজ দেখাবে।
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // Online but not authenticated - show login prompt
+  // Not authenticated - show login prompt
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
       <div className="max-w-md text-center">
@@ -96,7 +47,7 @@ export function OfflineAuthWrapper({ children }: OfflineAuthWrapperProps) {
         </h1>
         
         <p className="text-muted-foreground mb-6">
-          অ্যাপ ব্যবহার করতে প্রথমে লগইন করুন। একবার লগইন করলে ৭ দিন পর্যন্ত অফলাইনেও ব্যবহার করতে পারবেন।
+          অ্যাপ ব্যবহার করতে প্রথমে লগইন করুন।
         </p>
         
         <Button onClick={() => navigate("/login")} size="lg" className="w-full">
@@ -113,14 +64,13 @@ export function OfflineAuthWrapper({ children }: OfflineAuthWrapperProps) {
 }
 
 /**
- * Hook to check offline auth status
+ * Simple hook to check auth status
  */
 export function useOfflineAuthStatus() {
-  const { isOfflineMode, offlineAuthDaysRemaining } = useAuth();
+  const { user, isLoading } = useAuth();
   
   return {
-    isOffline: isOfflineMode,
-    daysRemaining: offlineAuthDaysRemaining,
-    hasValidAuth: hasValidOfflineAuth(),
+    isAuthenticated: !!user,
+    isLoading,
   };
 }

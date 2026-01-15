@@ -1,12 +1,11 @@
 // =============== ID GENERATION ===============
 
 /**
- * Generate a unique ID that's safe for offline use
- * Uses timestamp + random string to ensure uniqueness
+ * Generate a unique ID that's safe for use
+ * Uses UUID v4 format for database compatibility
  */
 export function generateOfflineId(prefix: string = ''): string {
   // Generate a proper UUID v4 that's compatible with the database
-  // Prefix is optional and can be used for debugging purposes in logs
   const uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
     const r = Math.random() * 16 | 0;
     const v = c === 'x' ? r : (r & 0x3 | 0x8);
@@ -29,7 +28,7 @@ export function generateUUID(): string {
 // =============== INVOICE NUMBER GENERATION ===============
 
 /**
- * Generate invoice number for offline use
+ * Generate invoice number
  * Format: PREFIX-YYYYMMDD-XXXX
  */
 export function generateInvoiceNumber(prefix: string, shopId: string): string {
@@ -41,19 +40,16 @@ export function generateInvoiceNumber(prefix: string, shopId: string): string {
 }
 
 /**
- * Generate sequential invoice number (for offline, stored in localStorage)
+ * Generate sequential invoice number
+ * Note: For proper sequence, this should be handled server-side
  */
 export function generateSequentialInvoice(prefix: string, shopId: string): string {
-  const key = `invoice_seq_${shopId}`;
-  const current = parseInt(localStorage.getItem(key) || '0', 10);
-  const next = current + 1;
-  localStorage.setItem(key, next.toString());
-  
   const date = new Date();
   const year = date.getFullYear().toString().slice(-2);
   const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const random = Math.floor(Math.random() * 100000).toString().padStart(5, '0');
   
-  return `${prefix}${year}${month}-${next.toString().padStart(5, '0')}`;
+  return `${prefix}${year}${month}-${random}`;
 }
 
 // =============== SALE CALCULATIONS ===============
@@ -189,27 +185,6 @@ export function formatCurrency(amount: number, currency: string = '৳', locale:
   });
   
   return `${currency}${formatted}`;
-}
-
-// =============== STORAGE UTILITIES ===============
-
-/**
- * Check available storage space
- */
-export async function getStorageEstimate(): Promise<{ used: number; quota: number; percentUsed: number } | null> {
-  if ('storage' in navigator && 'estimate' in navigator.storage) {
-    const estimate = await navigator.storage.estimate();
-    const used = estimate.usage || 0;
-    const quota = estimate.quota || 0;
-    const percentUsed = quota > 0 ? (used / quota) * 100 : 0;
-    
-    return {
-      used,
-      quota,
-      percentUsed: Math.round(percentUsed * 100) / 100,
-    };
-  }
-  return null;
 }
 
 /**
