@@ -575,7 +575,14 @@ const ShopDueCustomers = () => {
                             <User className="h-3 w-3 sm:h-4 sm:w-4 text-primary" />
                           </div>
                           <div className="min-w-0">
-                            <span className="font-medium text-xs sm:text-sm truncate block max-w-[80px] sm:max-w-none">{customer.customerName}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-xs sm:text-sm truncate max-w-[60px] sm:max-w-[120px]">{customer.customerName}</span>
+                              {customer.sales[0]?.invoice_number && (
+                                <Badge variant="outline" className="text-[9px] sm:text-[10px] px-1 py-0 shrink-0">
+                                  {customer.sales[0].invoice_number}
+                                </Badge>
+                              )}
+                            </div>
                             <span className="text-[10px] text-muted-foreground md:hidden">{customer.customerPhone || ""}</span>
                           </div>
                         </div>
