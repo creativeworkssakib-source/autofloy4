@@ -2087,6 +2087,20 @@ serve(async (req) => {
           });
         }
 
+        // Get current sale to calculate payment difference
+        const { data: currentSale, error: fetchError } = await supabase
+          .from("shop_sales")
+          .select("paid_amount, due_amount, invoice_number, customer_id")
+          .eq("id", id)
+          .eq("user_id", userId)
+          .single();
+
+        if (fetchError) throw fetchError;
+
+        const previousPaid = Number(currentSale?.paid_amount || 0);
+        const newPaid = Number(paid_amount ?? previousPaid);
+        const paymentReceived = newPaid - previousPaid;
+
         // Build update object only with provided fields
         const updates: Record<string, any> = {};
         if (paid_amount !== undefined) updates.paid_amount = paid_amount;
@@ -2104,6 +2118,37 @@ serve(async (req) => {
           .single();
 
         if (updateError) throw updateError;
+
+        // If payment was received (due collection), create a cash transaction
+        if (paymentReceived > 0) {
+          await supabase.from("shop_cash_transactions").insert({
+            user_id: userId,
+            shop_id: shopId || null,
+            type: "in",
+            source: "due_collection",
+            amount: paymentReceived,
+            reference_id: id,
+            reference_type: "sale",
+            notes: `Due collection - ${currentSale?.invoice_number || 'Sale'}`
+          });
+          console.log(`Due collection recorded: ${paymentReceived} for sale ${id}`);
+
+          // Update customer total_due if customer exists
+          if (currentSale?.customer_id) {
+            const { data: customer } = await supabase
+              .from("shop_customers")
+              .select("total_due")
+              .eq("id", currentSale.customer_id)
+              .single();
+
+            if (customer) {
+              await supabase
+                .from("shop_customers")
+                .update({ total_due: Math.max(0, Number(customer.total_due) - paymentReceived) })
+                .eq("id", currentSale.customer_id);
+            }
+          }
+        }
 
         console.log(`Sale updated: ${id}`, updates);
 
