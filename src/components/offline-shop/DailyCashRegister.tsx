@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useOfflineCashRegister } from "@/hooks/useOfflineShopData";
 import { offlineShopService } from "@/services/offlineShopService";
@@ -72,6 +73,7 @@ interface QuickExpense {
 
 export function DailyCashRegister() {
   const { language } = useLanguage();
+  const navigate = useNavigate();
   const {
     register: todayRegister,
     registers,
@@ -1151,18 +1153,32 @@ export function DailyCashRegister() {
               </div>
             ) : cashOutBreakdown ? (
               <>
-                {/* Summary */}
+                {/* Summary - Clickable Cards */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <Card className="border-destructive/20 bg-destructive/5">
+                  <Card 
+                    className="border-destructive/20 bg-destructive/5 cursor-pointer hover:bg-destructive/10 transition-colors"
+                    onClick={() => {
+                      setShowCashOutModal(false);
+                      navigate("/offline-shop/expenses");
+                    }}
+                  >
                     <CardContent className="p-3">
                       <div className="text-xs text-muted-foreground">{t.expenses}</div>
                       <div className="text-lg font-bold text-destructive">{formatCurrency(cashOutBreakdown.total_expenses || 0)}</div>
+                      <div className="text-[10px] text-muted-foreground mt-1">{language === "bn" ? "বিস্তারিত দেখুন →" : "View details →"}</div>
                     </CardContent>
                   </Card>
-                  <Card className="border-orange-500/20 bg-orange-500/5">
+                  <Card 
+                    className="border-orange-500/20 bg-orange-500/5 cursor-pointer hover:bg-orange-500/10 transition-colors"
+                    onClick={() => {
+                      setShowCashOutModal(false);
+                      navigate("/offline-shop/purchases");
+                    }}
+                  >
                     <CardContent className="p-3">
                       <div className="text-xs text-muted-foreground">{t.purchase}</div>
                       <div className="text-lg font-bold text-orange-600">{formatCurrency(cashOutBreakdown.total_purchases || 0)}</div>
+                      <div className="text-[10px] text-muted-foreground mt-1">{language === "bn" ? "বিস্তারিত দেখুন →" : "View details →"}</div>
                     </CardContent>
                   </Card>
                   <Card className="border-amber-500/20 bg-amber-500/5">
