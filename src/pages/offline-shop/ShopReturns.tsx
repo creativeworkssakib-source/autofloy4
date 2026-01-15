@@ -39,7 +39,15 @@ import {
 } from "@/components/ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { format } from "date-fns";
+import { format, isValid } from "date-fns";
+
+// Safe date formatter to prevent "Invalid time value" errors
+const safeFormatDate = (dateValue: string | Date | null | undefined, formatStr: string = "dd/MM/yyyy"): string => {
+  if (!dateValue) return "—";
+  const date = typeof dateValue === 'string' ? new Date(dateValue) : dateValue;
+  if (!isValid(date)) return "—";
+  return format(date, formatStr);
+};
 import {
   Plus,
   Search,
@@ -378,7 +386,7 @@ export default function ShopReturns() {
     setIsHistoryOpen(false);
     setCustomerSearchQuery("");
     setSearchedCustomers([]);
-    toast.success(`Selected: ${item.product_name} from ${format(new Date(sale.sale_date), "dd/MM/yyyy")}`);
+    toast.success(`Selected: ${item.product_name} from ${safeFormatDate(sale.sale_date)}`);
   };
 
   // Quick add return from search results - uses Supabase
@@ -684,7 +692,9 @@ export default function ShopReturns() {
     const monthEnd = new Date(year, month, 0);
 
     const monthlyReturns = returns.filter((r) => {
+      if (!r.return_date) return false;
       const returnDate = new Date(r.return_date);
+      if (!isValid(returnDate)) return false;
       return returnDate >= monthStart && returnDate <= monthEnd;
     });
 
@@ -942,7 +952,7 @@ export default function ShopReturns() {
                         </div>
                         <div>
                           <p className="text-muted-foreground">Sale Date</p>
-                          <p className="font-medium">{format(new Date(selectedSale.sale_date), "dd/MM/yyyy")}</p>
+                          <p className="font-medium">{safeFormatDate(selectedSale.sale_date)}</p>
                         </div>
                         <div>
                           <p className="text-muted-foreground">Product</p>
@@ -1036,10 +1046,7 @@ export default function ShopReturns() {
                       <div className="space-y-1">
                         <Label className="text-xs text-muted-foreground">Sale Date</Label>
                         <div className="p-2 bg-muted/50 rounded-md text-sm font-medium">
-                          {formData.original_sale_date 
-                            ? format(new Date(formData.original_sale_date), "dd/MM/yyyy")
-                            : "—"
-                          }
+                          {safeFormatDate(formData.original_sale_date)}
                         </div>
                       </div>
                       
@@ -1458,7 +1465,7 @@ export default function ShopReturns() {
                     {filteredReturns.map((ret) => (
                       <TableRow key={ret.id}>
                         <TableCell>
-                          {format(new Date(ret.return_date), "dd/MM/yyyy")}
+                          {safeFormatDate(ret.return_date)}
                         </TableCell>
                         <TableCell className="font-medium">
                           {ret.product_name}
@@ -1535,7 +1542,7 @@ export default function ShopReturns() {
                   <div>
                     <Label className="text-muted-foreground">Return Date</Label>
                     <p className="font-medium">
-                      {format(new Date(selectedReturn.return_date), "dd/MM/yyyy")}
+                      {safeFormatDate(selectedReturn.return_date)}
                     </p>
                   </div>
                   <div>
@@ -1563,7 +1570,7 @@ export default function ShopReturns() {
                   <div className="p-3 bg-muted rounded-lg">
                     <Label className="text-muted-foreground">Original Sale Info</Label>
                     <p className="text-sm mt-1">
-                      Sale Date: {selectedReturn.original_sale_date ? format(new Date(selectedReturn.original_sale_date), "dd/MM/yyyy") : "N/A"}
+                      Sale Date: {safeFormatDate(selectedReturn.original_sale_date, "dd/MM/yyyy") || "N/A"}
                       {selectedReturn.original_unit_price ? ` | Original Price: ৳${selectedReturn.original_unit_price}` : ""}
                     </p>
                   </div>
@@ -1645,7 +1652,7 @@ export default function ShopReturns() {
                         <div>
                           <CardTitle className="text-sm">{sale.invoice_number}</CardTitle>
                           <p className="text-xs text-muted-foreground">
-                            {format(new Date(sale.sale_date), "dd/MM/yyyy hh:mm a")}
+                            {safeFormatDate(sale.sale_date, "dd/MM/yyyy hh:mm a")}
                           </p>
                         </div>
                         <div className="text-right">
