@@ -225,7 +225,7 @@ export function useOfflineSuppliers() {
 
 // =============== SALES ===============
 
-export function useOfflineSales(params?: { startDate?: string; endDate?: string; customerId?: string; paymentStatus?: string }) {
+export function useOfflineSales(startDate?: string, endDate?: string) {
   const [sales, setSales] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { currentShop } = useShop();
@@ -233,7 +233,7 @@ export function useOfflineSales(params?: { startDate?: string; endDate?: string;
   const refetch = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await offlineShopService.getSales(params);
+      const result = await offlineShopService.getSales(startDate && endDate ? { startDate, endDate } : undefined);
       setSales(result.sales || []);
     } catch (error) {
       console.error('Failed to fetch sales:', error);
@@ -241,7 +241,7 @@ export function useOfflineSales(params?: { startDate?: string; endDate?: string;
     } finally {
       setLoading(false);
     }
-  }, [params?.startDate, params?.endDate, params?.customerId, params?.paymentStatus, currentShop?.id]);
+  }, [startDate, endDate, currentShop?.id]);
 
   useEffect(() => {
     refetch();

@@ -503,13 +503,20 @@ const ShopPurchases = () => {
     setIsDeleting(true);
     try {
       const ids = Array.from(selectedIds);
-      const result = await offlineDataService.deletePurchases(ids);
-      const successCount = result.deleted?.length || 0;
+      let successCount = 0;
+      for (const id of ids) {
+        try {
+          await offlineShopService.deletePurchase(id);
+          successCount++;
+        } catch (e) {
+          console.error(`Failed to delete purchase ${id}:`, e);
+        }
+      }
       
       if (successCount > 0) {
         toast.success(language === "bn" 
-          ? `${successCount}টি পার্চেজ মুছে ফেলা হয়েছে${result.offline ? ' (অফলাইন)' : ''}` 
-          : `${successCount} purchases deleted${result.offline ? ' (offline)' : ''}`);
+          ? `${successCount}টি পার্চেজ মুছে ফেলা হয়েছে` 
+          : `${successCount} purchases deleted`);
       }
       
       setSelectedIds(new Set());

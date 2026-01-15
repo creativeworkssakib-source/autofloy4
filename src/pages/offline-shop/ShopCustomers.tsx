@@ -37,7 +37,7 @@ interface Customer {
 const ShopCustomers = () => {
   const { t, language } = useLanguage();
   const { currentShop } = useShop();
-  const { customers, loading: isLoading, fromCache, isOnline, refetch, createCustomer, updateCustomer, deleteCustomer } = useOfflineCustomers();
+  const { customers, loading: isLoading, refetch, createCustomer, updateCustomer, deleteCustomer } = useOfflineCustomers();
   const { settings } = useOfflineSettings();
   const [searchQuery, setSearchQuery] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -183,12 +183,6 @@ const ShopCustomers = () => {
                 {selectedIds.length > 0 && ` • ${selectedIds.length} ${language === "bn" ? "টি নির্বাচিত" : "selected"}`}
               </p>
             </div>
-            {fromCache && (
-              <Badge variant={isOnline ? "secondary" : "destructive"} className="flex items-center gap-1">
-                {isOnline ? <Cloud className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
-                {isOnline ? (language === "bn" ? "ক্যাশ" : "Cached") : (language === "bn" ? "অফলাইন" : "Offline")}
-              </Badge>
-            )}
           </div>
           <div className="flex flex-wrap gap-2">
             {selectedIds.length > 0 && (

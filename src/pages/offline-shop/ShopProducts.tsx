@@ -132,7 +132,6 @@ const ShopProducts = () => {
   const { 
     products, 
     loading: isLoading, 
-    fromCache,
     isOnline,
     refetch: loadData,
     createProduct: createOfflineProduct,
@@ -788,7 +787,7 @@ const ShopProducts = () => {
               <h1 className="text-2xl sm:text-3xl font-bold">{t("shop.productsTitle")}</h1>
               <p className="text-sm sm:text-base text-muted-foreground">{t("shop.productsDesc")}</p>
             </div>
-            {(fromCache || !isOnline) && (
+            {!isOnline && (
               <Badge variant="outline" className="border-amber-500 text-amber-600 bg-amber-50 dark:bg-amber-950 flex items-center gap-1">
                 <WifiOff className="h-3 w-3" />
                 {t('offline.usingCache')}

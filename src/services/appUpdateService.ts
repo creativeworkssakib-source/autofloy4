@@ -130,11 +130,6 @@ class AppUpdateService {
     setTimeout(() => {
       if (navigator.onLine) {
         this.checkForUpdates();
-        // Also trigger a data sync when coming online
-        // Import dynamically to avoid circular dependency
-        import('./syncManager').then(({ syncManager }) => {
-          syncManager.sync();
-        }).catch(console.error);
       }
     }, 2000);
   };
@@ -185,23 +180,8 @@ class AppUpdateService {
       return { success: false, synced: [] };
     }
     
-    try {
-      const shopId = localStorage.getItem('autofloy_current_shop_id');
-      if (!shopId) {
-        return { success: false, synced: [] };
-      }
-      
-      // Import dynamically to avoid circular dependency
-      const { syncManager } = await import('./syncManager');
-      
-      // Perform full sync to get latest data
-      const result = await syncManager.fullSync(shopId);
-      
-      return { success: result.success, synced: result.tables };
-    } catch (error) {
-      console.error('Failed to sync data on update:', error);
-      return { success: false, synced: [] };
-    }
+    // No sync manager needed - all data is live from Supabase
+    return { success: true, synced: [] };
   }
   
   // Apply update (for PWA - refresh the page)

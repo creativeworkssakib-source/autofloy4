@@ -121,13 +121,13 @@ const ShopLoans = () => {
     upcomingLoans,
     overdueLoans,
     loading,
-    fromCache,
-    isOnline,
     refetch: fetchLoans,
     createLoan,
     deleteLoan: deleteLoanOffline,
     addPayment,
   } = useOfflineLoans(statusFilter);
+  
+  const isOnline = navigator.onLine;
 
   // Modal states
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);

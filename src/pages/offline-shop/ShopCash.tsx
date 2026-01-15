@@ -47,7 +47,7 @@ const ShopCash = () => {
   const [activeTab, setActiveTab] = useState("overview");
   
   // Use offline hooks
-  const { data: rawData, loading: isLoading, fromCache, isOnline, refetch } = useOfflineCashSummary();
+  const { data: rawData, loading: isLoading, refetch } = useOfflineCashSummary();
   const { settings } = useOfflineSettings();
   const currency = settings?.currency || "BDT";
   

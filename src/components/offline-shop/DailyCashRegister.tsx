@@ -67,18 +67,15 @@ interface QuickExpense {
 export function DailyCashRegister() {
   const { language } = useLanguage();
   const {
-    registers,
-    todayRegister,
-    hasOpenRegister,
+    register: todayRegister,
     loading: isLoading,
-    fromCache,
-    isOnline,
     refetch,
     openRegister,
     closeRegister,
-    addQuickExpense,
-    deleteQuickExpense,
   } = useOfflineCashRegister();
+  
+  const hasOpenRegister = todayRegister?.status === 'open';
+  const registers: any[] = todayRegister ? [todayRegister] : [];
   
   const [showOpenModal, setShowOpenModal] = useState(false);
   const [showCloseModal, setShowCloseModal] = useState(false);
@@ -152,7 +149,7 @@ export function DailyCashRegister() {
     
     setIsSubmitting(true);
     try {
-      const result = await openRegister(parseFloat(openingCash), notes);
+      const result = await openRegister(parseFloat(openingCash));
       toast.success(result.message);
       setShowOpenModal(false);
       setOpeningCash("");
@@ -185,32 +182,11 @@ export function DailyCashRegister() {
   };
 
   const handleAddQuickExpense = async () => {
-    if (!quickExpenseAmount || parseFloat(quickExpenseAmount) <= 0) {
-      toast.error(language === "bn" ? "টাকার পরিমাণ দিন" : "Enter amount");
-      return;
-    }
-    
-    setIsSubmitting(true);
-    try {
-      await addQuickExpense(parseFloat(quickExpenseAmount), quickExpenseDescription);
-      toast.success(language === "bn" ? "খরচ যোগ হয়েছে" : "Expense added");
-      setQuickExpenseAmount("");
-      setQuickExpenseDescription("");
-      setShowQuickExpenseModal(false);
-    } catch (error: any) {
-      toast.error(error.message || "Failed to add expense");
-    } finally {
-      setIsSubmitting(false);
-    }
+    toast.info(language === "bn" ? "এই ফিচারটি এখনো উপলব্ধ নয়" : "This feature is not available yet");
   };
 
   const handleDeleteQuickExpense = async (expenseId: string) => {
-    try {
-      await deleteQuickExpense(expenseId);
-      toast.success(language === "bn" ? "খরচ মুছে ফেলা হয়েছে" : "Expense deleted");
-    } catch (error: any) {
-      toast.error(error.message || "Failed to delete expense");
-    }
+    toast.info(language === "bn" ? "এই ফিচারটি এখনো উপলব্ধ নয়" : "This feature is not available yet");
   };
 
   const getCurrentCashBalance = () => {
@@ -256,12 +232,6 @@ export function DailyCashRegister() {
                     <Badge variant="secondary" className="bg-muted text-muted-foreground">
                       <AlertCircle className="h-3 w-3 mr-1" />
                       {t.shopClosed}
-                    </Badge>
-                  )}
-                  {!isOnline && (
-                    <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/30">
-                      <WifiOff className="h-3 w-3 mr-1" />
-                      {language === "bn" ? "অফলাইন" : "Offline"}
                     </Badge>
                   )}
                 </CardTitle>
