@@ -4724,6 +4724,7 @@ serve(async (req) => {
         // Also insert into shop_returns table for tracking
         await supabase.from("shop_returns").insert({
           user_id: userId,
+          shop_id: shopId,
           product_id: items[0]?.product_id || null,
           product_name: returnedItems[0]?.product_name || product_name || "Unknown",
           customer_id: customer_id || null,
@@ -4732,6 +4733,8 @@ serve(async (req) => {
           return_reason: reason || "Customer return",
           return_date: new Date().toISOString().split("T")[0],
           refund_amount: finalRefund,
+          refund_method: from_cash ? 'cash' : 'none',
+          unit_cost: items[0]?.unit_cost || 0,
           notes: notes || null,
           status: "processed",
           original_sale_id: sale_id || null,
@@ -6104,8 +6107,21 @@ serve(async (req) => {
           
           const totalPurchases = (purchases || []).reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
           
-          // Total Cash Out = Expenses + Purchases + Quick Expenses + Change Returns + Withdrawals
-          const totalCashOut = totalExpenses + totalPurchases + totalQuickExpenses + totalChangeReturns + totalWithdrawals;
+          // Get today's return refunds/losses from cash transactions
+          const { data: returnTransactions } = await supabase
+            .from("shop_cash_transactions")
+            .select("amount")
+            .eq("user_id", userId)
+            .eq("shop_id", shopId)
+            .eq("type", "out")
+            .eq("source", "return")
+            .gte("transaction_date", todayStart)
+            .lte("transaction_date", todayEnd);
+          
+          const totalReturns = (returnTransactions || []).reduce((sum: number, r: any) => sum + Number(r.amount || 0), 0);
+          
+          // Total Cash Out = Expenses + Purchases + Quick Expenses + Change Returns + Withdrawals + Returns
+          const totalCashOut = totalExpenses + totalPurchases + totalQuickExpenses + totalChangeReturns + totalWithdrawals + totalReturns;
           
           // Merge live data into today's register
           todayRegister = {
@@ -6117,8 +6133,9 @@ serve(async (req) => {
             total_withdrawals: totalWithdrawals,
             total_deposits: totalDeposits,
             total_change_returns: totalChangeReturns,
+            total_returns: totalReturns,
             total_cash_in: totalCashIn + totalDueCollected + totalDeposits, // Received from sales + dues + deposits
-            total_cash_out: totalCashOut, // All outgoing cash
+            total_cash_out: totalCashOut, // All outgoing cash (includes returns)
             quick_expenses: quickExpenses || [],
             total_quick_expenses: totalQuickExpenses,
           };
