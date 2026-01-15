@@ -39,10 +39,10 @@ class SmartDataService {
   private userId: string | null = null;
   private listeners: Map<string, Set<DataListener>> = new Map();
   private dataCache: Map<string, { data: any; timestamp: number }> = new Map();
-  private readonly CACHE_TTL = 30000; // 30 seconds cache TTL
+  private readonly CACHE_TTL = 60000; // 60 seconds cache TTL (increased from 30s)
   private initialSyncDone = false;
   private syncInterval: NodeJS.Timeout | null = null;
-  private readonly SYNC_INTERVAL_MS = 30000; // 30 seconds
+  private readonly SYNC_INTERVAL_MS = 60000; // 60 seconds (increased from 30s to reduce CPU load)
   private isSyncing = false;
   
   /**
@@ -79,11 +79,16 @@ class SmartDataService {
     // Initialize offline DB first
     await offlineDB.init();
     
-    // Now initialize sync for ALL platforms (including browser for fast cache)
-    await realtimeSyncManager.init(shopId, userId);
-    
-    // Start our own sync loop (aggressive sync every 30 seconds)
-    this.startSyncLoop();
+    // Only initialize realtime sync for installed apps (PWA/APK/EXE)
+    // Browser mode uses server-first strategy, no need for aggressive sync
+    if (shouldUseLocalFirst()) {
+      await realtimeSyncManager.init(shopId, userId);
+      
+      // Start sync loop only for installed apps (reduced from 30s to 60s)
+      this.startSyncLoop();
+    } else {
+      console.log('[SmartData] Browser mode - skipping sync loop for performance');
+    }
     
     // Subscribe to real-time updates
     realtimeSyncManager.subscribe(() => {
@@ -119,7 +124,7 @@ class SmartDataService {
     
     this.syncInterval = setInterval(async () => {
       if (navigator.onLine && !this.isSyncing && this.shopId) {
-        console.log('[SmartData] 30-second sync tick');
+        console.log('[SmartData] 60-second sync tick');
         await this.performBidirectionalSync();
       }
     }, this.SYNC_INTERVAL_MS);

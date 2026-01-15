@@ -47,10 +47,10 @@ class OfflineSyncOrchestrator {
   private syncProgress = 0;
   private syncDirection: 'push' | 'pull' | 'idle' = 'idle';
   
-  // Sync configuration
-  private readonly SYNC_INTERVAL_MS = 30000; // 30 seconds
+  // Sync configuration - optimized to reduce CPU load
+  private readonly SYNC_INTERVAL_MS = 120000; // 2 minutes (increased from 30s)
   private readonly MAX_RETRY_COUNT = 5;
-  private readonly BATCH_SIZE = 50;
+  private readonly BATCH_SIZE = 100; // Increased batch size for efficiency
 
   /**
    * Initialize the sync orchestrator
