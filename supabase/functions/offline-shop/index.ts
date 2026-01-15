@@ -6394,6 +6394,102 @@ serve(async (req) => {
           });
         }
 
+        if (type === "cash_out") {
+          // Get expenses from shop_expenses
+          const { data: expenses } = await supabase
+            .from("shop_expenses")
+            .select("id, amount, description, notes, expense_date, created_at")
+            .eq("user_id", userId)
+            .eq("shop_id", shopId)
+            .gte("expense_date", todayStart)
+            .lte("expense_date", todayEnd)
+            .order("created_at", { ascending: false });
+
+          // Get cash purchases
+          const { data: purchases } = await supabase
+            .from("shop_purchases")
+            .select("id, invoice_number, paid_amount, payment_method, supplier_name, purchase_date, created_at")
+            .eq("user_id", userId)
+            .eq("shop_id", shopId)
+            .eq("payment_method", "cash")
+            .gte("purchase_date", todayStart)
+            .lte("purchase_date", todayEnd)
+            .order("created_at", { ascending: false });
+
+          // Get quick expenses
+          const { data: quickExpenses } = await supabase
+            .from("shop_quick_expenses")
+            .select("id, amount, description, category, created_at")
+            .eq("user_id", userId)
+            .eq("shop_id", shopId)
+            .gte("created_at", todayStart)
+            .lte("created_at", todayEnd)
+            .order("created_at", { ascending: false });
+
+          // Get change returns (withdrawals marked as change_return)
+          const { data: changeReturns } = await supabase
+            .from("shop_cash_transactions")
+            .select("id, amount, notes, reference_id, created_at")
+            .eq("user_id", userId)
+            .eq("shop_id", shopId)
+            .eq("type", "out")
+            .eq("source", "change_return")
+            .gte("transaction_date", todayStart)
+            .lte("transaction_date", todayEnd)
+            .order("created_at", { ascending: false });
+
+          // Enrich change returns with sale info
+          const enrichedChangeReturns = await Promise.all((changeReturns || []).map(async (cr: any) => {
+            let customerName = '';
+            let invoiceNumber = '';
+            
+            if (cr.reference_id) {
+              const { data: sale } = await supabase
+                .from("shop_sales")
+                .select("invoice_number, customer_name, notes")
+                .eq("id", cr.reference_id)
+                .maybeSingle();
+              
+              if (sale) {
+                invoiceNumber = sale.invoice_number || '';
+                customerName = sale.customer_name || '';
+                if (!customerName && sale.notes) {
+                  const match = sale.notes.match(/Customer:\s*(.+?)(?:\s*\((.+?)\))?$/);
+                  if (match) {
+                    customerName = match[1].trim();
+                  }
+                }
+              }
+            }
+
+            return {
+              ...cr,
+              customer_name: customerName,
+              invoice_number: invoiceNumber
+            };
+          }));
+
+          const totalExpenses = (expenses || []).reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
+          const totalPurchases = (purchases || []).reduce((sum: number, p: any) => sum + Number(p.paid_amount || 0), 0);
+          const totalQuickExpenses = (quickExpenses || []).reduce((sum: number, q: any) => sum + Number(q.amount || 0), 0);
+          const totalChangeReturns = enrichedChangeReturns.reduce((sum: number, c: any) => sum + Number(c.amount || 0), 0);
+
+          return new Response(JSON.stringify({ 
+            expenses: expenses || [],
+            purchases: purchases || [],
+            quick_expenses: quickExpenses || [],
+            change_returns: enrichedChangeReturns,
+            total_expenses: totalExpenses,
+            total_purchases: totalPurchases,
+            total_quick_expenses: totalQuickExpenses,
+            total_change_returns: totalChangeReturns,
+            total: totalExpenses + totalPurchases + totalQuickExpenses + totalChangeReturns
+          }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
         return new Response(JSON.stringify({ error: "Invalid type parameter" }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },

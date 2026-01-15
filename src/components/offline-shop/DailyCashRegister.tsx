@@ -35,6 +35,8 @@ import {
   X,
   WifiOff,
   Wifi,
+  Package,
+  RefreshCcw,
 } from "lucide-react";
 
 interface CashRegister {
@@ -84,8 +86,10 @@ export function DailyCashRegister() {
   const [showQuickExpenseModal, setShowQuickExpenseModal] = useState(false);
   const [showCashInModal, setShowCashInModal] = useState(false);
   const [showDueCollectedModal, setShowDueCollectedModal] = useState(false);
+  const [showCashOutModal, setShowCashOutModal] = useState(false);
   const [cashInBreakdown, setCashInBreakdown] = useState<any>(null);
   const [dueCollectedBreakdown, setDueCollectedBreakdown] = useState<any>(null);
+  const [cashOutBreakdown, setCashOutBreakdown] = useState<any>(null);
   const [loadingBreakdown, setLoadingBreakdown] = useState(false);
   const [openingCash, setOpeningCash] = useState("");
   const [closingCash, setClosingCash] = useState("");
@@ -152,6 +156,12 @@ export function DailyCashRegister() {
     totalCashIn: language === "bn" ? "মোট ক্যাশ ইন" : "Total Cash In",
     totalCashOut: language === "bn" ? "মোট খরচ" : "Total Cash Out",
     todaysEarning: language === "bn" ? "আজকের আয়" : "Today's Earning",
+    cashOutDetails: language === "bn" ? "ক্যাশ আউট বিস্তারিত" : "Cash Out Details",
+    purchase: language === "bn" ? "ক্রয়" : "Purchase",
+    withdrawal: language === "bn" ? "উত্তোলন" : "Withdrawal",
+    changeReturn: language === "bn" ? "ফেরত দেওয়া চেঞ্জ" : "Change Return",
+    quickExpenses: language === "bn" ? "ছোট খরচ" : "Quick Expenses",
+    supplier: language === "bn" ? "সাপ্লায়ার" : "Supplier",
   };
 
   const formatCurrency = (amount: number) => {
@@ -269,6 +279,19 @@ export function DailyCashRegister() {
       setDueCollectedBreakdown(data);
     } catch (error) {
       console.error("Failed to load due collected breakdown:", error);
+    } finally {
+      setLoadingBreakdown(false);
+    }
+  };
+
+  const handleShowCashOutDetails = async () => {
+    setShowCashOutModal(true);
+    setLoadingBreakdown(true);
+    try {
+      const data = await offlineShopService.getCashFlowBreakdown('cash_out');
+      setCashOutBreakdown(data);
+    } catch (error) {
+      console.error("Failed to load cash out breakdown:", error);
     } finally {
       setLoadingBreakdown(false);
     }
@@ -398,8 +421,11 @@ export function DailyCashRegister() {
                 </CardContent>
               </Card>
 
-              {/* Cash Out */}
-              <Card className="border-destructive/20 bg-destructive/5">
+              {/* Cash Out - Clickable */}
+              <Card 
+                className="border-destructive/20 bg-destructive/5 cursor-pointer hover:bg-destructive/10 transition-colors"
+                onClick={handleShowCashOutDetails}
+              >
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
                     <ArrowUpRight className="h-3.5 w-3.5 text-destructive" />
@@ -1072,6 +1098,195 @@ export function DailyCashRegister() {
                     ))}
                   </div>
                 ) : (
+                  <p className="text-center text-muted-foreground py-8">{t.noData}</p>
+                )}
+              </>
+            ) : (
+              <p className="text-center text-muted-foreground py-8">{t.noData}</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cash Out Details Modal */}
+      <Dialog open={showCashOutModal} onOpenChange={setShowCashOutModal}>
+        <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ArrowUpRight className="h-5 w-5 text-destructive" />
+              {t.cashOutDetails}
+            </DialogTitle>
+            <DialogDescription>
+              {language === "bn" 
+                ? "আজকে কোথায় কত টাকা খরচ হয়েছে সব বিস্তারিত দেখুন।"
+                : "View all cash outflow details for today."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {loadingBreakdown ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : cashOutBreakdown ? (
+              <>
+                {/* Summary */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <Card className="border-destructive/20 bg-destructive/5">
+                    <CardContent className="p-3">
+                      <div className="text-xs text-muted-foreground">{t.expenses}</div>
+                      <div className="text-lg font-bold text-destructive">{formatCurrency(cashOutBreakdown.total_expenses || 0)}</div>
+                    </CardContent>
+                  </Card>
+                  <Card className="border-orange-500/20 bg-orange-500/5">
+                    <CardContent className="p-3">
+                      <div className="text-xs text-muted-foreground">{t.purchase}</div>
+                      <div className="text-lg font-bold text-orange-600">{formatCurrency(cashOutBreakdown.total_purchases || 0)}</div>
+                    </CardContent>
+                  </Card>
+                  <Card className="border-amber-500/20 bg-amber-500/5">
+                    <CardContent className="p-3">
+                      <div className="text-xs text-muted-foreground">{t.quickExpenses}</div>
+                      <div className="text-lg font-bold text-amber-600">{formatCurrency(cashOutBreakdown.total_quick_expenses || 0)}</div>
+                    </CardContent>
+                  </Card>
+                  <Card className="border-purple-500/20 bg-purple-500/5">
+                    <CardContent className="p-3">
+                      <div className="text-xs text-muted-foreground">{t.changeReturn}</div>
+                      <div className="text-lg font-bold text-purple-600">{formatCurrency(cashOutBreakdown.total_change_returns || 0)}</div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Expenses List */}
+                {cashOutBreakdown.expenses && cashOutBreakdown.expenses.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-medium text-destructive flex items-center gap-2">
+                      <TrendingDown className="h-4 w-4" />
+                      {t.expenses} ({cashOutBreakdown.expenses.length})
+                    </h4>
+                    <div className="space-y-2 max-h-[20vh] overflow-y-auto border rounded-lg p-2">
+                      {cashOutBreakdown.expenses.map((expense: any) => (
+                        <div key={expense.id} className="flex items-center justify-between p-3 bg-destructive/5 rounded-lg border border-destructive/20">
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-sm truncate">
+                              {expense.notes || expense.description || (language === "bn" ? "খরচ" : "Expense")}
+                            </div>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <span>{expense.created_at && format(new Date(expense.created_at), "hh:mm a")}</span>
+                            </div>
+                          </div>
+                          <div className="text-destructive font-semibold">
+                            -{formatCurrency(Number(expense.amount || 0))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Purchases List */}
+                {cashOutBreakdown.purchases && cashOutBreakdown.purchases.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-medium text-orange-600 flex items-center gap-2">
+                      <Package className="h-4 w-4" />
+                      {t.purchase} ({cashOutBreakdown.purchases.length})
+                    </h4>
+                    <div className="space-y-2 max-h-[20vh] overflow-y-auto border rounded-lg p-2">
+                      {cashOutBreakdown.purchases.map((purchase: any) => (
+                        <div key={purchase.id} className="flex items-center justify-between p-3 bg-orange-500/5 rounded-lg border border-orange-500/20">
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-sm truncate">
+                              {purchase.supplier_name || (language === "bn" ? "সাপ্লায়ার" : "Supplier")}
+                            </div>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              {purchase.invoice_number && (
+                                <>
+                                  <span className="flex items-center gap-1">
+                                    <Receipt className="h-3 w-3" />
+                                    {purchase.invoice_number}
+                                  </span>
+                                  <span>•</span>
+                                </>
+                              )}
+                              <span>{purchase.purchase_date && format(new Date(purchase.purchase_date), "hh:mm a")}</span>
+                            </div>
+                          </div>
+                          <div className="text-orange-600 font-semibold">
+                            -{formatCurrency(Number(purchase.paid_amount || 0))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Quick Expenses List */}
+                {cashOutBreakdown.quick_expenses && cashOutBreakdown.quick_expenses.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-medium text-amber-600 flex items-center gap-2">
+                      <Coins className="h-4 w-4" />
+                      {t.quickExpenses} ({cashOutBreakdown.quick_expenses.length})
+                    </h4>
+                    <div className="space-y-2 max-h-[20vh] overflow-y-auto border rounded-lg p-2">
+                      {cashOutBreakdown.quick_expenses.map((expense: any) => (
+                        <div key={expense.id} className="flex items-center justify-between p-3 bg-amber-500/5 rounded-lg border border-amber-500/20">
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-sm truncate">
+                              {expense.description || (language === "bn" ? "ছোট খরচ" : "Quick Expense")}
+                            </div>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <span>{expense.created_at && format(new Date(expense.created_at), "hh:mm a")}</span>
+                            </div>
+                          </div>
+                          <div className="text-amber-600 font-semibold">
+                            -{formatCurrency(Number(expense.amount || 0))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Change Returns List */}
+                {cashOutBreakdown.change_returns && cashOutBreakdown.change_returns.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-medium text-purple-600 flex items-center gap-2">
+                      <RefreshCcw className="h-4 w-4" />
+                      {t.changeReturn} ({cashOutBreakdown.change_returns.length})
+                    </h4>
+                    <div className="space-y-2 max-h-[20vh] overflow-y-auto border rounded-lg p-2">
+                      {cashOutBreakdown.change_returns.map((change: any) => (
+                        <div key={change.id} className="flex items-center justify-between p-3 bg-purple-500/5 rounded-lg border border-purple-500/20">
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-sm truncate">
+                              {change.customer_name || (language === "bn" ? "কাস্টমার" : "Customer")}
+                            </div>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              {change.invoice_number && (
+                                <>
+                                  <span className="flex items-center gap-1">
+                                    <Receipt className="h-3 w-3" />
+                                    {change.invoice_number}
+                                  </span>
+                                  <span>•</span>
+                                </>
+                              )}
+                              <span>{change.created_at && format(new Date(change.created_at), "hh:mm a")}</span>
+                            </div>
+                          </div>
+                          <div className="text-purple-600 font-semibold">
+                            -{formatCurrency(Number(change.amount || 0))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {(!cashOutBreakdown.expenses || cashOutBreakdown.expenses.length === 0) && 
+                 (!cashOutBreakdown.purchases || cashOutBreakdown.purchases.length === 0) && 
+                 (!cashOutBreakdown.quick_expenses || cashOutBreakdown.quick_expenses.length === 0) &&
+                 (!cashOutBreakdown.change_returns || cashOutBreakdown.change_returns.length === 0) && (
                   <p className="text-center text-muted-foreground py-8">{t.noData}</p>
                 )}
               </>
