@@ -6835,18 +6835,49 @@ serve(async (req) => {
           const totalQuickExpenses = (quickExpenses || []).reduce((sum: number, q: any) => sum + Number(q.amount || 0), 0);
           const totalChangeReturns = enrichedChangeReturns.reduce((sum: number, c: any) => sum + Number(c.amount || 0), 0);
 
+          // Get returns that were paid from cash (refund_method = 'cash')
+          const { data: returnsFromCash } = await supabase
+            .from("shop_returns")
+            .select("id, product_name, quantity, refund_amount, unit_cost, reason, customer_name, customer_phone, is_resellable, created_at")
+            .eq("user_id", userId)
+            .eq("shop_id", shopId)
+            .eq("refund_method", "cash")
+            .gte("return_date", todayStart)
+            .lte("return_date", todayEnd)
+            .order("created_at", { ascending: false });
+
+          // Calculate amounts for returns
+          const returnsEnriched = (returnsFromCash || []).map((r: any) => ({
+            id: r.id,
+            product_name: r.product_name,
+            quantity: r.quantity,
+            reason: r.reason,
+            customer_name: r.customer_name,
+            customer_phone: r.customer_phone,
+            is_resellable: r.is_resellable,
+            created_at: r.created_at,
+            // If resellable, cash_amount = refund_amount; else loss = unit_cost * quantity
+            cash_amount: r.is_resellable 
+              ? Number(r.refund_amount || 0) 
+              : Number(r.unit_cost || 0) * Number(r.quantity || 1)
+          }));
+
+          const totalReturns = returnsEnriched.reduce((sum: number, r: any) => sum + Number(r.cash_amount || 0), 0);
+
           return new Response(JSON.stringify({ 
             expenses: expenses || [],
             purchases: purchases || [],
             quick_expenses: quickExpenses || [],
             change_returns: enrichedChangeReturns,
+            returns: returnsEnriched,
             total_expenses: totalExpenses,
             total_cash_expenses: totalCashExpenses, // Only cash-paid expenses
             total_purchases: totalPurchases,
             total_quick_expenses: totalQuickExpenses,
             total_change_returns: totalChangeReturns,
+            total_returns: totalReturns,
             // Total cash out only includes cash-paid items
-            total: totalCashExpenses + totalPurchases + totalQuickExpenses + totalChangeReturns
+            total: totalCashExpenses + totalPurchases + totalQuickExpenses + totalChangeReturns + totalReturns
           }), {
             status: 200,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
