@@ -6519,16 +6519,47 @@ serve(async (req) => {
             .lte("expense_date", todayEnd)
             .order("created_at", { ascending: false });
 
-          // Get cash purchases
-          const { data: purchases } = await supabase
-            .from("shop_purchases")
-            .select("id, invoice_number, paid_amount, payment_method, supplier_name, purchase_date, created_at")
+          // Get cash purchases from shop_cash_transactions (since shop_purchases doesn't have payment_method)
+          const { data: purchaseTransactions } = await supabase
+            .from("shop_cash_transactions")
+            .select("id, amount, notes, reference_id, created_at")
             .eq("user_id", userId)
             .eq("shop_id", shopId)
-            .eq("payment_method", "cash")
-            .gte("purchase_date", todayStart)
-            .lte("purchase_date", todayEnd)
+            .eq("type", "out")
+            .eq("source", "purchase")
+            .gte("transaction_date", todayStart)
+            .lte("transaction_date", todayEnd)
             .order("created_at", { ascending: false });
+          
+          // Enrich with purchase details
+          const purchases = await Promise.all((purchaseTransactions || []).map(async (pt: any) => {
+            let supplierName = '';
+            let invoiceNumber = '';
+            let purchaseDate = pt.created_at;
+            
+            if (pt.reference_id) {
+              const { data: purchase } = await supabase
+                .from("shop_purchases")
+                .select("invoice_number, supplier_name, purchase_date")
+                .eq("id", pt.reference_id)
+                .maybeSingle();
+              
+              if (purchase) {
+                invoiceNumber = purchase.invoice_number || '';
+                supplierName = purchase.supplier_name || '';
+                purchaseDate = purchase.purchase_date || pt.created_at;
+              }
+            }
+            
+            return {
+              id: pt.id,
+              paid_amount: Number(pt.amount || 0),
+              invoice_number: invoiceNumber,
+              supplier_name: supplierName,
+              purchase_date: purchaseDate,
+              created_at: pt.created_at
+            };
+          }));
 
           // Get quick expenses
           const { data: quickExpenses } = await supabase
