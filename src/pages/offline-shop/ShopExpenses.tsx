@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from "react";
-import { Plus, Wallet, Trash2, Calendar, WifiOff, Cloud } from "lucide-react";
+import { Plus, Wallet, Trash2, Calendar, WifiOff, Cloud, Banknote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -67,6 +68,7 @@ const ShopExpenses = () => {
     expense_date: new Date().toISOString().split("T")[0],
     payment_method: "cash",
     notes: "",
+    paid_from_cash: true, // New field for cash deduction
   });
 
   useEffect(() => {
@@ -119,6 +121,7 @@ const ShopExpenses = () => {
       expense_date: new Date().toISOString().split("T")[0],
       payment_method: "cash",
       notes: "",
+      paid_from_cash: true,
     });
   };
 
@@ -313,6 +316,28 @@ const ShopExpenses = () => {
                 </SelectContent>
               </Select>
             </div>
+            
+            {/* Paid from Cash Toggle */}
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+              <Checkbox
+                id="paid_from_cash"
+                checked={formData.paid_from_cash}
+                onCheckedChange={(checked) => setFormData({ ...formData, paid_from_cash: !!checked })}
+              />
+              <div className="flex items-center gap-2">
+                <Banknote className="h-4 w-4 text-green-600" />
+                <Label htmlFor="paid_from_cash" className="text-sm font-medium cursor-pointer">
+                  {language === "bn" ? "ক্যাশ থেকে টাকা কাটা হবে" : "Deduct from Cash"}
+                </Label>
+              </div>
+            </div>
+            {formData.paid_from_cash && (
+              <p className="text-xs text-muted-foreground -mt-2">
+                {language === "bn" 
+                  ? "এই খরচ ক্যাশ আউট হিসাবে রেকর্ড হবে এবং আপনার ক্যাশ ব্যালেন্স থেকে কমে যাবে"
+                  : "This expense will be recorded as Cash Out and deducted from your cash balance"}
+              </p>
+            )}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>
                 {t("common.cancel")}

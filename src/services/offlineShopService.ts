@@ -307,6 +307,7 @@ class OfflineShopService {
       expiry_date?: string;
     }>;
     paid_amount?: number;
+    paid_from_cash?: boolean;
     payment_method?: string;
     notes?: string;
   }) {
@@ -349,6 +350,8 @@ class OfflineShopService {
     amount: number;
     description?: string;
     expense_date?: string;
+    payment_method?: string;
+    paid_from_cash?: boolean;
   }) {
     return this.request<{ expense: any }>("expenses", {
       method: "POST",

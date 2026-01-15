@@ -137,6 +137,7 @@ const ShopPurchases = () => {
   const [supplierName, setSupplierName] = useState("");
   const [supplierContact, setSupplierContact] = useState("");
   const [paidAmount, setPaidAmount] = useState<number | "">("");
+  const [paidFromCash, setPaidFromCash] = useState(true); // New field for cash deduction
   const [notes, setNotes] = useState("");
   const [bulkText, setBulkText] = useState("");
   const [showBulkInput, setShowBulkInput] = useState(false);
@@ -413,16 +414,16 @@ const ShopPurchases = () => {
         supplier_name: ensuredSupplierName,
         supplier_contact: ensuredSupplierContact,
         items: items.map((item) => ({
-          // Only include product_id if selecting an existing product (not new)
           product_id: !item.isNew && item.product_id ? item.product_id : undefined,
           product_name: item.product_name,
           quantity: item.quantity,
           unit_price: item.unit_price,
-          selling_price: item.selling_price, // Store selling price for later stock addition
+          selling_price: item.selling_price,
           total: item.total,
           expiry_date: item.expiry_date,
         })),
         paid_amount: (paidAmount === "" ? 0 : paidAmount) || total,
+        paid_from_cash: paidFromCash,
         notes,
       });
       
@@ -451,6 +452,7 @@ const ShopPurchases = () => {
     setSupplierName("");
     setSupplierContact("");
     setPaidAmount("");
+    setPaidFromCash(true);
     setNotes("");
     setBulkText("");
     setShowBulkInput(false);

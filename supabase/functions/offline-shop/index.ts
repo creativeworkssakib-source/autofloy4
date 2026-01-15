@@ -2342,7 +2342,7 @@ serve(async (req) => {
       }
 
       if (req.method === "POST") {
-        const { supplier_id, supplier_name, supplier_contact, invoice_number, items, paid_amount, payment_method, notes } = await req.json();
+        const { supplier_id, supplier_name, supplier_contact, invoice_number, items, paid_amount, paid_from_cash, payment_method, notes } = await req.json();
         const totalAmount = items.reduce((sum: number, item: any) => sum + item.total, 0);
         const dueAmount = totalAmount - (paid_amount || totalAmount);
 
@@ -2475,8 +2475,8 @@ serve(async (req) => {
           }
         }
 
-        // Create cash transaction
-        if (paid_amount > 0) {
+        // Create cash transaction only if paid_from_cash is true
+        if (paid_amount > 0 && paid_from_cash === true) {
           await supabase.from("shop_cash_transactions").insert({
             user_id: userId,
             shop_id: shopId,
@@ -2486,6 +2486,7 @@ serve(async (req) => {
             reference_id: purchase.id,
             reference_type: "purchase",
             notes: `Purchase from ${supplier_name || "Supplier"}`,
+            transaction_date: new Date().toISOString().split("T")[0],
           });
         }
 
@@ -2788,17 +2789,20 @@ serve(async (req) => {
 
         if (error) throw error;
 
-        // Create cash transaction
-        await supabase.from("shop_cash_transactions").insert({
-          user_id: userId,
-          shop_id: shopId,
-          type: "out",
-          source: "expense",
-          amount: body.amount,
-          reference_id: data.id,
-          reference_type: "expense",
-          notes: `${body.category}: ${body.description || ""}`,
-        });
+        // Only create cash transaction if paid_from_cash is true
+        if (body.paid_from_cash === true) {
+          await supabase.from("shop_cash_transactions").insert({
+            user_id: userId,
+            shop_id: shopId,
+            type: "out",
+            source: "expense",
+            amount: body.amount,
+            reference_id: data.id,
+            reference_type: "expense",
+            notes: `${body.category}: ${body.description || ""}`,
+            transaction_date: body.expense_date || new Date().toISOString().split("T")[0],
+          });
+        }
 
         return new Response(JSON.stringify({ expense: data }), {
           status: 201,
@@ -6511,14 +6515,47 @@ serve(async (req) => {
         }
 
         if (type === "cash_out") {
-          // Get expenses from shop_expenses - using expense_date (DATE type)
-          const { data: expenses } = await supabase
-            .from("shop_expenses")
-            .select("id, amount, description, notes, expense_date, created_at")
+          // Get cash expenses from shop_cash_transactions (only expenses paid from cash)
+          const { data: expenseTransactions } = await supabase
+            .from("shop_cash_transactions")
+            .select("id, amount, notes, reference_id, created_at, transaction_date")
             .eq("user_id", userId)
             .eq("shop_id", shopId)
-            .eq("expense_date", today)
+            .eq("type", "out")
+            .eq("source", "expense")
+            .gte("transaction_date", todayStart)
+            .lte("transaction_date", todayEnd)
             .order("created_at", { ascending: false });
+
+          // Enrich with expense details
+          const expenses = await Promise.all((expenseTransactions || []).map(async (et: any) => {
+            let description = et.notes || '';
+            let category = '';
+            let expenseDate = et.transaction_date || et.created_at;
+            
+            if (et.reference_id) {
+              const { data: expense } = await supabase
+                .from("shop_expenses")
+                .select("description, category, expense_date")
+                .eq("id", et.reference_id)
+                .maybeSingle();
+              
+              if (expense) {
+                description = expense.description || et.notes || '';
+                category = expense.category || '';
+                expenseDate = expense.expense_date || et.transaction_date;
+              }
+            }
+            
+            return {
+              id: et.id,
+              amount: Number(et.amount || 0),
+              description: description,
+              category: category,
+              expense_date: expenseDate,
+              created_at: et.created_at
+            };
+          }));
 
           // Get cash purchases from shop_cash_transactions (since shop_purchases doesn't have payment_method)
           const { data: purchaseTransactions } = await supabase
