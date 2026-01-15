@@ -996,9 +996,17 @@ export function DailyCashRegister() {
                               <span>•</span>
                               <span>{sale.sale_date && format(new Date(sale.sale_date), "hh:mm a")}</span>
                             </div>
+                            <div className="text-xs text-muted-foreground mt-1">
+                              {language === "bn" ? "পণ্য মূল্য" : "Product"}: {formatCurrency(Number(sale.sale_total || 0))}
+                              {sale.change_given > 0 && (
+                                <span className="text-destructive ml-2">
+                                  | {language === "bn" ? "ফেরত" : "Change"}: {formatCurrency(sale.change_given)}
+                                </span>
+                              )}
+                            </div>
                           </div>
                           <div className="text-success font-semibold">
-                            {formatCurrency(Number(sale.paid_amount || 0))}
+                            {formatCurrency(Number(sale.received_amount || sale.paid_amount || 0))}
                           </div>
                         </div>
                       ))}

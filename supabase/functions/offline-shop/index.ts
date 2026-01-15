@@ -6310,16 +6310,63 @@ serve(async (req) => {
 
       if (req.method === "GET") {
         if (type === "cash_in") {
-          // Get detailed cash sales list
-          const { data: sales } = await supabase
-            .from("shop_sales")
-            .select("id, invoice_number, total, paid_amount, payment_method, customer_name, customer_phone, sale_date, notes")
+          // Get cash transactions for sales (actual received amounts)
+          const { data: saleTransactions } = await supabase
+            .from("shop_cash_transactions")
+            .select("id, amount, notes, reference_id, created_at")
             .eq("user_id", userId)
             .eq("shop_id", shopId)
-            .eq("payment_method", "cash")
-            .gte("sale_date", todayStart)
-            .lte("sale_date", todayEnd)
-            .order("sale_date", { ascending: false });
+            .eq("type", "in")
+            .eq("source", "sale")
+            .gte("transaction_date", todayStart)
+            .lte("transaction_date", todayEnd)
+            .order("created_at", { ascending: false });
+
+          // Enrich sale transactions with sale details
+          const enrichedSaleTransactions = await Promise.all((saleTransactions || []).map(async (t: any) => {
+            let customerName = '';
+            let customerPhone = '';
+            let invoiceNumber = '';
+            let saleTotal = 0;
+            let saleDate = t.created_at;
+            
+            if (t.reference_id) {
+              const { data: sale } = await supabase
+                .from("shop_sales")
+                .select("invoice_number, total, customer_name, customer_phone, sale_date, notes")
+                .eq("id", t.reference_id)
+                .maybeSingle();
+              
+              if (sale) {
+                invoiceNumber = sale.invoice_number || '';
+                saleTotal = Number(sale.total || 0);
+                saleDate = sale.sale_date;
+                customerName = sale.customer_name || '';
+                customerPhone = sale.customer_phone || '';
+                if (!customerName && sale.notes) {
+                  const match = sale.notes.match(/Customer:\s*(.+?)(?:\s*\((.+?)\))?$/);
+                  if (match) {
+                    customerName = match[1].trim();
+                    if (!customerPhone && match[2]) {
+                      customerPhone = match[2].trim();
+                    }
+                  }
+                }
+              }
+            }
+            
+            return {
+              id: t.id,
+              received_amount: Number(t.amount || 0), // Actual received from customer
+              sale_total: saleTotal, // Product sell price
+              change_given: Number(t.amount || 0) - saleTotal, // Change returned
+              invoice_number: invoiceNumber,
+              customer_name: customerName,
+              customer_phone: customerPhone,
+              sale_date: saleDate,
+              source: 'sale'
+            };
+          }));
 
           // Get deposits
           const { data: deposits } = await supabase
@@ -6344,27 +6391,6 @@ serve(async (req) => {
             .gte("transaction_date", todayStart)
             .lte("transaction_date", todayEnd)
             .order("created_at", { ascending: false });
-
-          // Parse customer name from notes for older sales
-          const processedSales = (sales || []).map((sale: any) => {
-            let customerName = sale.customer_name || '';
-            let customerPhone = sale.customer_phone || '';
-            if (!customerName && sale.notes) {
-              const match = sale.notes.match(/Customer:\s*(.+?)(?:\s*\((.+?)\))?$/);
-              if (match) {
-                customerName = match[1].trim();
-                if (!customerPhone && match[2]) {
-                  customerPhone = match[2].trim();
-                }
-              }
-            }
-            return {
-              ...sale,
-              customer_name: customerName,
-              customer_phone: customerPhone,
-              source: 'sale'
-            };
-          });
 
           const processedDeposits = (deposits || []).map((d: any) => ({
             ...d,
@@ -6409,10 +6435,11 @@ serve(async (req) => {
           }));
 
           return new Response(JSON.stringify({ 
-            sales: processedSales,
+            sales: enrichedSaleTransactions,
             deposits: processedDeposits,
             due_collections: enrichedDueCollections,
-            total_sales: processedSales.reduce((sum: number, s: any) => sum + Number(s.paid_amount || 0), 0),
+            total_sales: enrichedSaleTransactions.reduce((sum: number, s: any) => sum + Number(s.sale_total || 0), 0),
+            total_received: enrichedSaleTransactions.reduce((sum: number, s: any) => sum + Number(s.received_amount || 0), 0),
             total_deposits: processedDeposits.reduce((sum: number, d: any) => sum + Number(d.amount || 0), 0),
             total_due_collected: enrichedDueCollections.reduce((sum: number, c: any) => sum + Number(c.amount || 0), 0)
           }), {
