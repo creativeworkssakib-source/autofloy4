@@ -52,6 +52,9 @@ interface CashRegister {
   total_expenses: number;
   total_withdrawals: number;
   total_deposits: number;
+  total_change_returns?: number;
+  total_cash_in?: number;
+  total_cash_out?: number;
   expected_cash: number;
   cash_difference: number;
   notes: string | null;
@@ -250,6 +253,13 @@ export function DailyCashRegister() {
 
   const getCurrentCashBalance = () => {
     if (!todayRegister) return 0;
+    // Use new total_cash_in/out if available, otherwise fallback to old calculation
+    if (todayRegister.total_cash_in !== undefined && todayRegister.total_cash_out !== undefined) {
+      return Number(todayRegister.opening_cash) + 
+             Number(todayRegister.total_cash_in || 0) - 
+             Number(todayRegister.total_cash_out || 0);
+    }
+    // Fallback for old data
     return Number(todayRegister.opening_cash) + 
            Number(todayRegister.total_cash_sales || 0) + 
            Number(todayRegister.total_due_collected || 0) + 
@@ -409,9 +419,11 @@ export function DailyCashRegister() {
                   </div>
                   <div className="text-xl font-bold text-success">
                     {formatCurrency(
-                      Number(todayRegister.total_cash_sales || 0) + 
-                      Number(todayRegister.total_due_collected || 0) + 
-                      Number(todayRegister.total_deposits || 0)
+                      todayRegister.total_cash_in !== undefined 
+                        ? Number(todayRegister.total_cash_in || 0)
+                        : Number(todayRegister.total_cash_sales || 0) + 
+                          Number(todayRegister.total_due_collected || 0) + 
+                          Number(todayRegister.total_deposits || 0)
                     )}
                   </div>
                   <div className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
@@ -433,8 +445,10 @@ export function DailyCashRegister() {
                   </div>
                   <div className="text-xl font-bold text-destructive">
                     {formatCurrency(
-                      Number(todayRegister.total_expenses || 0) + 
-                      Number(todayRegister.total_withdrawals || 0)
+                      todayRegister.total_cash_out !== undefined
+                        ? Number(todayRegister.total_cash_out || 0)
+                        : Number(todayRegister.total_expenses || 0) + 
+                          Number(todayRegister.total_withdrawals || 0)
                     )}
                   </div>
                   <div className="text-xs text-muted-foreground mt-1 flex items-center gap-1">

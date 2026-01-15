@@ -1895,7 +1895,7 @@ serve(async (req) => {
       }
 
       if (req.method === "POST") {
-        const { customer_id, customer_name, customer_phone, items, discount, tax, paid_amount, payment_method, notes } = await req.json();
+        const { customer_id, customer_name, customer_phone, items, discount, tax, paid_amount, received_amount, change_amount, payment_method, notes } = await req.json();
 
         // Get shop settings for invoice prefix
         const { data: settings } = await supabase
@@ -2083,16 +2083,28 @@ serve(async (req) => {
                 .eq("id", customer_id);
             }
           })() : Promise.resolve(),
-          // Create cash transaction if payment received
-          paid_amount > 0 ? supabase.from("shop_cash_transactions").insert({
+          // Create cash IN transaction for received amount (what customer actually paid)
+          // If received_amount provided (customer paid with change), use that. Otherwise use paid_amount.
+          (received_amount > 0 || paid_amount > 0) ? supabase.from("shop_cash_transactions").insert({
             user_id: userId,
             shop_id: shopId || null,
             type: "in",
             source: "sale",
-            amount: paid_amount || total,
+            amount: received_amount || paid_amount || total,
             reference_id: sale.id,
             reference_type: "sale",
             notes: `Sale ${invoiceNumber}`,
+          }) : Promise.resolve(),
+          // Create cash OUT transaction for change returned to customer
+          (change_amount && change_amount > 0) ? supabase.from("shop_cash_transactions").insert({
+            user_id: userId,
+            shop_id: shopId || null,
+            type: "out",
+            source: "change_return",
+            amount: change_amount,
+            reference_id: sale.id,
+            reference_type: "sale",
+            notes: `Change for ${invoiceNumber}`,
           }) : Promise.resolve(),
         ]);
 
@@ -5805,8 +5817,9 @@ serve(async (req) => {
             .lte("sale_date", todayEnd);
           
           const totalSales = (sales || []).reduce((sum: number, s: any) => sum + Number(s.total || 0), 0);
+          // Cash Sales = only product sell price (total), not what customer paid
           const totalCashSales = (sales || []).filter((s: any) => s.payment_method === "cash")
-            .reduce((sum: number, s: any) => sum + Number(s.paid_amount || 0), 0);
+            .reduce((sum: number, s: any) => sum + Number(s.total || 0), 0);
           
           // Get today's due collections from cash transactions
           const { data: dueCollections } = await supabase
@@ -5845,6 +5858,19 @@ serve(async (req) => {
           
           const totalWithdrawals = (withdrawals || []).reduce((sum: number, w: any) => sum + Number(w.amount || 0), 0);
           
+          // Get today's change returns from cash transactions
+          const { data: changeReturns } = await supabase
+            .from("shop_cash_transactions")
+            .select("amount")
+            .eq("user_id", userId)
+            .eq("shop_id", shopId)
+            .eq("type", "out")
+            .eq("source", "change_return")
+            .gte("transaction_date", todayStart)
+            .lte("transaction_date", todayEnd);
+          
+          const totalChangeReturns = (changeReturns || []).reduce((sum: number, c: any) => sum + Number(c.amount || 0), 0);
+          
           // Get today's deposits from cash transactions
           const { data: deposits } = await supabase
             .from("shop_cash_transactions")
@@ -5868,6 +5894,35 @@ serve(async (req) => {
           
           const totalQuickExpenses = (quickExpenses || []).reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
           
+          // Get today's cash in from sales (received_amount - what customer actually paid)
+          const { data: saleTransactions } = await supabase
+            .from("shop_cash_transactions")
+            .select("amount")
+            .eq("user_id", userId)
+            .eq("shop_id", shopId)
+            .eq("type", "in")
+            .eq("source", "sale")
+            .gte("transaction_date", todayStart)
+            .lte("transaction_date", todayEnd);
+          
+          const totalCashIn = (saleTransactions || []).reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
+          
+          // Get today's purchases from cash transactions
+          const { data: purchases } = await supabase
+            .from("shop_cash_transactions")
+            .select("amount")
+            .eq("user_id", userId)
+            .eq("shop_id", shopId)
+            .eq("type", "out")
+            .eq("source", "purchase")
+            .gte("transaction_date", todayStart)
+            .lte("transaction_date", todayEnd);
+          
+          const totalPurchases = (purchases || []).reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
+          
+          // Total Cash Out = Expenses + Purchases + Quick Expenses + Change Returns + Withdrawals
+          const totalCashOut = totalExpenses + totalPurchases + totalQuickExpenses + totalChangeReturns + totalWithdrawals;
+          
           // Merge live data into today's register
           todayRegister = {
             ...todayRegister,
@@ -5877,6 +5932,9 @@ serve(async (req) => {
             total_expenses: totalExpenses + totalQuickExpenses,
             total_withdrawals: totalWithdrawals,
             total_deposits: totalDeposits,
+            total_change_returns: totalChangeReturns,
+            total_cash_in: totalCashIn + totalDueCollected + totalDeposits, // Received from sales + dues + deposits
+            total_cash_out: totalCashOut, // All outgoing cash
             quick_expenses: quickExpenses || [],
             total_quick_expenses: totalQuickExpenses,
           };
