@@ -339,13 +339,9 @@ export function useOfflineDueCustomers() {
         // Get customer name from sale or joined customer object
         let customerName = sale.customer_name || sale.customer?.name || '';
         
-        // If no name, use phone number as display name; if no phone either, use invoice number
+        // If no name, use "No Name" - don't use invoice number as name
         if (!customerName || customerName.trim() === '') {
-          if (customerPhone && customerPhone.length > 5) {
-            customerName = customerPhone;
-          } else {
-            customerName = sale.invoice_number || 'No Name';
-          }
+          customerName = 'No Name';
         }
         
         // Create unique key: if phone exists use phone, otherwise use customer_id or sale id
