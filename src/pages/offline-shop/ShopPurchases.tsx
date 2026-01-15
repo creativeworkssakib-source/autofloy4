@@ -186,7 +186,9 @@ const ShopPurchases = () => {
     setIsLoadingTrash(true);
     try {
       const res = await offlineShopService.getTrash();
-      const purchaseTrash = (res.items || []).filter((item: any) => item.original_table === "shop_purchases");
+      // API returns { trash: [] }
+      const allTrash = res.trash || res.items || [];
+      const purchaseTrash = allTrash.filter((item: any) => item.original_table === "shop_purchases");
       setTrashItems(purchaseTrash);
     } catch (error) {
       console.error("Failed to load trash:", error);
