@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -108,6 +109,7 @@ const ShopDueCustomers = () => {
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [selectedSale, setSelectedSale] = useState<DueSale | null>(null);
   const [paymentAmount, setPaymentAmount] = useState("");
+  const [addToCash, setAddToCash] = useState(true);
   const [processingPayment, setProcessingPayment] = useState(false);
   const [selectedSaleIds, setSelectedSaleIds] = useState<string[]>([]);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -386,6 +388,16 @@ const ShopDueCustomers = () => {
       const newDueAmount = selectedSale.due_amount - amount;
       
       await updateSalePayment(selectedSale.id, newPaidAmount, newDueAmount);
+      
+      // Add to cash if toggle is enabled
+      if (addToCash) {
+        await offlineShopService.createCashTransaction({
+          type: "in",
+          source: "due_collection",
+          amount: amount,
+          notes: `Due collection for ${selectedSale.invoice_number}${selectedSale.customer_name ? ` - ${selectedSale.customer_name}` : ''}`,
+        });
+      }
       
       toast.success(language === "bn" ? "পেমেন্ট সফল হয়েছে" : "Payment recorded successfully");
       setPaymentModalOpen(false);
@@ -799,6 +811,26 @@ const ShopDueCustomers = () => {
                 <p className="text-xs text-muted-foreground">
                   {language === "bn" ? "সর্বোচ্চ" : "Max"}: {formatCurrency(selectedSale.due_amount)}
                 </p>
+              </div>
+
+              {/* Add to Cash Toggle */}
+              <div className="flex items-center justify-between p-3 bg-green-500/10 rounded-lg border border-green-500/20">
+                <div className="flex items-center gap-2">
+                  <Banknote className="h-4 w-4 text-green-600" />
+                  <div>
+                    <Label htmlFor="add-to-cash" className="text-sm font-medium cursor-pointer">
+                      {language === "bn" ? "ক্যাশে যোগ করুন" : "Add to Cash"}
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      {language === "bn" ? "অন থাকলে ক্যাশ রেজিস্টারে জমা হবে" : "When on, amount will be added to cash register"}
+                    </p>
+                  </div>
+                </div>
+                <Switch
+                  id="add-to-cash"
+                  checked={addToCash}
+                  onCheckedChange={setAddToCash}
+                />
               </div>
             </div>
           )}
