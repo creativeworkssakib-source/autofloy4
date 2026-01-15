@@ -94,6 +94,7 @@ export function DailyCashRegister() {
   const [quickExpenseAmount, setQuickExpenseAmount] = useState("");
   const [quickExpenseDescription, setQuickExpenseDescription] = useState("");
   const [quickExpenseCategory, setQuickExpenseCategory] = useState("other");
+  const [withdrawalAmount, setWithdrawalAmount] = useState("");
   
   // Get suggested opening cash from last closed register
   const suggestedOpening = registers.find((r: CashRegister) => r.status === "closed")?.closing_cash || 0;
@@ -145,6 +146,11 @@ export function DailyCashRegister() {
     time: language === "bn" ? "সময়" : "Time",
     noData: language === "bn" ? "কোনো ডাটা নেই" : "No data",
     clickToViewDetails: language === "bn" ? "বিস্তারিত দেখতে ক্লিক করুন" : "Click to view details",
+    keepInRegister: language === "bn" ? "রেজিস্টারে রাখবো" : "Keep in Register",
+    takeHome: language === "bn" ? "বাকি টাকা নিয়ে যাবো" : "Taking Home",
+    daySummary: language === "bn" ? "দিনের সারাংশ" : "Day Summary",
+    totalCashIn: language === "bn" ? "মোট ক্যাশ ইন" : "Total Cash In",
+    totalCashOut: language === "bn" ? "মোট খরচ" : "Total Cash Out",
   };
 
   const formatCurrency = (amount: number) => {
@@ -319,7 +325,9 @@ export function DailyCashRegister() {
               {hasOpenRegister ? (
                 <Button
                   onClick={() => {
-                    setClosingCash(getCurrentCashBalance().toString());
+                    setClosingCash("");
+                    setWithdrawalAmount("");
+                    setNotes("");
                     setShowCloseModal(true);
                   }}
                   className="gap-1 bg-destructive hover:bg-destructive/90"
@@ -646,7 +654,7 @@ export function DailyCashRegister() {
 
       {/* Close Register Modal */}
       <Dialog open={showCloseModal} onOpenChange={setShowCloseModal}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Square className="h-5 w-5 text-destructive" />
@@ -654,39 +662,127 @@ export function DailyCashRegister() {
             </DialogTitle>
             <DialogDescription>
               {language === "bn" 
-                ? "আজকের ক্যাশ রেজিস্টার বন্ধ করুন এবং ক্লোজিং টাকার পরিমাণ দিন।"
-                : "Close the cash register for today and enter the closing cash amount."}
+                ? "দিনশেষে কত টাকা রেজিস্টারে রাখবেন এবং কত টাকা নিয়ে যাবেন সেটি নির্ধারণ করুন।"
+                : "Decide how much to keep in register and how much to take home."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <Card className="bg-muted/50">
-              <CardContent className="p-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm">{t.expectedCash}</span>
-                  <span className="font-bold text-lg">{formatCurrency(getCurrentCashBalance())}</span>
+            {/* Day Summary */}
+            <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-secondary/5">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">{t.daySummary}</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="flex justify-between items-center p-2 bg-muted/50 rounded">
+                    <span className="text-muted-foreground">{t.openingCash}</span>
+                    <span className="font-semibold">{formatCurrency(Number(todayRegister?.opening_cash || 0))}</span>
+                  </div>
+                  <div className="flex justify-between items-center p-2 bg-success/10 rounded">
+                    <span className="text-muted-foreground">{t.totalCashIn}</span>
+                    <span className="font-semibold text-success">
+                      +{formatCurrency(
+                        Number(todayRegister?.total_cash_sales || 0) + 
+                        Number(todayRegister?.total_due_collected || 0) + 
+                        Number(todayRegister?.total_deposits || 0)
+                      )}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center p-2 bg-destructive/10 rounded">
+                    <span className="text-muted-foreground">{t.totalCashOut}</span>
+                    <span className="font-semibold text-destructive">
+                      -{formatCurrency(
+                        Number(todayRegister?.total_expenses || 0) + 
+                        Number(todayRegister?.total_withdrawals || 0)
+                      )}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center p-2 bg-primary/10 rounded">
+                    <span className="text-muted-foreground font-medium">{t.expectedCash}</span>
+                    <span className="font-bold text-primary">{formatCurrency(getCurrentCashBalance())}</span>
+                  </div>
                 </div>
               </CardContent>
             </Card>
+
+            {/* Keep in Register */}
             <div className="space-y-2">
-              <Label htmlFor="closing-cash">{t.closingCash} (৳)</Label>
+              <Label htmlFor="closing-cash" className="flex items-center gap-2">
+                <Banknote className="h-4 w-4 text-success" />
+                {t.keepInRegister} (৳)
+              </Label>
               <Input
                 id="closing-cash"
                 type="number"
-                placeholder="0"
+                placeholder={language === "bn" ? "রেজিস্টারে রাখবো..." : "Amount to keep..."}
                 value={closingCash}
-                onChange={(e) => setClosingCash(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setClosingCash(val);
+                  // Auto-calculate withdrawal
+                  if (val && !isNaN(parseFloat(val))) {
+                    const withdrawal = getCurrentCashBalance() - parseFloat(val);
+                    setWithdrawalAmount(withdrawal > 0 ? withdrawal.toString() : "0");
+                  } else {
+                    setWithdrawalAmount("");
+                  }
+                }}
                 className="text-lg font-semibold"
               />
-              {closingCash && (
-                <p className={`text-xs ${parseFloat(closingCash) === getCurrentCashBalance() ? "text-success" : parseFloat(closingCash) > getCurrentCashBalance() ? "text-blue-500" : "text-destructive"}`}>
-                  {parseFloat(closingCash) === getCurrentCashBalance() 
-                    ? `✓ ${t.matchIcon}`
-                    : parseFloat(closingCash) > getCurrentCashBalance()
-                    ? `↑ ${t.excessIcon}: ${formatCurrency(parseFloat(closingCash) - getCurrentCashBalance())}`
-                    : `↓ ${t.shortIcon}: ${formatCurrency(getCurrentCashBalance() - parseFloat(closingCash))}`}
+              <p className="text-xs text-muted-foreground">
+                {language === "bn" ? "আগামীকাল শপ এই টাকা দিয়ে শুরু হবে" : "Shop will start with this amount tomorrow"}
+              </p>
+            </div>
+
+            {/* Taking Home (Auto-calculated) */}
+            <div className="space-y-2">
+              <Label htmlFor="withdrawal-amount" className="flex items-center gap-2">
+                <ArrowUpRight className="h-4 w-4 text-blue-500" />
+                {t.takeHome} (৳)
+              </Label>
+              <Input
+                id="withdrawal-amount"
+                type="number"
+                placeholder={language === "bn" ? "নিয়ে যাবো..." : "Taking home..."}
+                value={withdrawalAmount}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setWithdrawalAmount(val);
+                  // Auto-calculate closing cash
+                  if (val && !isNaN(parseFloat(val))) {
+                    const closing = getCurrentCashBalance() - parseFloat(val);
+                    setClosingCash(closing > 0 ? closing.toString() : "0");
+                  } else {
+                    setClosingCash("");
+                  }
+                }}
+                className="text-lg font-semibold border-blue-500/30 focus:border-blue-500"
+              />
+              {withdrawalAmount && parseFloat(withdrawalAmount) > 0 && (
+                <p className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                  💰 {language === "bn" ? "এই টাকা নিয়ে যাচ্ছেন" : "You're taking this amount"}
                 </p>
               )}
             </div>
+
+            {/* Validation Message */}
+            {closingCash && (
+              <Card className={`${
+                parseFloat(closingCash) <= getCurrentCashBalance() 
+                  ? "border-success/30 bg-success/5" 
+                  : "border-destructive/30 bg-destructive/5"
+              }`}>
+                <CardContent className="p-3 flex items-center justify-between">
+                  <span className="text-sm">
+                    {parseFloat(closingCash) <= getCurrentCashBalance() 
+                      ? (language === "bn" ? "✓ ঠিক আছে" : "✓ Valid")
+                      : (language === "bn" ? "⚠ রেজিস্টারে এত টাকা নেই" : "⚠ Not enough cash in register")}
+                  </span>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Notes */}
             <div className="space-y-2">
               <Label htmlFor="close-notes">{t.notes}</Label>
               <Textarea
@@ -704,7 +800,7 @@ export function DailyCashRegister() {
             </Button>
             <Button 
               onClick={handleCloseRegister} 
-              disabled={isSubmitting}
+              disabled={isSubmitting || !closingCash || parseFloat(closingCash) > getCurrentCashBalance()}
               variant="destructive"
             >
               {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Square className="h-4 w-4 mr-2" />}
