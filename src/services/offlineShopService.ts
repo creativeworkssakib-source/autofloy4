@@ -576,7 +576,7 @@ class OfflineShopService {
   async getCashRegister(date?: string) {
     const params: Record<string, string> = {};
     if (date) params.date = date;
-    return this.request<{ register: any; message?: string; suggestedOpening?: number }>("cash-register", {}, params);
+    return this.request<{ registers: any[]; todayRegister: any; hasOpenRegister: boolean }>("cash-register", {}, params);
   }
 
   async openCashRegister(openingBalance: number) {
