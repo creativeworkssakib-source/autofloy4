@@ -65,6 +65,7 @@ import { offlineShopService } from "@/services/offlineShopService";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useShop } from "@/contexts/ShopContext";
 import { useOfflineProducts, useOfflineSales, useOfflineSettings } from "@/hooks/useOfflineData";
+import { useOfflineCashRegister } from "@/hooks/useOfflineShopData";
 import DateRangeFilter, { DateRangePreset, DateRange, getDateRangeFromPreset } from "@/components/offline-shop/DateRangeFilter";
 import { isWithinInterval, format } from "date-fns";
 
@@ -200,6 +201,10 @@ const ShopSales = () => {
   const {
     settings: shopSettings,
   } = useOfflineSettings();
+  
+  // Cash register check - prevent sales if register not open
+  const { register: todayRegister } = useOfflineCashRegister();
+  const isRegisterOpen = todayRegister?.status === 'open';
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [viewingSale, setViewingSale] = useState<Sale | null>(null);
@@ -340,6 +345,12 @@ const ShopSales = () => {
   const changeAmount = paidValue > total ? paidValue - total : 0;
 
   const handleSubmit = async () => {
+    // Check if cash register is open
+    if (!isRegisterOpen) {
+      toast.error(language === "bn" ? "আগে ক্যাশ রেজিস্টার খুলুন" : "Please open cash register first");
+      return;
+    }
+    
     if (cart.length === 0) {
       toast.error(t("shop.noProductsInCart"));
       return;
@@ -562,6 +573,25 @@ const ShopSales = () => {
   return (
     <ShopLayout>
       <div className="space-y-4 sm:space-y-6">
+        {/* Register Closed Warning */}
+        {!isRegisterOpen && (
+          <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-4 flex items-center gap-3">
+            <div className="h-10 w-10 rounded-full bg-destructive/20 flex items-center justify-center shrink-0">
+              <ShoppingCart className="h-5 w-5 text-destructive" />
+            </div>
+            <div>
+              <p className="font-medium text-destructive">
+                {language === "bn" ? "ক্যাশ রেজিস্টার বন্ধ আছে" : "Cash Register is Closed"}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {language === "bn" 
+                  ? "নতুন বিক্রয় করতে প্রথমে ক্যাশ রেজিস্টার পেজে গিয়ে শপ ওপেন করুন।" 
+                  : "Please open the cash register from the Cash Register page to create new sales."}
+              </p>
+            </div>
+          </div>
+        )}
+        
         {/* Header */}
         <div className="flex flex-col gap-3 sm:gap-4">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
@@ -588,17 +618,32 @@ const ShopSales = () => {
                 {language === "bn" ? "মুছুন" : "Delete"} ({selectedIds.length})
               </Button>
             )}
-            <Button onClick={() => setIsModalOpen(true)}>
+            <Button 
+              onClick={() => {
+                if (!isRegisterOpen) {
+                  toast.error(language === "bn" ? "আগে ক্যাশ রেজিস্টার খুলুন" : "Please open cash register first");
+                  return;
+                }
+                setIsModalOpen(true);
+              }}
+              disabled={!isRegisterOpen}
+              title={!isRegisterOpen ? (language === "bn" ? "আগে ক্যাশ রেজিস্টার খুলুন" : "Please open cash register first") : ""}
+            >
               <Plus className="h-4 w-4 mr-2" />
               {t("shop.newSale")}
             </Button>
             <Button 
               variant="outline" 
               onClick={() => {
+                if (!isRegisterOpen) {
+                  toast.error(language === "bn" ? "আগে ক্যাশ রেজিস্টার খুলুন" : "Please open cash register first");
+                  return;
+                }
                 setIsModalOpen(true);
                 // Small delay to ensure modal is open before starting scanner
                 setTimeout(() => setScannerOpen(true), 100);
               }}
+              disabled={!isRegisterOpen}
             >
               <ScanBarcode className="h-4 w-4 mr-2" />
               {language === "bn" ? "স্ক্যান" : "Scan"}
