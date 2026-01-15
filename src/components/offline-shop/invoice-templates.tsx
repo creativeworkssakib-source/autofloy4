@@ -17,6 +17,7 @@ export interface InvoiceData {
     total: number;
     paid_amount: number;
     due_amount: number;
+    change_amount?: number;
   };
   shopSettings: {
     shop_name?: string;
@@ -295,7 +296,12 @@ export const generateSimplePrintHTML = (data: InvoiceData): string => {
                 <span class="total-label">Due</span>
                 <span class="total-value" style="color:#dc2626;">${currency} ${formatAmount(Number(sale.due_amount))}</span>
               </div>
-            ` : ""}
+            ` : `
+              <div class="total-row">
+                <span class="total-label">Change</span>
+                <span class="total-value">${currency} ${formatAmount(Number(sale.change_amount) || 0)}</span>
+              </div>
+            `}
           </div>
         </div>
         
