@@ -364,22 +364,26 @@ const ShopSales = () => {
 
     setIsSubmitting(true);
     try {
-      // Calculate actual paid (if change, only record the total as paid, not the extra)
-      const actualPaid = changeAmount > 0 ? total : (paidValue || total);
-      
+      // Send both received amount (what customer paid) and change amount to backend
+      // paid_amount = the product total (actual sale value)
+      // received_amount = what customer actually gave (e.g., 3000 BDT)
+      // change_amount = money returned to customer (e.g., 177 BDT)
       const result = await createOfflineSale({
         customer_name: customerName || undefined,
         customer_phone: customerPhone || undefined,
         items: cart,
         discount: discountAmount,
         tax: taxAmount,
-        paid_amount: actualPaid,
+        paid_amount: dueAmount > 0 ? (paidValue || 0) : total, // For due sales, use partial paid; for full, use total
+        received_amount: paidValue || total, // What customer actually handed over
+        change_amount: changeAmount, // Change returned to customer
         payment_method: paymentMethod,
       });
 
       toast.success(`${t("shop.saleComplete")} ${t("shop.invoice")}: ${result.sale?.invoice_number || 'OFFLINE'}`);
       
       // Create the sale object for viewing
+      const displayPaidAmount = dueAmount > 0 ? (paidValue || 0) : total;
       const newSale: Sale = {
         id: result.sale?.id || '',
         invoice_number: result.sale?.invoice_number || `OFF-${Date.now()}`,
@@ -387,7 +391,7 @@ const ShopSales = () => {
         subtotal,
         discount: discountAmount,
         tax: taxAmount,
-        paid_amount: actualPaid,
+        paid_amount: displayPaidAmount,
         due_amount: dueAmount > 0 ? dueAmount : 0,
         payment_method: paymentMethod,
         payment_status: dueAmount > 0 ? 'partial' : 'paid',
