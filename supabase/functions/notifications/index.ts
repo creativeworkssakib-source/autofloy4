@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { verify } from "https://deno.land/x/djwt@v3.0.2/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -18,16 +17,42 @@ async function verifyToken(authHeader: string | null): Promise<string | null> {
   
   const token = authHeader.substring(7);
   try {
+    // Decode JWT manually without external library
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    
+    // Verify signature using Web Crypto API
     const key = await crypto.subtle.importKey(
       "raw",
       new TextEncoder().encode(jwtSecret),
       { name: "HMAC", hash: "SHA-256" },
       false,
-      ["sign", "verify"]
+      ["verify"]
     );
-    const payload = await verify(token, key);
+    
+    const signatureInput = `${parts[0]}.${parts[1]}`;
+    const signature = Uint8Array.from(atob(parts[2].replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0));
+    
+    const valid = await crypto.subtle.verify(
+      "HMAC",
+      key,
+      signature,
+      new TextEncoder().encode(signatureInput)
+    );
+    
+    if (!valid) return null;
+    
+    // Decode payload
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
+    
+    // Check expiration
+    if (payload.exp && payload.exp * 1000 < Date.now()) {
+      return null;
+    }
+    
     return payload.sub as string;
-  } catch {
+  } catch (error) {
+    console.error("Token verification error:", error);
     return null;
   }
 }
