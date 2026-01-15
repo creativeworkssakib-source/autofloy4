@@ -335,19 +335,29 @@ export function useOfflineDueCustomers() {
       const customerMap = new Map<string, any>();
       dueSales.forEach((sale: any) => {
         const customerPhone = sale.customer_phone || sale.customer?.phone || '';
-        const customerName = sale.customer_name || sale.customer?.name || 'Walk-in Customer';
+        const customerId = sale.customer_id || null;
+        // Get customer name from sale or joined customer object
+        let customerName = sale.customer_name || sale.customer?.name || '';
         
-        // Create unique key: if phone exists use phone, otherwise use customer_id or name
+        // If no name, use phone number as display name; if no phone either, use invoice number
+        if (!customerName || customerName.trim() === '') {
+          if (customerPhone && customerPhone.length > 5) {
+            customerName = customerPhone;
+          } else {
+            customerName = sale.invoice_number || 'No Name';
+          }
+        }
+        
+        // Create unique key: if phone exists use phone, otherwise use customer_id or sale id
         let groupKey: string;
         if (customerPhone && customerPhone.length > 5) {
           // Group by phone number if valid phone exists
           groupKey = `phone:${customerPhone}`;
-        } else if (sale.customer_id) {
+        } else if (customerId) {
           // Group by customer_id if exists
-          groupKey = `id:${sale.customer_id}`;
+          groupKey = `id:${customerId}`;
         } else {
           // Each sale without phone/id is its own group (different walk-in customers)
-          // Use sale id to keep them separate
           groupKey = `sale:${sale.id}`;
         }
         
@@ -369,7 +379,7 @@ export function useOfflineDueCustomers() {
           );
         } else {
           customerMap.set(groupKey, {
-            customerId: sale.customer_id || null,
+            customerId: customerId,
             customerName: customerName,
             customerPhone: customerPhone,
             totalDue: Number(sale.due_amount || 0),
