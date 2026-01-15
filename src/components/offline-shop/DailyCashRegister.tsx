@@ -1224,63 +1224,62 @@ export function DailyCashRegister() {
               {language === "bn" ? "খরচের বিস্তারিত" : "Expenses Details"}
             </DialogTitle>
             <DialogDescription>
-              {language === "bn" ? "আজকের সব খরচের তালিকা দেখুন।" : "View all expenses for today."}
+              {language === "bn" ? "আজকে ক্যাশ থেকে কত খরচ হয়েছে দেখুন।" : "View all cash expenses for today."}
             </DialogDescription>
           </DialogHeader>
           <div className="flex-1 overflow-auto">
-            {expensesData && expensesData.length > 0 ? (
-              <div className="space-y-2">
-                {expensesData.map((expense: any, index: number) => (
-                  <div 
-                    key={expense.id || index}
-                    className="flex items-center justify-between p-3 bg-destructive/5 rounded-lg border border-destructive/10"
-                  >
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 text-sm font-medium">
-                        <Receipt className="h-3.5 w-3.5 text-destructive" />
-                        {expense.description || expense.category || (language === "bn" ? "খরচ" : "Expense")}
-                      </div>
-                      {expense.category && expense.description && (
-                        <div className="text-xs text-muted-foreground mt-0.5">
-                          {expense.category}
+            {(() => {
+              const cashExpenses = expensesData?.filter((exp: any) => exp.payment_method === 'cash') || [];
+              return cashExpenses.length > 0 ? (
+                <div className="space-y-2">
+                  {cashExpenses.map((expense: any, index: number) => (
+                    <div 
+                      key={expense.id || index}
+                      className="flex items-center justify-between p-3 bg-destructive/5 rounded-lg border border-destructive/10"
+                    >
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 text-sm font-medium">
+                          <Receipt className="h-3.5 w-3.5 text-destructive" />
+                          {expense.description || expense.category || (language === "bn" ? "খরচ" : "Expense")}
                         </div>
-                      )}
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
-                        <span>{expense.created_at && format(new Date(expense.created_at), "hh:mm a")}</span>
-                        {expense.payment_method && (
-                          <>
-                            <span>•</span>
-                            <Badge variant="outline" className="text-[10px] px-1 py-0">
-                              {expense.payment_method === 'cash' ? (language === "bn" ? "ক্যাশ" : "Cash") : expense.payment_method}
-                            </Badge>
-                          </>
+                        {expense.category && expense.description && (
+                          <div className="text-xs text-muted-foreground mt-0.5">
+                            {expense.category}
+                          </div>
                         )}
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                          <span>{expense.created_at && format(new Date(expense.created_at), "hh:mm a")}</span>
+                          <span>•</span>
+                          <Badge variant="outline" className="text-[10px] px-1 py-0 border-green-500 text-green-600">
+                            {language === "bn" ? "ক্যাশ" : "Cash"}
+                          </Badge>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-lg font-bold text-destructive">
+                          {formatCurrency(Number(expense.amount || 0))}
+                        </div>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <div className="text-lg font-bold text-destructive">
-                        {formatCurrency(Number(expense.amount || 0))}
-                      </div>
+                  ))}
+                  <div className="mt-4 pt-4 border-t">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-muted-foreground">
+                        {language === "bn" ? "মোট ক্যাশ খরচ" : "Total Cash Expenses"}
+                      </span>
+                      <span className="text-lg font-bold text-destructive">
+                        {formatCurrency(cashExpenses.reduce((sum: number, exp: any) => sum + Number(exp.amount || 0), 0))}
+                      </span>
                     </div>
-                  </div>
-                ))}
-                <div className="mt-4 pt-4 border-t">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-muted-foreground">
-                      {language === "bn" ? "মোট খরচ" : "Total Expenses"}
-                    </span>
-                    <span className="text-lg font-bold text-destructive">
-                      {formatCurrency(expensesData.reduce((sum: number, exp: any) => sum + Number(exp.amount || 0), 0))}
-                    </span>
                   </div>
                 </div>
-              </div>
-            ) : (
-              <div className="text-center py-8 text-muted-foreground">
-                <Receipt className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                <p>{language === "bn" ? "আজকে কোনো খরচ নেই" : "No expenses today"}</p>
-              </div>
-            )}
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Receipt className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                  <p>{language === "bn" ? "আজকে ক্যাশে কোনো খরচ হয়নি" : "No cash expenses today"}</p>
+                </div>
+              );
+            })()}
           </div>
         </DialogContent>
       </Dialog>
