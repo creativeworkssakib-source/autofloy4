@@ -394,6 +394,7 @@ export function useOfflineDueCustomers() {
 
 export function useOfflineDailyCashRegister(date?: string) {
   const [register, setRegister] = useState<any>(null);
+  const [registers, setRegisters] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { currentShop } = useShop();
 
@@ -401,10 +402,13 @@ export function useOfflineDailyCashRegister(date?: string) {
     setLoading(true);
     try {
       const result = await offlineShopService.getCashRegister(date);
-      setRegister(result.register);
+      // API returns { registers, todayRegister, hasOpenRegister }
+      setRegister(result.todayRegister || null);
+      setRegisters(result.registers || []);
     } catch (error) {
       console.error('Failed to fetch daily cash register:', error);
       setRegister(null);
+      setRegisters([]);
     } finally {
       setLoading(false);
     }
@@ -428,6 +432,7 @@ export function useOfflineDailyCashRegister(date?: string) {
 
   return {
     register,
+    registers,
     loading,
     refetch,
     openRegister,

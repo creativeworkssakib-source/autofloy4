@@ -68,6 +68,7 @@ export function DailyCashRegister() {
   const { language } = useLanguage();
   const {
     register: todayRegister,
+    registers,
     loading: isLoading,
     refetch,
     openRegister,
@@ -75,7 +76,6 @@ export function DailyCashRegister() {
   } = useOfflineCashRegister();
   
   const hasOpenRegister = todayRegister?.status === 'open';
-  const registers: any[] = todayRegister ? [todayRegister] : [];
   
   const [showOpenModal, setShowOpenModal] = useState(false);
   const [showCloseModal, setShowCloseModal] = useState(false);
