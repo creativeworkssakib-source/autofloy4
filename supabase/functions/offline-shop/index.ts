@@ -6307,6 +6307,8 @@ serve(async (req) => {
       const today = dateParam || new Date().toISOString().split("T")[0];
       const todayStart = today + "T00:00:00";
       const todayEnd = today + "T23:59:59";
+      
+      console.log("Cash flow breakdown - date params:", { dateParam, today, todayStart, todayEnd, type, shopId });
 
       if (req.method === "GET") {
         if (type === "cash_in") {
@@ -6561,13 +6563,16 @@ serve(async (req) => {
           }));
 
           // Get quick expenses - using expense_date (DATE type) not created_at
-          const { data: quickExpenses } = await supabase
+          console.log("Fetching quick_expenses for:", { userId, shopId, today });
+          const { data: quickExpenses, error: qeError } = await supabase
             .from("shop_quick_expenses")
             .select("id, amount, description, category, expense_date, created_at")
             .eq("user_id", userId)
             .eq("shop_id", shopId)
             .eq("expense_date", today)
             .order("created_at", { ascending: false });
+          
+          console.log("Quick expenses result:", { count: quickExpenses?.length, error: qeError, data: quickExpenses });
 
           // Get change returns (withdrawals marked as change_return)
           const { data: changeReturns } = await supabase
