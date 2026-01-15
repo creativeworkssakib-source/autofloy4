@@ -6603,7 +6603,7 @@ serve(async (req) => {
           console.log("Fetching quick_expenses for:", { userId, shopId, today });
           const { data: quickExpenses, error: qeError } = await supabase
             .from("shop_quick_expenses")
-            .select("id, amount, description, category, expense_date, created_at")
+            .select("id, amount, description, expense_date, created_at")
             .eq("user_id", userId)
             .eq("shop_id", shopId)
             .eq("expense_date", today)
