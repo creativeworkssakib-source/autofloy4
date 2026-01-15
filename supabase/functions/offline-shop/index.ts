@@ -2099,16 +2099,25 @@ serve(async (req) => {
             notes: `Sale ${invoiceNumber}`,
           }) : Promise.resolve(),
           // Create change_return transaction if customer received change back
-          (payment_method === 'cash' && change_amount && Number(change_amount) > 0) ? supabase.from("shop_cash_transactions").insert({
-            user_id: userId,
-            shop_id: shopId || null,
-            type: "out",
-            source: "change_return",
-            amount: Number(change_amount),
-            reference_id: sale.id,
-            reference_type: "sale",
-            notes: `Change for ${invoiceNumber}${customer_name ? ` - ${customer_name}` : ''}`,
-          }) : Promise.resolve(),
+          (async () => {
+            console.log("[SALES] Change tracking:", { payment_method, change_amount, received_amount, paid_amount, total });
+            if (payment_method === 'cash' && change_amount && Number(change_amount) > 0) {
+              console.log("[SALES] Creating change_return transaction for amount:", Number(change_amount));
+              const { error: changeError } = await supabase.from("shop_cash_transactions").insert({
+                user_id: userId,
+                shop_id: shopId || null,
+                type: "out",
+                source: "change_return",
+                amount: Number(change_amount),
+                reference_id: sale.id,
+                reference_type: "sale",
+                notes: `Change for ${invoiceNumber}${customer_name ? ` - ${customer_name}` : ''}`,
+              });
+              if (changeError) {
+                console.error("[SALES] Failed to create change_return:", changeError);
+              }
+            }
+          })(),
         ]);
 
         // Add customer info to response for invoice display
