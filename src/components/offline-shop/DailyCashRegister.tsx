@@ -1165,6 +1165,11 @@ export function DailyCashRegister() {
                     <CardContent className="p-3">
                       <div className="text-xs text-muted-foreground">{t.expenses}</div>
                       <div className="text-lg font-bold text-destructive">{formatCurrency(cashOutBreakdown.total_expenses || 0)}</div>
+                      {cashOutBreakdown.total_cash_expenses !== undefined && cashOutBreakdown.total_cash_expenses !== cashOutBreakdown.total_expenses && (
+                        <div className="text-[10px] text-green-600 mt-0.5">
+                          {language === "bn" ? `ক্যাশ থেকে: ${formatCurrency(cashOutBreakdown.total_cash_expenses)}` : `From cash: ${formatCurrency(cashOutBreakdown.total_cash_expenses)}`}
+                        </div>
+                      )}
                       <div className="text-[10px] text-muted-foreground mt-1">{language === "bn" ? "বিস্তারিত দেখুন →" : "View details →"}</div>
                     </CardContent>
                   </Card>
