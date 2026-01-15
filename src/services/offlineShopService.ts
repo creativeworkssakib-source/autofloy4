@@ -611,7 +611,7 @@ class OfflineShopService {
   }
 
   // Cash Flow Breakdown
-  async getCashFlowBreakdown(type: 'cash_in' | 'due_collected', date?: string) {
+  async getCashFlowBreakdown(type: 'cash_in' | 'due_collected' | 'cash_out', date?: string) {
     const params: Record<string, string> = { type };
     if (date) params.date = date;
     return this.request<any>("cash-flow-breakdown", {}, params);
