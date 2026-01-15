@@ -123,6 +123,7 @@ async function deductStockFIFO(
   let remaining = quantityToDeduct;
   let totalCost = 0;
   const batchesUsed: Array<{ batchId: string; quantity: number; unitCost: number }> = [];
+  const batchUpdates: Array<{ id: string; newRemaining: number }> = [];
 
   for (const batch of batches || []) {
     if (remaining <= 0) break;
@@ -135,15 +136,22 @@ async function deductStockFIFO(
       unitCost: Number(batch.unit_cost),
     });
 
-    // Update batch remaining quantity
-    const newRemaining = batch.remaining_quantity - deductFromBatch;
-    await supabase
-      .from("shop_stock_batches")
-      .update({ remaining_quantity: newRemaining, updated_at: new Date().toISOString() })
-      .eq("id", batch.id);
+    // Collect batch updates for parallel execution
+    batchUpdates.push({
+      id: batch.id,
+      newRemaining: batch.remaining_quantity - deductFromBatch
+    });
 
     remaining -= deductFromBatch;
   }
+
+  // Update all batches in parallel
+  await Promise.all(batchUpdates.map(update => 
+    supabase
+      .from("shop_stock_batches")
+      .update({ remaining_quantity: update.newRemaining, updated_at: new Date().toISOString() })
+      .eq("id", update.id)
+  ));
 
   return { totalCost, batchesUsed };
 }
@@ -1944,9 +1952,13 @@ serve(async (req) => {
 
         if (saleError) throw saleError;
 
-        // Create sale items and update stock using FIFO
+        // Create sale items and update stock using FIFO - OPTIMIZED with parallel processing
         let actualTotalCost = 0;
-        for (const item of items) {
+        const saleItemsToInsert: any[] = [];
+        const productUpdates: Promise<void>[] = [];
+        
+        // Process all items in parallel for FIFO deduction
+        const itemResults = await Promise.all(items.map(async (item: any) => {
           let itemActualCost = (item.purchase_price || 0) * item.quantity;
           
           // Use FIFO to deduct from batches and get actual cost
@@ -1960,102 +1972,119 @@ serve(async (req) => {
               
               if (batchesUsed.length > 0) {
                 itemActualCost = fifoCost;
-                console.log(`FIFO deduction for ${item.product_name}: ${item.quantity} units, cost: ${fifoCost}, batches used: ${batchesUsed.length}`);
               }
-              
-              // Update average cost after deduction
-              await updateProductAverageCost(supabase, item.product_id, userId);
             } catch (fifoError) {
               console.error("FIFO deduction failed, using fallback:", fifoError);
-              // Fallback to provided purchase_price if FIFO fails
             }
           }
           
+          return { item, itemActualCost };
+        }));
+        
+        // Prepare all sale items for batch insert
+        for (const { item, itemActualCost } of itemResults) {
           const itemProfit = item.total - itemActualCost;
           actualTotalCost += itemActualCost;
           
-          await supabase.from("shop_sale_items").insert({
+          saleItemsToInsert.push({
             sale_id: sale.id,
             product_id: item.product_id,
             product_name: item.product_name,
             quantity: item.quantity,
             unit_price: item.unit_price,
-            purchase_price: itemActualCost / item.quantity, // Store actual average cost per unit
+            purchase_price: itemActualCost / item.quantity,
             discount: item.discount || 0,
             total: item.total,
             profit: itemProfit,
           });
-
-          // Reduce stock in offline shop (already deducted from batches)
-          if (item.product_id) {
-            const { data: product } = await supabase
-              .from("shop_products")
-              .select("stock_quantity, online_sku")
-              .eq("id", item.product_id)
-              .single();
-
+        }
+        
+        // Batch insert all sale items at once
+        if (saleItemsToInsert.length > 0) {
+          await supabase.from("shop_sale_items").insert(saleItemsToInsert);
+        }
+        
+        // Get all products in one query instead of per-item
+        const productIds = items.filter((i: any) => i.product_id).map((i: any) => i.product_id);
+        const { data: products } = await supabase
+          .from("shop_products")
+          .select("id, stock_quantity, online_sku")
+          .in("id", productIds);
+        
+        // Get sync settings once
+        const { data: syncSettings } = await supabase
+          .from("sync_settings")
+          .select("sync_enabled")
+          .eq("user_id", userId)
+          .maybeSingle();
+        
+        // Prepare product stock updates
+        const productStockUpdates: any[] = [];
+        const onlineProductUpdates: any[] = [];
+        
+        for (const item of items) {
+          if (item.product_id && products) {
+            const product = products.find((p: any) => p.id === item.product_id);
             if (product) {
               const newStock = Math.max(0, product.stock_quantity - item.quantity);
-              await supabase
-                .from("shop_products")
-                .update({ stock_quantity: newStock })
-                .eq("id", item.product_id);
-              
-              // If sync is enabled and product has online_sku, update online product stock too
-              if (product.online_sku) {
-                const { data: syncSettings } = await supabase
-                  .from("sync_settings")
-                  .select("sync_enabled")
-                  .eq("user_id", userId)
-                  .maybeSingle();
-                
-                if (syncSettings?.sync_enabled) {
-                  // Update online product stock
-                  await supabase
-                    .from("products")
-                    .update({ stock_quantity: newStock, updated_at: new Date().toISOString() })
-                    .eq("user_id", userId)
-                    .eq("sku", product.online_sku);
-                  
-                  console.log(`Synced stock to online product SKU: ${product.online_sku}, new stock: ${newStock}`);
-                }
-              }
+              productStockUpdates.push({
+                id: item.product_id,
+                stock_quantity: newStock,
+                online_sku: product.online_sku,
+              });
             }
           }
         }
         
-        // Update sale with actual cost and profit
-        const actualTotalProfit = total - actualTotalCost;
-        await supabase
-          .from("shop_sales")
-          .update({ 
-            total_cost: actualTotalCost, 
-            total_profit: actualTotalProfit 
-          })
-          .eq("id", sale.id);
-
-        // Update customer totals
-        if (customer_id) {
-          const { data: customer } = await supabase
-            .from("shop_customers")
-            .select("total_purchases, total_due")
-            .eq("id", customer_id)
-            .single();
-
-          if (customer) {
+        // Update all products and average costs in parallel
+        await Promise.all([
+          // Update shop products stock in batch
+          ...productStockUpdates.map(async (update) => {
             await supabase
+              .from("shop_products")
+              .update({ stock_quantity: update.stock_quantity })
+              .eq("id", update.id);
+            
+            // Update average cost
+            await updateProductAverageCost(supabase, update.id, userId);
+            
+            // Sync to online if enabled
+            if (syncSettings?.sync_enabled && update.online_sku) {
+              await supabase
+                .from("products")
+                .update({ stock_quantity: update.stock_quantity, updated_at: new Date().toISOString() })
+                .eq("user_id", userId)
+                .eq("sku", update.online_sku);
+            }
+          }),
+          // Update sale with actual cost and profit
+          supabase
+            .from("shop_sales")
+            .update({ 
+              total_cost: actualTotalCost, 
+              total_profit: total - actualTotalCost 
+            })
+            .eq("id", sale.id),
+          // Update customer totals if customer_id provided
+          customer_id ? (async () => {
+            const { data: customer } = await supabase
               .from("shop_customers")
-              .update({
-                total_purchases: Number(customer.total_purchases) + total,
-                total_due: Number(customer.total_due) + dueAmount,
-              })
-              .eq("id", customer_id);
-          }
-        }
-
-        // Create cash transaction if payment received
-        if (paid_amount > 0) {
-          await supabase.from("shop_cash_transactions").insert({
+              .select("total_purchases, total_due")
+              .eq("id", customer_id)
+              .single();
+            
+            if (customer) {
+              await supabase
+                .from("shop_customers")
+                .update({
+                  total_purchases: Number(customer.total_purchases) + total,
+                  total_due: Number(customer.total_due) + dueAmount,
+                })
+                .eq("id", customer_id);
+            }
+          })() : Promise.resolve(),
+          // Create cash transaction if payment received
+          paid_amount > 0 ? supabase.from("shop_cash_transactions").insert({
             user_id: userId,
             shop_id: shopId || null,
             type: "in",
@@ -2064,8 +2093,8 @@ serve(async (req) => {
             reference_id: sale.id,
             reference_type: "sale",
             notes: `Sale ${invoiceNumber}`,
-          });
-        }
+          }) : Promise.resolve(),
+        ]);
 
         // Add customer info to response for invoice display
         const saleResponse = {
