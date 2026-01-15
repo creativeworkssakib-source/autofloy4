@@ -334,12 +334,25 @@ export function useOfflineDueCustomers() {
       // Group by customer - prioritize phone number for grouping, then customer_id, then customer name
       const customerMap = new Map<string, any>();
       dueSales.forEach((sale: any) => {
-        const customerPhone = sale.customer_phone || sale.customer?.phone || '';
+        let customerPhone = sale.customer_phone || sale.customer?.phone || '';
         const customerId = sale.customer_id || null;
         // Get customer name from sale or joined customer object
         let customerName = sale.customer_name || sale.customer?.name || '';
         
-        // If no name, use "No Name" - don't use invoice number as name
+        // If no name in direct fields, try to parse from notes (format: "Customer: Name (Phone)")
+        if (!customerName || customerName.trim() === '') {
+          if (sale.notes) {
+            const match = sale.notes.match(/Customer:\s*(.+?)(?:\s*\((.+?)\))?$/);
+            if (match) {
+              customerName = match[1].trim();
+              if (!customerPhone && match[2]) {
+                customerPhone = match[2].trim();
+              }
+            }
+          }
+        }
+        
+        // If still no name, use "No Name"
         if (!customerName || customerName.trim() === '') {
           customerName = 'No Name';
         }
