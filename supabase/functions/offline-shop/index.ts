@@ -4805,7 +4805,6 @@ serve(async (req) => {
           .from("shop_trash")
           .insert({
             user_id: userId,
-            shop_id: shopId,
             original_id: id,
             original_table: "shop_returns",
             data: returnData,
