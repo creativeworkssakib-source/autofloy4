@@ -39,7 +39,6 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useSiteSettings } from "@/contexts/SiteSettingsContext";
 import { DynamicDocumentTitle } from "@/components/DynamicDocumentTitle";
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
 import { BusinessModeSwitcher } from "@/components/dashboard/BusinessModeSwitcher";
 import { SyncStatusBadge } from "@/components/dashboard/SyncStatusBadge";
 import { ShopSelector } from "@/components/offline-shop/ShopSelector";
@@ -48,12 +47,8 @@ import { useOfflineShopTrial, useOfflineGracePeriod } from "@/hooks/useOfflineSh
 import OfflineTrialBanner from "./OfflineTrialBanner";
 import OfflineTrialExpiredOverlay from "./OfflineTrialExpiredOverlay";
 import { FeatureDisabledOverlay } from "@/components/FeatureDisabledOverlay";
-import { OfflineStatusBar } from "./OfflineStatusBar";
 import { OfflineExpiredModal } from "./OfflineExpiredModal";
-import { FloatingSyncIndicator } from "./SyncProgressIndicator";
 import { UpdateNotification } from "./UpdateNotification";
-import { offlineDataService } from "@/services/offlineDataService";
-import { syncManager } from "@/services/syncManager";
 import { appUpdateService } from "@/services/appUpdateService";
 import { useShop } from "@/contexts/ShopContext";
 
@@ -77,28 +72,13 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
   // Check if offline shop is disabled by admin
   const isOfflineShopDisabled = settings.offline_shop_enabled === false;
 
-  // Initialize offline data service with shop and user IDs
+  // Initialize app update service
   useEffect(() => {
-    const initOfflineService = async () => {
-      await offlineDataService.init();
-      if (user?.id) {
-        offlineDataService.setUserId(user.id);
-      }
-      if (currentShop?.id) {
-        offlineDataService.setShopId(currentShop.id);
-      }
-      // Start auto sync (every 30 seconds)
-      syncManager.startAutoSync(30000);
-      
-      // Start auto update check (every 30 minutes)
-      // This ensures APK/EXE/PWA gets latest settings when admin makes changes
-      appUpdateService.startAutoCheck();
-    };
-    
-    initOfflineService();
+    // Start auto update check (every 30 minutes)
+    // This ensures APK/EXE/PWA gets latest settings when admin makes changes
+    appUpdateService.startAutoCheck();
     
     return () => {
-      syncManager.stopAutoSync();
       appUpdateService.stopAutoCheck();
     };
   }, [user?.id, currentShop?.id]);
@@ -296,9 +276,6 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
 
           {/* Page Content */}
           <main className="p-3 sm:p-4 lg:p-6 relative">
-            {/* Offline Status Bar */}
-            <OfflineStatusBar className="mb-4" />
-            
             {/* Show frozen overlay if feature is disabled by admin */}
             {isOfflineShopDisabled && (
               <FeatureDisabledOverlay featureName={language === "bn" ? "অফলাইন শপ সিস্টেম" : "Offline Shop System"} featureType="offline" />
@@ -313,9 +290,6 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
             {children}
           </main>
         </div>
-        
-        {/* Floating Sync Indicator */}
-        <FloatingSyncIndicator />
         
         {/* Update Notification */}
         <UpdateNotification />
