@@ -345,6 +345,12 @@ const ShopSales = () => {
       return;
     }
 
+    // Customer name is required
+    if (!customerName.trim()) {
+      toast.error(language === "bn" ? "গ্রাহকের নাম আবশ্যক" : "Customer name is required");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       // Calculate actual paid (if change, only record the total as paid, not the extra)
@@ -835,11 +841,16 @@ const ShopSales = () => {
               {/* Customer Info */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>{t("shop.customerNameOptional")}</Label>
+                  <Label className="flex items-center gap-1">
+                    {language === "bn" ? "গ্রাহকের নাম" : "Customer Name"}
+                    <span className="text-destructive">*</span>
+                  </Label>
                   <Input
                     value={customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
                     placeholder={t("shop.name")}
+                    required
+                    className={!customerName.trim() && cart.length > 0 ? "border-destructive" : ""}
                   />
                 </div>
                 <div className="space-y-2">
@@ -952,7 +963,7 @@ const ShopSales = () => {
             <Button variant="outline" onClick={() => setIsModalOpen(false)} disabled={isSubmitting}>
               {t("common.cancel")}
             </Button>
-            <Button onClick={handleSubmit} disabled={cart.length === 0 || isSubmitting}>
+            <Button onClick={handleSubmit} disabled={cart.length === 0 || !customerName.trim() || isSubmitting}>
               {isSubmitting ? (
                 <>
                   <span className="animate-spin mr-2">⏳</span>
