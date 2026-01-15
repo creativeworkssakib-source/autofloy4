@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from "react";
+import { lazy, Suspense } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import { 
@@ -12,18 +12,16 @@ import {
   RefreshCw,
   RotateCcw,
   ArrowRight,
-  Plus,
-  Clock,
   Trash2,
   WifiOff,
-  Cloud
+  Plus,
+  Clock
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
-import { toast } from "sonner";
 import ShopLayout from "@/components/offline-shop/ShopLayout";
 import { useOfflineDashboard, useOfflineTrash } from "@/hooks/useOfflineShopData";
 import { useOfflineSettings } from "@/hooks/useOfflineData";
@@ -88,7 +86,7 @@ const ShopDashboard = () => {
   const { data: todayData, loading: isTodayLoading, refetch: loadTodayDashboard } = useOfflineDashboard('today');
   
   // Use trash hook but defer loading
-  const { trash, refetch: refetchTrash } = useOfflineTrash();
+  const { trash } = useOfflineTrash();
   const trashCount = trash?.length || 0;
 
   const isLoading = isTodayLoading;
