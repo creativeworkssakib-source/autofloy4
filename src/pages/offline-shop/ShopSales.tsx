@@ -122,6 +122,7 @@ interface Sale {
   tax: number;
   paid_amount: number;
   due_amount: number;
+  change_amount?: number;
   payment_method: string;
   payment_status: string;
   sale_date: string;
@@ -393,6 +394,7 @@ const ShopSales = () => {
         tax: taxAmount,
         paid_amount: displayPaidAmount,
         due_amount: dueAmount > 0 ? dueAmount : 0,
+        change_amount: changeAmount, // Include change amount for invoice display
         payment_method: paymentMethod,
         payment_status: dueAmount > 0 ? 'partial' : 'paid',
         sale_date: new Date().toISOString(),
@@ -448,6 +450,7 @@ const ShopSales = () => {
         total: Number(viewingSale.total),
         paid_amount: Number(viewingSale.paid_amount),
         due_amount: Number(viewingSale.due_amount),
+        change_amount: Number(viewingSale.change_amount) || 0,
         payment_method: viewingSale.payment_method,
       },
       shopSettings: shopSettings,
@@ -1043,6 +1046,7 @@ const ShopSales = () => {
                     total: Number(viewingSale.total),
                     paid_amount: Number(viewingSale.paid_amount),
                     due_amount: Number(viewingSale.due_amount),
+                    change_amount: Number(viewingSale.change_amount) || 0,
                     payment_method: viewingSale.payment_method,
                   }}
                   shopSettings={{

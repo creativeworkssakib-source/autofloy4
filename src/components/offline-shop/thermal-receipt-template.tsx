@@ -18,6 +18,7 @@ export interface ThermalReceiptData {
     total: number;
     paid_amount: number;
     due_amount: number;
+    change_amount?: number;
     payment_method?: string;
   };
   shopSettings: {
@@ -355,7 +356,7 @@ export const generateThermalReceiptHTML = (data: ThermalReceiptData): string => 
             ` : `
               <div class="total-row">
                 <span>Change</span>
-                <span>${formatAmount(Math.max(0, Number(sale.paid_amount) - Number(sale.total)), currency)}</span>
+                <span>${formatAmount(Number(sale.change_amount) || 0, currency)}</span>
               </div>
             `}
           </div>
@@ -675,7 +676,7 @@ export const ThermalReceiptPreview: React.FC<ThermalReceiptPreviewProps> = ({
         ) : (
           <div className="flex justify-between">
             <span>Change</span>
-            <span>{formatAmount(Math.max(0, Number(sale.paid_amount) - Number(sale.total)), currency)}</span>
+            <span>{formatAmount(Number(sale.change_amount) || 0, currency)}</span>
           </div>
         )}
       </div>
