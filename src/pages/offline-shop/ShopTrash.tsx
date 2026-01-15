@@ -83,7 +83,7 @@ const ShopTrash = () => {
     try {
       setLoading(true);
       const result = await offlineShopService.getTrash();
-      setTrashItems(result.items || []);
+      setTrashItems(result.trash || result.items || []);
       
       // Check if user has passcode set
       const settingsResult = await offlineShopService.getSettings();

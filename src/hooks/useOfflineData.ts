@@ -412,7 +412,8 @@ export function useOfflineTrash() {
     setLoading(true);
     try {
       const result = await offlineShopService.getTrash();
-      setTrash(result.items || []);
+      // API returns { trash: [] }
+      setTrash(result.trash || result.items || []);
     } catch (error) {
       console.error('Failed to fetch trash:', error);
       setTrash([]);
