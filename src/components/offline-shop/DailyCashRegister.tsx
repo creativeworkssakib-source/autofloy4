@@ -82,6 +82,11 @@ export function DailyCashRegister() {
   const [showCloseModal, setShowCloseModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [showQuickExpenseModal, setShowQuickExpenseModal] = useState(false);
+  const [showCashInModal, setShowCashInModal] = useState(false);
+  const [showDueCollectedModal, setShowDueCollectedModal] = useState(false);
+  const [cashInBreakdown, setCashInBreakdown] = useState<any>(null);
+  const [dueCollectedBreakdown, setDueCollectedBreakdown] = useState<any>(null);
+  const [loadingBreakdown, setLoadingBreakdown] = useState(false);
   const [openingCash, setOpeningCash] = useState("");
   const [closingCash, setClosingCash] = useState("");
   const [notes, setNotes] = useState("");
@@ -133,6 +138,13 @@ export function DailyCashRegister() {
     description: language === "bn" ? "বিবরণ" : "Description",
     add: language === "bn" ? "যোগ করুন" : "Add",
     noQuickExpenses: language === "bn" ? "কোনো ছোট খরচ নেই" : "No quick expenses",
+    cashInDetails: language === "bn" ? "ক্যাশ ইন বিস্তারিত" : "Cash In Details",
+    dueCollectedDetails: language === "bn" ? "বাকি আদায় বিস্তারিত" : "Due Collected Details",
+    customer: language === "bn" ? "কাস্টমার" : "Customer",
+    invoice: language === "bn" ? "ইনভয়েস" : "Invoice",
+    time: language === "bn" ? "সময়" : "Time",
+    noData: language === "bn" ? "কোনো ডাটা নেই" : "No data",
+    clickToViewDetails: language === "bn" ? "বিস্তারিত দেখতে ক্লিক করুন" : "Click to view details",
   };
 
   const formatCurrency = (amount: number) => {
@@ -227,6 +239,32 @@ export function DailyCashRegister() {
            Number(todayRegister.total_deposits || 0) - 
            Number(todayRegister.total_expenses || 0) - 
            Number(todayRegister.total_withdrawals || 0);
+  };
+
+  const handleShowCashInDetails = async () => {
+    setShowCashInModal(true);
+    setLoadingBreakdown(true);
+    try {
+      const data = await offlineShopService.getCashFlowBreakdown('cash_in');
+      setCashInBreakdown(data);
+    } catch (error) {
+      console.error("Failed to load cash in breakdown:", error);
+    } finally {
+      setLoadingBreakdown(false);
+    }
+  };
+
+  const handleShowDueCollectedDetails = async () => {
+    setShowDueCollectedModal(true);
+    setLoadingBreakdown(true);
+    try {
+      const data = await offlineShopService.getCashFlowBreakdown('due_collected');
+      setDueCollectedBreakdown(data);
+    } catch (error) {
+      console.error("Failed to load due collected breakdown:", error);
+    } finally {
+      setLoadingBreakdown(false);
+    }
   };
 
   // Functions already defined above with refetch() instead of loadData()
@@ -327,8 +365,11 @@ export function DailyCashRegister() {
                 </CardContent>
               </Card>
 
-              {/* Cash In */}
-              <Card className="border-success/20 bg-success/5">
+              {/* Cash In - Clickable */}
+              <Card 
+                className="border-success/20 bg-success/5 cursor-pointer hover:shadow-md hover:border-success/40 transition-all"
+                onClick={handleShowCashInDetails}
+              >
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
                     <ArrowDownRight className="h-3.5 w-3.5 text-success" />
@@ -403,7 +444,10 @@ export function DailyCashRegister() {
                   <div className="font-semibold text-sm">{formatCurrency(Number(todayRegister.total_cash_sales || 0))}</div>
                 </div>
               </div>
-              <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50">
+              <div 
+                className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 cursor-pointer hover:bg-emerald-500/10 transition-colors"
+                onClick={handleShowDueCollectedDetails}
+              >
                 <TrendingUp className="h-4 w-4 text-emerald-500" />
                 <div>
                   <div className="text-xs text-muted-foreground">{t.dueCollected}</div>
@@ -748,65 +792,140 @@ export function DailyCashRegister() {
         </DialogContent>
       </Dialog>
 
-      {/* History Modal */}
-      <Dialog open={showHistoryModal} onOpenChange={setShowHistoryModal}>
+      {/* Cash In Details Modal */}
+      <Dialog open={showCashInModal} onOpenChange={setShowCashInModal}>
         <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <History className="h-5 w-5" />
-              {t.history} - {t.last7Days}
+              <ArrowDownRight className="h-5 w-5 text-success" />
+              {t.cashInDetails}
             </DialogTitle>
             <DialogDescription>
               {language === "bn" 
-                ? "গত সাত দিনের ক্যাশ রেজিস্টার হিস্ট্রি দেখুন।"
-                : "View cash register history for the last seven days."}
+                ? "আজকে কোথা থেকে কত টাকা এসেছে সব বিস্তারিত দেখুন।"
+                : "View all cash inflow details for today."}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3 py-4">
-            {registers.length === 0 ? (
-              <p className="text-center text-muted-foreground py-8">{t.noHistory}</p>
+          <div className="space-y-4 py-4">
+            {loadingBreakdown ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : cashInBreakdown ? (
+              <>
+                {/* Summary */}
+                <div className="grid grid-cols-2 gap-3">
+                  <Card className="border-success/20 bg-success/5">
+                    <CardContent className="p-3">
+                      <div className="text-xs text-muted-foreground">{t.cashSales}</div>
+                      <div className="text-lg font-bold text-success">{formatCurrency(cashInBreakdown.total_sales || 0)}</div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Sales List */}
+                {cashInBreakdown.sales && cashInBreakdown.sales.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-medium text-muted-foreground">{t.cashSales}</h4>
+                    <div className="space-y-2 max-h-[40vh] overflow-y-auto">
+                      {cashInBreakdown.sales.map((sale: any) => (
+                        <div key={sale.id} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-sm truncate">
+                              {sale.customer_name || (language === "bn" ? "অজানা" : "Unknown")}
+                            </div>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <span className="flex items-center gap-1">
+                                <Receipt className="h-3 w-3" />
+                                {sale.invoice_number}
+                              </span>
+                              <span>•</span>
+                              <span>{sale.sale_date && format(new Date(sale.sale_date), "hh:mm a")}</span>
+                            </div>
+                          </div>
+                          <div className="text-success font-semibold">
+                            {formatCurrency(Number(sale.paid_amount || 0))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {(!cashInBreakdown.sales || cashInBreakdown.sales.length === 0) && (
+                  <p className="text-center text-muted-foreground py-8">{t.noData}</p>
+                )}
+              </>
             ) : (
-              registers.slice(0, 7).map((reg) => (
-                <Card key={reg.id} className={`${reg.status === "open" ? "border-success/30 bg-success/5" : ""}`}>
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-muted-foreground" />
-                        <span className="font-medium">{format(new Date(reg.register_date), "dd MMM yyyy")}</span>
-                        <Badge variant={reg.status === "open" ? "default" : "secondary"} className="text-xs">
-                          {reg.status === "open" ? t.shopOpen : t.shopClosed}
-                        </Badge>
-                      </div>
-                      {reg.cash_difference !== 0 && reg.status === "closed" && (
-                        <Badge variant={reg.cash_difference > 0 ? "secondary" : "destructive"} className="text-xs">
-                          {reg.cash_difference > 0 ? `+${formatCurrency(reg.cash_difference)}` : formatCurrency(reg.cash_difference)}
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="grid grid-cols-4 gap-4 text-sm">
-                      <div>
-                        <div className="text-xs text-muted-foreground">{t.openingCash}</div>
-                        <div className="font-semibold">{formatCurrency(Number(reg.opening_cash))}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-muted-foreground">{t.todaySales}</div>
-                        <div className="font-semibold text-success">{formatCurrency(Number(reg.total_sales || 0))}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-muted-foreground">{t.expenses}</div>
-                        <div className="font-semibold text-destructive">{formatCurrency(Number(reg.total_expenses || 0))}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-muted-foreground">{t.closingCash}</div>
-                        <div className="font-semibold">{reg.closing_cash !== null ? formatCurrency(Number(reg.closing_cash)) : "-"}</div>
-                      </div>
-                    </div>
-                    {reg.notes && (
-                      <p className="text-xs text-muted-foreground mt-2 italic">"{reg.notes}"</p>
-                    )}
+              <p className="text-center text-muted-foreground py-8">{t.noData}</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Due Collected Details Modal */}
+      <Dialog open={showDueCollectedModal} onOpenChange={setShowDueCollectedModal}>
+        <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-emerald-500" />
+              {t.dueCollectedDetails}
+            </DialogTitle>
+            <DialogDescription>
+              {language === "bn" 
+                ? "আজকে কে কত টাকা বাকি শোধ করেছে দেখুন।"
+                : "View all due payments collected today."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {loadingBreakdown ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : dueCollectedBreakdown && dueCollectedBreakdown.collections ? (
+              <>
+                {/* Summary */}
+                <Card className="border-emerald-500/20 bg-emerald-500/5">
+                  <CardContent className="p-3">
+                    <div className="text-xs text-muted-foreground">{t.dueCollected}</div>
+                    <div className="text-lg font-bold text-emerald-600">{formatCurrency(dueCollectedBreakdown.total || 0)}</div>
                   </CardContent>
                 </Card>
-              ))
+
+                {/* Collections List */}
+                {dueCollectedBreakdown.collections.length > 0 ? (
+                  <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+                    {dueCollectedBreakdown.collections.map((collection: any) => (
+                      <div key={collection.id} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm truncate">
+                            {collection.customer_name || (language === "bn" ? "অজানা" : "Unknown")}
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            {collection.invoice_number && (
+                              <>
+                                <span className="flex items-center gap-1">
+                                  <Receipt className="h-3 w-3" />
+                                  {collection.invoice_number}
+                                </span>
+                                <span>•</span>
+                              </>
+                            )}
+                            <span>{collection.created_at && format(new Date(collection.created_at), "hh:mm a")}</span>
+                          </div>
+                        </div>
+                        <div className="text-emerald-600 font-semibold">
+                          {formatCurrency(Number(collection.amount || 0))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-center text-muted-foreground py-8">{t.noData}</p>
+                )}
+              </>
+            ) : (
+              <p className="text-center text-muted-foreground py-8">{t.noData}</p>
             )}
           </div>
         </DialogContent>
