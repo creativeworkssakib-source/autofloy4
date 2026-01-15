@@ -6509,14 +6509,13 @@ serve(async (req) => {
         }
 
         if (type === "cash_out") {
-          // Get expenses from shop_expenses
+          // Get expenses from shop_expenses - using expense_date (DATE type)
           const { data: expenses } = await supabase
             .from("shop_expenses")
             .select("id, amount, description, notes, expense_date, created_at")
             .eq("user_id", userId)
             .eq("shop_id", shopId)
-            .gte("expense_date", todayStart)
-            .lte("expense_date", todayEnd)
+            .eq("expense_date", today)
             .order("created_at", { ascending: false });
 
           // Get cash purchases from shop_cash_transactions (since shop_purchases doesn't have payment_method)
@@ -6561,14 +6560,13 @@ serve(async (req) => {
             };
           }));
 
-          // Get quick expenses
+          // Get quick expenses - using expense_date (DATE type) not created_at
           const { data: quickExpenses } = await supabase
             .from("shop_quick_expenses")
-            .select("id, amount, description, category, created_at")
+            .select("id, amount, description, category, expense_date, created_at")
             .eq("user_id", userId)
             .eq("shop_id", shopId)
-            .gte("created_at", todayStart)
-            .lte("created_at", todayEnd)
+            .eq("expense_date", today)
             .order("created_at", { ascending: false });
 
           // Get change returns (withdrawals marked as change_return)
