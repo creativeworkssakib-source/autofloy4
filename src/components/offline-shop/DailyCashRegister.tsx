@@ -151,6 +151,7 @@ export function DailyCashRegister() {
     daySummary: language === "bn" ? "দিনের সারাংশ" : "Day Summary",
     totalCashIn: language === "bn" ? "মোট ক্যাশ ইন" : "Total Cash In",
     totalCashOut: language === "bn" ? "মোট খরচ" : "Total Cash Out",
+    todaysEarning: language === "bn" ? "আজকের আয়" : "Today's Earning",
   };
 
   const formatCurrency = (amount: number) => {
@@ -698,8 +699,16 @@ export function DailyCashRegister() {
                     </span>
                   </div>
                   <div className="flex justify-between items-center p-2 bg-primary/10 rounded">
-                    <span className="text-muted-foreground font-medium">{t.expectedCash}</span>
-                    <span className="font-bold text-primary">{formatCurrency(getCurrentCashBalance())}</span>
+                    <span className="text-muted-foreground font-medium">{t.todaysEarning}</span>
+                    <span className="font-bold text-primary">
+                      {formatCurrency(
+                        Number(todayRegister?.total_cash_sales || 0) + 
+                        Number(todayRegister?.total_due_collected || 0) + 
+                        Number(todayRegister?.total_deposits || 0) -
+                        Number(todayRegister?.total_expenses || 0) - 
+                        Number(todayRegister?.total_withdrawals || 0)
+                      )}
+                    </span>
                   </div>
                 </div>
               </CardContent>
@@ -917,15 +926,24 @@ export function DailyCashRegister() {
                       <div className="text-lg font-bold text-success">{formatCurrency(cashInBreakdown.total_sales || 0)}</div>
                     </CardContent>
                   </Card>
+                  <Card className="border-emerald-500/20 bg-emerald-500/5">
+                    <CardContent className="p-3">
+                      <div className="text-xs text-muted-foreground">{t.dueCollected}</div>
+                      <div className="text-lg font-bold text-emerald-600">{formatCurrency(cashInBreakdown.total_due_collected || 0)}</div>
+                    </CardContent>
+                  </Card>
                 </div>
 
-                {/* Sales List */}
+                {/* Cash Sales List */}
                 {cashInBreakdown.sales && cashInBreakdown.sales.length > 0 && (
                   <div className="space-y-2">
-                    <h4 className="text-sm font-medium text-muted-foreground">{t.cashSales}</h4>
-                    <div className="space-y-2 max-h-[40vh] overflow-y-auto">
+                    <h4 className="text-sm font-medium text-success flex items-center gap-2">
+                      <ShoppingCart className="h-4 w-4" />
+                      {t.cashSales} ({cashInBreakdown.sales.length})
+                    </h4>
+                    <div className="space-y-2 max-h-[25vh] overflow-y-auto border rounded-lg p-2">
                       {cashInBreakdown.sales.map((sale: any) => (
-                        <div key={sale.id} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                        <div key={sale.id} className="flex items-center justify-between p-3 bg-success/5 rounded-lg border border-success/20">
                           <div className="flex-1 min-w-0">
                             <div className="font-medium text-sm truncate">
                               {sale.customer_name || (language === "bn" ? "অজানা" : "Unknown")}
@@ -948,7 +966,44 @@ export function DailyCashRegister() {
                   </div>
                 )}
 
-                {(!cashInBreakdown.sales || cashInBreakdown.sales.length === 0) && (
+                {/* Due Collections List */}
+                {cashInBreakdown.due_collections && cashInBreakdown.due_collections.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-medium text-emerald-600 flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4" />
+                      {t.dueCollected} ({cashInBreakdown.due_collections.length})
+                    </h4>
+                    <div className="space-y-2 max-h-[25vh] overflow-y-auto border rounded-lg p-2">
+                      {cashInBreakdown.due_collections.map((collection: any) => (
+                        <div key={collection.id} className="flex items-center justify-between p-3 bg-emerald-500/5 rounded-lg border border-emerald-500/20">
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-sm truncate">
+                              {collection.customer_name || (language === "bn" ? "অজানা" : "Unknown")}
+                            </div>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              {collection.invoice_number && (
+                                <>
+                                  <span className="flex items-center gap-1">
+                                    <Receipt className="h-3 w-3" />
+                                    {collection.invoice_number}
+                                  </span>
+                                  <span>•</span>
+                                </>
+                              )}
+                              <span>{collection.created_at && format(new Date(collection.created_at), "hh:mm a")}</span>
+                            </div>
+                          </div>
+                          <div className="text-emerald-600 font-semibold">
+                            {formatCurrency(Number(collection.amount || 0))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {(!cashInBreakdown.sales || cashInBreakdown.sales.length === 0) && 
+                 (!cashInBreakdown.due_collections || cashInBreakdown.due_collections.length === 0) && (
                   <p className="text-center text-muted-foreground py-8">{t.noData}</p>
                 )}
               </>
