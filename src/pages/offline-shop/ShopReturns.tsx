@@ -1312,38 +1312,38 @@ export default function ShopReturns() {
               <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
                 <Card className="bg-muted/30">
                   <CardContent className="pt-4 pb-3">
-                    <p className="text-sm text-muted-foreground">Total Returns</p>
-                    <p className="text-2xl font-bold">{reportData.totalReturns}</p>
+                    <span className="text-sm text-muted-foreground block">Total Returns</span>
+                    <span className="text-2xl font-bold block">{reportData.totalReturns}</span>
                   </CardContent>
                 </Card>
                 <Card className="bg-amber-500/10 border-amber-500/30">
                   <CardContent className="pt-4 pb-3">
-                    <p className="text-sm text-amber-700">Total Refunds</p>
-                    <p className="text-2xl font-bold text-amber-700">৳{(reportData.totalRefundValue || 0).toFixed(0)}</p>
+                    <span className="text-sm text-amber-700 block">Total Refunds</span>
+                    <span className="text-2xl font-bold text-amber-700 block">৳{(reportData.totalRefundValue || 0).toFixed(0)}</span>
                   </CardContent>
                 </Card>
                 <Card className="bg-destructive/10 border-destructive/30">
                   <CardContent className="pt-4 pb-3">
                     <div className="flex items-center gap-1">
                       <TrendingDown className="h-4 w-4 text-destructive" />
-                      <p className="text-sm text-destructive">Total Loss</p>
+                      <span className="text-sm text-destructive">Total Loss</span>
                     </div>
-                    <p className="text-2xl font-bold text-destructive">৳{(reportData.totalLoss || 0).toFixed(0)}</p>
+                    <span className="text-2xl font-bold text-destructive block">৳{(reportData.totalLoss || 0).toFixed(0)}</span>
                   </CardContent>
                 </Card>
                 <Card className="bg-green-500/10 border-green-500/30">
                   <CardContent className="pt-4 pb-3">
-                    <p className="text-sm text-green-700">Resellable</p>
-                    <p className="text-2xl font-bold text-green-700">{reportData.resellableCount}</p>
+                    <span className="text-sm text-green-700 block">Resellable</span>
+                    <span className="text-2xl font-bold text-green-700 block">{reportData.resellableCount}</span>
                   </CardContent>
                 </Card>
                 <Card className="bg-red-500/10 border-red-500/30">
                   <CardContent className="pt-4 pb-3">
                     <div className="flex items-center gap-1">
                       <AlertTriangle className="h-4 w-4 text-red-600" />
-                      <p className="text-sm text-red-600">Damaged</p>
+                      <span className="text-sm text-red-600">Damaged</span>
                     </div>
-                    <p className="text-2xl font-bold text-red-600">{reportData.damagedCount}</p>
+                    <span className="text-2xl font-bold text-red-600 block">{reportData.damagedCount}</span>
                   </CardContent>
                 </Card>
               </div>
@@ -1373,8 +1373,8 @@ export default function ShopReturns() {
                               <span className="text-sm font-medium truncate max-w-[150px]">{product.name}</span>
                             </div>
                             <div className="text-right">
-                              <p className="text-sm font-bold">{product.count} pcs</p>
-                              <p className="text-xs text-muted-foreground">৳{(product.refund || 0).toFixed(0)} refund</p>
+                              <span className="text-sm font-bold block">{product.count} pcs</span>
+                              <span className="text-xs text-muted-foreground block">৳{(product.refund || 0).toFixed(0)} refund</span>
                             </div>
                           </div>
                         ))}
@@ -1623,14 +1623,14 @@ export default function ShopReturns() {
                       <RotateCcw className="h-4 w-4 text-amber-600" />
                       <span className="text-sm font-medium text-amber-700">Return History</span>
                     </div>
-                    <div className="flex gap-4 text-sm">
+                      <div className="flex gap-4 text-sm">
                       <div className="text-center">
-                        <p className="text-muted-foreground">Total Returns</p>
-                        <p className="font-bold text-lg text-amber-600">{customerReturnStats.total_returns}</p>
+                        <span className="text-muted-foreground block">Total Returns</span>
+                        <span className="font-bold text-lg text-amber-600 block">{customerReturnStats.total_returns}</span>
                       </div>
                       <div className="text-center">
-                        <p className="text-muted-foreground">Total Refunds</p>
-                        <p className="font-bold text-lg text-amber-600">৳{(customerReturnStats.total_refund_value || 0).toFixed(2)}</p>
+                        <span className="text-muted-foreground block">Total Refunds</span>
+                        <span className="font-bold text-lg text-amber-600 block">৳{(customerReturnStats.total_refund_value || 0).toFixed(2)}</span>
                       </div>
                     </div>
                   </div>
