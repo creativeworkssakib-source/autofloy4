@@ -166,6 +166,12 @@ class RealtimeSyncManager {
       clearTimeout(existingTimer);
     }
     
+    // Skip if too many pending updates to prevent overload
+    if (this.pendingUpdates > 20) {
+      console.log('[RealtimeSync] Too many pending updates, skipping to prevent freeze');
+      return;
+    }
+    
     const timer = setTimeout(async () => {
       try {
         // Check for deduplication
@@ -194,7 +200,7 @@ class RealtimeSyncManager {
       }
       
       this.syncDebounceTimers.delete(debounceKey);
-    }, 100); // 100ms debounce
+    }, 500); // 500ms debounce (increased from 100ms to reduce CPU load)
     
     this.syncDebounceTimers.set(debounceKey, timer);
     this.pendingUpdates++;

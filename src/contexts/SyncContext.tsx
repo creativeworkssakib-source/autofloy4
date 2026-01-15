@@ -53,7 +53,7 @@ export function SyncProvider({ children }: SyncProviderProps) {
   const orchestratorRef = useRef<any>(null);
 
   // Initialize sync orchestrator when shop and user are available
-  // NOW WORKS FOR ALL PLATFORMS including browser
+  // ONLY for installed apps (PWA/APK/EXE) - browser uses server-first
   useEffect(() => {
     // Skip if no shop or user
     if (!currentShop?.id || !user?.id) {
@@ -65,7 +65,14 @@ export function SyncProvider({ children }: SyncProviderProps) {
       return;
     }
 
-    // Initialize for ALL platforms now (browser included for caching)
+    // PERFORMANCE FIX: Skip sync orchestrator in browser mode
+    // Browser uses server-first strategy, no need for heavy offline sync
+    if (!isInstalled()) {
+      console.log('[SyncProvider] Browser mode - skipping sync orchestrator for performance');
+      return;
+    }
+
+    // Initialize only for installed apps (PWA/APK/EXE)
 
     console.log('[SyncProvider] Initializing sync for shop:', currentShop.id);
     
