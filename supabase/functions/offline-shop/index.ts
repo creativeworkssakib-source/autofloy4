@@ -4722,7 +4722,7 @@ serve(async (req) => {
         }
 
         // Also insert into shop_returns table for tracking
-        await supabase.from("shop_returns").insert({
+        const { error: returnInsertError } = await supabase.from("shop_returns").insert({
           user_id: userId,
           shop_id: shopId,
           product_id: items[0]?.product_id || null,
@@ -4733,15 +4733,17 @@ serve(async (req) => {
           return_reason: reason || "Customer return",
           return_date: new Date().toISOString().split("T")[0],
           refund_amount: finalRefund,
-          refund_method: from_cash ? 'cash' : 'none',
-          unit_cost: items[0]?.unit_cost || 0,
-          notes: notes || null,
+          notes: from_cash ? `[From Cash] ${notes || ''}`.trim() : (notes || null),
           status: "processed",
           original_sale_id: sale_id || null,
           is_resellable,
           loss_amount: finalLoss,
           stock_restored: is_resellable,
         });
+
+        if (returnInsertError) {
+          console.error("Failed to insert return record:", returnInsertError);
+        }
 
         const message = is_resellable 
           ? `Return created. Stock restored (+${items[0]?.quantity || 1}). Refund: ৳${finalRefund}`
