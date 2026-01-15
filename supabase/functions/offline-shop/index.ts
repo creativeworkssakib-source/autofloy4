@@ -4568,8 +4568,9 @@ serve(async (req) => {
           product_name,
           customer_id,
           customer_name,
+          from_cash = true, // New parameter - whether to deduct from cash register
         } = await req.json();
-        console.log("Processing return:", { sale_id, items, refund_amount, reason, is_resellable, loss_amount });
+        console.log("Processing return:", { sale_id, items, refund_amount, reason, is_resellable, loss_amount, from_cash });
 
         // Get the original sale if sale_id is provided
         let sale: any = null;
@@ -4679,21 +4680,23 @@ serve(async (req) => {
         const finalRefund = refund_amount || totalRefund;
         const finalLoss = loss_amount || (is_resellable ? 0 : finalRefund);
 
-        // Create cash out transaction for refund (always for customer returns)
-        if (finalRefund > 0 && refund_method === 'cash') {
+        // Create cash out transaction for refund (only if from_cash is true)
+        const amountToDeduct = is_resellable ? finalRefund : finalLoss;
+        if (from_cash && amountToDeduct > 0) {
           await supabase.from("shop_cash_transactions").insert({
             user_id: userId,
+            shop_id: shopId,
             type: "out",
             source: "return",
-            amount: finalRefund,
+            amount: amountToDeduct,
             reference_id: sale_id || null,
             reference_type: "return",
             notes: is_resellable 
               ? `Refund (resellable) for ${sale?.invoice_number || 'manual return'}. ${reason || ""}`
-              : `Refund (damaged - loss: ৳${finalLoss}) for ${sale?.invoice_number || 'manual return'}. ${reason || ""}`,
+              : `Loss (damaged - ৳${finalLoss}) for ${sale?.invoice_number || 'manual return'}. ${reason || ""}`,
             transaction_date: new Date().toISOString().split("T")[0],
           });
-          console.log(`Cash out created: ৳${finalRefund} for return`);
+          console.log(`Cash out created: ৳${amountToDeduct} for return (from_cash: ${from_cash})`);
         }
 
         // Adjust sale profit if there's a loss
