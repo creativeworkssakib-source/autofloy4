@@ -6246,6 +6246,18 @@ serve(async (req) => {
             .lte("transaction_date", todayEnd)
             .order("created_at", { ascending: false });
 
+          // Get due collections (for showing in cash_in breakdown)
+          const { data: dueCollections } = await supabase
+            .from("shop_cash_transactions")
+            .select("id, amount, notes, reference_id, created_at")
+            .eq("user_id", userId)
+            .eq("shop_id", shopId)
+            .eq("type", "in")
+            .eq("source", "due_collection")
+            .gte("transaction_date", todayStart)
+            .lte("transaction_date", todayEnd)
+            .order("created_at", { ascending: false });
+
           // Parse customer name from notes for older sales
           const processedSales = (sales || []).map((sale: any) => {
             let customerName = sale.customer_name || '';
@@ -6272,11 +6284,50 @@ serve(async (req) => {
             source: 'deposit'
           }));
 
+          // Enrich due collections with sale info
+          const enrichedDueCollections = await Promise.all((dueCollections || []).map(async (dc: any) => {
+            let customerName = '';
+            let customerPhone = '';
+            let invoiceNumber = '';
+            
+            if (dc.reference_id) {
+              const { data: sale } = await supabase
+                .from("shop_sales")
+                .select("invoice_number, customer_name, customer_phone, notes")
+                .eq("id", dc.reference_id)
+                .maybeSingle();
+              
+              if (sale) {
+                invoiceNumber = sale.invoice_number || '';
+                customerName = sale.customer_name || '';
+                customerPhone = sale.customer_phone || '';
+                if (!customerName && sale.notes) {
+                  const match = sale.notes.match(/Customer:\s*(.+?)(?:\s*\((.+?)\))?$/);
+                  if (match) {
+                    customerName = match[1].trim();
+                    if (!customerPhone && match[2]) {
+                      customerPhone = match[2].trim();
+                    }
+                  }
+                }
+              }
+            }
+
+            return {
+              ...dc,
+              customer_name: customerName,
+              customer_phone: customerPhone,
+              invoice_number: invoiceNumber
+            };
+          }));
+
           return new Response(JSON.stringify({ 
             sales: processedSales,
             deposits: processedDeposits,
+            due_collections: enrichedDueCollections,
             total_sales: processedSales.reduce((sum: number, s: any) => sum + Number(s.paid_amount || 0), 0),
-            total_deposits: processedDeposits.reduce((sum: number, d: any) => sum + Number(d.amount || 0), 0)
+            total_deposits: processedDeposits.reduce((sum: number, d: any) => sum + Number(d.amount || 0), 0),
+            total_due_collected: enrichedDueCollections.reduce((sum: number, c: any) => sum + Number(c.amount || 0), 0)
           }), {
             status: 200,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
