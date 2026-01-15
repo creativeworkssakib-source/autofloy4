@@ -89,6 +89,8 @@ export function DailyCashRegister() {
   const [quickExpenseAmount, setQuickExpenseAmount] = useState("");
   const [quickExpenseDescription, setQuickExpenseDescription] = useState("");
   const [quickExpenseCategory, setQuickExpenseCategory] = useState("other");
+  const [showCashInDetails, setShowCashInDetails] = useState(false);
+  const [showCashOutDetails, setShowCashOutDetails] = useState(false);
   
   // Get suggested opening cash from last closed register
   const suggestedOpening = registers.find((r: CashRegister) => r.status === "closed")?.closing_cash || 0;
@@ -133,6 +135,14 @@ export function DailyCashRegister() {
     description: language === "bn" ? "বিবরণ" : "Description",
     add: language === "bn" ? "যোগ করুন" : "Add",
     noQuickExpenses: language === "bn" ? "কোনো ছোট খরচ নেই" : "No quick expenses",
+    cashInDetails: language === "bn" ? "ক্যাশ ইন বিবরণ" : "Cash In Details",
+    cashOutDetails: language === "bn" ? "ক্যাশ আউট বিবরণ" : "Cash Out Details",
+    fromSales: language === "bn" ? "বিক্রি থেকে" : "From Sales",
+    fromDueCollection: language === "bn" ? "বাকি আদায় থেকে" : "From Due Collection",
+    fromDeposits: language === "bn" ? "জমা থেকে" : "From Deposits",
+    regularExpenses: language === "bn" ? "নিয়মিত খরচ" : "Regular Expenses",
+    quickExpenses: language === "bn" ? "ছোট খরচ" : "Quick Expenses",
+    withdrawals: language === "bn" ? "উত্তোলন" : "Withdrawals",
   };
 
   const formatCurrency = (amount: number) => {
@@ -223,9 +233,24 @@ export function DailyCashRegister() {
     if (!todayRegister) return 0;
     return Number(todayRegister.opening_cash) + 
            Number(todayRegister.total_cash_sales || 0) + 
-           Number(todayRegister.total_due_collected || 0) + 
            Number(todayRegister.total_deposits || 0) - 
            Number(todayRegister.total_expenses || 0) - 
+           Number(todayRegister.total_quick_expenses || 0) - 
+           Number(todayRegister.total_due_collected || 0) - 
+           Number(todayRegister.total_withdrawals || 0);
+  };
+
+  const getTotalCashIn = () => {
+    if (!todayRegister) return 0;
+    return Number(todayRegister.total_cash_sales || 0) + 
+           Number(todayRegister.total_deposits || 0);
+  };
+
+  const getTotalCashOut = () => {
+    if (!todayRegister) return 0;
+    return Number(todayRegister.total_expenses || 0) + 
+           Number(todayRegister.total_quick_expenses || 0) + 
+           Number(todayRegister.total_due_collected || 0) + 
            Number(todayRegister.total_withdrawals || 0);
   };
 
@@ -327,19 +352,18 @@ export function DailyCashRegister() {
                 </CardContent>
               </Card>
 
-              {/* Cash In */}
-              <Card className="border-success/20 bg-success/5">
+              {/* Cash In - Clickable */}
+              <Card 
+                className="border-success/20 bg-success/5 cursor-pointer hover:bg-success/10 transition-colors"
+                onClick={() => setShowCashInDetails(true)}
+              >
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
                     <ArrowDownRight className="h-3.5 w-3.5 text-success" />
                     {t.cashIn}
                   </div>
                   <div className="text-xl font-bold text-success">
-                    {formatCurrency(
-                      Number(todayRegister.total_cash_sales || 0) + 
-                      Number(todayRegister.total_due_collected || 0) + 
-                      Number(todayRegister.total_deposits || 0)
-                    )}
+                    {formatCurrency(getTotalCashIn())}
                   </div>
                   <div className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
                     <ShoppingCart className="h-3 w-3" />
@@ -348,22 +372,22 @@ export function DailyCashRegister() {
                 </CardContent>
               </Card>
 
-              {/* Cash Out */}
-              <Card className="border-destructive/20 bg-destructive/5">
+              {/* Cash Out - Clickable (includes Due Collected) */}
+              <Card 
+                className="border-destructive/20 bg-destructive/5 cursor-pointer hover:bg-destructive/10 transition-colors"
+                onClick={() => setShowCashOutDetails(true)}
+              >
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
                     <ArrowUpRight className="h-3.5 w-3.5 text-destructive" />
                     {t.cashOut}
                   </div>
                   <div className="text-xl font-bold text-destructive">
-                    {formatCurrency(
-                      Number(todayRegister.total_expenses || 0) + 
-                      Number(todayRegister.total_withdrawals || 0)
-                    )}
+                    {formatCurrency(getTotalCashOut())}
                   </div>
                   <div className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                    <Receipt className="h-3 w-3" />
-                    {formatCurrency(Number(todayRegister.total_expenses || 0))}
+                    <TrendingUp className="h-3 w-3" />
+                    {formatCurrency(Number(todayRegister.total_due_collected || 0))}
                   </div>
                 </CardContent>
               </Card>
@@ -388,7 +412,7 @@ export function DailyCashRegister() {
 
           {/* Today's Breakdown - Simplified */}
           {hasOpenRegister && todayRegister && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
               <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50">
                 <ShoppingCart className="h-4 w-4 text-primary" />
                 <div>
@@ -401,13 +425,6 @@ export function DailyCashRegister() {
                 <div>
                   <div className="text-xs text-muted-foreground">{t.cashSales}</div>
                   <div className="font-semibold text-sm">{formatCurrency(Number(todayRegister.total_cash_sales || 0))}</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50">
-                <TrendingUp className="h-4 w-4 text-emerald-500" />
-                <div>
-                  <div className="text-xs text-muted-foreground">{t.dueCollected}</div>
-                  <div className="font-semibold text-sm">{formatCurrency(Number(todayRegister.total_due_collected || 0))}</div>
                 </div>
               </div>
               <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50">
@@ -809,6 +826,139 @@ export function DailyCashRegister() {
               ))
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cash In Details Modal */}
+      <Dialog open={showCashInDetails} onOpenChange={setShowCashInDetails}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ArrowDownRight className="h-5 w-5 text-success" />
+              {t.cashInDetails}
+            </DialogTitle>
+            <DialogDescription>
+              {language === "bn" 
+                ? "আজ কোথা থেকে কত টাকা এসেছে দেখুন।"
+                : "See where today's cash came from."}
+            </DialogDescription>
+          </DialogHeader>
+          {todayRegister && (
+            <div className="space-y-3 py-4">
+              <Card className="border-success/20 bg-success/5">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <ShoppingCart className="h-4 w-4 text-success" />
+                      <span className="text-sm">{t.fromSales}</span>
+                    </div>
+                    <span className="font-bold text-success">{formatCurrency(Number(todayRegister.total_cash_sales || 0))}</span>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="border-blue-500/20 bg-blue-500/5">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Wallet className="h-4 w-4 text-blue-500" />
+                      <span className="text-sm">{t.fromDeposits}</span>
+                    </div>
+                    <span className="font-bold text-blue-500">{formatCurrency(Number(todayRegister.total_deposits || 0))}</span>
+                  </div>
+                </CardContent>
+              </Card>
+              <div className="border-t pt-3 mt-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">{language === "bn" ? "মোট ক্যাশ ইন" : "Total Cash In"}</span>
+                  <span className="font-bold text-lg text-success">{formatCurrency(getTotalCashIn())}</span>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCashInDetails(false)}>
+              {language === "bn" ? "বন্ধ করুন" : "Close"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cash Out Details Modal */}
+      <Dialog open={showCashOutDetails} onOpenChange={setShowCashOutDetails}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ArrowUpRight className="h-5 w-5 text-destructive" />
+              {t.cashOutDetails}
+            </DialogTitle>
+            <DialogDescription>
+              {language === "bn" 
+                ? "আজ কোথায় কত টাকা গেছে দেখুন।"
+                : "See where today's cash went."}
+            </DialogDescription>
+          </DialogHeader>
+          {todayRegister && (
+            <div className="space-y-3 py-4">
+              <Card className="border-emerald-500/20 bg-emerald-500/5">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4 text-emerald-600" />
+                      <span className="text-sm">{t.dueCollected}</span>
+                    </div>
+                    <span className="font-bold text-emerald-600">{formatCurrency(Number(todayRegister.total_due_collected || 0))}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {language === "bn" ? "কাস্টমারদের বাকি আদায়" : "Collected from customer dues"}
+                  </p>
+                </CardContent>
+              </Card>
+              <Card className="border-destructive/20 bg-destructive/5">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Receipt className="h-4 w-4 text-destructive" />
+                      <span className="text-sm">{t.regularExpenses}</span>
+                    </div>
+                    <span className="font-bold text-destructive">{formatCurrency(Number(todayRegister.total_expenses || 0))}</span>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="border-amber-500/20 bg-amber-500/5">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Coins className="h-4 w-4 text-amber-600" />
+                      <span className="text-sm">{t.quickExpenses}</span>
+                    </div>
+                    <span className="font-bold text-amber-600">{formatCurrency(Number(todayRegister.total_quick_expenses || 0))}</span>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="border-purple-500/20 bg-purple-500/5">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Banknote className="h-4 w-4 text-purple-600" />
+                      <span className="text-sm">{t.withdrawals}</span>
+                    </div>
+                    <span className="font-bold text-purple-600">{formatCurrency(Number(todayRegister.total_withdrawals || 0))}</span>
+                  </div>
+                </CardContent>
+              </Card>
+              <div className="border-t pt-3 mt-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">{language === "bn" ? "মোট ক্যাশ আউট" : "Total Cash Out"}</span>
+                  <span className="font-bold text-lg text-destructive">{formatCurrency(getTotalCashOut())}</span>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCashOutDetails(false)}>
+              {language === "bn" ? "বন্ধ করুন" : "Close"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>
