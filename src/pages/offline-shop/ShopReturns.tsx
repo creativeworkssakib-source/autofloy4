@@ -65,7 +65,6 @@ import {
 import SupplierReturnsTab from "@/components/offline-shop/SupplierReturnsTab";
 import { DeleteConfirmDialog } from "@/components/offline-shop/DeleteConfirmDialog";
 import { useOfflineReturns, useOfflineProductsSimple } from "@/hooks/useOfflineShopData";
-import { offlineDataService } from "@/services/offlineDataService";
 import { offlineShopService } from "@/services/offlineShopService";
 
 
@@ -223,7 +222,7 @@ export default function ShopReturns() {
   const fetchReturns = async () => {
     setLoading(true);
     try {
-      const result = await offlineDataService.getReturns();
+      const result = await offlineShopService.getReturns();
       setReturns((result.returns as unknown as ShopReturn[]) || []);
     } catch (error) {
       console.error("Fetch returns error:", error);
@@ -234,7 +233,7 @@ export default function ShopReturns() {
 
   const fetchProducts = async () => {
     try {
-      const result = await offlineDataService.getProducts();
+      const result = await offlineShopService.getProducts();
       setProducts(result.products.map((p: any) => ({ id: p.id, name: p.name, selling_price: p.selling_price })) || []);
     } catch (error) {
       console.error("Fetch products error:", error);
@@ -243,7 +242,7 @@ export default function ShopReturns() {
 
   const fetchCustomers = async () => {
     try {
-      const result = await offlineDataService.getCustomers();
+      const result = await offlineShopService.getCustomers();
       if (result.customers) {
         setCustomers(result.customers.map((c: any) => ({
           id: c.id,
@@ -257,7 +256,7 @@ export default function ShopReturns() {
     }
   };
 
-  // Search customers by name or phone for returns - offline supported
+  // Search customers by name or phone for returns - uses Supabase
   const searchCustomersForReturn = async (query: string) => {
     if (!query.trim()) {
       setSearchedCustomers([]);
@@ -266,10 +265,10 @@ export default function ShopReturns() {
 
     setIsSearchingCustomers(true);
     try {
-      // Use local offline data for customer search
-      const result = await offlineDataService.getCustomers();
+      // Use offlineShopService for customer search
+      const result = await offlineShopService.getCustomers();
       const allCustomers = result.customers || [];
-      const salesResult = await offlineDataService.getSales();
+      const salesResult = await offlineShopService.getSales();
       const allSales = salesResult.sales || [];
       
       const queryLower = query.toLowerCase();
@@ -321,10 +320,10 @@ export default function ShopReturns() {
     }
   };
 
-  // Fetch customer purchase history - offline supported
+  // Fetch customer purchase history - uses Supabase
   const fetchCustomerHistory = async (customer: Customer) => {
     try {
-      const salesResult = await offlineDataService.getSales();
+      const salesResult = await offlineShopService.getSales();
       const allSales = salesResult.sales || [];
       
       let customerSales: any[] = [];
@@ -382,7 +381,7 @@ export default function ShopReturns() {
     toast.success(`Selected: ${item.product_name} from ${format(new Date(sale.sale_date), "dd/MM/yyyy")}`);
   };
 
-  // Quick add return from search results - offline supported
+  // Quick add return from search results - uses Supabase
   const [pendingReturnCustomer, setPendingReturnCustomer] = useState<Customer | null>(null);
 
   const quickAddReturnForCustomer = async (customer: Customer) => {
@@ -396,9 +395,9 @@ export default function ShopReturns() {
       return_date: new Date().toISOString().split("T")[0],
     });
 
-    // Fetch customer history using local data
+    // Fetch customer history using Supabase
     try {
-      const salesResult = await offlineDataService.getSales();
+      const salesResult = await offlineShopService.getSales();
       const allSales = salesResult.sales || [];
       
       let customerSales: any[] = [];
@@ -569,61 +568,22 @@ export default function ShopReturns() {
     }
 
     try {
-      // Use offlineDataService for offline-first return creation
-      const returnData = {
-        return_type: 'sale' as const,
-        reference_id: formData.original_sale_id || '',
-        reference_invoice: '',
-        product_id: formData.product_id,
-        product_name: formData.product_name,
-        quantity: formData.quantity,
-        unit_price: formData.refund_amount,
-        total_amount: formData.refund_amount * formData.quantity,
+      // Use offlineShopService for return creation
+      const result = await offlineShopService.processReturn({
+        sale_id: formData.original_sale_id || '',
+        items: [{
+          product_id: formData.product_id,
+          quantity: formData.quantity,
+        }],
+        refund_amount: formData.refund_amount * formData.quantity,
         reason: formData.return_reason,
         notes: formData.notes,
-        return_date: formData.return_date,
-        customer_id: formData.customer_id,
-        customer_name: formData.customer_name,
-        photo_url: formData.photo_url,
-        status: formData.status,
-        is_resellable: formData.is_resellable,
-        loss_amount: formData.loss_amount,
-      };
-
-      const result = await offlineDataService.createReturn(returnData);
+      });
       
-      if (result.return) {
-        // Convert to the local interface format
-        const newReturn: ShopReturn = {
-          id: result.return.id,
-          product_id: result.return.product_id,
-          product_name: result.return.product_name,
-          customer_id: formData.customer_id || null,
-          customer_name: formData.customer_name || null,
-          quantity: result.return.quantity,
-          return_reason: result.return.reason || '',
-          return_date: result.return.return_date,
-          refund_amount: result.return.total_amount,
-          notes: result.return.notes || null,
-          photo_url: formData.photo_url || null,
-          status: formData.status,
-          created_at: result.return.created_at,
-          is_resellable: formData.is_resellable,
-          loss_amount: formData.loss_amount,
-          original_sale_id: formData.original_sale_id || null,
-          original_sale_date: formData.original_sale_date || null,
-          original_unit_price: formData.original_unit_price,
-          stock_restored: false,
-        };
-        
-        setReturns([newReturn, ...returns]);
-        toast.success(result.offline 
-          ? (language === "bn" ? "রিটার্ন যোগ হয়েছে (অফলাইন)" : "Return added (offline)")
-          : (language === "bn" ? "রিটার্ন যোগ হয়েছে" : "Return added successfully")
-        );
-        setIsAddOpen(false);
-        resetForm();
-      }
+      toast.success(language === "bn" ? "রিটার্ন যোগ হয়েছে" : "Return added successfully");
+      setIsAddOpen(false);
+      resetForm();
+      fetchReturns();
     } catch (error) {
       console.error("Submit error:", error);
       toast.error("Failed to add return");

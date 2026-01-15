@@ -126,7 +126,7 @@ interface CalculationHistory {
 
 const ShopPriceCalculator = () => {
   const { language } = useLanguage();
-  const { products, loading, fromCache, isOnline } = useOfflineProductsSimple();
+  const { products, loading, isOnline } = useOfflineProductsSimple();
   const [purchasePrice, setPurchasePrice] = useState<string>("");
   const [productName, setProductName] = useState<string>("");
   const [category, setCategory] = useState<string>("general");

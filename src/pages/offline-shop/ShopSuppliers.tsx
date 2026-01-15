@@ -51,7 +51,6 @@ import { toast } from "sonner";
 import ShopLayout from "@/components/offline-shop/ShopLayout";
 import AddToStockModal, { PurchasedProduct } from "@/components/offline-shop/AddToStockModal";
 import { offlineShopService } from "@/services/offlineShopService";
-import { offlineDataService } from "@/services/offlineDataService";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 interface Supplier {
@@ -272,12 +271,12 @@ const ShopSuppliers = () => {
     if (selectedIds.length === 0) return;
     setIsBulkDeleting(true);
     try {
-      const result = await offlineDataService.deleteSuppliers(selectedIds);
+      const result = await offlineShopService.deleteSuppliers(selectedIds);
       const deletedCount = result.deleted?.length || 0;
       toast.success(
         language === "bn"
-          ? `${deletedCount}টি সরবরাহকারী ট্র্যাশে সরানো হয়েছে${result.offline ? ' (অফলাইন)' : ''}`
-          : `${deletedCount} supplier(s) moved to trash${result.offline ? ' (offline)' : ''}`
+          ? `${deletedCount}টি সরবরাহকারী ট্র্যাশে সরানো হয়েছে`
+          : `${deletedCount} supplier(s) moved to trash`
       );
       setSelectedIds([]);
       loadData();
@@ -405,11 +404,11 @@ const ShopSuppliers = () => {
 
   const handleDelete = async (id: string) => {
     try {
-      const result = await offlineDataService.deleteSupplier(id);
+      await offlineShopService.deleteSupplier(id);
       toast.success(
         language === "bn" 
-          ? `সরবরাহকারী ট্র্যাশে সরানো হয়েছে${result.offline ? ' (অফলাইন)' : ''}` 
-          : `Supplier moved to trash${result.offline ? ' (offline)' : ''}`
+          ? `সরবরাহকারী ট্র্যাশে সরানো হয়েছে` 
+          : `Supplier moved to trash`
       );
       loadData();
     } catch (error) {

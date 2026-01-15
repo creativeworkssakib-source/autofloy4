@@ -80,7 +80,7 @@ const ShopAdjustments = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   // Use offline hooks
-  const { adjustments, loading: isLoading, fromCache, isOnline, refetch, createAdjustment, deleteAdjustments } = useOfflineAdjustments(filterType);
+  const { adjustments, loading: isLoading, refetch, createAdjustment, deleteAdjustments } = useOfflineAdjustments(filterType);
   const { products } = useOfflineProducts();
   const { settings } = useOfflineSettings();
   const currency = settings?.currency || "BDT";

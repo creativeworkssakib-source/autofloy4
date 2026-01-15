@@ -36,7 +36,7 @@ interface Expense {
 const ShopExpenses = () => {
   const { t, language } = useLanguage();
   const { currentShop } = useShop();
-  const { expenses, loading: isLoading, fromCache, isOnline, refetch, createExpense, deleteExpense } = useOfflineExpenses();
+  const { expenses, loading: isLoading, refetch, createExpense, deleteExpense } = useOfflineExpenses();
   const { settings } = useOfflineSettings();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -159,12 +159,6 @@ const ShopExpenses = () => {
                   {t("shop.expensesDesc")} • {filteredExpenses.length} {language === "bn" ? "টি খরচ" : "expenses"}
                 </p>
               </div>
-              {fromCache && (
-                <Badge variant={isOnline ? "secondary" : "destructive"} className="flex items-center gap-1">
-                  {isOnline ? <Cloud className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
-                  {isOnline ? (language === "bn" ? "ক্যাশ" : "Cached") : (language === "bn" ? "অফলাইন" : "Offline")}
-                </Badge>
-              )}
             </div>
             <DateRangeFilter
               selectedRange={dateRange}

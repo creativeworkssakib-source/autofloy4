@@ -173,8 +173,6 @@ const ShopSales = () => {
   const { 
     sales, 
     loading: isLoading, 
-    fromCache,
-    isOnline,
     refetch: loadData,
     createSale: createOfflineSale,
     deleteSales: deleteOfflineSales,
@@ -550,12 +548,6 @@ const ShopSales = () => {
                   {selectedIds.length > 0 && ` • ${selectedIds.length} ${language === "bn" ? "টি নির্বাচিত" : "selected"}`}
                 </p>
               </div>
-              {(fromCache || !isOnline) && (
-                <Badge variant="outline" className="border-amber-500 text-amber-600 bg-amber-50 dark:bg-amber-950 flex items-center gap-1 shrink-0">
-                  <WifiOff className="h-3 w-3" />
-                  {t('offline.usingCache')}
-                </Badge>
-              )}
             </div>
             <DateRangeFilter
               selectedRange={dateRange}
