@@ -925,11 +925,7 @@ export function useOfflineDashboard(range: 'today' | 'week' | 'month' = 'today')
     }
     
     fetchingRef.current = true;
-    
-    // Only show loading if we have no data yet
-    if (!data) {
-      setLoading(true);
-    }
+    setLoading(true);
     
     try {
       console.log(`[useOfflineDashboard] Fetching dashboard for range: ${range}`);
@@ -973,15 +969,12 @@ export function useOfflineDashboard(range: 'today' | 'week' | 'month' = 'today')
       }
     } catch (error) {
       console.error('[useOfflineDashboard] Dashboard fetch error:', error);
-      // Only clear data if we have nothing yet
-      if (!data) {
-        setData(null);
-      }
     } finally {
       setLoading(false);
       fetchingRef.current = false;
     }
-  }, [range, currentShop?.id, platform, initialized, data]);
+  // Remove 'data' from dependencies to prevent re-fetch loops
+  }, [range, currentShop?.id, platform, initialized]);
 
   // Refetch when dependencies change
   useEffect(() => {

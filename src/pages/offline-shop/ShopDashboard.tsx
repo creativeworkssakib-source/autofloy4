@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import { 
@@ -29,8 +29,10 @@ import { useOfflineDashboard, useOfflineTrash } from "@/hooks/useOfflineShopData
 import { useOfflineSettings, useSyncStatus } from "@/hooks/useOfflineData";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useShop } from "@/contexts/ShopContext";
-import { ProductPerformanceSection } from "@/components/analytics/ProductPerformanceSection";
-import { BusinessGrowthInsight } from "@/components/offline-shop/BusinessGrowthInsight";
+
+// Lazy load heavy analytics components to improve initial load
+const ProductPerformanceSection = lazy(() => import("@/components/analytics/ProductPerformanceSection").then(m => ({ default: m.ProductPerformanceSection })));
+const BusinessGrowthInsight = lazy(() => import("@/components/offline-shop/BusinessGrowthInsight").then(m => ({ default: m.BusinessGrowthInsight })));
 
 interface DashboardData {
   period: {
@@ -81,20 +83,22 @@ const ShopDashboard = () => {
   const { settings } = useOfflineSettings();
   const { pendingCount, isSyncing, triggerSync } = useSyncStatus();
   
-  // Use offline-first dashboard hooks - one for today, one for month
+  // Use offline-first dashboard hooks - only 'today' for main dashboard data
+  // Removed 'month' hook to reduce double-fetch and improve performance
   const { data: todayData, loading: isTodayLoading, fromCache, isOnline, refetch: loadTodayDashboard } = useOfflineDashboard('today');
-  const { data: monthData, loading: isMonthLoading, refetch: loadMonthDashboard } = useOfflineDashboard('month');
+  
+  // Use trash hook but defer loading
   const { trash, refetch: refetchTrash } = useOfflineTrash();
   const trashCount = trash?.length || 0;
 
-  const isLoading = isTodayLoading || isMonthLoading;
+  const isLoading = isTodayLoading;
   
   const loadDashboard = async () => {
-    await Promise.all([loadTodayDashboard(), loadMonthDashboard()]);
+    await loadTodayDashboard();
   };
 
-  // Map hook data to expected format - today's data for period, month data for lifetime
-  const data: DashboardData | null = (todayData || monthData) ? {
+  // Map hook data to expected format - use only today's data (simpler, faster)
+  const data: DashboardData | null = todayData ? {
     period: {
       totalSales: todayData?.totalSales || 0,
       totalPurchases: todayData?.totalPurchases || 0,
@@ -104,18 +108,18 @@ const ShopDashboard = () => {
       customersServed: todayData?.salesCount || 0,
     },
     lifetime: {
-      totalSales: monthData?.totalSales || 0,
-      totalProfit: monthData?.profit || 0,
-      totalProducts: todayData?.productsCount || monthData?.productsCount || 0,
+      totalSales: todayData?.totalSales || 0,
+      totalProfit: todayData?.profit || 0,
+      totalProducts: todayData?.productsCount || 0,
       totalSuppliers: 0,
-      totalDue: todayData?.totalDue || monthData?.totalDue || 0,
+      totalDue: todayData?.totalDue || 0,
     },
-    totalProducts: todayData?.productsCount || monthData?.productsCount || 0,
-    totalCustomers: todayData?.customersCount || monthData?.customersCount || 0,
-    lowStockProducts: todayData?.lowStockItems || monthData?.lowStockItems || [],
-    recentSales: todayData?.recentSales || monthData?.recentSales || [],
-    recentProducts: todayData?.recentProducts || monthData?.recentProducts || [],
-    returns: todayData?.returnsSummary || monthData?.returnsSummary || {
+    totalProducts: todayData?.productsCount || 0,
+    totalCustomers: todayData?.customersCount || 0,
+    lowStockProducts: todayData?.lowStockItems || [],
+    recentSales: todayData?.recentSales || [],
+    recentProducts: todayData?.recentProducts || [],
+    returns: todayData?.returnsSummary || {
       totalCount: 0,
       totalRefundAmount: 0,
       processedCount: 0,
@@ -581,11 +585,15 @@ const ShopDashboard = () => {
           </Card>
         </div>
 
-        {/* Business Growth Insight */}
-        <BusinessGrowthInsight />
+        {/* Business Growth Insight - Lazy loaded */}
+        <Suspense fallback={<Card className="h-48 animate-pulse bg-muted/30" />}>
+          <BusinessGrowthInsight />
+        </Suspense>
 
-        {/* Product Performance Analytics */}
-        <ProductPerformanceSection type="offline" shopId={currentShop?.id} />
+        {/* Product Performance Analytics - Lazy loaded */}
+        <Suspense fallback={<Card className="h-64 animate-pulse bg-muted/30" />}>
+          <ProductPerformanceSection type="offline" shopId={currentShop?.id} />
+        </Suspense>
       </div>
     </ShopLayout>
   );
