@@ -4771,6 +4771,75 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+
+      // DELETE return - move to trash
+      if (req.method === "DELETE") {
+        const body = await req.json().catch(() => ({}));
+        const { id } = body as { id?: string };
+
+        if (!id) {
+          return new Response(JSON.stringify({ error: "Return ID is required" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        // Get the return data first
+        const { data: returnData, error: fetchError } = await supabase
+          .from("shop_returns")
+          .select("*")
+          .eq("id", id)
+          .eq("user_id", userId)
+          .single();
+
+        if (fetchError || !returnData) {
+          console.error("Fetch return for delete error:", fetchError);
+          return new Response(JSON.stringify({ error: "Return not found" }), {
+            status: 404,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        // Insert into trash
+        const { error: trashError } = await supabase
+          .from("shop_trash")
+          .insert({
+            user_id: userId,
+            shop_id: shopId,
+            original_id: id,
+            original_table: "shop_returns",
+            data: returnData,
+          });
+
+        if (trashError) {
+          console.error("Insert to trash error:", trashError);
+          return new Response(JSON.stringify({ error: "Failed to move to trash" }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        // Delete from shop_returns table
+        const { error: deleteError } = await supabase
+          .from("shop_returns")
+          .delete()
+          .eq("id", id)
+          .eq("user_id", userId);
+
+        if (deleteError) {
+          console.error("Delete return error:", deleteError);
+          return new Response(JSON.stringify({ error: "Failed to delete return" }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        console.log(`Return ${id} moved to trash`);
+        return new Response(JSON.stringify({ message: "Return moved to trash" }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     // ===== TRASH BIN =====

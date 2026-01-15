@@ -631,11 +631,17 @@ export default function ShopReturns() {
     
     setIsDeleting(true);
     try {
-      // Delete from local state and sync queue will handle server deletion
+      // Call the API to delete the return from server
+      await offlineShopService.deleteReturn(deletingId);
+      
+      // Update local state after successful server deletion
       setReturns(returns.filter((r) => r.id !== deletingId));
       toast.success(language === "bn" ? "রিটার্ন ট্র্যাশে সরানো হয়েছে" : "Return moved to trash");
       setDeleteDialogOpen(false);
       setDeletingId(null);
+      
+      // Refetch to ensure data is in sync
+      fetchReturns();
     } catch (error) {
       console.error("Delete error:", error);
       toast.error("Failed to delete return. Please try again.");
