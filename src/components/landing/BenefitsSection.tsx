@@ -1,4 +1,4 @@
-import { motion, useMotionValue, useTransform, animate } from "framer-motion";
+import { motion, useMotionValue, useTransform, animate, useInView } from "framer-motion";
 import { useEffect, useRef, useState, memo, useCallback } from "react";
 import { TrendingUp, Users, Clock, Wallet, Star, BadgeCheck, ThumbsUp, Plus, LogIn, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -63,6 +63,65 @@ const isPaidPlan = (plan?: string) => {
   return plan && ['starter', 'business', 'enterprise', 'lifetime'].includes(plan.toLowerCase());
 };
 
+const BenefitCard = memo(({ benefit, index }: { benefit: typeof benefits[0]; index: number }) => {
+  const cardRef = useRef(null);
+  const isInView = useInView(cardRef, { once: true, margin: "-50px" });
+
+  return (
+    <motion.div
+      ref={cardRef}
+      initial={{ opacity: 0, y: 40, scale: 0.9 }}
+      animate={isInView ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 40, scale: 0.9 }}
+      transition={{ 
+        duration: 0.5, 
+        delay: index * 0.1,
+        ease: [0.25, 0.46, 0.45, 0.94]
+      }}
+      whileHover={{ y: -8, scale: 1.02 }}
+      className="relative bg-card/80 backdrop-blur-sm rounded-2xl p-6 border border-border/50 text-center overflow-hidden group"
+    >
+      {/* Hover Effect */}
+      <motion.div 
+        className="absolute inset-0 bg-gradient-to-br from-primary/5 to-secondary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+      />
+      
+      {/* Shimmer */}
+      <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 overflow-hidden">
+        <div className="absolute inset-0 animate-shimmer" />
+      </div>
+      
+      {/* Icon */}
+      <motion.div 
+        className={`w-14 h-14 rounded-xl bg-gradient-to-br ${benefit.gradient} flex items-center justify-center mx-auto mb-4 relative z-10`}
+        whileHover={{ rotate: 10, scale: 1.1 }}
+        transition={{ type: "spring", stiffness: 300 }}
+      >
+        <benefit.icon className="w-7 h-7 text-primary-foreground" />
+      </motion.div>
+      
+      {/* Counter */}
+      <motion.div 
+        className="text-3xl lg:text-4xl font-bold mb-2 relative z-10"
+        initial={{ scale: 0.5 }}
+        animate={isInView ? { scale: 1 } : { scale: 0.5 }}
+        transition={{ delay: 0.3 + index * 0.1, type: "spring" }}
+      >
+        <Counter from={0} to={benefit.value} prefix={benefit.prefix} suffix={benefit.suffix} duration={2} />
+      </motion.div>
+      
+      <h3 className="text-lg font-semibold mb-1 relative z-10">{benefit.label}</h3>
+      <p className="text-sm text-muted-foreground relative z-10">{benefit.description}</p>
+      
+      {/* Border Glow */}
+      <motion.div 
+        className="absolute inset-0 rounded-2xl border-2 border-primary/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+      />
+    </motion.div>
+  );
+});
+
+BenefitCard.displayName = "BenefitCard";
+
 const BenefitsSection = memo(() => {
   const { settings } = useSiteSettings();
   const { user } = useAuth();
@@ -73,6 +132,8 @@ const BenefitsSection = memo(() => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
   const reviewsContainerRef = useRef<HTMLDivElement>(null);
+  const sectionRef = useRef(null);
+  const isInView = useInView(sectionRef, { once: true, margin: "-100px" });
   
   const reviewsPerPage = 5;
   const totalPages = Math.ceil(reviews.length / reviewsPerPage);
@@ -188,15 +249,34 @@ const BenefitsSection = memo(() => {
   };
 
   return (
-    <section className="py-10 lg:py-14 relative overflow-hidden">
+    <section ref={sectionRef} className="py-10 lg:py-14 relative overflow-hidden">
+      {/* Animated Background */}
       <div className="absolute inset-0 bg-gradient-to-b from-background via-primary/5 to-background" />
+      <motion.div 
+        className="absolute top-1/4 left-0 w-72 h-72 bg-primary/10 rounded-full blur-3xl"
+        animate={{ x: [0, 100, 0], opacity: [0.3, 0.5, 0.3] }}
+        transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
+      />
+      <motion.div 
+        className="absolute bottom-1/4 right-0 w-96 h-96 bg-secondary/10 rounded-full blur-3xl"
+        animate={{ x: [0, -100, 0], opacity: [0.3, 0.5, 0.3] }}
+        transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }}
+      />
 
       <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         {/* Section Header */}
-        <div className="text-center max-w-3xl mx-auto mb-10">
-          <span className="inline-block px-4 py-1.5 rounded-full bg-success/10 text-success text-sm font-medium mb-4">
+        <motion.div 
+          className="text-center max-w-3xl mx-auto mb-10"
+          initial={{ opacity: 0, y: 30 }}
+          animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
+          transition={{ duration: 0.6 }}
+        >
+          <motion.span 
+            className="inline-block px-4 py-1.5 rounded-full bg-success/10 text-success text-sm font-medium mb-4"
+            whileHover={{ scale: 1.05 }}
+          >
             Real Results
-          </span>
+          </motion.span>
           <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-6">
             Why Thousands of Businesses{" "}
             <span className="gradient-text">Choose {settings.company_name}</span>
@@ -204,39 +284,37 @@ const BenefitsSection = memo(() => {
           <p className="text-lg text-muted-foreground">
             Join the revolution - automate online sales AND manage offline shops from one platform.
           </p>
-        </div>
+        </motion.div>
 
         {/* Benefits Grid */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6 mb-12">
-          {benefits.map((benefit) => (
-            <div
-              key={benefit.label}
-              className="relative bg-card/80 backdrop-blur-sm rounded-2xl p-6 border border-border/50 hover:border-primary/30 transition-colors text-center"
-            >
-              <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${benefit.gradient} flex items-center justify-center mx-auto mb-4`}>
-                <benefit.icon className="w-7 h-7 text-primary-foreground" />
-              </div>
-              <div className="text-3xl lg:text-4xl font-bold mb-2">
-                <Counter from={0} to={benefit.value} prefix={benefit.prefix} suffix={benefit.suffix} duration={2} />
-              </div>
-              <h3 className="text-lg font-semibold mb-1">{benefit.label}</h3>
-              <p className="text-sm text-muted-foreground">{benefit.description}</p>
-            </div>
+          {benefits.map((benefit, index) => (
+            <BenefitCard key={benefit.label} benefit={benefit} index={index} />
           ))}
         </div>
 
         {/* Reviews Section */}
-        <div className="max-w-2xl mx-auto">
+        <motion.div 
+          className="max-w-2xl mx-auto"
+          initial={{ opacity: 0, y: 40 }}
+          animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 40 }}
+          transition={{ delay: 0.4, duration: 0.6 }}
+        >
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-xl font-bold flex items-center gap-2">
-              <Star className="w-5 h-5 text-amber-500 fill-current" />
+              <motion.div
+                animate={{ rotate: [0, 10, -10, 0] }}
+                transition={{ duration: 2, repeat: Infinity }}
+              >
+                <Star className="w-5 h-5 text-amber-500 fill-current" />
+              </motion.div>
               Customer Reviews ({reviews.length}+)
             </h3>
             {user ? (
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button variant="outline" size="sm" className="gap-2">
-                    <Plus className="w-4 h-4" />
+                  <Button variant="outline" size="sm" className="gap-2 group">
+                    <Plus className="w-4 h-4 group-hover:rotate-90 transition-transform" />
                     Add Review
                   </Button>
                 </DialogTrigger>
@@ -250,15 +328,16 @@ const BenefitsSection = memo(() => {
                       <label className="text-sm font-medium mb-2 block">Rating</label>
                       <div className="flex gap-1">
                         {[1, 2, 3, 4, 5].map((star) => (
-                          <button 
+                          <motion.button 
                             key={star} 
                             type="button" 
                             onClick={() => setNewReview({ ...newReview, rating: star })} 
-                            className="hover:scale-110 transition-transform"
+                            whileHover={{ scale: 1.2 }}
+                            whileTap={{ scale: 0.9 }}
                             aria-label={`Rate ${star} star${star > 1 ? 's' : ''}`}
                           >
                             <Star className={`w-6 h-6 ${star <= newReview.rating ? "text-amber-500 fill-current" : "text-muted-foreground"}`} />
-                          </button>
+                          </motion.button>
                         ))}
                       </div>
                     </div>
@@ -274,8 +353,8 @@ const BenefitsSection = memo(() => {
               </Dialog>
             ) : (
               <Link to="/login">
-                <Button variant="outline" size="sm" className="gap-2">
-                  <LogIn className="w-4 h-4" />
+                <Button variant="outline" size="sm" className="gap-2 group">
+                  <LogIn className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                   Login to Review
                 </Button>
               </Link>
@@ -289,20 +368,48 @@ const BenefitsSection = memo(() => {
                 Showing {currentPage * reviewsPerPage + 1}-{Math.min((currentPage + 1) * reviewsPerPage, reviews.length)} of {reviews.length}
               </p>
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="icon" onClick={() => setCurrentPage(prev => Math.max(0, prev - 1))} disabled={currentPage === 0} className="h-8 w-8" aria-label="Previous reviews page">
+                <Button 
+                  variant="outline" 
+                  size="icon" 
+                  onClick={() => setCurrentPage(prev => Math.max(0, prev - 1))} 
+                  disabled={currentPage === 0} 
+                  className="h-8 w-8 hover:scale-105 transition-transform" 
+                  aria-label="Previous reviews page"
+                >
                   <ChevronLeft className="w-4 h-4" />
                 </Button>
                 <span className="text-sm text-muted-foreground min-w-[60px] text-center">{currentPage + 1} / {totalPages}</span>
-                <Button variant="outline" size="icon" onClick={() => setCurrentPage(prev => Math.min(totalPages - 1, prev + 1))} disabled={currentPage >= totalPages - 1} className="h-8 w-8" aria-label="Next reviews page">
+                <Button 
+                  variant="outline" 
+                  size="icon" 
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages - 1, prev + 1))} 
+                  disabled={currentPage >= totalPages - 1} 
+                  className="h-8 w-8 hover:scale-105 transition-transform" 
+                  aria-label="Next reviews page"
+                >
                   <ChevronRight className="w-4 h-4" />
                 </Button>
               </div>
             </div>
 
             {/* Reviews Grid */}
-            <motion.div key={currentPage} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }} className="space-y-4">
-              {reviews.slice(currentPage * reviewsPerPage, (currentPage + 1) * reviewsPerPage).map((review) => (
-                <div key={review.id} className="bg-card/80 border border-border/50 rounded-xl p-5 hover:border-primary/20 transition-colors">
+            <motion.div 
+              key={currentPage} 
+              initial={{ opacity: 0, x: 20 }} 
+              animate={{ opacity: 1, x: 0 }} 
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.3 }} 
+              className="space-y-4"
+            >
+              {reviews.slice(currentPage * reviewsPerPage, (currentPage + 1) * reviewsPerPage).map((review, index) => (
+                <motion.div 
+                  key={review.id} 
+                  className="bg-card/80 border border-border/50 rounded-xl p-5 hover:border-primary/20 transition-all duration-300 hover:shadow-lg group"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                  whileHover={{ y: -2 }}
+                >
                   <div className="flex gap-0.5 text-amber-500 mb-2">
                     {[1, 2, 3, 4, 5].map((i) => (
                       <Star key={i} className={`w-4 h-4 ${i <= review.rating ? "fill-current" : "text-muted-foreground"}`} />
@@ -311,22 +418,32 @@ const BenefitsSection = memo(() => {
                   <div className="flex items-center gap-2 mb-3">
                     <span className="text-sm font-medium">{review.name}</span>
                     {review.isVerified && (
-                      <span className="inline-flex items-center gap-1 text-xs text-success">
+                      <motion.span 
+                        className="inline-flex items-center gap-1 text-xs text-success"
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        transition={{ type: "spring" }}
+                      >
                         <BadgeCheck className="w-3.5 h-3.5" />
                         Verified User
-                      </span>
+                      </motion.span>
                     )}
                   </div>
                   <p className="text-sm mb-3">{review.text}</p>
-                  <button onClick={() => handleLike(review.id)} className={`flex items-center gap-1.5 transition-colors ${review.isLiked ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}>
+                  <motion.button 
+                    onClick={() => handleLike(review.id)} 
+                    className={`flex items-center gap-1.5 transition-colors ${review.isLiked ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                  >
                     <ThumbsUp className={`w-4 h-4 ${review.isLiked ? "fill-current" : ""}`} />
                     <span className="text-xs font-medium">{review.likes}</span>
-                  </button>
-                </div>
+                  </motion.button>
+                </motion.div>
               ))}
             </motion.div>
           </div>
-        </div>
+        </motion.div>
       </div>
     </section>
   );
