@@ -281,83 +281,65 @@ const ShopDashboard = () => {
           })}
         </div>
 
-        {/* Sales Target Card - Professional Tall Card */}
+        {/* Sales Target Card - Compact Premium Design */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
         >
-          <Card className="overflow-hidden border-2 border-primary/20 bg-gradient-to-br from-primary/5 via-background to-primary/10">
-            <CardContent className="p-6 sm:p-8">
-              <div className="flex flex-col lg:flex-row lg:items-center gap-6">
-                {/* Left Section - Target Info */}
-                <div className="flex-1 space-y-4">
-                  <div className="flex items-center gap-3">
-                    <div className="p-3 rounded-xl bg-primary/10 ring-2 ring-primary/20">
-                      <Target className="h-7 w-7 text-primary" />
+          <Card className="overflow-hidden border border-primary/20 bg-gradient-to-r from-primary/5 to-transparent">
+            <CardContent className="p-4 sm:p-5">
+              <div className="flex items-center gap-4">
+                {/* Icon */}
+                <div className="p-2.5 rounded-lg bg-primary/10 shrink-0">
+                  <Target className="h-5 w-5 text-primary" />
+                </div>
+                
+                {/* Content */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-medium text-muted-foreground">{t("dashboard.salesTarget")}</h3>
+                      {isTargetAchieved && (
+                        <Badge className="bg-emerald-500/90 hover:bg-emerald-500 text-xs px-2 py-0.5 h-5">
+                          {language === "bn" ? "✓ অর্জিত" : "✓ Achieved"}
+                        </Badge>
+                      )}
                     </div>
-                    <div>
-                      <h3 className="text-lg font-semibold">{t("dashboard.salesTarget")}</h3>
-                      <p className="text-xs text-muted-foreground">
-                        {language === "bn" ? "মাসিক বিক্রয় লক্ষ্য" : "Monthly Sales Goal"}
-                      </p>
-                    </div>
-                    {isTargetAchieved && (
-                      <Badge className="bg-emerald-500 hover:bg-emerald-600 text-sm ml-auto">
-                        {language === "bn" ? "✓ লক্ষ্য অর্জিত!" : "✓ Target Achieved!"}
-                      </Badge>
+                    {isLoading ? (
+                      <Skeleton className="h-6 w-12" />
+                    ) : (
+                      <span className={`text-lg font-bold ${isTargetAchieved ? 'text-emerald-500' : 'text-primary'}`}>
+                        {targetProgress}%
+                      </span>
                     )}
                   </div>
                   
+                  {/* Progress Bar */}
                   {isLoading ? (
-                    <Skeleton className="h-14 w-48" />
+                    <Skeleton className="h-2 w-full" />
                   ) : (
-                    <div className="flex items-baseline gap-2">
-                      <p className="text-4xl sm:text-5xl font-bold text-primary">
-                        {formatCurrency(salesTarget)}
-                      </p>
-                      <span className="text-sm text-muted-foreground font-medium">
-                        /{language === "bn" ? "মাস" : "month"}
-                      </span>
-                    </div>
+                    <Progress 
+                      value={Math.min(targetProgress, 100)} 
+                      className={`h-2 rounded-full ${isTargetAchieved ? '[&>div]:bg-emerald-500' : '[&>div]:bg-primary'}`}
+                    />
                   )}
-                </div>
-
-                {/* Right Section - Progress */}
-                <div className="flex-1 space-y-4">
-                  {isLoading ? (
-                    <Skeleton className="h-24 w-full" />
-                  ) : (
-                    <>
-                      {/* Progress Section */}
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium">
-                            {formatCurrency(monthSales)} {t("dashboard.ofTarget")}
-                          </span>
-                          <span className={`text-2xl font-bold ${isTargetAchieved ? 'text-emerald-500' : 'text-primary'}`}>
-                            {targetProgress}%
-                          </span>
-                        </div>
-                        <Progress 
-                          value={Math.min(targetProgress, 100)} 
-                          className={`h-4 rounded-full ${isTargetAchieved ? '[&>div]:bg-gradient-to-r [&>div]:from-emerald-500 [&>div]:to-emerald-400' : '[&>div]:bg-gradient-to-r [&>div]:from-primary [&>div]:to-primary/70'}`}
-                        />
-                        <div className="flex items-center justify-between text-xs text-muted-foreground">
-                          <span>0%</span>
-                          <span className="flex items-center gap-1">
-                            {language === "bn" 
-                              ? `স্টক মূল্য ÷ ১২ মাস` 
-                              : `Stock Value ÷ 12 months`}
-                            <span className="font-medium text-foreground">
-                              ({formatCurrency(data?.monthly?.inventoryValue || 0)})
-                            </span>
-                          </span>
-                          <span>100%</span>
-                        </div>
-                      </div>
-                    </>
-                  )}
+                  
+                  {/* Stats Row */}
+                  <div className="flex items-center justify-between mt-2 text-xs">
+                    {isLoading ? (
+                      <Skeleton className="h-4 w-32" />
+                    ) : (
+                      <>
+                        <span className="text-muted-foreground">
+                          {formatCurrency(monthSales)} / <span className="font-medium text-foreground">{formatCurrency(salesTarget)}</span>
+                        </span>
+                        <span className="text-muted-foreground">
+                          {language === "bn" ? "স্টক ÷ ১২" : "Stock ÷ 12"}
+                        </span>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
             </CardContent>
