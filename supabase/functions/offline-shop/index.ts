@@ -1182,6 +1182,7 @@ serve(async (req) => {
             // Save to trash before removing from inventory
             const { error: trashError } = await supabase.from("shop_trash").insert({
               user_id: userId,
+              shop_id: shopId || null,
               original_table: "shop_products",
               original_id: productId,
               data: product,
@@ -1307,6 +1308,7 @@ serve(async (req) => {
         // Save to trash before deleting
         const { error: trashError } = await supabase.from("shop_trash").insert({
           user_id: userId,
+          shop_id: shopId || null,
           original_table: "shop_categories",
           original_id: id,
           data: category,
@@ -1451,6 +1453,7 @@ serve(async (req) => {
             // Save to trash
             const { error: trashError } = await supabase.from("shop_trash").insert({
               user_id: userId,
+              shop_id: shopId || null,
               original_table: "shop_customers",
               original_id: customerId,
               data: customer,
@@ -1792,6 +1795,7 @@ serve(async (req) => {
             // Save to trash
             const { error: trashError } = await supabase.from("shop_trash").insert({
               user_id: userId,
+              shop_id: shopId || null,
               original_table: "shop_suppliers",
               original_id: supplierId,
               data: supplier,
@@ -2298,6 +2302,7 @@ serve(async (req) => {
             // Save to trash
             const { error: trashError } = await supabase.from("shop_trash").insert({
               user_id: userId,
+              shop_id: shopId || null,
               original_table: "shop_sales",
               original_id: saleId,
               data: sale,
@@ -2583,6 +2588,7 @@ serve(async (req) => {
         // Save to trash bin before deleting
         await supabase.from("shop_trash").insert({
           user_id: userId,
+          shop_id: shopId || null,
           original_table: "shop_purchases",
           original_id: id,
           data: {
@@ -2917,6 +2923,7 @@ serve(async (req) => {
         // Save to trash before deleting
         const { error: trashError } = await supabase.from("shop_trash").insert({
           user_id: userId,
+          shop_id: shopId || null,
           original_table: "shop_expenses",
           original_id: id,
           data: expense,
@@ -3043,6 +3050,7 @@ serve(async (req) => {
           // Move to trash
           await supabase.from("shop_trash").insert({
             user_id: userId,
+            shop_id: shopId || null,
             original_table: "shop_stock_adjustments",
             original_id: adjustment.id,
             data: adjustment,
@@ -3216,6 +3224,7 @@ serve(async (req) => {
         // Save to trash before deleting
         const { error: trashError } = await supabase.from("shop_trash").insert({
           user_id: userId,
+          shop_id: shopId || null,
           original_table: "shop_staff_users",
           original_id: id,
           data: staffUser,
@@ -4864,6 +4873,7 @@ serve(async (req) => {
           .from("shop_trash")
           .insert({
             user_id: userId,
+            shop_id: shopId || null,
             original_id: id,
             original_table: "shop_returns",
             data: returnData,
@@ -4912,6 +4922,11 @@ serve(async (req) => {
           .is("restored_at", null)
           .is("permanently_deleted_at", null)
           .order("deleted_at", { ascending: false });
+
+        // Filter by shop_id if provided
+        if (shopId) {
+          query = query.eq("shop_id", shopId);
+        }
 
         if (table) query = query.eq("original_table", table);
 
@@ -5322,12 +5337,19 @@ serve(async (req) => {
 
       // Empty trash (backwards compatible)
       if (req.method === "DELETE") {
-        await supabase
+        let emptyQuery = supabase
           .from("shop_trash")
           .update({ permanently_deleted_at: new Date().toISOString() })
           .eq("user_id", userId)
           .is("restored_at", null)
           .is("permanently_deleted_at", null);
+
+        // Filter by shop_id if provided
+        if (shopId) {
+          emptyQuery = emptyQuery.eq("shop_id", shopId);
+        }
+
+        await emptyQuery;
 
         return new Response(JSON.stringify({ message: "Trash emptied" }), {
           status: 200,

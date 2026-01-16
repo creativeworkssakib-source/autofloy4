@@ -3654,6 +3654,7 @@ export type Database = {
           original_table: string
           permanently_deleted_at: string | null
           restored_at: string | null
+          shop_id: string | null
           user_id: string
         }
         Insert: {
@@ -3665,6 +3666,7 @@ export type Database = {
           original_table: string
           permanently_deleted_at?: string | null
           restored_at?: string | null
+          shop_id?: string | null
           user_id: string
         }
         Update: {
@@ -3676,9 +3678,17 @@ export type Database = {
           original_table?: string
           permanently_deleted_at?: string | null
           restored_at?: string | null
+          shop_id?: string | null
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "shop_trash_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "shops"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "shop_trash_user_id_fkey"
             columns: ["user_id"]
