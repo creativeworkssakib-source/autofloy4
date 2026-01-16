@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Link } from "react-router-dom";
 import { 
   TrendingUp, 
@@ -16,7 +16,8 @@ import {
   Plus,
   Clock,
   Target,
-  CircleDollarSign
+  CircleDollarSign,
+  Sparkles
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,9 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import ShopLayout from "@/components/offline-shop/ShopLayout";
+import { AnimatedStatCard } from "@/components/offline-shop/AnimatedStatCard";
+import { PremiumTargetCard } from "@/components/offline-shop/PremiumTargetCard";
+import { PremiumQuickStats } from "@/components/offline-shop/PremiumQuickStats";
 import { useOfflineDashboard, useOfflineTrash } from "@/hooks/useOfflineShopData";
 import { useOfflineSettings } from "@/hooks/useOfflineData";
 import { useIsOnline } from "@/hooks/useOnlineStatus";
@@ -176,31 +180,39 @@ const ShopDashboard = () => {
       value: periodSales,
       icon: ShoppingCart,
       color: "text-blue-500",
-      bgColor: "bg-blue-500/10",
+      bgColor: "bg-blue-500/15",
+      gradientFrom: "from-blue-500/10",
+      gradientTo: "to-cyan-500/5",
     },
     {
       title: t("dashboard.monthSales"),
       value: monthSales,
       icon: TrendingUp,
-      color: "text-green-500",
-      bgColor: "bg-green-500/10",
+      color: "text-emerald-500",
+      bgColor: "bg-emerald-500/15",
+      gradientFrom: "from-emerald-500/10",
+      gradientTo: "to-teal-500/5",
     },
     {
       title: t("dashboard.totalDue"),
       value: totalDue,
       icon: Wallet,
-      color: "text-red-500",
-      bgColor: "bg-red-500/10",
+      color: "text-rose-500",
+      bgColor: "bg-rose-500/15",
+      gradientFrom: "from-rose-500/10",
+      gradientTo: "to-orange-500/5",
       link: "/offline-shop/due-customers",
     },
     {
       title: t("dashboard.monthProfit"),
       value: monthlyProfit,
       icon: CircleDollarSign,
-      color: monthlyProfit >= 0 ? "text-emerald-500" : "text-red-500",
-      bgColor: monthlyProfit >= 0 ? "bg-emerald-500/10" : "bg-red-500/10",
+      color: monthlyProfit >= 0 ? "text-emerald-500" : "text-rose-500",
+      bgColor: monthlyProfit >= 0 ? "bg-emerald-500/15" : "bg-rose-500/15",
+      gradientFrom: monthlyProfit >= 0 ? "from-emerald-500/10" : "from-rose-500/10",
+      gradientTo: monthlyProfit >= 0 ? "to-green-500/5" : "to-red-500/5",
       badge: monthlyProfit >= 0 ? (language === "bn" ? "লাভ" : "Profit") : (language === "bn" ? "লস" : "Loss"),
-      badgeVariant: monthlyProfit >= 0 ? "default" : "destructive",
+      badgeVariant: monthlyProfit >= 0 ? "default" : "destructive" as const,
     },
   ];
 
@@ -209,239 +221,211 @@ const ShopDashboard = () => {
 
   return (
     <ShopLayout>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
+      <div className="space-y-6 relative">
+        {/* Ambient background effects */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none -z-10">
+          <motion.div
+            className="absolute w-96 h-96 rounded-full bg-primary/5 blur-3xl"
+            animate={{
+              x: [0, 50, 0],
+              y: [0, 30, 0],
+            }}
+            transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
+            style={{ top: "-10%", right: "-10%" }}
+          />
+          <motion.div
+            className="absolute w-72 h-72 rounded-full bg-secondary/5 blur-3xl"
+            animate={{
+              x: [0, -30, 0],
+              y: [0, 40, 0],
+            }}
+            transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
+            style={{ bottom: "20%", left: "-5%" }}
+          />
+        </div>
+
+        {/* Premium Header */}
+        <motion.div 
+          className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4"
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h1 className="text-2xl sm:text-3xl font-bold">{t("shop.dashboard")}</h1>
-              <p className="text-sm sm:text-base text-muted-foreground">{t("dashboard.overview")}</p>
+              <div className="flex items-center gap-2">
+                <motion.h1 
+                  className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text"
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.1 }}
+                >
+                  {t("shop.dashboard")}
+                </motion.h1>
+                <motion.div
+                  initial={{ scale: 0, rotate: -180 }}
+                  animate={{ scale: 1, rotate: 0 }}
+                  transition={{ delay: 0.3, type: "spring" }}
+                >
+                  <Sparkles className="h-5 w-5 text-primary" />
+                </motion.div>
+              </div>
+              <motion.p 
+                className="text-sm sm:text-base text-muted-foreground"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.2 }}
+              >
+                {t("dashboard.overview")}
+              </motion.p>
             </div>
             <div className="flex items-center gap-2">
-              {!isOnline && (
-                <Badge variant="destructive" className="flex items-center gap-1">
-                  <WifiOff className="h-3 w-3" />
-                  {language === "bn" ? "অফলাইন" : "Offline"}
-                </Badge>
-              )}
+              <AnimatePresence>
+                {!isOnline && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.8 }}
+                  >
+                    <Badge variant="destructive" className="flex items-center gap-1 shadow-lg shadow-destructive/30">
+                      <WifiOff className="h-3 w-3" />
+                      {language === "bn" ? "অফলাইন" : "Offline"}
+                    </Badge>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={loadDashboard} disabled={isLoading} size="sm" className="sm:size-default">
+          <motion.div 
+            className="flex gap-2"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.2 }}
+          >
+            <Button 
+              variant="outline" 
+              onClick={loadDashboard} 
+              disabled={isLoading} 
+              size="sm" 
+              className="sm:size-default backdrop-blur-sm bg-card/50 hover:bg-card/80 border-border/50 shadow-sm"
+            >
               <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
               {t("common.refresh")}
             </Button>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
 
-        {/* Stats Grid - 4 columns: Today's Sales, Month Sales, Total Due, This Month's Profit */}
+        {/* Premium Stats Grid */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           {statsCards.map((stat, index) => {
             const isClickable = !!stat.link;
-            const cardContent = (
-              <Card className={`relative overflow-hidden ${isClickable ? "cursor-pointer hover:shadow-md transition-shadow hover:border-primary/50" : ""}`}>
-                <CardContent className="p-3 sm:pt-6 sm:p-6">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <p className="text-xs sm:text-sm text-muted-foreground truncate">{stat.title}</p>
-                        {stat.badge && (
-                          <Badge variant={stat.badgeVariant as any} className="text-[10px] px-1.5 py-0">
-                            {stat.badge}
-                          </Badge>
-                        )}
-                      </div>
-                      {isLoading ? (
-                        <Skeleton className="h-6 sm:h-8 w-16 sm:w-24 mt-1" />
-                      ) : (
-                        <p className={`text-lg sm:text-2xl font-bold truncate ${stat.badge ? stat.color : ''}`}>
-                          {formatCurrency(stat.value)}
-                        </p>
-                      )}
-                    </div>
-                    <div className={`p-2 sm:p-3 rounded-full ${stat.bgColor} shrink-0`}>
-                      <stat.icon className={`h-4 w-4 sm:h-6 sm:w-6 ${stat.color}`} />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+            const cardElement = (
+              <AnimatedStatCard
+                title={stat.title}
+                value={stat.value}
+                icon={stat.icon}
+                color={stat.color}
+                bgColor={stat.bgColor}
+                gradientFrom={stat.gradientFrom}
+                gradientTo={stat.gradientTo}
+                delay={index * 0.1}
+                isLoading={isLoading}
+                formatValue={formatCurrency}
+                badge={stat.badge}
+                badgeVariant={stat.badgeVariant as "default" | "destructive" | "outline" | "secondary" | undefined}
+                isClickable={isClickable}
+              />
             );
             
-            return (
-              <motion.div
-                key={stat.title}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
-              >
-                {isClickable ? (
-                  <Link to={stat.link!}>{cardContent}</Link>
-                ) : (
-                  cardContent
-                )}
-              </motion.div>
+            return isClickable ? (
+              <Link key={stat.title} to={stat.link!}>{cardElement}</Link>
+            ) : (
+              <div key={stat.title}>{cardElement}</div>
             );
           })}
         </div>
 
-        {/* Sales Target Card - Compact Premium Design */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-        >
-          <Card className="overflow-hidden border border-primary/20 bg-gradient-to-r from-primary/5 to-transparent">
-            <CardContent className="p-4 sm:p-5">
-              <div className="flex items-center gap-4">
-                {/* Icon */}
-                <div className="p-2.5 rounded-lg bg-primary/10 shrink-0">
-                  <Target className="h-5 w-5 text-primary" />
-                </div>
-                
-                {/* Content */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2 mb-2">
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-sm font-medium text-muted-foreground">{t("dashboard.salesTarget")}</h3>
-                      {isTargetAchieved && (
-                        <Badge className="bg-emerald-500/90 hover:bg-emerald-500 text-xs px-2 py-0.5 h-5">
-                          {language === "bn" ? "✓ অর্জিত" : "✓ Achieved"}
-                        </Badge>
-                      )}
-                    </div>
-                    {isLoading ? (
-                      <Skeleton className="h-6 w-12" />
-                    ) : (
-                      <span className={`text-lg font-bold ${isTargetAchieved ? 'text-emerald-500' : 'text-primary'}`}>
-                        {targetProgress}%
-                      </span>
-                    )}
-                  </div>
-                  
-                  {/* Progress Bar */}
-                  {isLoading ? (
-                    <Skeleton className="h-2 w-full" />
-                  ) : (
-                    <Progress 
-                      value={Math.min(targetProgress, 100)} 
-                      className={`h-2 rounded-full ${isTargetAchieved ? '[&>div]:bg-emerald-500' : '[&>div]:bg-primary'}`}
+        {/* Premium Sales Target Card */}
+        <PremiumTargetCard
+          monthSales={monthSales}
+          salesTarget={salesTarget}
+          targetProgress={targetProgress}
+          isTargetAchieved={isTargetAchieved}
+          isLoading={isLoading}
+          formatCurrency={formatCurrency}
+          language={language}
+        />
+
+        {/* Premium Trash Bin Alert */}
+        <AnimatePresence>
+          {trashCount > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: -20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -20, scale: 0.95 }}
+              transition={{ type: "spring", stiffness: 300, damping: 25 }}
+            >
+              <Link to="/offline-shop/trash">
+                <Card className="border-0 bg-gradient-to-r from-orange-500/10 via-orange-400/5 to-amber-500/10 hover:from-orange-500/15 hover:to-amber-500/15 transition-all duration-300 cursor-pointer shadow-lg hover:shadow-xl backdrop-blur-xl overflow-hidden">
+                  <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                    <motion.div
+                      className="absolute w-32 h-32 rounded-full bg-orange-500/20 blur-2xl"
+                      animate={{ x: [0, 20, 0], y: [0, -10, 0] }}
+                      transition={{ duration: 4, repeat: Infinity }}
+                      style={{ top: "-30%", right: "10%" }}
                     />
-                  )}
-                  
-                  {/* Stats Row */}
-                  <div className="flex items-center justify-between mt-2 text-xs">
-                    {isLoading ? (
-                      <Skeleton className="h-4 w-32" />
-                    ) : (
-                      <>
-                        <span className="text-muted-foreground">
-                          {formatCurrency(monthSales)} / <span className="font-medium text-foreground">{formatCurrency(salesTarget)}</span>
-                        </span>
-                        <span className="text-muted-foreground">
-                          {language === "bn" ? "স্টক ÷ ১২" : "Stock ÷ 12"}
-                        </span>
-                      </>
-                    )}
                   </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        {/* Trash Bin Alert */}
-        {trashCount > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            <Link to="/offline-shop/trash">
-              <Card className="border-orange-500/50 bg-orange-500/5 hover:bg-orange-500/10 transition-colors cursor-pointer">
-                <CardContent className="py-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="p-3 rounded-full bg-orange-500/20">
-                        <Trash2 className="h-6 w-6 text-orange-500" />
+                  <CardContent className="py-4 relative">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <motion.div 
+                          className="p-3 rounded-2xl bg-orange-500/20 backdrop-blur-sm"
+                          whileHover={{ scale: 1.1, rotate: [0, -5, 5, 0] }}
+                          animate={{ scale: [1, 1.05, 1] }}
+                          transition={{ duration: 2, repeat: Infinity }}
+                        >
+                          <Trash2 className="h-6 w-6 text-orange-500" />
+                        </motion.div>
+                        <div>
+                          <p className="font-semibold text-orange-600 dark:text-orange-400">
+                            {language === "bn" ? "ট্র্যাশ বিনে আইটেম আছে" : "Items in Trash Bin"}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {language === "bn" 
+                              ? `${trashCount}টি আইটেম স্থায়ীভাবে ডিলিট করার জন্য অপেক্ষা করছে`
+                              : `${trashCount} item(s) waiting to be permanently deleted`
+                            }
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-medium text-orange-600 dark:text-orange-400">
-                          {language === "bn" ? "ট্র্যাশ বিনে আইটেম আছে" : "Items in Trash Bin"}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          {language === "bn" 
-                            ? `${trashCount}টি আইটেম স্থায়ীভাবে ডিলিট করার জন্য অপেক্ষা করছে`
-                            : `${trashCount} item(s) waiting to be permanently deleted`
-                          }
-                        </p>
+                      <div className="flex items-center gap-3">
+                        <Badge className="bg-orange-500/20 text-orange-600 border-orange-500/30 hover:bg-orange-500/30 shadow-sm">
+                          {trashCount}
+                        </Badge>
+                        <motion.div
+                          animate={{ x: [0, 5, 0] }}
+                          transition={{ duration: 1.5, repeat: Infinity }}
+                        >
+                          <ArrowRight className="h-5 w-5 text-orange-500" />
+                        </motion.div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="border-orange-500/50 text-orange-600">
-                        {trashCount}
-                      </Badge>
-                      <ArrowRight className="h-5 w-5 text-orange-500" />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
-          </motion.div>
-        )}
+                  </CardContent>
+                </Card>
+              </Link>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-        {/* Quick Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-3 rounded-full bg-purple-500/10">
-                    <Package className="h-6 w-6 text-purple-500" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">
-                      {language === "bn" ? "প্রোডাক্ট টাইপ" : "Product Types"}
-                    </p>
-                    {isLoading ? (
-                      <Skeleton className="h-6 w-16" />
-                    ) : (
-                      <p className="text-xl font-bold">{data?.totalProducts || 0}</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-3 rounded-full bg-cyan-500/10">
-                    <ShoppingCart className="h-6 w-6 text-cyan-500" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">
-                      {language === "bn" ? "মোট স্টক আইটেম" : "Total Stock Items"}
-                    </p>
-                    {isLoading ? (
-                      <Skeleton className="h-6 w-16" />
-                    ) : (
-                      <p className="text-xl font-bold">{data?.totalStockItems || 0}</p>
-                    )}
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {language === "bn" ? "মূল্য: " : "Value: "}
-                      {isLoading ? (
-                        <Skeleton className="h-3 w-12 inline-block" />
-                      ) : (
-                        <span className="font-medium text-cyan-600">{formatCurrency(data?.totalStockValue || 0)}</span>
-                      )}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        {/* Premium Quick Stats */}
+        <PremiumQuickStats
+          totalProducts={data?.totalProducts || 0}
+          totalStockItems={data?.totalStockItems || 0}
+          totalStockValue={data?.totalStockValue || 0}
+          isLoading={isLoading}
+          formatCurrency={formatCurrency}
+          language={language}
+        />
 
         {/* Returns Summary Section */}
         <Card>
