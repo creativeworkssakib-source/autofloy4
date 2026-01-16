@@ -4868,6 +4868,39 @@ serve(async (req) => {
           });
         }
 
+        // If the return was a cash refund, reverse the cash transaction (add money back)
+        if (returnData.refund_method === "cash") {
+          const refundAmount = returnData.is_resellable 
+            ? Number(returnData.refund_amount || 0) 
+            : Number(returnData.unit_cost || 0) * Number(returnData.quantity || 1);
+          
+          if (refundAmount > 0) {
+            console.log(`Reversing cash refund of ${refundAmount} for deleted return ${id}`);
+            
+            // Add the refund amount back to cash (as a deposit/adjustment)
+            const { error: cashInError } = await supabase
+              .from("shop_cash_transactions")
+              .insert({
+                user_id: userId,
+                shop_id: shopId || null,
+                amount: refundAmount,
+                type: "in",
+                source: "return_reversal",
+                notes: `Return deleted - cash refund reversed (${returnData.product_name || 'Product'})`,
+                reference_id: id,
+                reference_type: "return_reversal",
+                transaction_date: new Date().toISOString(),
+              });
+            
+            if (cashInError) {
+              console.error("Failed to reverse cash refund:", cashInError);
+              // Continue with deletion anyway, but log the error
+            } else {
+              console.log(`Cash refund of ${refundAmount} reversed successfully`);
+            }
+          }
+        }
+
         // Insert into trash
         const { error: trashError } = await supabase
           .from("shop_trash")
