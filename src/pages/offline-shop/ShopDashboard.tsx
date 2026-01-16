@@ -15,7 +15,9 @@ import {
   Trash2,
   WifiOff,
   Plus,
-  Clock
+  Clock,
+  Target,
+  CircleDollarSign
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -47,6 +49,9 @@ interface DashboardData {
     grossProfit: number;
     totalExpenses: number;
     netProfit: number;
+    salesTarget: number;
+    targetProgress: number;
+    inventoryValue: number;
   };
   lifetime: {
     totalSales: number;
@@ -116,6 +121,9 @@ const ShopDashboard = () => {
       grossProfit: todayData?.monthly?.grossProfit || 0,
       totalExpenses: todayData?.monthly?.totalExpenses || 0,
       netProfit: todayData?.monthly?.netProfit || 0,
+      salesTarget: todayData?.monthly?.salesTarget || 0,
+      targetProgress: todayData?.monthly?.targetProgress || 0,
+      inventoryValue: todayData?.monthly?.inventoryValue || 0,
     },
     lifetime: {
       totalSales: todayData?.lifetime?.totalSales || 0,
@@ -153,8 +161,11 @@ const ShopDashboard = () => {
 
   const totalDue = data?.lifetime?.totalDue || 0;
 
-  // Get monthly profit for display
+  // Get monthly profit and target for display
   const monthlyProfit = data?.monthly?.netProfit || 0;
+  const salesTarget = data?.monthly?.salesTarget || 0;
+  const targetProgress = data?.monthly?.targetProgress || 0;
+  const monthSales = data?.monthly?.totalSales || 0;
   
   const statsCards = [
     {
@@ -166,7 +177,7 @@ const ShopDashboard = () => {
     },
     {
       title: t("dashboard.monthSales"),
-      value: data?.monthly?.totalSales || 0, // Use monthly instead of lifetime
+      value: monthSales,
       icon: TrendingUp,
       color: "text-green-500",
       bgColor: "bg-green-500/10",
@@ -178,14 +189,10 @@ const ShopDashboard = () => {
       color: "text-red-500",
       bgColor: "bg-red-500/10",
     },
-    {
-      title: t("dashboard.monthProfit"),
-      value: monthlyProfit, // Use monthly profit instead of period (today) profit
-      icon: monthlyProfit >= 0 ? TrendingUp : TrendingDown,
-      color: monthlyProfit >= 0 ? "text-emerald-500" : "text-red-500",
-      bgColor: monthlyProfit >= 0 ? "bg-emerald-500/10" : "bg-red-500/10",
-    },
   ];
+
+  // Check if target is achieved
+  const isTargetAchieved = monthSales >= salesTarget && salesTarget > 0;
 
   return (
     <ShopLayout>
@@ -214,8 +221,8 @@ const ShopDashboard = () => {
           </div>
         </div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        {/* Stats Grid - 3 columns on larger screens */}
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           {statsCards.map((stat, index) => {
             const isClickable = stat.title === t("dashboard.totalDue");
             const cardContent = (
@@ -254,6 +261,98 @@ const ShopDashboard = () => {
             );
           })}
         </div>
+
+        {/* Profit & Target Card - Full Width Professional Card */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+        >
+          <Card className="overflow-hidden border-2 border-primary/10">
+            <CardContent className="p-0">
+              <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-border">
+                {/* This Month's Profit Section */}
+                <div className="p-4 sm:p-6">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className={`p-2 rounded-full ${monthlyProfit >= 0 ? 'bg-emerald-500/10' : 'bg-red-500/10'}`}>
+                        <CircleDollarSign className={`h-5 w-5 ${monthlyProfit >= 0 ? 'text-emerald-500' : 'text-red-500'}`} />
+                      </div>
+                      <p className="text-sm font-medium text-muted-foreground">{t("dashboard.monthProfit")}</p>
+                    </div>
+                    <Badge variant={monthlyProfit >= 0 ? "default" : "destructive"} className="text-xs">
+                      {monthlyProfit >= 0 ? (language === "bn" ? "লাভ" : "Profit") : (language === "bn" ? "লস" : "Loss")}
+                    </Badge>
+                  </div>
+                  {isLoading ? (
+                    <Skeleton className="h-10 w-32" />
+                  ) : (
+                    <p className={`text-2xl sm:text-3xl font-bold ${monthlyProfit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                      {formatCurrency(monthlyProfit)}
+                    </p>
+                  )}
+                  <p className="text-xs text-muted-foreground mt-2">
+                    {language === "bn" ? "বিক্রয় লাভ - খরচ" : "Sales Profit - Expenses"}
+                  </p>
+                </div>
+
+                {/* Monthly Target Section */}
+                <div className="p-4 sm:p-6 bg-muted/30">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="p-2 rounded-full bg-primary/10">
+                        <Target className="h-5 w-5 text-primary" />
+                      </div>
+                      <p className="text-sm font-medium text-muted-foreground">{t("dashboard.salesTarget")}</p>
+                    </div>
+                    {isTargetAchieved && (
+                      <Badge className="bg-emerald-500 hover:bg-emerald-600 text-xs">
+                        {language === "bn" ? "অর্জিত! ✓" : "Achieved! ✓"}
+                      </Badge>
+                    )}
+                  </div>
+                  
+                  {isLoading ? (
+                    <Skeleton className="h-10 w-32 mb-4" />
+                  ) : (
+                    <>
+                      <div className="flex items-baseline gap-2 mb-3">
+                        <p className="text-2xl sm:text-3xl font-bold text-primary">
+                          {formatCurrency(salesTarget)}
+                        </p>
+                        <span className="text-xs text-muted-foreground">
+                          /{language === "bn" ? "মাস" : "month"}
+                        </span>
+                      </div>
+                      
+                      {/* Progress Bar */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-muted-foreground">
+                            {formatCurrency(monthSales)} {t("dashboard.ofTarget")}
+                          </span>
+                          <span className={`font-medium ${isTargetAchieved ? 'text-emerald-500' : 'text-primary'}`}>
+                            {targetProgress}%
+                          </span>
+                        </div>
+                        <Progress 
+                          value={targetProgress} 
+                          className={`h-2 ${isTargetAchieved ? '[&>div]:bg-emerald-500' : ''}`}
+                        />
+                      </div>
+                      
+                      <p className="text-xs text-muted-foreground mt-3">
+                        {language === "bn" 
+                          ? `স্টক মূল্য ÷ ১২ মাস (${formatCurrency(data?.monthly?.inventoryValue || 0)})` 
+                          : `Stock Value ÷ 12 months (${formatCurrency(data?.monthly?.inventoryValue || 0)})`}
+                      </p>
+                    </>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
 
         {/* Trash Bin Alert */}
         {trashCount > 0 && (

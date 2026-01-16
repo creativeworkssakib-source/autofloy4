@@ -787,6 +787,23 @@ serve(async (req) => {
       const monthTotalExpenses = (monthExpenses || []).reduce((sum: number, e: any) => sum + Number(e.amount), 0);
       const monthNetProfit = monthGrossProfit - monthTotalExpenses;
 
+      // === MONTHLY TARGET CALCULATION ===
+      // Calculate total inventory value based on selling price (how much worth of products you have)
+      // Then divide by 12 to get monthly sales target for healthy business cash flow
+      let inventoryValueQuery = supabase
+        .from("shop_products")
+        .select("selling_price, stock_quantity")
+        .eq("user_id", userId)
+        .eq("is_active", true);
+      if (shopId) inventoryValueQuery = inventoryValueQuery.eq("shop_id", shopId);
+      const { data: inventoryProducts } = await inventoryValueQuery;
+      
+      const totalInventoryValue = (inventoryProducts || []).reduce(
+        (sum: number, p: any) => sum + (Number(p.selling_price || 0) * Number(p.stock_quantity || 0)), 0
+      );
+      const monthlyTarget = Math.round(totalInventoryValue / 12); // Target per month to sell all inventory in a year
+      const targetProgress = monthlyTarget > 0 ? Math.min(100, Math.round((monthTotalSales / monthlyTarget) * 100)) : 0;
+
       const lifetimeTotalSales = (lifetimeSales || []).reduce((sum: number, s: any) => sum + Number(s.total), 0);
       const lifetimeTotalProfit = (lifetimeSales || []).reduce((sum: number, s: any) => sum + Number(s.total_profit || 0), 0);
       const totalDueAmount = (dueData || []).reduce((sum: number, s: any) => sum + Number(s.due_amount || 0), 0);
@@ -821,6 +838,9 @@ serve(async (req) => {
           grossProfit: monthGrossProfit,
           totalExpenses: monthTotalExpenses,
           netProfit: monthNetProfit,
+          salesTarget: monthlyTarget,
+          targetProgress: targetProgress,
+          inventoryValue: totalInventoryValue,
         },
         lifetime: {
           totalSales: lifetimeTotalSales,
