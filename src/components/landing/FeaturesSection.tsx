@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
-import { memo, useMemo } from "react";
+import { memo, useMemo, useRef } from "react";
+import { motion, useInView } from "framer-motion";
 import { 
   MessageSquare, 
   Image, 
@@ -15,8 +16,96 @@ import {
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 
+const FeatureCard = memo(({ 
+  feature, 
+  index, 
+  variant = "default" 
+}: { 
+  feature: any; 
+  index: number;
+  variant?: "default" | "compact";
+}) => {
+  const cardRef = useRef(null);
+  const isInView = useInView(cardRef, { once: true, margin: "-50px" });
+
+  return (
+    <motion.div
+      ref={cardRef}
+      initial={{ opacity: 0, y: 40 }}
+      animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 40 }}
+      transition={{ 
+        duration: 0.5, 
+        delay: index * 0.1,
+        ease: [0.25, 0.46, 0.45, 0.94]
+      }}
+      whileHover={{ y: -8 }}
+      className={`group relative bg-card/80 backdrop-blur-sm rounded-2xl border border-border/50 overflow-hidden ${
+        variant === "compact" ? "p-6" : "p-8"
+      }`}
+    >
+      {/* Hover Gradient Overlay */}
+      <motion.div 
+        className="absolute inset-0 bg-gradient-to-br from-primary/5 to-secondary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+      />
+      
+      {/* Shimmer Effect on Hover */}
+      <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 overflow-hidden">
+        <div className="absolute inset-0 animate-shimmer" />
+      </div>
+      
+      {/* Icon */}
+      <motion.div 
+        className={`${variant === "compact" ? "w-12 h-12 mb-4" : "w-14 h-14 mb-6"} rounded-xl bg-gradient-to-br ${feature.gradient} flex items-center justify-center relative overflow-hidden`}
+        whileHover={{ scale: 1.1, rotate: 5 }}
+        transition={{ type: "spring", stiffness: 300 }}
+      >
+        <feature.icon className={`${variant === "compact" ? "w-6 h-6" : "w-7 h-7"} text-primary-foreground relative z-10`} />
+        <motion.div 
+          className="absolute inset-0 bg-white/20"
+          initial={{ x: "-100%" }}
+          whileHover={{ x: "100%" }}
+          transition={{ duration: 0.5 }}
+        />
+      </motion.div>
+      
+      {/* Content */}
+      <h3 className={`${variant === "compact" ? "text-lg mb-2" : "text-xl mb-3"} font-bold group-hover:text-primary transition-colors duration-300 relative z-10`}>
+        {feature.title}
+      </h3>
+      <p className={`text-muted-foreground ${variant === "compact" ? "text-sm mb-3" : "mb-4"} relative z-10`}>
+        {feature.description}
+      </p>
+      
+      {/* Link */}
+      <Link
+        to={`/features/${feature.slug}`}
+        className={`inline-flex items-center ${variant === "compact" ? "text-success-accessible" : "text-primary"} font-medium text-sm group/link relative z-10`}
+        aria-label={`Learn more about ${feature.title}`}
+      >
+        <span>Learn More</span>
+        <motion.span
+          className="ml-1"
+          initial={{ x: 0 }}
+          whileHover={{ x: 5 }}
+        >
+          <ArrowRight className="w-4 h-4" />
+        </motion.span>
+      </Link>
+      
+      {/* Border Glow on Hover */}
+      <motion.div 
+        className={`absolute inset-0 rounded-2xl border-2 ${variant === "compact" ? "border-success/30" : "border-primary/30"} opacity-0 group-hover:opacity-100 transition-opacity duration-300`}
+      />
+    </motion.div>
+  );
+});
+
+FeatureCard.displayName = "FeatureCard";
+
 const FeaturesSection = memo(() => {
   const { t } = useLanguage();
+  const sectionRef = useRef(null);
+  const isInView = useInView(sectionRef, { once: true, margin: "-100px" });
 
   const onlineFeatures = useMemo(() => [
     {
@@ -94,90 +183,99 @@ const FeaturesSection = memo(() => {
     },
   ], [t]);
 
+  const headerVariants = {
+    hidden: { opacity: 0, y: 30 },
+    visible: { 
+      opacity: 1, 
+      y: 0,
+      transition: { duration: 0.6, ease: "easeOut" as const }
+    }
+  };
+
   return (
-    <section id="features" className="py-16 lg:py-24 relative overflow-hidden">
-      {/* Background */}
+    <section id="features" ref={sectionRef} className="py-16 lg:py-24 relative overflow-hidden">
+      {/* Animated Background */}
       <div className="absolute inset-0 bg-muted/30" />
+      <motion.div 
+        className="absolute top-0 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl"
+        animate={{ 
+          x: [0, 50, 0],
+          y: [0, 30, 0]
+        }}
+        transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }}
+      />
+      <motion.div 
+        className="absolute bottom-0 right-1/4 w-96 h-96 bg-secondary/5 rounded-full blur-3xl"
+        animate={{ 
+          x: [0, -50, 0],
+          y: [0, -30, 0]
+        }}
+        transition={{ duration: 25, repeat: Infinity, ease: "easeInOut" }}
+      />
 
       <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         {/* Section Header */}
-        <div className="text-center max-w-3xl mx-auto mb-16">
-          <span className="inline-block px-4 py-1.5 rounded-full bg-primary/10 text-primary-accessible text-sm font-medium mb-4">
+        <motion.div 
+          className="text-center max-w-3xl mx-auto mb-16"
+          variants={headerVariants}
+          initial="hidden"
+          animate={isInView ? "visible" : "hidden"}
+        >
+          <motion.span 
+            className="inline-block px-4 py-1.5 rounded-full bg-primary/10 text-primary-accessible text-sm font-medium mb-4"
+            whileHover={{ scale: 1.05 }}
+          >
             {t("features.badge")}
-          </span>
+          </motion.span>
           <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-6">
             {t("features.title1")}{" "}
             <span className="gradient-text">{t("features.title2")}</span>
           </h2>
           <p className="text-lg text-muted-foreground">{t("features.subtitle")}</p>
-        </div>
+        </motion.div>
 
         {/* Online Business Features */}
         <div className="mb-12">
-          <h3 className="text-xl md:text-2xl font-bold mb-6 text-center">
-            <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-secondary/10 text-secondary">
+          <motion.h3 
+            className="text-xl md:text-2xl font-bold mb-6 text-center"
+            initial={{ opacity: 0, y: 20 }}
+            animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
+            transition={{ delay: 0.2 }}
+          >
+            <motion.span 
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-secondary/10 text-secondary"
+              whileHover={{ scale: 1.05 }}
+            >
               <MessageSquare className="w-5 h-5" />
               {t("features.onlineBusiness")}
-            </span>
-          </h3>
+            </motion.span>
+          </motion.h3>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
-            {onlineFeatures.map((feature) => (
-              <div
-                key={feature.slug}
-                className="group relative bg-card/80 backdrop-blur-sm rounded-2xl p-8 border border-border/50 hover:border-primary/30 transition-colors h-full"
-              >
-                <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${feature.gradient} flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300`}>
-                  <feature.icon className="w-7 h-7 text-primary-foreground" />
-                </div>
-                <h3 className="text-xl font-bold mb-3 group-hover:text-primary transition-colors">
-                  {feature.title}
-                </h3>
-                <p className="text-muted-foreground mb-4">{feature.description}</p>
-                <Link
-                  to={`/features/${feature.slug}`}
-                  className="inline-flex items-center text-primary font-medium text-sm group/link"
-                  aria-label={`${t("features.learnMore")} ${feature.title}`}
-                >
-                  <span>{t("features.learnMore")}</span>
-                  <span className="sr-only"> {feature.title}</span>
-                  <ArrowRight className="w-4 h-4 ml-1 group-hover/link:translate-x-1 transition-transform" />
-                </Link>
-              </div>
+            {onlineFeatures.map((feature, index) => (
+              <FeatureCard key={feature.slug} feature={feature} index={index} />
             ))}
           </div>
         </div>
 
         {/* Offline Shop Features */}
         <div>
-          <h3 className="text-xl md:text-2xl font-bold mb-6 text-center">
-            <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-success/10 text-success-accessible">
+          <motion.h3 
+            className="text-xl md:text-2xl font-bold mb-6 text-center"
+            initial={{ opacity: 0, y: 20 }}
+            animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
+            transition={{ delay: 0.4 }}
+          >
+            <motion.span 
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-success/10 text-success-accessible"
+              whileHover={{ scale: 1.05 }}
+            >
               <Store className="w-5 h-5" />
               {t("features.offlineShopBusiness")}
-            </span>
-          </h3>
+            </motion.span>
+          </motion.h3>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8">
-            {offlineFeatures.map((feature) => (
-              <div
-                key={feature.slug}
-                className="group relative bg-card/80 backdrop-blur-sm rounded-2xl p-6 border border-border/50 hover:border-success/30 transition-colors h-full"
-              >
-                <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${feature.gradient} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300`}>
-                  <feature.icon className="w-6 h-6 text-primary-foreground" />
-                </div>
-                <h3 className="text-lg font-bold mb-2 group-hover:text-success transition-colors">
-                  {feature.title}
-                </h3>
-                <p className="text-muted-foreground text-sm mb-3">{feature.description}</p>
-                <Link
-                  to={`/features/${feature.slug}`}
-                  className="inline-flex items-center text-success-accessible font-medium text-sm group/link"
-                  aria-label={`${t("features.learnMore")} ${feature.title}`}
-                >
-                  <span>{t("features.learnMore")}</span>
-                  <span className="sr-only"> {feature.title}</span>
-                  <ArrowRight className="w-4 h-4 ml-1 group-hover/link:translate-x-1 transition-transform" />
-                </Link>
-              </div>
+            {offlineFeatures.map((feature, index) => (
+              <FeatureCard key={feature.slug} feature={feature} index={index + 6} variant="compact" />
             ))}
           </div>
         </div>
