@@ -6928,15 +6928,18 @@ serve(async (req) => {
           const totalChangeReturns = enrichedChangeReturns.reduce((sum: number, c: any) => sum + Number(c.amount || 0), 0);
 
           // Get returns that were paid from cash (refund_method = 'cash')
-          const { data: returnsFromCash } = await supabase
+          // Note: return_date is a DATE column, so we compare with just the date string, not datetime
+          console.log("Fetching returns for cash_out:", { userId, shopId, today });
+          const { data: returnsFromCash, error: returnsError } = await supabase
             .from("shop_returns")
-            .select("id, product_name, quantity, refund_amount, unit_cost, reason, customer_name, customer_phone, is_resellable, created_at")
+            .select("id, product_name, quantity, refund_amount, unit_cost, reason, customer_name, customer_phone, is_resellable, created_at, return_date")
             .eq("user_id", userId)
             .eq("shop_id", shopId)
             .eq("refund_method", "cash")
-            .gte("return_date", todayStart)
-            .lte("return_date", todayEnd)
+            .eq("return_date", today)
             .order("created_at", { ascending: false });
+          
+          console.log("Returns query result:", { count: returnsFromCash?.length, error: returnsError, data: returnsFromCash });
 
           // Calculate amounts for returns
           const returnsEnriched = (returnsFromCash || []).map((r: any) => ({
