@@ -73,29 +73,14 @@ const HeroSection = memo(() => {
 
   return (
     <section ref={sectionRef} className="relative min-h-screen flex items-center overflow-hidden">
-      {/* Animated Background Orbs */}
-      <div className="absolute inset-0 overflow-hidden">
-        <motion.div 
-          className="absolute top-20 left-10 w-72 h-72 bg-primary/10 rounded-full blur-3xl animate-orb"
-          style={{ y: y1 }}
-        />
-        <motion.div 
-          className="absolute bottom-20 right-10 w-96 h-96 bg-secondary/10 rounded-full blur-3xl animate-orb"
-          style={{ animationDelay: "5s" }}
-        />
-        <motion.div 
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-gradient-to-r from-primary/5 to-secondary/5 rounded-full blur-3xl"
-          animate={{ scale: [1, 1.1, 1], rotate: [0, 180, 360] }}
-          transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
-        />
+      {/* Subtle Background Orbs - reduced opacity */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-20 left-10 w-72 h-72 bg-primary/5 rounded-full blur-3xl" />
+        <div className="absolute bottom-20 right-10 w-96 h-96 bg-secondary/5 rounded-full blur-3xl" />
       </div>
-      
-      {/* Grid Pattern Overlay */}
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,hsl(var(--primary)/0.03)_1px,transparent_1px),linear-gradient(to_bottom,hsl(var(--primary)/0.03)_1px,transparent_1px)] bg-[size:4rem_4rem]" />
 
       <motion.div 
         className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-16 relative z-10"
-        style={{ opacity }}
       >
         <motion.div 
           className="flex flex-col items-center gap-12"
@@ -201,16 +186,6 @@ const HeroSection = memo(() => {
             variants={itemVariants}
             className="relative flex justify-center"
           >
-            {/* Glow Effect */}
-            <motion.div 
-              className="absolute inset-0 bg-gradient-to-r from-primary/20 to-secondary/20 blur-3xl rounded-full scale-75"
-              animate={{ 
-                scale: [0.75, 0.85, 0.75],
-                opacity: [0.5, 0.8, 0.5]
-              }}
-              transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-            />
-            
             {/* Main Illustration Container */}
             <motion.div 
               className="relative w-full max-w-sm sm:max-w-md md:max-w-2xl lg:max-w-3xl"
@@ -220,7 +195,7 @@ const HeroSection = memo(() => {
               <img
                 src={heroConversation}
                 alt="AI Robot and Human Conversation"
-                className="relative w-full drop-shadow-2xl"
+                className="relative w-full drop-shadow-xl"
                 loading="eager"
                 width={768}
                 height={432}
