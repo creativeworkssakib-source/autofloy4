@@ -188,6 +188,16 @@ const ShopDashboard = () => {
       icon: Wallet,
       color: "text-red-500",
       bgColor: "bg-red-500/10",
+      link: "/offline-shop/due-customers",
+    },
+    {
+      title: t("dashboard.monthProfit"),
+      value: monthlyProfit,
+      icon: CircleDollarSign,
+      color: monthlyProfit >= 0 ? "text-emerald-500" : "text-red-500",
+      bgColor: monthlyProfit >= 0 ? "bg-emerald-500/10" : "bg-red-500/10",
+      badge: monthlyProfit >= 0 ? (language === "bn" ? "লাভ" : "Profit") : (language === "bn" ? "লস" : "Loss"),
+      badgeVariant: monthlyProfit >= 0 ? "default" : "destructive",
     },
   ];
 
@@ -221,20 +231,29 @@ const ShopDashboard = () => {
           </div>
         </div>
 
-        {/* Stats Grid - 3 columns on larger screens */}
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+        {/* Stats Grid - 4 columns: Today's Sales, Month Sales, Total Due, This Month's Profit */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           {statsCards.map((stat, index) => {
-            const isClickable = stat.title === t("dashboard.totalDue");
+            const isClickable = !!stat.link;
             const cardContent = (
-              <Card className={isClickable ? "cursor-pointer hover:shadow-md transition-shadow hover:border-primary/50" : ""}>
+              <Card className={`relative overflow-hidden ${isClickable ? "cursor-pointer hover:shadow-md transition-shadow hover:border-primary/50" : ""}`}>
                 <CardContent className="p-3 sm:pt-6 sm:p-6">
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0 flex-1">
-                      <p className="text-xs sm:text-sm text-muted-foreground truncate">{stat.title}</p>
+                      <div className="flex items-center gap-2 mb-1">
+                        <p className="text-xs sm:text-sm text-muted-foreground truncate">{stat.title}</p>
+                        {stat.badge && (
+                          <Badge variant={stat.badgeVariant as any} className="text-[10px] px-1.5 py-0">
+                            {stat.badge}
+                          </Badge>
+                        )}
+                      </div>
                       {isLoading ? (
                         <Skeleton className="h-6 sm:h-8 w-16 sm:w-24 mt-1" />
                       ) : (
-                        <p className="text-lg sm:text-2xl font-bold truncate">{formatCurrency(stat.value)}</p>
+                        <p className={`text-lg sm:text-2xl font-bold truncate ${stat.badge ? stat.color : ''}`}>
+                          {formatCurrency(stat.value)}
+                        </p>
                       )}
                     </div>
                     <div className={`p-2 sm:p-3 rounded-full ${stat.bgColor} shrink-0`}>
@@ -253,7 +272,7 @@ const ShopDashboard = () => {
                 transition={{ delay: index * 0.1 }}
               >
                 {isClickable ? (
-                  <Link to="/offline-shop/due-customers">{cardContent}</Link>
+                  <Link to={stat.link!}>{cardContent}</Link>
                 ) : (
                   cardContent
                 )}
@@ -262,90 +281,81 @@ const ShopDashboard = () => {
           })}
         </div>
 
-        {/* Profit & Target Card - Full Width Professional Card */}
+        {/* Sales Target Card - Professional Tall Card */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
+          transition={{ delay: 0.4 }}
         >
-          <Card className="overflow-hidden border-2 border-primary/10">
-            <CardContent className="p-0">
-              <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-border">
-                {/* This Month's Profit Section */}
-                <div className="p-4 sm:p-6">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <div className={`p-2 rounded-full ${monthlyProfit >= 0 ? 'bg-emerald-500/10' : 'bg-red-500/10'}`}>
-                        <CircleDollarSign className={`h-5 w-5 ${monthlyProfit >= 0 ? 'text-emerald-500' : 'text-red-500'}`} />
-                      </div>
-                      <p className="text-sm font-medium text-muted-foreground">{t("dashboard.monthProfit")}</p>
+          <Card className="overflow-hidden border-2 border-primary/20 bg-gradient-to-br from-primary/5 via-background to-primary/10">
+            <CardContent className="p-6 sm:p-8">
+              <div className="flex flex-col lg:flex-row lg:items-center gap-6">
+                {/* Left Section - Target Info */}
+                <div className="flex-1 space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 rounded-xl bg-primary/10 ring-2 ring-primary/20">
+                      <Target className="h-7 w-7 text-primary" />
                     </div>
-                    <Badge variant={monthlyProfit >= 0 ? "default" : "destructive"} className="text-xs">
-                      {monthlyProfit >= 0 ? (language === "bn" ? "লাভ" : "Profit") : (language === "bn" ? "লস" : "Loss")}
-                    </Badge>
-                  </div>
-                  {isLoading ? (
-                    <Skeleton className="h-10 w-32" />
-                  ) : (
-                    <p className={`text-2xl sm:text-3xl font-bold ${monthlyProfit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-                      {formatCurrency(monthlyProfit)}
-                    </p>
-                  )}
-                  <p className="text-xs text-muted-foreground mt-2">
-                    {language === "bn" ? "বিক্রয় লাভ - খরচ" : "Sales Profit - Expenses"}
-                  </p>
-                </div>
-
-                {/* Monthly Target Section */}
-                <div className="p-4 sm:p-6 bg-muted/30">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <div className="p-2 rounded-full bg-primary/10">
-                        <Target className="h-5 w-5 text-primary" />
-                      </div>
-                      <p className="text-sm font-medium text-muted-foreground">{t("dashboard.salesTarget")}</p>
+                    <div>
+                      <h3 className="text-lg font-semibold">{t("dashboard.salesTarget")}</h3>
+                      <p className="text-xs text-muted-foreground">
+                        {language === "bn" ? "মাসিক বিক্রয় লক্ষ্য" : "Monthly Sales Goal"}
+                      </p>
                     </div>
                     {isTargetAchieved && (
-                      <Badge className="bg-emerald-500 hover:bg-emerald-600 text-xs">
-                        {language === "bn" ? "অর্জিত! ✓" : "Achieved! ✓"}
+                      <Badge className="bg-emerald-500 hover:bg-emerald-600 text-sm ml-auto">
+                        {language === "bn" ? "✓ লক্ষ্য অর্জিত!" : "✓ Target Achieved!"}
                       </Badge>
                     )}
                   </div>
                   
                   {isLoading ? (
-                    <Skeleton className="h-10 w-32 mb-4" />
+                    <Skeleton className="h-14 w-48" />
+                  ) : (
+                    <div className="flex items-baseline gap-2">
+                      <p className="text-4xl sm:text-5xl font-bold text-primary">
+                        {formatCurrency(salesTarget)}
+                      </p>
+                      <span className="text-sm text-muted-foreground font-medium">
+                        /{language === "bn" ? "মাস" : "month"}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Right Section - Progress */}
+                <div className="flex-1 space-y-4">
+                  {isLoading ? (
+                    <Skeleton className="h-24 w-full" />
                   ) : (
                     <>
-                      <div className="flex items-baseline gap-2 mb-3">
-                        <p className="text-2xl sm:text-3xl font-bold text-primary">
-                          {formatCurrency(salesTarget)}
-                        </p>
-                        <span className="text-xs text-muted-foreground">
-                          /{language === "bn" ? "মাস" : "month"}
-                        </span>
-                      </div>
-                      
-                      {/* Progress Bar */}
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-muted-foreground">
+                      {/* Progress Section */}
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">
                             {formatCurrency(monthSales)} {t("dashboard.ofTarget")}
                           </span>
-                          <span className={`font-medium ${isTargetAchieved ? 'text-emerald-500' : 'text-primary'}`}>
+                          <span className={`text-2xl font-bold ${isTargetAchieved ? 'text-emerald-500' : 'text-primary'}`}>
                             {targetProgress}%
                           </span>
                         </div>
                         <Progress 
-                          value={targetProgress} 
-                          className={`h-2 ${isTargetAchieved ? '[&>div]:bg-emerald-500' : ''}`}
+                          value={Math.min(targetProgress, 100)} 
+                          className={`h-4 rounded-full ${isTargetAchieved ? '[&>div]:bg-gradient-to-r [&>div]:from-emerald-500 [&>div]:to-emerald-400' : '[&>div]:bg-gradient-to-r [&>div]:from-primary [&>div]:to-primary/70'}`}
                         />
+                        <div className="flex items-center justify-between text-xs text-muted-foreground">
+                          <span>0%</span>
+                          <span className="flex items-center gap-1">
+                            {language === "bn" 
+                              ? `স্টক মূল্য ÷ ১২ মাস` 
+                              : `Stock Value ÷ 12 months`}
+                            <span className="font-medium text-foreground">
+                              ({formatCurrency(data?.monthly?.inventoryValue || 0)})
+                            </span>
+                          </span>
+                          <span>100%</span>
+                        </div>
                       </div>
-                      
-                      <p className="text-xs text-muted-foreground mt-3">
-                        {language === "bn" 
-                          ? `স্টক মূল্য ÷ ১২ মাস (${formatCurrency(data?.monthly?.inventoryValue || 0)})` 
-                          : `Stock Value ÷ 12 months (${formatCurrency(data?.monthly?.inventoryValue || 0)})`}
-                      </p>
                     </>
                   )}
                 </div>
