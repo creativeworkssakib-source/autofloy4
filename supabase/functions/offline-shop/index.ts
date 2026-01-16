@@ -755,12 +755,37 @@ serve(async (req) => {
         .sort((a, b) => b.count - a.count)
         .slice(0, 5);
 
-      // Calculate totals
+      // Calculate period totals - use actual profit from sales (total_profit = selling - cost)
       const periodTotalSales = (periodSales || []).reduce((sum: number, s: any) => sum + Number(s.total), 0);
       const periodTotalPurchases = (periodPurchases || []).reduce((sum: number, p: any) => sum + Number(p.total_amount), 0);
       const periodTotalExpenses = (periodExpenses || []).reduce((sum: number, e: any) => sum + Number(e.amount), 0);
-      const periodGrossProfit = periodTotalSales - periodTotalPurchases;
+      // Use actual profit from each sale (stored as total_profit) instead of Sales - Purchases
+      const periodActualProfit = (periodSales || []).reduce((sum: number, s: any) => sum + Number(s.total_profit || 0), 0);
+      const periodGrossProfit = periodActualProfit;
       const periodNetProfit = periodGrossProfit - periodTotalExpenses;
+
+      // === THIS MONTH'S DATA (always from start of current month) ===
+      let monthSalesQuery = supabase
+        .from("shop_sales")
+        .select("total, total_profit")
+        .eq("user_id", userId)
+        .gte("sale_date", startOfMonth);
+      if (shopId) monthSalesQuery = monthSalesQuery.eq("shop_id", shopId);
+      const { data: monthSales } = await monthSalesQuery;
+
+      let monthExpensesQuery = supabase
+        .from("shop_expenses")
+        .select("amount")
+        .eq("user_id", userId)
+        .gte("expense_date", startOfMonth);
+      if (shopId) monthExpensesQuery = monthExpensesQuery.eq("shop_id", shopId);
+      const { data: monthExpenses } = await monthExpensesQuery;
+
+      // Calculate this month's totals using actual profit from sales
+      const monthTotalSales = (monthSales || []).reduce((sum: number, s: any) => sum + Number(s.total), 0);
+      const monthGrossProfit = (monthSales || []).reduce((sum: number, s: any) => sum + Number(s.total_profit || 0), 0);
+      const monthTotalExpenses = (monthExpenses || []).reduce((sum: number, e: any) => sum + Number(e.amount), 0);
+      const monthNetProfit = monthGrossProfit - monthTotalExpenses;
 
       const lifetimeTotalSales = (lifetimeSales || []).reduce((sum: number, s: any) => sum + Number(s.total), 0);
       const lifetimeTotalProfit = (lifetimeSales || []).reduce((sum: number, s: any) => sum + Number(s.total_profit || 0), 0);
@@ -790,6 +815,12 @@ serve(async (req) => {
           totalExpenses: periodTotalExpenses,
           netProfit: periodNetProfit,
           customersServed: customersServed || 0,
+        },
+        monthly: {
+          totalSales: monthTotalSales,
+          grossProfit: monthGrossProfit,
+          totalExpenses: monthTotalExpenses,
+          netProfit: monthNetProfit,
         },
         lifetime: {
           totalSales: lifetimeTotalSales,
