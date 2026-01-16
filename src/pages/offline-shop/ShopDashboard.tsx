@@ -42,6 +42,12 @@ interface DashboardData {
     netProfit: number;
     customersServed: number;
   };
+  monthly: {
+    totalSales: number;
+    grossProfit: number;
+    totalExpenses: number;
+    netProfit: number;
+  };
   lifetime: {
     totalSales: number;
     totalProfit: number;
@@ -95,7 +101,7 @@ const ShopDashboard = () => {
     await loadTodayDashboard();
   };
 
-  // Map hook data to expected format - API returns { period: {...}, lifetime: {...}, totalProducts, ... }
+  // Map hook data to expected format - API returns { period: {...}, monthly: {...}, lifetime: {...}, totalProducts, ... }
   const data: DashboardData | null = todayData ? {
     period: {
       totalSales: todayData?.period?.totalSales || 0,
@@ -104,6 +110,12 @@ const ShopDashboard = () => {
       totalExpenses: todayData?.period?.totalExpenses || 0,
       netProfit: todayData?.period?.netProfit || 0,
       customersServed: todayData?.period?.customersServed || 0,
+    },
+    monthly: {
+      totalSales: todayData?.monthly?.totalSales || 0,
+      grossProfit: todayData?.monthly?.grossProfit || 0,
+      totalExpenses: todayData?.monthly?.totalExpenses || 0,
+      netProfit: todayData?.monthly?.netProfit || 0,
     },
     lifetime: {
       totalSales: todayData?.lifetime?.totalSales || 0,
@@ -141,6 +153,9 @@ const ShopDashboard = () => {
 
   const totalDue = data?.lifetime?.totalDue || 0;
 
+  // Get monthly profit for display
+  const monthlyProfit = data?.monthly?.netProfit || 0;
+  
   const statsCards = [
     {
       title: t("dashboard.todaySales"),
@@ -151,7 +166,7 @@ const ShopDashboard = () => {
     },
     {
       title: t("dashboard.monthSales"),
-      value: data?.lifetime?.totalSales || 0,
+      value: data?.monthly?.totalSales || 0, // Use monthly instead of lifetime
       icon: TrendingUp,
       color: "text-green-500",
       bgColor: "bg-green-500/10",
@@ -165,10 +180,10 @@ const ShopDashboard = () => {
     },
     {
       title: t("dashboard.monthProfit"),
-      value: periodProfit,
-      icon: periodProfit >= 0 ? TrendingUp : TrendingDown,
-      color: periodProfit >= 0 ? "text-emerald-500" : "text-red-500",
-      bgColor: periodProfit >= 0 ? "bg-emerald-500/10" : "bg-red-500/10",
+      value: monthlyProfit, // Use monthly profit instead of period (today) profit
+      icon: monthlyProfit >= 0 ? TrendingUp : TrendingDown,
+      color: monthlyProfit >= 0 ? "text-emerald-500" : "text-red-500",
+      bgColor: monthlyProfit >= 0 ? "bg-emerald-500/10" : "bg-red-500/10",
     },
   ];
 
