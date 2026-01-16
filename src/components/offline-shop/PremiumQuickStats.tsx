@@ -52,7 +52,7 @@ export const PremiumQuickStats = ({
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className="grid grid-cols-2 gap-4">
       {stats.map((stat, index) => (
         <motion.div
           key={stat.title}
@@ -60,10 +60,10 @@ export const PremiumQuickStats = ({
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.5 + index * 0.1, duration: 0.5 }}
           whileHover={{ scale: 1.02, y: -2 }}
-          className="group"
+          className="group h-full"
         >
           <Card className={`
-            relative overflow-hidden border-0
+            relative overflow-hidden border-0 h-full
             bg-gradient-to-br ${stat.gradientFrom} ${stat.gradientTo}
             backdrop-blur-xl shadow-lg
             transition-all duration-300
@@ -83,8 +83,8 @@ export const PremiumQuickStats = ({
               />
             </div>
 
-            <CardContent className="relative pt-5 pb-5 px-5">
-              <div className="flex items-center gap-4">
+            <CardContent className="relative pt-5 pb-5 px-5 h-full">
+              <div className="flex items-center gap-4 h-full">
                 {/* Animated Icon */}
                 <motion.div 
                   className={`
