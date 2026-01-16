@@ -414,9 +414,14 @@ export default function ShopReturns() {
 
   // Quick add return from search results - uses Supabase
   const [pendingReturnCustomer, setPendingReturnCustomer] = useState<Customer | null>(null);
+  // State to show inline purchase history (instead of separate dialog)
+  const [inlineHistoryCustomer, setInlineHistoryCustomer] = useState<Customer | null>(null);
+  const [inlineHistory, setInlineHistory] = useState<CustomerSale[]>([]);
+  const [isLoadingInlineHistory, setIsLoadingInlineHistory] = useState(false);
 
   const quickAddReturnForCustomer = async (customer: Customer) => {
     setPendingReturnCustomer(customer);
+    setIsLoadingInlineHistory(true);
     
     // Set customer info immediately
     setFormData({
@@ -439,7 +444,7 @@ export default function ShopReturns() {
         customerSales = allSales.filter((s: any) => s.customer_id === customer.id);
       }
 
-      const history = customerSales.map((s: any) => ({
+      const history: CustomerSale[] = customerSales.map((s: any) => ({
         id: s.id,
         invoice_number: s.invoice_number,
         total: s.total,
@@ -448,18 +453,25 @@ export default function ShopReturns() {
         items: s.items || [],
       }));
 
-      setSelectedCustomerHistory(history);
-      setCustomerReturnStats({
-        total_returns: 0,
-        total_refund_value: 0,
-        customer_name: customer.name,
-      });
-      setIsHistoryOpen(true);
+      // Set inline history to show in step 2 area
+      setInlineHistoryCustomer(customer);
+      setInlineHistory(history);
       setCustomerSearchQuery("");
       setSearchedCustomers([]);
+      
+      // If only one sale with one item, auto-select it
+      if (history.length === 1 && history[0].items.length === 1) {
+        const sale = history[0];
+        const item = sale.items[0];
+        selectSaleItemForReturn(sale, item, customer.name, customer.is_walk_in ? "" : customer.id);
+        setInlineHistoryCustomer(null);
+        setInlineHistory([]);
+      }
     } catch (error) {
       console.error("Fetch customer history error:", error);
       toast.error("Failed to fetch purchase history");
+    } finally {
+      setIsLoadingInlineHistory(false);
     }
   };
 
@@ -702,6 +714,8 @@ export default function ShopReturns() {
     setSelectedSale(null);
     setCustomerReturnStats(null);
     setPendingReturnCustomer(null);
+    setInlineHistoryCustomer(null);
+    setInlineHistory([]);
   };
 
   const applyFilters = () => {
@@ -933,6 +947,8 @@ export default function ShopReturns() {
                               setSelectedSaleItem(null);
                               setSelectedSale(null);
                               setPendingReturnCustomer(null);
+                              setInlineHistoryCustomer(null);
+                              setInlineHistory([]);
                             }}
                           >
                             <X className="h-3 w-3" />
@@ -982,6 +998,10 @@ export default function ShopReturns() {
                               original_sale_date: "",
                               original_unit_price: 0,
                             });
+                            // Re-show inline history if customer is still selected
+                            if (pendingReturnCustomer) {
+                              quickAddReturnForCustomer(pendingReturnCustomer);
+                            }
                           }}
                         >
                           <X className="h-4 w-4 mr-1" />
@@ -1006,6 +1026,80 @@ export default function ShopReturns() {
                           <p className="font-medium">{selectedSaleItem.quantity} × ৳{selectedSaleItem.unit_price}</p>
                         </div>
                       </div>
+                    </CardContent>
+                  </Card>
+                ) : inlineHistoryCustomer && inlineHistory.length > 0 ? (
+                  /* Inline Purchase History Selection - Direct in Dialog */
+                  <Card className="border-2 border-primary/40 bg-primary/5">
+                    <CardContent className="pt-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs font-bold">2</div>
+                          <ShoppingBag className="h-4 w-4 text-primary" />
+                          <span className="font-medium text-primary">Select Product from Purchase History</span>
+                        </div>
+                        <Button 
+                          size="sm" 
+                          variant="ghost" 
+                          onClick={() => {
+                            setInlineHistoryCustomer(null);
+                            setInlineHistory([]);
+                          }}
+                        >
+                          <X className="h-4 w-4 mr-1" />
+                          Cancel
+                        </Button>
+                      </div>
+                      
+                      <div className="space-y-3 max-h-[300px] overflow-y-auto">
+                        {inlineHistory.map((sale) => (
+                          <div key={sale.id} className="border rounded-lg p-3 bg-background">
+                            <div className="flex justify-between items-center mb-2 pb-2 border-b">
+                              <div>
+                                <p className="font-medium text-sm">{sale.invoice_number}</p>
+                                <p className="text-xs text-muted-foreground">{safeFormatDate(sale.sale_date)}</p>
+                              </div>
+                              <Badge variant={sale.payment_status === "paid" ? "default" : "secondary"}>
+                                ৳{sale.total}
+                              </Badge>
+                            </div>
+                            <div className="space-y-2">
+                              {sale.items.map((item, idx) => (
+                                <div 
+                                  key={idx} 
+                                  className="flex items-center justify-between p-2 rounded-md hover:bg-muted/50 cursor-pointer transition-colors border"
+                                  onClick={() => {
+                                    selectSaleItemForReturn(
+                                      sale, 
+                                      item, 
+                                      inlineHistoryCustomer.name, 
+                                      inlineHistoryCustomer.is_walk_in ? "" : inlineHistoryCustomer.id
+                                    );
+                                    setInlineHistoryCustomer(null);
+                                    setInlineHistory([]);
+                                  }}
+                                >
+                                  <div className="flex-1">
+                                    <p className="font-medium text-sm">{item.product_name}</p>
+                                    <p className="text-xs text-muted-foreground">{item.quantity} × ৳{item.unit_price}</p>
+                                  </div>
+                                  <Button size="sm" variant="default" className="h-7">
+                                    <Plus className="h-3 w-3 mr-1" />
+                                    Select
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ) : isLoadingInlineHistory ? (
+                  <Card className="border border-dashed">
+                    <CardContent className="pt-4 text-center py-8">
+                      <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full mx-auto mb-2" />
+                      <p className="text-sm text-muted-foreground">Loading purchase history...</p>
                     </CardContent>
                   </Card>
                 ) : (
