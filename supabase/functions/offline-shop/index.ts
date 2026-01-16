@@ -640,6 +640,18 @@ serve(async (req) => {
       if (shopId) totalProductsQuery = totalProductsQuery.eq("shop_id", shopId);
       const { count: totalProducts } = await totalProductsQuery;
 
+      // Get total stock items (sum of all stock quantities) and total stock value
+      let stockDataQuery = supabase
+        .from("shop_products")
+        .select("stock_quantity, selling_price")
+        .eq("user_id", userId)
+        .eq("is_active", true);
+      if (shopId) stockDataQuery = stockDataQuery.eq("shop_id", shopId);
+      const { data: stockData } = await stockDataQuery;
+      
+      const totalStockItems = (stockData || []).reduce((sum: number, p: any) => sum + (p.stock_quantity || 0), 0);
+      const totalStockValue = (stockData || []).reduce((sum: number, p: any) => sum + ((p.stock_quantity || 0) * (p.selling_price || 0)), 0);
+
       // Get total customers count
       let totalCustomersQuery = supabase
         .from("shop_customers")
@@ -858,6 +870,8 @@ serve(async (req) => {
         },
         totalProducts: totalProducts || 0,
         totalCustomers: totalCustomers || 0,
+        totalStockItems,
+        totalStockValue,
         totalSuppliers: totalSuppliers || 0,
         lowStockProducts,
         recentSales: recentSales || [],
