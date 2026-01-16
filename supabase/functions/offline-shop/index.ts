@@ -6960,34 +6960,39 @@ serve(async (req) => {
           const totalQuickExpenses = (quickExpenses || []).reduce((sum: number, q: any) => sum + Number(q.amount || 0), 0);
           const totalChangeReturns = enrichedChangeReturns.reduce((sum: number, c: any) => sum + Number(c.amount || 0), 0);
 
-          // Get returns that were paid from cash (refund_method = 'cash')
-          // Note: return_date is a DATE column, so we compare with just the date string, not datetime
+          // Get returns for today - check notes for "[From Cash]" to identify cash refunds
+          // Note: return_date is a DATE column, so we compare with just the date string
           console.log("Fetching returns for cash_out:", { userId, shopId, today });
-          const { data: returnsFromCash, error: returnsError } = await supabase
+          const { data: allReturns, error: returnsError } = await supabase
             .from("shop_returns")
-            .select("id, product_name, quantity, refund_amount, unit_cost, reason, customer_name, customer_phone, is_resellable, created_at, return_date")
+            .select("id, product_name, quantity, refund_amount, loss_amount, original_unit_price, return_reason, customer_name, is_resellable, notes, created_at, return_date")
             .eq("user_id", userId)
             .eq("shop_id", shopId)
-            .eq("refund_method", "cash")
             .eq("return_date", today)
             .order("created_at", { ascending: false });
           
-          console.log("Returns query result:", { count: returnsFromCash?.length, error: returnsError, data: returnsFromCash });
+          console.log("Returns query result:", { count: allReturns?.length, error: returnsError, data: allReturns });
+
+          // Filter to only cash refunds (notes contain "[From Cash]")
+          const returnsFromCash = (allReturns || []).filter((r: any) => 
+            r.notes && r.notes.includes("[From Cash]")
+          );
+          
+          console.log("Cash returns filtered:", { count: returnsFromCash.length });
 
           // Calculate amounts for returns
-          const returnsEnriched = (returnsFromCash || []).map((r: any) => ({
+          const returnsEnriched = returnsFromCash.map((r: any) => ({
             id: r.id,
             product_name: r.product_name,
             quantity: r.quantity,
-            reason: r.reason,
+            reason: r.return_reason,
             customer_name: r.customer_name,
-            customer_phone: r.customer_phone,
             is_resellable: r.is_resellable,
             created_at: r.created_at,
-            // If resellable, cash_amount = refund_amount; else loss = unit_cost * quantity
+            // For damaged items (not resellable), use loss_amount; for resellable, use refund_amount
             cash_amount: r.is_resellable 
               ? Number(r.refund_amount || 0) 
-              : Number(r.unit_cost || 0) * Number(r.quantity || 1)
+              : Number(r.loss_amount || r.refund_amount || 0)
           }));
 
           const totalReturns = returnsEnriched.reduce((sum: number, r: any) => sum + Number(r.cash_amount || 0), 0);
