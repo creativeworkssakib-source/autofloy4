@@ -5,7 +5,6 @@ import {
   TrendingUp, 
   TrendingDown, 
   Package, 
-  Users, 
   ShoppingCart, 
   Wallet,
   AlertTriangle,
@@ -62,6 +61,8 @@ interface DashboardData {
   };
   totalProducts: number;
   totalCustomers: number;
+  totalStockItems: number;
+  totalStockValue: number;
   lowStockProducts: Array<{ id: string; name: string; stock_quantity: number; min_stock_alert: number }>;
   recentSales: Array<{
     id: string;
@@ -134,6 +135,8 @@ const ShopDashboard = () => {
     },
     totalProducts: todayData?.totalProducts || 0,
     totalCustomers: todayData?.totalCustomers || 0,
+    totalStockItems: todayData?.totalStockItems || 0,
+    totalStockValue: todayData?.totalStockValue || 0,
     lowStockProducts: todayData?.lowStockProducts || [],
     recentSales: todayData?.recentSales || [],
     recentProducts: todayData?.recentProducts || [],
@@ -395,7 +398,9 @@ const ShopDashboard = () => {
                     <Package className="h-6 w-6 text-purple-500" />
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">{t("dashboard.totalProducts")}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {language === "bn" ? "প্রোডাক্ট টাইপ" : "Product Types"}
+                    </p>
                     {isLoading ? (
                       <Skeleton className="h-6 w-16" />
                     ) : (
@@ -412,15 +417,25 @@ const ShopDashboard = () => {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="p-3 rounded-full bg-cyan-500/10">
-                    <Users className="h-6 w-6 text-cyan-500" />
+                    <ShoppingCart className="h-6 w-6 text-cyan-500" />
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">{t("dashboard.totalCustomers")}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {language === "bn" ? "মোট স্টক আইটেম" : "Total Stock Items"}
+                    </p>
                     {isLoading ? (
                       <Skeleton className="h-6 w-16" />
                     ) : (
-                      <p className="text-xl font-bold">{data?.totalCustomers || 0}</p>
+                      <p className="text-xl font-bold">{data?.totalStockItems || 0}</p>
                     )}
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {language === "bn" ? "মূল্য: " : "Value: "}
+                      {isLoading ? (
+                        <Skeleton className="h-3 w-12 inline-block" />
+                      ) : (
+                        <span className="font-medium text-cyan-600">{formatCurrency(data?.totalStockValue || 0)}</span>
+                      )}
+                    </p>
                   </div>
                 </div>
               </div>
