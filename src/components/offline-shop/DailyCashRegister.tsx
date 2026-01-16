@@ -830,15 +830,18 @@ export function DailyCashRegister() {
             {/* Validation Message */}
             {closingCash && (
               <Card className={`${
-                parseFloat(closingCash) <= getCurrentCashBalance() 
+                // Allow closing if: balance is negative (user can close with 0) OR keeping amount is valid
+                getCurrentCashBalance() < 0 || parseFloat(closingCash) <= getCurrentCashBalance() 
                   ? "border-success/30 bg-success/5" 
                   : "border-destructive/30 bg-destructive/5"
               }`}>
                 <CardContent className="p-3 flex items-center justify-between">
                   <span className="text-sm">
-                    {parseFloat(closingCash) <= getCurrentCashBalance() 
-                      ? (language === "bn" ? "✓ ঠিক আছে" : "✓ Valid")
-                      : (language === "bn" ? "⚠ রেজিস্টারে এত টাকা নেই" : "⚠ Not enough cash in register")}
+                    {getCurrentCashBalance() < 0 
+                      ? (language === "bn" ? "⚠ ক্যাশ ব্যালেন্স নেগেটিভ - শপ বন্ধ করতে পারবেন" : "⚠ Negative cash balance - you can still close")
+                      : parseFloat(closingCash) <= getCurrentCashBalance() 
+                        ? (language === "bn" ? "✓ ঠিক আছে" : "✓ Valid")
+                        : (language === "bn" ? "⚠ রেজিস্টারে এত টাকা নেই" : "⚠ Not enough cash in register")}
                   </span>
                 </CardContent>
               </Card>
@@ -862,7 +865,7 @@ export function DailyCashRegister() {
             </Button>
             <Button 
               onClick={handleCloseRegister} 
-              disabled={isSubmitting || !closingCash || parseFloat(closingCash) > getCurrentCashBalance()}
+              disabled={isSubmitting || !closingCash || (getCurrentCashBalance() >= 0 && parseFloat(closingCash) > getCurrentCashBalance())}
               variant="destructive"
             >
               {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Square className="h-4 w-4 mr-2" />}
