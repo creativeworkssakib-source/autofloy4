@@ -11,6 +11,24 @@ const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const jwtSecret = Deno.env.get("JWT_SECRET")!;
 
+// Retry helper for transient network errors
+async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3, delayMs = 100): Promise<T> {
+  let lastError: unknown = null;
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.log(`Retry attempt ${i + 1}/${maxRetries} after error:`, errorMessage);
+      if (i < maxRetries - 1) {
+        await new Promise(resolve => setTimeout(resolve, delayMs * (i + 1)));
+      }
+    }
+  }
+  throw lastError;
+}
+
 // JWT token verification using custom JWT_SECRET
 async function verifyToken(authHeader: string | null): Promise<string | null> {
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -49,15 +67,17 @@ serve(async (req) => {
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-  // GET - Fetch notifications
+  // GET - Fetch notifications with retry
   if (req.method === "GET") {
     try {
-      const { data: notifications, error } = await supabase
-        .from("notifications")
-        .select("id, title, body, is_read, created_at, notification_type, metadata")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false })
-        .limit(50);
+      const { data: notifications, error } = await withRetry(async () => {
+        return await supabase
+          .from("notifications")
+          .select("id, title, body, is_read, created_at, notification_type, metadata")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false })
+          .limit(50);
+      });
 
       if (error) {
         console.error("Fetch notifications error:", error);
