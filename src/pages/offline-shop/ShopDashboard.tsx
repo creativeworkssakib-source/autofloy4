@@ -27,6 +27,7 @@ import { Progress } from "@/components/ui/progress";
 import ShopLayout from "@/components/offline-shop/ShopLayout";
 import { AnimatedStatCard } from "@/components/offline-shop/AnimatedStatCard";
 import { PremiumTargetCard } from "@/components/offline-shop/PremiumTargetCard";
+import { ProfitBreakdownCard } from "@/components/offline-shop/ProfitBreakdownCard";
 import { PremiumQuickStats } from "@/components/offline-shop/PremiumQuickStats";
 import { useOfflineDashboard, useOfflineTrash } from "@/hooks/useOfflineShopData";
 import { useOfflineSettings } from "@/hooks/useOfflineData";
@@ -344,6 +345,16 @@ const ShopDashboard = () => {
             );
           })}
         </div>
+
+        {/* Profit Breakdown Card */}
+        <ProfitBreakdownCard
+          grossProfit={data?.monthly?.grossProfit || 0}
+          totalExpenses={data?.monthly?.totalExpenses || 0}
+          netProfit={data?.monthly?.netProfit || 0}
+          isLoading={isLoading}
+          formatCurrency={formatCurrency}
+          language={language}
+        />
 
         {/* Premium Sales Target Card */}
         <PremiumTargetCard
