@@ -1,4 +1,4 @@
-import { Sparkles, TrendingUp, ArrowRight, User, Bot, Users, Laptop, Infinity, Rocket, Zap } from "lucide-react";
+import { Sparkles, TrendingUp, ArrowRight, Clock, Briefcase, Users, Monitor, Infinity, Star } from "lucide-react";
 import { ValueComparison } from "@/data/plans";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { motion } from "framer-motion";
@@ -8,44 +8,37 @@ interface ValueComparisonBoxProps {
   compact?: boolean;
 }
 
-// Map icon types to Lucide components with styling
+// Clean icon mapping with simple, elegant styling
 const getIconComponent = (iconType: string, size: string) => {
-  const iconMap: Record<string, { icon: React.ReactNode; gradient: string; glow: string }> = {
+  const iconMap: Record<string, { icon: React.ReactNode; color: string }> = {
     "👨‍💼": { 
-      icon: <User className={size} />, 
-      gradient: "from-blue-500 to-cyan-400",
-      glow: "shadow-blue-500/50"
+      icon: <Clock className={size} />, 
+      color: "text-emerald-400"
     },
     "👥": { 
       icon: <Users className={size} />, 
-      gradient: "from-indigo-500 to-purple-400",
-      glow: "shadow-indigo-500/50"
+      color: "text-blue-400"
     },
     "🤖": { 
-      icon: <Bot className={size} />, 
-      gradient: "from-emerald-500 to-teal-400",
-      glow: "shadow-emerald-500/50"
+      icon: <Briefcase className={size} />, 
+      color: "text-amber-400"
     },
     "💻": { 
-      icon: <Laptop className={size} />, 
-      gradient: "from-slate-600 to-slate-400",
-      glow: "shadow-slate-500/50"
+      icon: <Monitor className={size} />, 
+      color: "text-violet-400"
     },
     "♾️": { 
       icon: <Infinity className={size} />, 
-      gradient: "from-amber-500 to-orange-400",
-      glow: "shadow-amber-500/50"
+      color: "text-rose-400"
     },
     "🚀": { 
-      icon: <Rocket className={size} />, 
-      gradient: "from-rose-500 to-pink-400",
-      glow: "shadow-rose-500/50"
+      icon: <Star className={size} />, 
+      color: "text-yellow-400"
     },
   };
   return iconMap[iconType] || { 
-    icon: <Zap className={size} />, 
-    gradient: "from-yellow-500 to-amber-400",
-    glow: "shadow-yellow-500/50"
+    icon: <Star className={size} />, 
+    color: "text-emerald-400"
   };
 };
 
@@ -53,137 +46,74 @@ const ValueComparisonBox = ({ comparison, compact = false }: ValueComparisonBoxP
   const { language } = useLanguage();
   const isBn = language === "bn";
 
-  const iconSize = compact ? "w-6 h-6" : "w-8 h-8";
-  const boxSize = compact ? "w-16 h-16" : "w-20 h-20";
+  const iconSize = compact ? "w-5 h-5" : "w-6 h-6";
 
   return (
     <motion.div 
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, delay: 0.2 }}
-      className={`relative overflow-hidden rounded-3xl ${compact ? 'p-4 mt-4' : 'p-6 mt-6'}`}
+      transition={{ duration: 0.4, delay: 0.2 }}
+      className={`relative overflow-hidden rounded-2xl ${compact ? 'p-4 mt-4' : 'p-5 mt-5'}`}
     >
-      {/* Premium Dark Gradient Background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900" />
+      {/* Clean Gradient Background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 via-teal-500/5 to-cyan-500/10 dark:from-emerald-500/15 dark:via-teal-500/10 dark:to-cyan-500/15" />
       
-      {/* Vibrant Gradient Overlays */}
-      <div className="absolute inset-0">
-        <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-br from-violet-600/20 via-fuchsia-500/15 to-transparent" />
-        <div className="absolute bottom-0 right-0 w-full h-1/2 bg-gradient-to-tl from-cyan-500/20 via-emerald-500/10 to-transparent" />
-      </div>
-      
-      {/* Animated Glow Orbs */}
-      <div className="absolute inset-0 opacity-80">
-        <div className="absolute top-0 left-1/4 w-32 h-32 bg-violet-500/40 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-0 right-1/4 w-28 h-28 bg-cyan-400/35 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-20 bg-fuchsia-500/25 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '0.5s' }} />
-      </div>
-      
-      {/* Premium Gradient Border */}
-      <div className="absolute inset-0 rounded-3xl p-[1px] bg-gradient-to-br from-violet-400/50 via-fuchsia-400/30 to-cyan-400/50">
-        <div className="w-full h-full rounded-3xl bg-slate-900/80 backdrop-blur-sm" />
-      </div>
+      {/* Subtle Border */}
+      <div className="absolute inset-0 rounded-2xl border border-emerald-500/20 dark:border-emerald-400/30" />
       
       {/* Content */}
       <div className="relative z-10">
         {/* Header Badge */}
-        <motion.div 
-          initial={{ scale: 0.9 }}
-          animate={{ scale: 1 }}
-          transition={{ duration: 0.3, delay: 0.3 }}
-          className="flex justify-center mb-4"
-        >
-          <span className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-gradient-to-r from-violet-500 via-fuchsia-500 to-pink-500 text-white font-bold shadow-lg shadow-fuchsia-500/40 ${compact ? 'text-xs' : 'text-sm'}`}>
-            <TrendingUp className={`${compact ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} />
+        <div className="flex justify-center mb-4">
+          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold shadow-md ${compact ? 'text-[10px]' : 'text-xs'}`}>
+            <TrendingUp className={`${compact ? 'w-3 h-3' : 'w-3.5 h-3.5'}`} />
             {isBn ? comparison.titleBn : comparison.title}
-            <Sparkles className={`${compact ? 'w-3.5 h-3.5' : 'w-4 h-4'} animate-pulse`} />
+            <Sparkles className={`${compact ? 'w-3 h-3' : 'w-3.5 h-3.5'}`} />
           </span>
-        </motion.div>
+        </div>
         
-        {/* Premium Icon Comparison */}
-        <div className="flex items-center justify-center gap-3 mb-5">
+        {/* Icon Comparison Row */}
+        <div className="flex items-center justify-center gap-2 mb-4">
           {comparison.items.map((item, index) => {
             const iconData = getIconComponent(item.icon, iconSize);
             return (
-              <div key={index} className="flex items-center gap-3">
-                {/* Premium Icon Card */}
+              <div key={index} className="flex items-center gap-2">
+                {/* Icon with label */}
                 <motion.div 
-                  initial={{ scale: 0.8, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={{ duration: 0.4, delay: 0.4 + index * 0.15 }}
-                  whileHover={{ scale: 1.08, y: -4 }}
-                  className="flex flex-col items-center gap-2"
+                  whileHover={{ scale: 1.05 }}
+                  className="flex flex-col items-center gap-1"
                 >
-                  <div className={`relative ${boxSize} rounded-2xl bg-gradient-to-br ${iconData.gradient} p-0.5 shadow-xl ${iconData.glow}`}>
-                    <div className="w-full h-full rounded-2xl bg-slate-900/80 backdrop-blur-sm flex items-center justify-center">
-                      <div className="text-white">
-                        {iconData.icon}
-                      </div>
+                  <div className={`${compact ? 'w-12 h-12' : 'w-14 h-14'} rounded-xl bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm border border-slate-200/50 dark:border-slate-700/50 flex items-center justify-center shadow-sm`}>
+                    <div className={iconData.color}>
+                      {iconData.icon}
                     </div>
-                    {/* Shine effect */}
-                    <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-white/20 via-transparent to-transparent" />
                   </div>
-                  <span className={`text-white/90 font-semibold ${compact ? 'text-[10px]' : 'text-xs'}`}>
+                  <span className={`text-foreground/80 font-medium ${compact ? 'text-[9px]' : 'text-[10px]'} max-w-[60px] text-center leading-tight`}>
                     {isBn ? item.textBn : item.text}
                   </span>
                 </motion.div>
                 
-                {/* Animated Arrow/Equals */}
+                {/* Arrow */}
                 {index < comparison.items.length - 1 && (
-                  <motion.div 
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.4, delay: 0.6 }}
-                    className="flex flex-col items-center gap-1"
-                  >
-                    <div className={`${compact ? 'w-10 h-10' : 'w-12 h-12'} rounded-full bg-gradient-to-r from-violet-500/20 to-cyan-500/20 border-2 border-dashed border-violet-400/50 flex items-center justify-center`}>
-                      <ArrowRight className={`${compact ? 'w-5 h-5' : 'w-6 h-6'} text-violet-400 animate-pulse`} />
+                  <div className="flex items-center px-1">
+                    <div className={`${compact ? 'w-7 h-7' : 'w-8 h-8'} rounded-full bg-emerald-500/10 dark:bg-emerald-500/20 flex items-center justify-center`}>
+                      <ArrowRight className={`${compact ? 'w-4 h-4' : 'w-4 h-4'} text-emerald-500`} />
                     </div>
-                    <span className={`text-fuchsia-400 font-bold ${compact ? 'text-[10px]' : 'text-xs'}`}>=</span>
-                  </motion.div>
+                  </div>
                 )}
               </div>
             );
           })}
         </div>
         
-        {/* Premium Highlight Message */}
-        <motion.div 
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.7 }}
-          className="text-center space-y-3"
-        >
-          {/* Main highlight with glow */}
-          <div className="relative inline-block">
-            <p className={`font-black leading-tight ${compact ? 'text-base' : 'text-lg'}`}>
-              <span className="bg-gradient-to-r from-violet-300 via-fuchsia-300 to-cyan-300 bg-clip-text text-transparent drop-shadow-lg">
-                {isBn ? comparison.highlightBn : comparison.highlight}
-              </span>
-            </p>
-            {/* Text glow effect */}
-            <div className="absolute inset-0 bg-gradient-to-r from-violet-500/20 via-fuchsia-500/20 to-cyan-500/20 blur-xl -z-10" />
-          </div>
-          
-          {/* Decorative sparkle line */}
-          <div className="flex justify-center items-center gap-2">
-            <motion.div
-              animate={{ rotate: 360 }}
-              transition={{ duration: 4, repeat: Number.POSITIVE_INFINITY, ease: "linear" }}
-            >
-              <Sparkles className="w-4 h-4 text-violet-400" />
-            </motion.div>
-            <div className="w-16 h-0.5 bg-gradient-to-r from-transparent via-violet-400/60 to-transparent" />
-            <Zap className="w-4 h-4 text-fuchsia-400 fill-fuchsia-400/50" />
-            <div className="w-16 h-0.5 bg-gradient-to-r from-transparent via-cyan-400/60 to-transparent" />
-            <motion.div
-              animate={{ rotate: -360 }}
-              transition={{ duration: 4, repeat: Number.POSITIVE_INFINITY, ease: "linear" }}
-            >
-              <Sparkles className="w-4 h-4 text-cyan-400" />
-            </motion.div>
-          </div>
-        </motion.div>
+        {/* Highlight Message */}
+        <div className="text-center">
+          <p className={`font-bold leading-snug ${compact ? 'text-sm' : 'text-base'}`}>
+            <span className="bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-400 bg-clip-text text-transparent">
+              {isBn ? comparison.highlightBn : comparison.highlight}
+            </span>
+          </p>
+        </div>
       </div>
     </motion.div>
   );
