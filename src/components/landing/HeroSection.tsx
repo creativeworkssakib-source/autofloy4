@@ -96,10 +96,10 @@ const HeroSection = memo(() => {
               className="text-4xl md:text-5xl lg:text-6xl font-extrabold leading-tight mb-6"
             >
               {t("hero.title1")}{" "}
-              <span className="gradient-text relative inline-block">
+              <span className="gradient-text relative inline-block pb-2">
                 {t("hero.title2")}
                 <motion.span 
-                  className="absolute -bottom-2 left-0 right-0 h-1 bg-gradient-to-r from-primary to-secondary rounded-full"
+                  className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-primary to-secondary rounded-full origin-left"
                   initial={{ scaleX: 0 }}
                   animate={{ scaleX: 1 }}
                   transition={{ delay: 0.8, duration: 0.6 }}
