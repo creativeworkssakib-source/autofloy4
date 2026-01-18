@@ -51,7 +51,7 @@ export const PremiumQuickStats = ({
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-4">
+    <div className="grid grid-cols-2 gap-2 sm:gap-4">
       {stats.map((stat, index) => (
         <div key={stat.title} className="group h-full">
           <Card className={`
@@ -65,47 +65,47 @@ export const PremiumQuickStats = ({
             {/* Static background glow */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
               <div
-                className={`absolute w-24 h-24 rounded-full ${stat.bgColor} blur-2xl opacity-40`}
+                className={`absolute w-16 sm:w-24 h-16 sm:h-24 rounded-full ${stat.bgColor} blur-2xl opacity-40`}
                 style={{ top: "-20%", right: "0%" }}
               />
             </div>
 
-            <CardContent className="relative pt-5 pb-5 px-5 h-full">
-              <div className="flex items-center gap-4 h-full">
+            <CardContent className="relative p-3 sm:pt-5 sm:pb-5 sm:px-5 h-full">
+              <div className="flex items-start gap-2 sm:gap-4 h-full">
                 {/* Icon */}
                 <div 
                   className={`
-                    relative p-3.5 rounded-2xl shrink-0 
+                    relative p-2 sm:p-3.5 rounded-xl sm:rounded-2xl shrink-0 
                     ${stat.iconBg} 
                     shadow-inner backdrop-blur-sm
                     group-hover:scale-110 transition-transform duration-200
                   `}
                 >
-                  <stat.icon className={`h-6 w-6 ${stat.color} drop-shadow-sm`} />
+                  <stat.icon className={`h-4 w-4 sm:h-6 sm:w-6 ${stat.color} drop-shadow-sm`} />
                 </div>
                 
                 {/* Content */}
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-muted-foreground/80 mb-1">
+                  <p className="text-[10px] sm:text-sm font-medium text-muted-foreground/80 mb-0.5 sm:mb-1 leading-tight">
                     {stat.title}
                   </p>
                   {isLoading ? (
-                    <Skeleton className="h-7 w-20" />
+                    <Skeleton className="h-5 sm:h-7 w-12 sm:w-20" />
                   ) : (
-                    <p className="text-2xl font-bold text-foreground">
+                    <p className="text-base sm:text-2xl font-bold text-foreground">
                       {stat.displayValue}
                     </p>
                   )}
                   {stat.subtitle && (
-                    <p className={`text-xs mt-1 ${stat.color} font-medium`}>
-                      {isLoading ? <Skeleton className="h-3 w-24" /> : stat.subtitle}
+                    <p className={`text-[9px] sm:text-xs mt-0.5 sm:mt-1 ${stat.color} font-medium leading-tight`}>
+                      {isLoading ? <Skeleton className="h-2 sm:h-3 w-16 sm:w-24" /> : stat.subtitle}
                     </p>
                   )}
                 </div>
                 
-                {/* Decorative layers icon */}
-                <div className="absolute bottom-3 right-3 opacity-10">
-                  <Layers className="h-16 w-16" />
+                {/* Decorative layers icon - hide on very small screens */}
+                <div className="absolute bottom-2 right-2 sm:bottom-3 sm:right-3 opacity-10">
+                  <Layers className="h-8 w-8 sm:h-16 sm:w-16" />
                 </div>
               </div>
             </CardContent>
