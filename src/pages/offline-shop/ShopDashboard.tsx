@@ -380,44 +380,44 @@ const ShopDashboard = () => {
                 <Card className="border-0 bg-gradient-to-r from-orange-500/10 via-orange-400/5 to-amber-500/10 hover:from-orange-500/15 hover:to-amber-500/15 transition-all duration-300 cursor-pointer shadow-lg hover:shadow-xl backdrop-blur-xl overflow-hidden">
                   <div className="absolute inset-0 overflow-hidden pointer-events-none">
                     <motion.div
-                      className="absolute w-32 h-32 rounded-full bg-orange-500/20 blur-2xl"
+                      className="absolute w-20 sm:w-32 h-20 sm:h-32 rounded-full bg-orange-500/20 blur-2xl"
                       animate={{ x: [0, 20, 0], y: [0, -10, 0] }}
                       transition={{ duration: 4, repeat: Infinity }}
                       style={{ top: "-30%", right: "10%" }}
                     />
                   </div>
-                  <CardContent className="py-4 relative">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
+                  <CardContent className="py-3 sm:py-4 px-3 sm:px-6 relative">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 sm:gap-4 min-w-0">
                         <motion.div 
-                          className="p-3 rounded-2xl bg-orange-500/20 backdrop-blur-sm"
+                          className="p-2 sm:p-3 rounded-xl sm:rounded-2xl bg-orange-500/20 backdrop-blur-sm shrink-0"
                           whileHover={{ scale: 1.1, rotate: [0, -5, 5, 0] }}
                           animate={{ scale: [1, 1.05, 1] }}
                           transition={{ duration: 2, repeat: Infinity }}
                         >
-                          <Trash2 className="h-6 w-6 text-orange-500" />
+                          <Trash2 className="h-4 w-4 sm:h-6 sm:w-6 text-orange-500" />
                         </motion.div>
-                        <div>
-                          <p className="font-semibold text-orange-600 dark:text-orange-400">
+                        <div className="min-w-0">
+                          <p className="text-xs sm:text-base font-semibold text-orange-600 dark:text-orange-400 truncate">
                             {language === "bn" ? "ট্র্যাশ বিনে আইটেম আছে" : "Items in Trash Bin"}
                           </p>
-                          <p className="text-sm text-muted-foreground">
+                          <p className="text-[10px] sm:text-sm text-muted-foreground truncate">
                             {language === "bn" 
-                              ? `${trashCount}টি আইটেম স্থায়ীভাবে ডিলিট করার জন্য অপেক্ষা করছে`
-                              : `${trashCount} item(s) waiting to be permanently deleted`
+                              ? `${trashCount}টি আইটেম ডিলিটের অপেক্ষায়`
+                              : `${trashCount} item(s) waiting`
                             }
                           </p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <Badge className="bg-orange-500/20 text-orange-600 border-orange-500/30 hover:bg-orange-500/30 shadow-sm">
+                      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                        <Badge className="bg-orange-500/20 text-orange-600 border-orange-500/30 hover:bg-orange-500/30 shadow-sm text-xs sm:text-sm">
                           {trashCount}
                         </Badge>
                         <motion.div
                           animate={{ x: [0, 5, 0] }}
                           transition={{ duration: 1.5, repeat: Infinity }}
                         >
-                          <ArrowRight className="h-5 w-5 text-orange-500" />
+                          <ArrowRight className="h-4 w-4 sm:h-5 sm:w-5 text-orange-500" />
                         </motion.div>
                       </div>
                     </div>
@@ -440,54 +440,55 @@ const ShopDashboard = () => {
 
         {/* Returns Summary Section */}
         <Card>
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <RotateCcw className="h-5 w-5 text-amber-500" />
-                <CardTitle>{t("dashboard.returnsSummary")}</CardTitle>
+          <CardHeader className="pb-2 px-3 sm:px-6">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <RotateCcw className="h-4 w-4 sm:h-5 sm:w-5 text-amber-500 shrink-0" />
+                <CardTitle className="text-sm sm:text-lg truncate">{t("dashboard.returnsSummary")}</CardTitle>
               </div>
-              <Link to="/offline-shop/returns">
-                <Button variant="ghost" size="sm">
-                  {t("dashboard.viewAll")} <ArrowRight className="ml-1 h-4 w-4" />
+              <Link to="/offline-shop/returns" className="shrink-0">
+                <Button variant="ghost" size="sm" className="text-xs sm:text-sm px-2 sm:px-3">
+                  <span className="hidden sm:inline">{t("dashboard.viewAll")}</span>
+                  <ArrowRight className="sm:ml-1 h-3 w-3 sm:h-4 sm:w-4" />
                 </Button>
               </Link>
             </div>
-            <CardDescription>{t("dashboard.returnsOverview")}</CardDescription>
+            <CardDescription className="text-xs sm:text-sm">{t("dashboard.returnsOverview")}</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-3 sm:px-6">
             {isLoading ? (
               <div className="space-y-4">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
                   {[1, 2, 3, 4].map((i) => (
-                    <Skeleton key={i} className="h-20" />
+                    <Skeleton key={i} className="h-16 sm:h-20" />
                   ))}
                 </div>
               </div>
             ) : (
-              <div className="space-y-6">
+              <div className="space-y-4 sm:space-y-6">
                 {/* Stats Row */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                    <p className="text-sm text-muted-foreground">{t("dashboard.totalReturns")}</p>
-                    <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+                  <div className="p-2.5 sm:p-4 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                    <p className="text-[10px] sm:text-sm text-muted-foreground">{t("dashboard.totalReturns")}</p>
+                    <p className="text-lg sm:text-2xl font-bold text-amber-600 dark:text-amber-400">
                       {data?.returns?.totalCount || 0}
                     </p>
                   </div>
-                  <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/20">
-                    <p className="text-sm text-muted-foreground">{t("dashboard.totalRefunds")}</p>
-                    <p className="text-2xl font-bold text-red-600 dark:text-red-400">
+                  <div className="p-2.5 sm:p-4 rounded-lg bg-red-500/10 border border-red-500/20">
+                    <p className="text-[10px] sm:text-sm text-muted-foreground">{t("dashboard.totalRefunds")}</p>
+                    <p className="text-sm sm:text-2xl font-bold text-red-600 dark:text-red-400">
                       {formatCurrency(data?.returns?.totalRefundAmount || 0)}
                     </p>
                   </div>
-                  <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/20">
-                    <p className="text-sm text-muted-foreground">{t("dashboard.processed")}</p>
-                    <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+                  <div className="p-2.5 sm:p-4 rounded-lg bg-green-500/10 border border-green-500/20">
+                    <p className="text-[10px] sm:text-sm text-muted-foreground">{t("dashboard.processed")}</p>
+                    <p className="text-lg sm:text-2xl font-bold text-green-600 dark:text-green-400">
                       {data?.returns?.processedCount || 0}
                     </p>
                   </div>
-                  <div className="p-4 rounded-lg bg-orange-500/10 border border-orange-500/20">
-                    <p className="text-sm text-muted-foreground">{t("dashboard.pending")}</p>
-                    <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">
+                  <div className="p-2.5 sm:p-4 rounded-lg bg-orange-500/10 border border-orange-500/20">
+                    <p className="text-[10px] sm:text-sm text-muted-foreground">{t("dashboard.pending")}</p>
+                    <p className="text-lg sm:text-2xl font-bold text-orange-600 dark:text-orange-400">
                       {data?.returns?.pendingCount || 0}
                     </p>
                   </div>
@@ -496,25 +497,25 @@ const ShopDashboard = () => {
                 {/* Top Return Reasons */}
                 {data?.returns?.topReasons && data.returns.topReasons.length > 0 && (
                   <div>
-                    <h4 className="text-sm font-medium mb-3">{t("dashboard.topReturnReasons")}</h4>
-                    <div className="space-y-3">
+                    <h4 className="text-xs sm:text-sm font-medium mb-2 sm:mb-3">{t("dashboard.topReturnReasons")}</h4>
+                    <div className="space-y-2 sm:space-y-3">
                       {data.returns.topReasons.map((item, index) => {
                         const maxCount = data.returns?.topReasons?.[0]?.count || 1;
                         const percentage = (item.count / maxCount) * 100;
                         return (
                           <div key={item.reason} className="space-y-1">
-                            <div className="flex items-center justify-between text-sm">
-                              <span className="flex items-center gap-2">
-                                <Badge variant="outline" className="text-xs">
+                            <div className="flex items-center justify-between text-xs sm:text-sm gap-2">
+                              <span className="flex items-center gap-1 sm:gap-2 min-w-0 truncate">
+                                <Badge variant="outline" className="text-[10px] sm:text-xs shrink-0">
                                   #{index + 1}
                                 </Badge>
-                                {item.reason}
+                                <span className="truncate">{item.reason}</span>
                               </span>
-                              <span className="text-muted-foreground">
-                                {item.count} {t("dashboard.returns")} • {formatCurrency(item.amount)}
+                              <span className="text-muted-foreground shrink-0 text-[10px] sm:text-sm">
+                                {item.count} • {formatCurrency(item.amount)}
                               </span>
                             </div>
-                            <Progress value={percentage} className="h-2" />
+                            <Progress value={percentage} className="h-1.5 sm:h-2" />
                           </div>
                         );
                       })}
@@ -523,9 +524,9 @@ const ShopDashboard = () => {
                 )}
 
                 {(!data?.returns?.topReasons || data.returns.topReasons.length === 0) && (
-                  <div className="text-center py-4 text-muted-foreground">
-                    <RotateCcw className="mx-auto h-8 w-8 mb-2 opacity-50" />
-                    <p>{t("dashboard.noReturns")}</p>
+                  <div className="text-center py-3 sm:py-4 text-muted-foreground">
+                    <RotateCcw className="mx-auto h-6 w-6 sm:h-8 sm:w-8 mb-2 opacity-50" />
+                    <p className="text-xs sm:text-sm">{t("dashboard.noReturns")}</p>
                   </div>
                 )}
               </div>
@@ -533,40 +534,40 @@ const ShopDashboard = () => {
           </CardContent>
         </Card>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
           {/* Low Stock Alert */}
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-orange-500" />
-                {t("dashboard.lowStockAlert")}
+            <CardHeader className="px-3 sm:px-6 pb-2 sm:pb-4">
+              <CardTitle className="flex items-center gap-2 text-sm sm:text-lg">
+                <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5 text-orange-500 shrink-0" />
+                <span className="truncate">{t("dashboard.lowStockAlert")}</span>
               </CardTitle>
-              <CardDescription>{t("dashboard.lowStockAlert")}</CardDescription>
+              <CardDescription className="text-xs sm:text-sm">{t("dashboard.lowStockAlert")}</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="px-3 sm:px-6">
               {isLoading ? (
-                <div className="space-y-3">
+                <div className="space-y-2 sm:space-y-3">
                   {[1, 2, 3].map((i) => (
-                    <Skeleton key={i} className="h-12 w-full" />
+                    <Skeleton key={i} className="h-10 sm:h-12 w-full" />
                   ))}
                 </div>
               ) : data?.lowStockProducts && data.lowStockProducts.length > 0 ? (
-                <div className="space-y-3">
+                <div className="space-y-2 sm:space-y-3">
                   {data.lowStockProducts.slice(0, 5).map((product) => (
                     <Link
                       key={product.id}
                       to="/offline-shop/products"
-                      className="flex items-center justify-between p-3 rounded-lg bg-orange-500/5 border border-orange-500/20 hover:bg-orange-500/10 transition-colors group"
+                      className="flex items-center justify-between gap-2 p-2 sm:p-3 rounded-lg bg-orange-500/5 border border-orange-500/20 hover:bg-orange-500/10 transition-colors group"
                     >
-                      <span className="font-medium group-hover:text-primary transition-colors">{product.name}</span>
-                      <Badge variant="destructive">
+                      <span className="text-xs sm:text-sm font-medium group-hover:text-primary transition-colors truncate">{product.name}</span>
+                      <Badge variant="destructive" className="text-[10px] sm:text-xs shrink-0">
                         {product.stock_quantity} {t("dashboard.remaining")}
                       </Badge>
                     </Link>
                   ))}
                 </div>
               ) : (
-                <p className="text-muted-foreground text-center py-8">
+                <p className="text-muted-foreground text-center py-6 sm:py-8 text-xs sm:text-sm">
                   {t("dashboard.noLowStock")}
                 </p>
               )}
