@@ -1,3 +1,17 @@
+export interface ValueComparisonItem {
+  icon: string;
+  text: string;
+  textBn: string;
+}
+
+export interface ValueComparison {
+  title: string;
+  titleBn: string;
+  items: ValueComparisonItem[];
+  highlight: string;
+  highlightBn: string;
+}
+
 export interface Plan {
   id: string;
   name: string;
@@ -16,6 +30,7 @@ export interface Plan {
   originalPriceNumeric?: number;
   savings?: string;
   discountPercent?: number;
+  valueComparison?: ValueComparison;
 }
 
 export const plans: Plan[] = [
@@ -69,6 +84,16 @@ export const plans: Plan[] = [
     originalPriceNumeric: 1996,
     savings: "Save ৳1,497",
     discountPercent: 75,
+    valueComparison: {
+      title: "Smart Investment",
+      titleBn: "স্মার্ট বিনিয়োগ",
+      items: [
+        { icon: "👨‍💼", text: "1 hour of employee salary", textBn: "একজন Employee-এর ১ ঘণ্টার বেতন" },
+        { icon: "🚗", text: "2 days CNG/Rickshaw fare", textBn: "২ দিনের CNG/রিকশা ভাড়া" },
+      ],
+      highlight: "Get 24/7 automation for just 1 hour's staff cost!",
+      highlightBn: "একজন Staff-এর ১ ঘণ্টার বেতনে পুরো মাসের automation!",
+    },
   },
   {
     id: "professional",
@@ -97,6 +122,16 @@ export const plans: Plan[] = [
     originalPriceNumeric: 9999,
     savings: "Save ৳3,000",
     discountPercent: 30,
+    valueComparison: {
+      title: "Smart Investment",
+      titleBn: "স্মার্ট বিনিয়োগ",
+      items: [
+        { icon: "👨‍💼", text: "= 1 Part-time employee salary", textBn: "= ১জন Part-time কর্মচারীর বেতন" },
+        { icon: "⚡", text: "= 1 month shop electricity", textBn: "= দোকানের ১ মাসের বিদ্যুৎ বিল" },
+      ],
+      highlight: "AI works 24/7, staff works 8 hours!",
+      highlightBn: "AI ২৪/৭ কাজ করে, Staff মাত্র ৮ ঘণ্টা!",
+    },
   },
   {
     id: "business",
@@ -127,6 +162,16 @@ export const plans: Plan[] = [
     originalPriceNumeric: 39998,
     savings: "Save ৳19,999",
     discountPercent: 50,
+    valueComparison: {
+      title: "Smart Investment",
+      titleBn: "স্মার্ট বিনিয়োগ",
+      items: [
+        { icon: "👥", text: "= 2 Sales staff monthly salary", textBn: "= ২জন Sales Staff-এর মাসিক বেতন" },
+        { icon: "📈", text: "= 1 Marketing campaign cost", textBn: "= ১টা Marketing Campaign খরচ" },
+      ],
+      highlight: "Replace 2 staff with unlimited AI automation!",
+      highlightBn: "২জন Staff-এর বদলে Unlimited AI Automation!",
+    },
   },
   {
     id: "lifetime",
@@ -151,6 +196,16 @@ export const plans: Plan[] = [
     cta: "Contact Us",
     ctaVariant: "gradient",
     popular: false,
+    valueComparison: {
+      title: "One-time Investment",
+      titleBn: "একবারের বিনিয়োগ",
+      items: [
+        { icon: "💻", text: "= Cost of a laptop", textBn: "= একটা Laptop-এর দাম" },
+        { icon: "🏍️", text: "= Cost of a bike", textBn: "= একটা Bike-এর দাম" },
+      ],
+      highlight: "Invest once, free forever!",
+      highlightBn: "একবার বিনিয়োগ, চিরকালের জন্য ফ্রি!",
+    },
   },
 ];
 

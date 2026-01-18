@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Check, Sparkles, Crown, Zap, Star, ArrowRight, Gift, Loader2 } from "lucide-react";
+import { Check, Sparkles, Crown, Zap, Star, ArrowRight, Gift, Loader2, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { useRef } from "react";
 import { plans as staticPlans, Plan } from "@/data/plans";
+import ValueComparisonBox from "@/components/pricing/ValueComparisonBox";
 import { useSiteSettings } from "@/contexts/SiteSettingsContext";
 import { useAuth } from "@/contexts/AuthContext";
 import ContactLifetimeModal from "@/components/pricing/ContactLifetimeModal";
@@ -222,8 +223,13 @@ const Pricing = () => {
                         )}
                       </div>
 
+                      {/* Value Comparison - Mobile */}
+                      {plan.valueComparison && (
+                        <ValueComparisonBox comparison={plan.valueComparison} compact />
+                      )}
+
                       {/* Features */}
-                      <ul className="space-y-1.5 flex-1 mb-4">
+                      <ul className="space-y-1.5 flex-1 mb-4 mt-3">
                         {plan.features.map((feature) => (
                           <li key={feature} className="flex items-start gap-1.5 text-xs">
                             <Check className="w-3.5 h-3.5 text-success shrink-0 mt-0.5" />
@@ -347,8 +353,13 @@ const Pricing = () => {
                       )}
                     </div>
 
+                    {/* Value Comparison - Desktop */}
+                    {plan.valueComparison && (
+                      <ValueComparisonBox comparison={plan.valueComparison} />
+                    )}
+
                     {/* Features - Minimum height for alignment */}
-                    <ul className="space-y-2.5 flex-1 mb-5" style={{ minHeight: `${maxFeatures * 26}px` }}>
+                    <ul className="space-y-2.5 flex-1 mb-5 mt-4" style={{ minHeight: `${maxFeatures * 26}px` }}>
                       {plan.features.map((feature) => (
                         <li key={feature} className="flex items-start gap-2">
                           <Check className="w-4 h-4 text-success shrink-0 mt-0.5" />
