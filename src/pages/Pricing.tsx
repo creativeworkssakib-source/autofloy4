@@ -230,10 +230,6 @@ const Pricing = () => {
                         )}
                       </div>
 
-                      {/* Value Comparison - Mobile */}
-                      {plan.valueComparison && (
-                        <ValueComparisonBox comparison={plan.valueComparison} compact />
-                      )}
 
                       {/* Features */}
                       <ul className="space-y-1.5 flex-1 mb-4 mt-3">
@@ -360,10 +356,6 @@ const Pricing = () => {
                       )}
                     </div>
 
-                    {/* Value Comparison - Desktop */}
-                    {plan.valueComparison && (
-                      <ValueComparisonBox comparison={plan.valueComparison} />
-                    )}
 
                     {/* Features - Minimum height for alignment */}
                     <ul className="space-y-2.5 flex-1 mb-5 mt-4" style={{ minHeight: `${maxFeatures * 26}px` }}>
