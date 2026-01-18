@@ -21,9 +21,9 @@ export const PremiumQuickStats = ({
   formatCurrency,
   language,
 }: PremiumQuickStatsProps) => {
-  const animatedProducts = useAnimatedCounter(totalProducts, { duration: 1200 });
-  const animatedStock = useAnimatedCounter(totalStockItems, { duration: 1400 });
-  const animatedValue = useAnimatedCounter(totalStockValue, { duration: 1600 });
+  const animatedProducts = useAnimatedCounter(totalProducts, { duration: 500 });
+  const animatedStock = useAnimatedCounter(totalStockItems, { duration: 500 });
+  const animatedValue = useAnimatedCounter(totalStockValue, { duration: 500 });
 
   const stats = [
     {
@@ -54,57 +54,36 @@ export const PremiumQuickStats = ({
   return (
     <div className="grid grid-cols-2 gap-4">
       {stats.map((stat, index) => (
-        <motion.div
-          key={stat.title}
-          initial={{ opacity: 0, x: index === 0 ? -30 : 30 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.5 + index * 0.1, duration: 0.5 }}
-          whileHover={{ scale: 1.02, y: -2 }}
-          className="group h-full"
-        >
+        <div key={stat.title} className="group h-full">
           <Card className={`
             relative overflow-hidden border-0 h-full
             bg-gradient-to-br ${stat.gradientFrom} ${stat.gradientTo}
             backdrop-blur-xl shadow-lg
-            transition-all duration-300
-            hover:shadow-xl
+            transition-all duration-200
+            hover:shadow-xl hover:scale-[1.02]
             dark:from-card/80 dark:to-card/40
           `}>
-            {/* Animated background */}
+            {/* Static background glow */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
-              <motion.div
+              <div
                 className={`absolute w-24 h-24 rounded-full ${stat.bgColor} blur-2xl opacity-40`}
-                animate={{
-                  x: [0, 15, 0],
-                  y: [0, -10, 0],
-                }}
-                transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
                 style={{ top: "-20%", right: "0%" }}
               />
             </div>
 
             <CardContent className="relative pt-5 pb-5 px-5 h-full">
               <div className="flex items-center gap-4 h-full">
-                {/* Animated Icon */}
-                <motion.div 
+                {/* Icon */}
+                <div 
                   className={`
                     relative p-3.5 rounded-2xl shrink-0 
                     ${stat.iconBg} 
                     shadow-inner backdrop-blur-sm
-                    group-hover:scale-110 transition-transform duration-300
+                    group-hover:scale-110 transition-transform duration-200
                   `}
-                  whileHover={{ rotate: [0, -8, 8, 0] }}
-                  transition={{ duration: 0.5 }}
                 >
                   <stat.icon className={`h-6 w-6 ${stat.color} drop-shadow-sm`} />
-                  
-                  {/* Pulse effect */}
-                  <motion.div
-                    className={`absolute inset-0 rounded-2xl ${stat.bgColor} opacity-50`}
-                    animate={{ scale: [1, 1.2, 1], opacity: [0.5, 0, 0.5] }}
-                    transition={{ duration: 2.5, repeat: Infinity }}
-                  />
-                </motion.div>
+                </div>
                 
                 {/* Content */}
                 <div className="min-w-0 flex-1">
@@ -114,39 +93,25 @@ export const PremiumQuickStats = ({
                   {isLoading ? (
                     <Skeleton className="h-7 w-20" />
                   ) : (
-                    <motion.p 
-                      className="text-2xl font-bold text-foreground"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ delay: 0.6 + index * 0.1 }}
-                    >
+                    <p className="text-2xl font-bold text-foreground">
                       {stat.displayValue}
-                    </motion.p>
+                    </p>
                   )}
                   {stat.subtitle && (
-                    <motion.p 
-                      className={`text-xs mt-1 ${stat.color} font-medium`}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ delay: 0.7 + index * 0.1 }}
-                    >
+                    <p className={`text-xs mt-1 ${stat.color} font-medium`}>
                       {isLoading ? <Skeleton className="h-3 w-24" /> : stat.subtitle}
-                    </motion.p>
+                    </p>
                   )}
                 </div>
                 
                 {/* Decorative layers icon */}
-                <motion.div
-                  className="absolute bottom-3 right-3 opacity-10"
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
-                >
+                <div className="absolute bottom-3 right-3 opacity-10">
                   <Layers className="h-16 w-16" />
-                </motion.div>
+                </div>
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </div>
       ))}
     </div>
   );
