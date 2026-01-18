@@ -59,28 +59,35 @@ const Pricing = () => {
           setPlans(staticPlans);
         } else if (data && data.length > 0) {
           // Transform database plans to match Plan interface
-          const dbPlans: Plan[] = (data as unknown as DbPricingPlan[]).map((p) => ({
-            id: p.id,
-            name: p.name,
-            badge: p.badge || p.name.toUpperCase(),
-            badgeColor: p.badge_color || "bg-primary/10 text-primary",
-            price: p.price_numeric === 0 ? (p.id === 'lifetime' ? '' : '৳0') : `${p.currency}${p.price_numeric.toLocaleString()}`,
-            priceNumeric: p.price_numeric,
-            // Lifetime plan should have no period
-            period: p.id === 'lifetime' ? '' : (p.period || '/month'),
-            description: p.description || '',
-            features: p.features || [],
-            cta: p.cta_text || `Choose ${p.name}`,
-            ctaVariant: (p.cta_variant as "default" | "gradient" | "success") || "default",
-            note: p.id === 'free-trial' ? 'No credit card required' : undefined,
-            popular: p.is_popular,
-            originalPrice: p.original_price_numeric ? `${p.currency}${p.original_price_numeric.toLocaleString()}` : undefined,
-            originalPriceNumeric: p.original_price_numeric || undefined,
-            savings: p.original_price_numeric && p.price_numeric 
-              ? `Save ${p.currency}${(p.original_price_numeric - p.price_numeric).toLocaleString()}`
-              : undefined,
-            discountPercent: p.discount_percent || undefined,
-          }));
+          const dbPlans: Plan[] = (data as unknown as DbPricingPlan[]).map((p) => {
+            // Get valueComparison from static plans
+            const staticPlan = staticPlans.find(sp => sp.id === p.id);
+            
+            return {
+              id: p.id,
+              name: p.name,
+              badge: p.badge || p.name.toUpperCase(),
+              badgeColor: p.badge_color || "bg-primary/10 text-primary",
+              price: p.price_numeric === 0 ? (p.id === 'lifetime' ? '' : '৳0') : `${p.currency}${p.price_numeric.toLocaleString()}`,
+              priceNumeric: p.price_numeric,
+              // Lifetime plan should have no period
+              period: p.id === 'lifetime' ? '' : (p.period || '/month'),
+              description: p.description || '',
+              features: p.features || [],
+              cta: p.cta_text || `Choose ${p.name}`,
+              ctaVariant: (p.cta_variant as "default" | "gradient" | "success") || "default",
+              note: p.id === 'free-trial' ? 'No credit card required' : undefined,
+              popular: p.is_popular,
+              originalPrice: p.original_price_numeric ? `${p.currency}${p.original_price_numeric.toLocaleString()}` : undefined,
+              originalPriceNumeric: p.original_price_numeric || undefined,
+              savings: p.original_price_numeric && p.price_numeric 
+                ? `Save ${p.currency}${(p.original_price_numeric - p.price_numeric).toLocaleString()}`
+                : undefined,
+              discountPercent: p.discount_percent || undefined,
+              // Merge valueComparison from static plans
+              valueComparison: staticPlan?.valueComparison,
+            };
+          });
           setPlans(dbPlans);
         }
       } catch (err) {
