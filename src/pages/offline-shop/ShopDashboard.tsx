@@ -317,7 +317,7 @@ const ShopDashboard = () => {
         </motion.div>
 
         {/* Premium Stats Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="grid grid-cols-4 gap-1.5 sm:gap-3 lg:gap-4">
           {statsCards.map((stat, index) => {
             const isClickable = !!stat.link;
             const cardElement = (

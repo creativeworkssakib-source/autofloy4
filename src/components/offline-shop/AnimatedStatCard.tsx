@@ -85,12 +85,12 @@ export const AnimatedStatCard = ({
           />
         </div>
 
-        <CardContent className="relative p-3 sm:p-4 lg:p-5">
-          <div className="flex items-start gap-2 sm:gap-3">
-            {/* Animated Icon Container - Mobile first */}
+        <CardContent className="relative p-2 sm:p-3 lg:p-5">
+          <div className="flex flex-col items-center text-center gap-1 sm:gap-2">
+            {/* Animated Icon Container */}
             <motion.div 
               className={`
-                relative p-2 sm:p-3 rounded-xl sm:rounded-2xl shrink-0
+                relative p-1.5 sm:p-2 lg:p-3 rounded-lg sm:rounded-xl lg:rounded-2xl shrink-0
                 ${bgColor} 
                 shadow-inner backdrop-blur-sm
                 group-hover:scale-110 transition-transform duration-300
@@ -98,42 +98,44 @@ export const AnimatedStatCard = ({
               whileHover={{ rotate: [0, -5, 5, 0] }}
               transition={{ duration: 0.5 }}
             >
-              <Icon className={`h-4 w-4 sm:h-5 sm:w-5 ${color} drop-shadow-sm`} />
+              <Icon className={`h-3 w-3 sm:h-4 sm:w-4 lg:h-5 lg:w-5 ${color} drop-shadow-sm`} />
               
               {/* Pulse ring effect */}
               <motion.div
-                className={`absolute inset-0 rounded-xl sm:rounded-2xl ${bgColor} opacity-50`}
+                className={`absolute inset-0 rounded-lg sm:rounded-xl lg:rounded-2xl ${bgColor} opacity-50`}
                 animate={{ scale: [1, 1.3, 1], opacity: [0.5, 0, 0.5] }}
                 transition={{ duration: 2, repeat: Infinity }}
               />
             </motion.div>
             
-            <div className="min-w-0 flex-1 space-y-1">
-              <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
-                <p className="text-[10px] sm:text-xs lg:text-sm font-medium text-muted-foreground/80 leading-tight">
+            <div className="min-w-0 w-full space-y-0.5 sm:space-y-1">
+              <div className="flex items-center justify-center gap-1 flex-wrap">
+                <p className="text-[8px] sm:text-[10px] lg:text-sm font-medium text-muted-foreground/80 leading-tight line-clamp-2">
                   {title}
                 </p>
-                {badge && (
-                  <motion.div
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    transition={{ delay: delay + 0.3, type: "spring" }}
-                  >
-                    <Badge 
-                      variant={badgeVariant} 
-                      className="text-[8px] sm:text-[10px] px-1.5 sm:px-2 py-0 sm:py-0.5 shadow-sm"
-                    >
-                      {badge}
-                    </Badge>
-                  </motion.div>
-                )}
               </div>
               
+              {badge && (
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ delay: delay + 0.3, type: "spring" }}
+                  className="flex justify-center"
+                >
+                  <Badge 
+                    variant={badgeVariant} 
+                    className="text-[6px] sm:text-[8px] lg:text-[10px] px-1 sm:px-1.5 py-0 shadow-sm"
+                  >
+                    {badge}
+                  </Badge>
+                </motion.div>
+              )}
+              
               {isLoading ? (
-                <Skeleton className="h-5 sm:h-7 lg:h-9 w-16 sm:w-24 lg:w-32" />
+                <Skeleton className="h-4 sm:h-6 lg:h-9 w-12 sm:w-20 lg:w-32 mx-auto" />
               ) : (
                 <motion.p 
-                  className={`text-sm sm:text-lg lg:text-2xl font-bold tracking-tight leading-tight ${badge ? color : 'text-foreground'}`}
+                  className={`text-[10px] sm:text-sm lg:text-2xl font-bold tracking-tight leading-tight ${badge ? color : 'text-foreground'}`}
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: delay + 0.2 }}
