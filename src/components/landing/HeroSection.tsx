@@ -72,30 +72,11 @@ const HeroSection = memo(() => {
   };
 
   return (
-    <section ref={sectionRef} className="relative min-h-screen flex items-center overflow-hidden bg-gradient-to-b from-background via-background to-muted/20">
-      {/* Premium Background Effects */}
+    <section ref={sectionRef} className="relative min-h-screen flex items-center overflow-hidden">
+      {/* Clean Background */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {/* Gradient Orbs */}
-        <motion.div 
-          className="absolute top-20 left-10 w-96 h-96 bg-gradient-to-br from-primary/10 to-secondary/5 rounded-full blur-3xl"
-          animate={{ 
-            scale: [1, 1.2, 1],
-            opacity: [0.3, 0.5, 0.3]
-          }}
-          transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-        />
-        <motion.div 
-          className="absolute bottom-20 right-10 w-[500px] h-[500px] bg-gradient-to-tl from-secondary/10 to-primary/5 rounded-full blur-3xl"
-          animate={{ 
-            scale: [1.2, 1, 1.2],
-            opacity: [0.3, 0.5, 0.3]
-          }}
-          transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
-        />
-        {/* Subtle Grid Pattern */}
-        <div className="absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.02)_1px,transparent_1px)] dark:bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:60px_60px]" />
-        {/* Top Gradient Fade */}
-        <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-background to-transparent" />
+        <div className="absolute top-20 left-10 w-72 h-72 bg-primary/5 rounded-full blur-3xl" />
+        <div className="absolute bottom-20 right-10 w-96 h-96 bg-secondary/5 rounded-full blur-3xl" />
       </div>
 
       <motion.div 
@@ -112,16 +93,16 @@ const HeroSection = memo(() => {
             {/* Headline */}
             <motion.h1 
               variants={itemVariants}
-              className="text-4xl md:text-5xl lg:text-7xl font-extrabold leading-tight mb-6 tracking-tight"
+              className="text-4xl md:text-5xl lg:text-6xl font-extrabold leading-tight mb-6"
             >
               {t("hero.title1")}{" "}
               <span className="gradient-text relative inline-block">
                 {t("hero.title2")}
                 <motion.span 
-                  className="absolute -bottom-2 left-0 right-0 h-1.5 bg-gradient-to-r from-primary via-secondary to-primary rounded-full"
-                  initial={{ scaleX: 0, opacity: 0 }}
-                  animate={{ scaleX: 1, opacity: 1 }}
-                  transition={{ delay: 0.8, duration: 0.8, ease: "easeOut" }}
+                  className="absolute -bottom-2 left-0 right-0 h-1 bg-gradient-to-r from-primary to-secondary rounded-full"
+                  initial={{ scaleX: 0 }}
+                  animate={{ scaleX: 1 }}
+                  transition={{ delay: 0.8, duration: 0.6 }}
                 />
               </span>{" "}
               {t("hero.title3")}
@@ -130,10 +111,10 @@ const HeroSection = memo(() => {
             {/* Subheadline */}
             <motion.p 
               variants={itemVariants}
-              className="text-lg md:text-xl lg:text-2xl text-muted-foreground max-w-3xl mx-auto mb-10 leading-relaxed"
+              className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-8"
             >
               {t("hero.subtitle")}
-              <strong className="text-foreground font-semibold"> {t("hero.subtitleBold")}</strong>
+              <strong className="text-foreground"> {t("hero.subtitleBold")}</strong>
             </motion.p>
 
             {/* CTA Buttons */}
