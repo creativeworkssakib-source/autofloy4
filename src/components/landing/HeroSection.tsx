@@ -90,30 +90,14 @@ const HeroSection = memo(() => {
         >
           {/* Top Content - Text */}
           <div className="text-center max-w-4xl">
-            {/* Badge */}
-            <motion.div 
-              variants={itemVariants}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/30 text-primary text-sm font-medium mb-6 animate-glow-pulse"
-            >
-              <Sparkles className="w-4 h-4 animate-icon-bounce" />
-              {t("hero.badge")}
-              <ArrowRight className="w-4 h-4" />
-            </motion.div>
-
             {/* Headline */}
             <motion.h1 
               variants={itemVariants}
               className="text-4xl md:text-5xl lg:text-6xl font-extrabold leading-tight mb-6"
             >
               {t("hero.title1")}{" "}
-              <span className="gradient-text relative">
+              <span className="gradient-text">
                 {t("hero.title2")}
-                <motion.span 
-                  className="absolute -bottom-2 left-0 right-0 h-1 bg-gradient-to-r from-primary to-secondary rounded-full"
-                  initial={{ scaleX: 0 }}
-                  animate={{ scaleX: 1 }}
-                  transition={{ delay: 0.8, duration: 0.6 }}
-                />
               </span>{" "}
               {t("hero.title3")}
             </motion.h1>
