@@ -7,69 +7,38 @@ const corsHeaders = {
 };
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const jwtSecret = Deno.env.get("JWT_SECRET")!;
-
-async function verifyToken(authHeader: string | null): Promise<string | null> {
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return null;
-  }
-  
-  const token = authHeader.substring(7);
-  try {
-    // Decode JWT manually without external library
-    const parts = token.split(".");
-    if (parts.length !== 3) return null;
-    
-    // Verify signature using Web Crypto API
-    const key = await crypto.subtle.importKey(
-      "raw",
-      new TextEncoder().encode(jwtSecret),
-      { name: "HMAC", hash: "SHA-256" },
-      false,
-      ["verify"]
-    );
-    
-    const signatureInput = `${parts[0]}.${parts[1]}`;
-    const signature = Uint8Array.from(atob(parts[2].replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0));
-    
-    const valid = await crypto.subtle.verify(
-      "HMAC",
-      key,
-      signature,
-      new TextEncoder().encode(signatureInput)
-    );
-    
-    if (!valid) return null;
-    
-    // Decode payload
-    const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
-    
-    // Check expiration
-    if (payload.exp && payload.exp * 1000 < Date.now()) {
-      return null;
-    }
-    
-    return payload.sub as string;
-  } catch (error) {
-    console.error("Token verification error:", error);
-    return null;
-  }
-}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const userId = await verifyToken(req.headers.get("Authorization"));
-  if (!userId) {
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 
+  // Create client with user's auth header for getUser
+  const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: authHeader } }
+  });
+
+  const { data: { user }, error: userError } = await supabaseAuth.auth.getUser();
+  
+  if (userError || !user) {
+    console.error("Auth error:", userError);
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  const userId = user.id;
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   // GET - Fetch notifications
