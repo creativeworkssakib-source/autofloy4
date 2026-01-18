@@ -302,8 +302,10 @@ export function useOfflineExpenses(params?: { startDate?: string; endDate?: stri
   }, [params?.startDate, params?.endDate, currentShop?.id]);
 
   useEffect(() => {
-    refetch();
-  }, [refetch]);
+    if (currentShop?.id) {
+      refetch();
+    }
+  }, [currentShop?.id]);
 
   const createExpense = useCallback(async (data: any) => {
     const result = await offlineShopService.createExpense(data);
