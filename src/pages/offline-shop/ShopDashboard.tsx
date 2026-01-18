@@ -316,8 +316,8 @@ const ShopDashboard = () => {
           </motion.div>
         </motion.div>
 
-        {/* Premium Stats Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        {/* Premium Stats Grid - Consistent sizing across all devices */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 auto-rows-fr">
           {statsCards.map((stat, index) => {
             const isClickable = !!stat.link;
             const cardElement = (
@@ -339,9 +339,9 @@ const ShopDashboard = () => {
             );
             
             return isClickable ? (
-              <Link key={stat.title} to={stat.link!}>{cardElement}</Link>
+              <Link key={stat.title} to={stat.link!} className="h-full">{cardElement}</Link>
             ) : (
-              <div key={stat.title}>{cardElement}</div>
+              <div key={stat.title} className="h-full">{cardElement}</div>
             );
           })}
         </div>

@@ -52,10 +52,10 @@ export const AnimatedStatCard = ({
         y: -4,
         transition: { duration: 0.2 } 
       }}
-      className="group"
+      className="group h-full"
     >
       <Card className={`
-        relative overflow-hidden border-0 
+        relative overflow-hidden border-0 h-full
         bg-gradient-to-br ${gradientFrom} ${gradientTo}
         backdrop-blur-xl shadow-lg
         ${isClickable ? "cursor-pointer" : ""}
@@ -85,12 +85,12 @@ export const AnimatedStatCard = ({
           />
         </div>
 
-        <CardContent className="relative p-3 sm:p-4 lg:p-5">
-          <div className="flex items-start gap-2 sm:gap-3">
+        <CardContent className="relative p-3 sm:p-4 lg:p-5 h-full">
+          <div className="flex items-start gap-2 sm:gap-3 h-full">
             {/* Animated Icon Container - Mobile first */}
             <motion.div 
               className={`
-                relative p-2 sm:p-3 rounded-xl sm:rounded-2xl shrink-0
+                relative p-2 sm:p-2.5 lg:p-3 rounded-xl sm:rounded-2xl shrink-0
                 ${bgColor} 
                 shadow-inner backdrop-blur-sm
                 group-hover:scale-110 transition-transform duration-300
@@ -98,7 +98,7 @@ export const AnimatedStatCard = ({
               whileHover={{ rotate: [0, -5, 5, 0] }}
               transition={{ duration: 0.5 }}
             >
-              <Icon className={`h-4 w-4 sm:h-5 sm:w-5 ${color} drop-shadow-sm`} />
+              <Icon className={`h-4 w-4 sm:h-4 sm:w-4 lg:h-5 lg:w-5 ${color} drop-shadow-sm`} />
               
               {/* Pulse ring effect */}
               <motion.div
@@ -108,9 +108,9 @@ export const AnimatedStatCard = ({
               />
             </motion.div>
             
-            <div className="min-w-0 flex-1 space-y-1">
-              <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
-                <p className="text-[10px] sm:text-xs lg:text-sm font-medium text-muted-foreground/80 leading-tight">
+            <div className="min-w-0 flex-1 flex flex-col justify-center">
+              <div className="flex items-center gap-1 sm:gap-1.5 lg:gap-2 flex-wrap">
+                <p className="text-[10px] sm:text-[11px] lg:text-sm font-medium text-muted-foreground/80 leading-tight line-clamp-1">
                   {title}
                 </p>
                 {badge && (
@@ -130,10 +130,10 @@ export const AnimatedStatCard = ({
               </div>
               
               {isLoading ? (
-                <Skeleton className="h-5 sm:h-7 lg:h-9 w-16 sm:w-24 lg:w-32" />
+                <Skeleton className="h-5 sm:h-6 lg:h-8 w-16 sm:w-20 lg:w-28 mt-0.5" />
               ) : (
                 <motion.p 
-                  className={`text-sm sm:text-lg lg:text-2xl font-bold tracking-tight leading-tight ${badge ? color : 'text-foreground'}`}
+                  className={`text-sm sm:text-base lg:text-xl font-bold tracking-tight leading-tight mt-0.5 ${badge ? color : 'text-foreground'}`}
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: delay + 0.2 }}
