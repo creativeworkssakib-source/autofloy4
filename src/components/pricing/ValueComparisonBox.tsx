@@ -1,4 +1,4 @@
-import { TrendingUp, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { ValueComparison } from "@/data/plans";
 import { useLanguage } from "@/contexts/LanguageContext";
 
@@ -12,36 +12,29 @@ const ValueComparisonBox = ({ comparison, compact = false }: ValueComparisonBoxP
   const isBn = language === "bn";
 
   return (
-    <div className={`rounded-lg bg-gradient-to-br from-primary/5 via-transparent to-secondary/5 border border-primary/10 ${compact ? 'p-2 mt-3' : 'p-3 mt-4'}`}>
-      {/* Header */}
-      <div className="flex items-center gap-1.5 mb-2">
-        <div className="p-1 rounded-md bg-primary/10">
-          <TrendingUp className={`text-primary ${compact ? 'w-3 h-3' : 'w-3.5 h-3.5'}`} />
-        </div>
-        <span className={`font-semibold text-primary ${compact ? 'text-[10px]' : 'text-xs'}`}>
-          {isBn ? comparison.titleBn : comparison.title}
-        </span>
-      </div>
-      
-      {/* Comparison Items */}
-      <div className={`space-y-1 ${compact ? 'mb-1.5' : 'mb-2'}`}>
+    <div className={`rounded-xl bg-gradient-to-r from-amber-50 via-orange-50 to-yellow-50 dark:from-amber-950/30 dark:via-orange-950/20 dark:to-yellow-950/30 border border-amber-200/50 dark:border-amber-700/30 ${compact ? 'p-3 mt-3' : 'p-4 mt-4'}`}>
+      {/* Large Icon Row */}
+      <div className="flex items-center justify-center gap-3 mb-2">
         {comparison.items.map((item, index) => (
-          <div 
-            key={index} 
-            className={`flex items-center gap-2 text-muted-foreground ${compact ? 'text-[10px]' : 'text-xs'}`}
-          >
-            <span className={compact ? 'text-sm' : 'text-base'}>{item.icon}</span>
-            <span className="leading-tight">{isBn ? item.textBn : item.text}</span>
+          <div key={index} className="flex items-center gap-1">
+            <span className={`${compact ? 'text-2xl' : 'text-3xl'}`}>{item.icon}</span>
+            {index < comparison.items.length - 1 && (
+              <span className="text-amber-400 dark:text-amber-500 font-bold mx-1">=</span>
+            )}
           </div>
         ))}
       </div>
       
-      {/* Highlight Message */}
-      <div className={`flex items-start gap-1 ${compact ? 'text-[9px]' : 'text-[10px]'}`}>
-        <Sparkles className={`text-success shrink-0 mt-0.5 ${compact ? 'w-2.5 h-2.5' : 'w-3 h-3'}`} />
-        <span className="font-medium text-success leading-tight">
+      {/* Single Line Highlight */}
+      <div className="text-center">
+        <p className={`font-bold bg-gradient-to-r from-amber-600 via-orange-500 to-amber-600 dark:from-amber-400 dark:via-orange-400 dark:to-amber-400 bg-clip-text text-transparent ${compact ? 'text-xs' : 'text-sm'}`}>
           {isBn ? comparison.highlightBn : comparison.highlight}
-        </span>
+        </p>
+      </div>
+      
+      {/* Sparkle accent */}
+      <div className="flex justify-center mt-1.5">
+        <Sparkles className={`text-amber-500 ${compact ? 'w-3 h-3' : 'w-4 h-4'}`} />
       </div>
     </div>
   );
