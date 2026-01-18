@@ -12,7 +12,11 @@ import {
   Package,
   Users,
   BarChart3,
-  ArrowRight
+  ArrowRight,
+  Wallet,
+  RefreshCw,
+  Truck,
+  Landmark
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 
@@ -180,6 +184,34 @@ const FeaturesSection = memo(() => {
       description: t("features.reports.desc"),
       gradient: "from-primary to-success",
       slug: "reports-analytics",
+    },
+    {
+      icon: Wallet,
+      title: t("features.expense.title"),
+      description: t("features.expense.desc"),
+      gradient: "from-secondary to-accent",
+      slug: "expense-cash-management",
+    },
+    {
+      icon: RefreshCw,
+      title: t("features.sync.title"),
+      description: t("features.sync.desc"),
+      gradient: "from-success to-primary",
+      slug: "online-offline-sync",
+    },
+    {
+      icon: Truck,
+      title: t("features.suppliers.title"),
+      description: t("features.suppliers.desc"),
+      gradient: "from-accent to-success",
+      slug: "supplier-management",
+    },
+    {
+      icon: Landmark,
+      title: t("features.loans.title"),
+      description: t("features.loans.desc"),
+      gradient: "from-primary to-accent",
+      slug: "loan-management",
     },
   ], [t]);
 
