@@ -63,19 +63,26 @@ const ValueComparisonBox = ({ comparison, compact = false }: ValueComparisonBoxP
       transition={{ duration: 0.5, delay: 0.2 }}
       className={`relative overflow-hidden rounded-3xl ${compact ? 'p-4 mt-4' : 'p-6 mt-6'}`}
     >
-      {/* Animated Premium Background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-amber-950/90 via-orange-950/80 to-rose-950/90 dark:from-amber-950 dark:via-orange-950 dark:to-rose-950" />
+      {/* Premium Dark Gradient Background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900" />
       
-      {/* Animated Mesh Gradient Overlay */}
-      <div className="absolute inset-0 opacity-60">
-        <div className="absolute top-0 left-1/4 w-40 h-40 bg-amber-500/30 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-0 right-1/4 w-32 h-32 bg-rose-500/25 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-24 bg-orange-500/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '0.5s' }} />
+      {/* Vibrant Gradient Overlays */}
+      <div className="absolute inset-0">
+        <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-br from-violet-600/20 via-fuchsia-500/15 to-transparent" />
+        <div className="absolute bottom-0 right-0 w-full h-1/2 bg-gradient-to-tl from-cyan-500/20 via-emerald-500/10 to-transparent" />
       </div>
       
-      {/* Animated Border */}
-      <div className="absolute inset-0 rounded-3xl border border-amber-400/40 dark:border-amber-400/30" />
-      <div className="absolute inset-[1px] rounded-3xl border border-white/10" />
+      {/* Animated Glow Orbs */}
+      <div className="absolute inset-0 opacity-80">
+        <div className="absolute top-0 left-1/4 w-32 h-32 bg-violet-500/40 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute bottom-0 right-1/4 w-28 h-28 bg-cyan-400/35 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-20 bg-fuchsia-500/25 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '0.5s' }} />
+      </div>
+      
+      {/* Premium Gradient Border */}
+      <div className="absolute inset-0 rounded-3xl p-[1px] bg-gradient-to-br from-violet-400/50 via-fuchsia-400/30 to-cyan-400/50">
+        <div className="w-full h-full rounded-3xl bg-slate-900/80 backdrop-blur-sm" />
+      </div>
       
       {/* Content */}
       <div className="relative z-10">
@@ -86,7 +93,7 @@ const ValueComparisonBox = ({ comparison, compact = false }: ValueComparisonBoxP
           transition={{ duration: 0.3, delay: 0.3 }}
           className="flex justify-center mb-4"
         >
-          <span className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 text-white font-bold shadow-lg shadow-orange-500/40 ${compact ? 'text-xs' : 'text-sm'}`}>
+          <span className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-gradient-to-r from-violet-500 via-fuchsia-500 to-pink-500 text-white font-bold shadow-lg shadow-fuchsia-500/40 ${compact ? 'text-xs' : 'text-sm'}`}>
             <TrendingUp className={`${compact ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} />
             {isBn ? comparison.titleBn : comparison.title}
             <Sparkles className={`${compact ? 'w-3.5 h-3.5' : 'w-4 h-4'} animate-pulse`} />
@@ -129,10 +136,10 @@ const ValueComparisonBox = ({ comparison, compact = false }: ValueComparisonBoxP
                     transition={{ duration: 0.4, delay: 0.6 }}
                     className="flex flex-col items-center gap-1"
                   >
-                    <div className={`${compact ? 'w-10 h-10' : 'w-12 h-12'} rounded-full bg-gradient-to-r from-amber-500/20 to-orange-500/20 border-2 border-dashed border-amber-400/50 flex items-center justify-center`}>
-                      <ArrowRight className={`${compact ? 'w-5 h-5' : 'w-6 h-6'} text-amber-400 animate-pulse`} />
+                    <div className={`${compact ? 'w-10 h-10' : 'w-12 h-12'} rounded-full bg-gradient-to-r from-violet-500/20 to-cyan-500/20 border-2 border-dashed border-violet-400/50 flex items-center justify-center`}>
+                      <ArrowRight className={`${compact ? 'w-5 h-5' : 'w-6 h-6'} text-violet-400 animate-pulse`} />
                     </div>
-                    <span className={`text-amber-400 font-bold ${compact ? 'text-[10px]' : 'text-xs'}`}>=</span>
+                    <span className={`text-fuchsia-400 font-bold ${compact ? 'text-[10px]' : 'text-xs'}`}>=</span>
                   </motion.div>
                 )}
               </div>
@@ -150,12 +157,12 @@ const ValueComparisonBox = ({ comparison, compact = false }: ValueComparisonBoxP
           {/* Main highlight with glow */}
           <div className="relative inline-block">
             <p className={`font-black leading-tight ${compact ? 'text-base' : 'text-lg'}`}>
-              <span className="bg-gradient-to-r from-amber-300 via-orange-300 to-rose-300 bg-clip-text text-transparent drop-shadow-lg">
+              <span className="bg-gradient-to-r from-violet-300 via-fuchsia-300 to-cyan-300 bg-clip-text text-transparent drop-shadow-lg">
                 {isBn ? comparison.highlightBn : comparison.highlight}
               </span>
             </p>
             {/* Text glow effect */}
-            <div className="absolute inset-0 bg-gradient-to-r from-amber-500/20 via-orange-500/20 to-rose-500/20 blur-xl -z-10" />
+            <div className="absolute inset-0 bg-gradient-to-r from-violet-500/20 via-fuchsia-500/20 to-cyan-500/20 blur-xl -z-10" />
           </div>
           
           {/* Decorative sparkle line */}
@@ -164,16 +171,16 @@ const ValueComparisonBox = ({ comparison, compact = false }: ValueComparisonBoxP
               animate={{ rotate: 360 }}
               transition={{ duration: 4, repeat: Number.POSITIVE_INFINITY, ease: "linear" }}
             >
-              <Sparkles className="w-4 h-4 text-amber-400" />
+              <Sparkles className="w-4 h-4 text-violet-400" />
             </motion.div>
-            <div className="w-16 h-0.5 bg-gradient-to-r from-transparent via-amber-400/60 to-transparent" />
-            <Zap className="w-4 h-4 text-orange-400 fill-orange-400/50" />
-            <div className="w-16 h-0.5 bg-gradient-to-r from-transparent via-orange-400/60 to-transparent" />
+            <div className="w-16 h-0.5 bg-gradient-to-r from-transparent via-violet-400/60 to-transparent" />
+            <Zap className="w-4 h-4 text-fuchsia-400 fill-fuchsia-400/50" />
+            <div className="w-16 h-0.5 bg-gradient-to-r from-transparent via-cyan-400/60 to-transparent" />
             <motion.div
               animate={{ rotate: -360 }}
               transition={{ duration: 4, repeat: Number.POSITIVE_INFINITY, ease: "linear" }}
             >
-              <Sparkles className="w-4 h-4 text-rose-400" />
+              <Sparkles className="w-4 h-4 text-cyan-400" />
             </motion.div>
           </div>
         </motion.div>
