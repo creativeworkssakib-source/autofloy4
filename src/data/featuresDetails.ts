@@ -1,4 +1,4 @@
-import { MessageSquare, Image, Mic, Shield, FileText, Clock, Store, Package, Users, BarChart3, Wallet, RefreshCw, LucideIcon } from "lucide-react";
+import { MessageSquare, Image, Mic, Shield, FileText, Clock, Store, Package, Users, BarChart3, Wallet, RefreshCw, Truck, Landmark, LucideIcon } from "lucide-react";
 
 export interface FeatureDetail {
   slug: string;
@@ -559,6 +559,94 @@ export const featuresDetails: FeatureDetail[] = [
       {
         question: "Can I use only offline features without sync?",
         answer: "Absolutely! Sync is optional. You can use the offline shop completely independently if you prefer."
+      }
+    ]
+  },
+  {
+    slug: "supplier-management",
+    title: "Supplier Management",
+    subtitle: "Track supplier purchases, dues, and payment history",
+    icon: Truck,
+    color: "from-accent to-success",
+    description: "Manage all your suppliers in one place. Track purchases, outstanding dues, and payment history. Get insights into your best suppliers and negotiate better deals.\n\nPerfect for shops that regularly buy inventory from multiple suppliers and need to manage credit relationships.",
+    benefits: [
+      "Complete supplier database",
+      "Purchase order tracking",
+      "Supplier due management",
+      "Payment history records",
+      "Supplier-wise purchase reports",
+      "Contact information storage"
+    ],
+    steps: [
+      {
+        title: "Add Suppliers",
+        description: "Create supplier profiles with name, phone, address, and opening balance."
+      },
+      {
+        title: "Record Purchases",
+        description: "Log purchases with items, quantities, and payment amounts."
+      },
+      {
+        title: "Track Dues",
+        description: "Monitor outstanding dues and record payments."
+      },
+      {
+        title: "Analyze",
+        description: "View supplier-wise purchase reports and payment history."
+      }
+    ],
+    faq: [
+      {
+        question: "Can I track how much I owe suppliers?",
+        answer: "Yes! The system tracks all purchases and payments, showing outstanding dues for each supplier."
+      },
+      {
+        question: "Can I see purchase history from a specific supplier?",
+        answer: "Absolutely! View complete purchase history, payment records, and current balance for any supplier."
+      }
+    ]
+  },
+  {
+    slug: "loan-management",
+    title: "Loan Management",
+    subtitle: "Track business loans with installments and payment reminders",
+    icon: Landmark,
+    color: "from-primary to-accent",
+    description: "Keep track of all your business loans in one place. Record loan details, set up installment schedules, and get payment reminders. Never miss a payment deadline.\n\nPerfect for businesses managing multiple loans from banks, microfinance, or personal lenders.",
+    benefits: [
+      "Complete loan tracking",
+      "Installment scheduling",
+      "Payment reminders",
+      "Interest calculation",
+      "Loan status overview",
+      "Payment history records"
+    ],
+    steps: [
+      {
+        title: "Add Loan",
+        description: "Enter loan details including amount, interest rate, and lender information."
+      },
+      {
+        title: "Set Schedule",
+        description: "Define installment amounts and due dates for payments."
+      },
+      {
+        title: "Track Payments",
+        description: "Record payments and see remaining balance automatically calculated."
+      },
+      {
+        title: "Get Reminders",
+        description: "Receive notifications before payment due dates."
+      }
+    ],
+    faq: [
+      {
+        question: "Can I track multiple loans?",
+        answer: "Yes! Add as many loans as needed - bank loans, microfinance, personal loans, etc."
+      },
+      {
+        question: "Does it send payment reminders?",
+        answer: "Yes, you'll receive notifications before each installment due date so you never miss a payment."
       }
     ]
   }

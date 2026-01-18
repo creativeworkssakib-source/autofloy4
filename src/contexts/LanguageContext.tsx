@@ -94,6 +94,14 @@ const en: Record<string, string> = {
   "features.customers.desc": "Build customer relationships with due tracking and purchase history.",
   "features.reports.title": "Reports & Analytics",
   "features.reports.desc": "Make data-driven decisions with comprehensive business reports.",
+  "features.expense.title": "Expense & Cash",
+  "features.expense.desc": "Track expenses, manage cash flow, and daily cash closing.",
+  "features.sync.title": "Online-Offline Sync",
+  "features.sync.desc": "Unify inventory across online and offline sales channels.",
+  "features.suppliers.title": "Supplier Management",
+  "features.suppliers.desc": "Track supplier purchases, dues, and payment history.",
+  "features.loans.title": "Loan Management",
+  "features.loans.desc": "Track business loans with installments and payment reminders.",
 
   // FAQ Section
   "faq.badge": "FAQ",
@@ -798,6 +806,14 @@ const bn: Record<string, string> = {
   "features.customers.desc": "বাকি ট্র্যাকিং এবং কেনাকাটার ইতিহাস সহ কাস্টমার সম্পর্ক তৈরি করুন।",
   "features.reports.title": "রিপোর্ট ও অ্যানালিটিক্স",
   "features.reports.desc": "বিস্তারিত ব্যবসায়িক রিপোর্ট দিয়ে ডেটা-চালিত সিদ্ধান্ত নিন।",
+  "features.expense.title": "খরচ ও ক্যাশ",
+  "features.expense.desc": "খরচ ট্র্যাক করুন, ক্যাশ ফ্লো ম্যানেজ করুন এবং দৈনিক ক্যাশ ক্লোজিং।",
+  "features.sync.title": "অনলাইন-অফলাইন সিংক",
+  "features.sync.desc": "অনলাইন এবং অফলাইন বিক্রি চ্যানেল জুড়ে ইনভেন্টরি একীভূত করুন।",
+  "features.suppliers.title": "সাপ্লায়ার ম্যানেজমেন্ট",
+  "features.suppliers.desc": "সাপ্লায়ার ক্রয়, বাকি এবং পেমেন্ট ইতিহাস ট্র্যাক করুন।",
+  "features.loans.title": "লোন ম্যানেজমেন্ট",
+  "features.loans.desc": "কিস্তি এবং পেমেন্ট রিমাইন্ডার সহ ব্যবসায়িক লোন ট্র্যাক করুন।",
 
   // FAQ Section
   "faq.badge": "জিজ্ঞাসা",
