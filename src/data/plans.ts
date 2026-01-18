@@ -88,11 +88,11 @@ export const plans: Plan[] = [
       title: "Smart Investment",
       titleBn: "স্মার্ট বিনিয়োগ",
       items: [
-        { icon: "👨‍💼", text: "1 hour of employee salary", textBn: "একজন Employee-এর ১ ঘণ্টার বেতন" },
-        { icon: "🚗", text: "2 days CNG/Rickshaw fare", textBn: "২ দিনের CNG/রিকশা ভাড়া" },
+        { icon: "👨‍💼", text: "1 Staff Hour", textBn: "১ ঘণ্টার বেতন" },
+        { icon: "🤖", text: "Full Month AI", textBn: "পুরো মাসের AI" },
       ],
-      highlight: "Get 24/7 automation for just 1 hour's staff cost!",
-      highlightBn: "একজন Staff-এর ১ ঘণ্টার বেতনে পুরো মাসের automation!",
+      highlight: "1 hour salary = 30 days automation!",
+      highlightBn: "১ ঘণ্টার বেতনে ৩০ দিনের automation!",
     },
   },
   {
@@ -126,11 +126,11 @@ export const plans: Plan[] = [
       title: "Smart Investment",
       titleBn: "স্মার্ট বিনিয়োগ",
       items: [
-        { icon: "👨‍💼", text: "= 1 Part-time employee salary", textBn: "= ১জন Part-time কর্মচারীর বেতন" },
-        { icon: "⚡", text: "= 1 month shop electricity", textBn: "= দোকানের ১ মাসের বিদ্যুৎ বিল" },
+        { icon: "👨‍💼", text: "1 Staff Salary", textBn: "১জন Staff বেতন" },
+        { icon: "🤖", text: "24/7 AI Assistant", textBn: "২৪/৭ AI Assistant" },
       ],
-      highlight: "AI works 24/7, staff works 8 hours!",
-      highlightBn: "AI ২৪/৭ কাজ করে, Staff মাত্র ৮ ঘণ্টা!",
+      highlight: "AI never sleeps, never takes leave!",
+      highlightBn: "AI ঘুমায় না, ছুটি নেয় না!",
     },
   },
   {
@@ -166,11 +166,11 @@ export const plans: Plan[] = [
       title: "Smart Investment",
       titleBn: "স্মার্ট বিনিয়োগ",
       items: [
-        { icon: "👥", text: "= 2 Sales staff monthly salary", textBn: "= ২জন Sales Staff-এর মাসিক বেতন" },
-        { icon: "📈", text: "= 1 Marketing campaign cost", textBn: "= ১টা Marketing Campaign খরচ" },
+        { icon: "👥", text: "2 Staff Salary", textBn: "২জন Staff বেতন" },
+        { icon: "🚀", text: "Unlimited AI", textBn: "Unlimited AI" },
       ],
-      highlight: "Replace 2 staff with unlimited AI automation!",
-      highlightBn: "২জন Staff-এর বদলে Unlimited AI Automation!",
+      highlight: "2 staff = Unlimited automation power!",
+      highlightBn: "২জন Staff-এর বেতনে Unlimited automation!",
     },
   },
   {
@@ -200,11 +200,11 @@ export const plans: Plan[] = [
       title: "One-time Investment",
       titleBn: "একবারের বিনিয়োগ",
       items: [
-        { icon: "💻", text: "= Cost of a laptop", textBn: "= একটা Laptop-এর দাম" },
-        { icon: "🏍️", text: "= Cost of a bike", textBn: "= একটা Bike-এর দাম" },
+        { icon: "💻", text: "1 Laptop", textBn: "১টা Laptop" },
+        { icon: "♾️", text: "Forever Free", textBn: "চিরকাল ফ্রি" },
       ],
-      highlight: "Invest once, free forever!",
-      highlightBn: "একবার বিনিয়োগ, চিরকালের জন্য ফ্রি!",
+      highlight: "One laptop price = Lifetime access!",
+      highlightBn: "একটা Laptop-এর দামে সারাজীবন!",
     },
   },
 ];
