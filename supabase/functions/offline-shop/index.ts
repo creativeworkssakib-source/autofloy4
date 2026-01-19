@@ -7568,17 +7568,29 @@ serve(async (req) => {
       if (req.method === "POST" && !isPaymentRoute) {
         const body = await req.json();
         
-        // Calculate remaining amount
-        const loanAmount = Number(body.loan_amount) || 0;
+        // Support both lender_name and customer_name (frontend compatibility)
+        const lenderName = body.lender_name || body.customer_name;
+        if (!lenderName) {
+          return new Response(JSON.stringify({ error: "Lender/customer name is required" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        
+        // Calculate remaining amount - support both field naming conventions
+        const loanAmount = Number(body.loan_amount) || Number(body.principal_amount) || 0;
         const interestRate = Number(body.interest_rate) || 0;
         const totalInstallments = Number(body.total_installments) || 1;
         
         // Simple interest calculation for total amount
-        const totalWithInterest = loanAmount + (loanAmount * interestRate * totalInstallments / 12 / 100);
+        const totalWithInterest = body.total_amount 
+          ? Number(body.total_amount) 
+          : loanAmount + (loanAmount * interestRate * totalInstallments / 12 / 100);
         const installmentAmount = body.installment_amount || (totalWithInterest / totalInstallments);
         
-        // Calculate next payment date
-        const startDate = new Date(body.start_date || new Date());
+        // Calculate next payment date - support both start_date and loan_date
+        const startDateStr = body.start_date || body.loan_date || new Date().toISOString().split('T')[0];
+        const startDate = new Date(startDateStr);
         const paymentDay = body.payment_day || startDate.getDate();
         let nextPaymentDate = new Date(startDate);
         nextPaymentDate.setDate(paymentDay);
@@ -7591,13 +7603,13 @@ serve(async (req) => {
           .insert({
             user_id: userId,
             shop_id: shopId || null,
-            lender_name: body.lender_name,
-            lender_type: body.lender_type || 'bank',
+            lender_name: lenderName,
+            lender_type: body.lender_type || body.loan_type || 'bank',
             loan_amount: loanAmount,
             interest_rate: interestRate,
             total_installments: totalInstallments,
             installment_amount: installmentAmount,
-            start_date: body.start_date || new Date().toISOString().split('T')[0],
+            start_date: startDateStr,
             next_payment_date: nextPaymentDate.toISOString().split('T')[0],
             payment_day: paymentDay,
             remaining_amount: totalWithInterest,
