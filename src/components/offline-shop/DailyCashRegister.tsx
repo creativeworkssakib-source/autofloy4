@@ -347,7 +347,7 @@ export function DailyCashRegister() {
                       {t.shopOpen}
                     </Badge>
                   ) : (
-                    <Badge variant="secondary" className="bg-muted text-muted-foreground">
+                    <Badge variant="destructive" className="bg-destructive/80 text-destructive-foreground">
                       <AlertCircle className="h-3 w-3 mr-1" />
                       {t.shopClosed}
                     </Badge>
