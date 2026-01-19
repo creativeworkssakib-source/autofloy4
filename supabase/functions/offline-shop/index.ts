@@ -3208,7 +3208,8 @@ serve(async (req) => {
           .eq("user_id", userId)
           .order("adjustment_date", { ascending: false });
         
-        if (shopId) query = query.eq("shop_id", shopId);
+        // Include adjustments for current shop OR legacy adjustments with no shop_id
+        if (shopId) query = query.or(`shop_id.eq.${shopId},shop_id.is.null`);
         if (productId) query = query.eq("product_id", productId);
         if (type) query = query.eq("type", type);
         if (startDate) query = query.gte("adjustment_date", startDate);
