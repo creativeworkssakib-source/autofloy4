@@ -75,7 +75,7 @@ interface DashboardData {
     total: number;
     sale_date: string;
     payment_status: string;
-    customer: { name: string } | null;
+    customer_name?: string | null;
     items?: Array<{ product_name: string }>;
   }>;
   recentProducts: Array<{
@@ -596,20 +596,22 @@ const ShopDashboard = () => {
                   {data.recentSales.map((sale) => (
                     <div
                       key={sale.id}
-                      className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
+                      className="flex items-center justify-between p-3 rounded-lg bg-muted/50 gap-3"
                     >
-                      <div className="flex-1 min-w-0">
+                      <div className="min-w-0">
                         <p className="font-medium truncate">
-                          {sale.customer?.name || (language === "bn" ? "সাধারণ বিক্রি" : "General Sale")}
+                          {sale.customer_name || (language === "bn" ? "সাধারণ বিক্রি" : "General Sale")}
                         </p>
-                        <p className="text-sm text-muted-foreground truncate">
-                          {sale.items?.map((item: { product_name: string }) => item.product_name).join(", ") || "-"}
-                        </p>
-                        <p className="text-xs text-muted-foreground/70">
+                        <p className="text-xs text-muted-foreground">
                           {sale.invoice_number}
                         </p>
                       </div>
-                      <div className="text-right">
+                      <div className="flex-1 text-center min-w-0">
+                        <p className="text-sm text-muted-foreground truncate">
+                          {sale.items?.map((item) => item.product_name).join(", ") || "-"}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
                         <p className="font-semibold">{formatCurrency(Number(sale.total))}</p>
                         <Badge variant={sale.payment_status === "paid" ? "default" : "secondary"}>
                           {sale.payment_status === "paid" ? t("common.paid") : t("common.due")}
