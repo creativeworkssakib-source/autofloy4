@@ -254,6 +254,7 @@ const ShopLoans = () => {
     late_fee: "",
     notes: "",
   });
+  const [selectedInstallment, setSelectedInstallment] = useState<number | null>(null);
 
   // fetchLoanDetails for viewing payment history
   const API_BASE = import.meta.env.VITE_SUPABASE_URL;
@@ -285,6 +286,16 @@ const ShopLoans = () => {
       setLoanPayments(data.payments || []);
       setLoanSchedule(data.schedule || []);
       setInterestBreakdown(data.interestBreakdown || null);
+      
+      // Auto-select next unpaid installment
+      const nextUnpaid = (data.schedule || []).find((s: any) => !s.is_paid);
+      if (nextUnpaid) {
+        setSelectedInstallment(nextUnpaid.installment_number);
+        setPaymentData(prev => ({
+          ...prev,
+          amount: String(Math.round(nextUnpaid.amount))
+        }));
+      }
     } catch (error: any) {
       // Fallback to local
       const loan = loans.find((l: any) => l.id === loanId);
@@ -445,6 +456,7 @@ const ShopLoans = () => {
 
   const openPaymentModal = (loan: Loan) => {
     setSelectedLoan(loan);
+    setSelectedInstallment(loan.paid_installments + 1); // Auto-select next installment
     fetchLoanDetails(loan.id); // Fetch details including schedule and payments
     setPaymentData({
       amount: loan.installment_amount.toString(),
@@ -1107,34 +1119,52 @@ const ShopLoans = () => {
                 <div className="p-3 bg-muted/30 rounded-lg">
                   <h4 className="font-medium text-sm mb-2">{t.paymentSchedule}</h4>
                   <div className="space-y-1.5 max-h-32 overflow-y-auto">
-                    {loanSchedule.map((item: any) => (
-                      <div 
-                        key={item.installment_number} 
-                        className={`flex items-center justify-between text-xs p-2 rounded ${
-                          item.is_paid 
-                            ? 'bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800' 
-                            : item.installment_number === selectedLoan.paid_installments + 1
-                            ? 'bg-blue-50 dark:bg-blue-950/30 border-2 border-blue-400'
-                            : 'bg-background border'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          {item.is_paid ? (
-                            <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
-                          ) : (
-                            <span className="h-3.5 w-3.5 rounded-full border-2 border-muted-foreground/30" />
-                          )}
-                          <span className="font-medium">#{item.installment_number}</span>
-                          <span className="text-muted-foreground">{formatDateFull(item.due_date)}</span>
+                    {loanSchedule.map((item: any) => {
+                      const isSelected = selectedInstallment === item.installment_number;
+                      const canSelect = !item.is_paid;
+                      
+                      return (
+                        <div 
+                          key={item.installment_number} 
+                          onClick={() => {
+                            if (canSelect) {
+                              setSelectedInstallment(item.installment_number);
+                              setPaymentData(prev => ({
+                                ...prev,
+                                amount: String(Math.round(item.amount))
+                              }));
+                            }
+                          }}
+                          className={`flex items-center justify-between text-xs p-2 rounded transition-all ${
+                            item.is_paid 
+                              ? 'bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 cursor-not-allowed opacity-60' 
+                              : isSelected
+                              ? 'bg-blue-100 dark:bg-blue-950/50 border-2 border-blue-500 cursor-pointer'
+                              : 'bg-background border hover:border-blue-300 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 cursor-pointer'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            {item.is_paid ? (
+                              <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                            ) : (
+                              <span className={`h-3.5 w-3.5 rounded-full border-2 flex items-center justify-center ${
+                                isSelected ? 'border-blue-500 bg-blue-500' : 'border-muted-foreground/30'
+                              }`}>
+                                {isSelected && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+                              </span>
+                            )}
+                            <span className="font-medium">#{item.installment_number}</span>
+                            <span className="text-muted-foreground">{formatDateFull(item.due_date)}</span>
+                          </div>
+                          <div className="text-right">
+                            <span className="font-medium">৳{Math.round(item.amount).toLocaleString()}</span>
+                            {item.is_paid && item.payment_date && (
+                              <p className="text-green-600 text-[10px]">{t.paidOn}: {formatDate(item.payment_date)}</p>
+                            )}
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <span className="font-medium">৳{Math.round(item.amount).toLocaleString()}</span>
-                          {item.is_paid && item.payment_date && (
-                            <p className="text-green-600 text-[10px]">{t.paidOn}: {formatDate(item.payment_date)}</p>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
