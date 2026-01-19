@@ -311,7 +311,7 @@ export default function SupplierReturnsTab() {
     let matchedProductId = item.product_id || "";
     
     const token = getToken();
-    const shopId = localStorage.getItem("current_shop_id");
+    const shopId = localStorage.getItem("autofloy_current_shop_id");
     if (token) {
       try {
         const url = new URL(`${SUPABASE_URL}/functions/v1/offline-shop/products`);
