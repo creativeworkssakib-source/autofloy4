@@ -265,7 +265,18 @@ export default function SupplierReturnsTab() {
       );
       const data = await response.json();
       if (data.purchases) {
-        setPurchases(data.purchases);
+        // Ensure items have proper quantity parsed as numbers
+        const parsedPurchases = data.purchases.map((purchase: any) => ({
+          ...purchase,
+          items: (purchase.items || []).map((item: any) => ({
+            ...item,
+            quantity: Number(item.quantity) || 1,
+            unit_price: Number(item.unit_price) || 0,
+            total: Number(item.total) || 0,
+          })),
+        }));
+        console.log("Parsed purchases:", parsedPurchases);
+        setPurchases(parsedPurchases);
       }
     } catch (error) {
       console.error("Fetch purchases error:", error);
@@ -293,19 +304,26 @@ export default function SupplierReturnsTab() {
   };
 
   const selectPurchaseItem = (purchase: Purchase, item: PurchaseItem) => {
-    const qty = Math.min(1, item.quantity); // Start with 1, max is item.quantity
-    setMaxQuantity(item.quantity);
+    // Ensure quantity is properly parsed as a number
+    const itemQuantity = Number(item.quantity) || 1;
+    const itemUnitPrice = Number(item.unit_price) || 0;
+    
+    console.log("Selected item:", item, "Parsed quantity:", itemQuantity);
+    
+    // Start with 1, max is the item's purchased quantity
+    const qty = Math.min(1, itemQuantity);
+    setMaxQuantity(itemQuantity);
     setFormData({
       ...formData,
       purchase_id: purchase.id,
       product_id: item.product_id || "",
       product_name: item.product_name,
       quantity: qty,
-      unit_cost: item.unit_price,
-      refund_amount: item.unit_price * qty,
+      unit_cost: itemUnitPrice,
+      refund_amount: itemUnitPrice * qty,
     });
     setIsPurchasesOpen(false);
-    toast.success(`Selected: ${item.product_name} (max: ${item.quantity})`);
+    toast.success(`Selected: ${item.product_name} (max: ${itemQuantity})`);
   };
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
