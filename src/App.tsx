@@ -255,11 +255,6 @@ const App = () => (
                       <ShopSales />
                     </ProtectedRoute>
                   } />
-                  <Route path="/offline-shop/purchases" element={
-                    <ProtectedRoute>
-                      <ShopPurchases />
-                    </ProtectedRoute>
-                  } />
                   <Route path="/offline-shop/expenses" element={
                     <ProtectedRoute>
                       <ShopExpenses />
