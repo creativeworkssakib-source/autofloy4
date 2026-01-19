@@ -1060,6 +1060,67 @@ serve(async (req) => {
         });
       }
 
+      // Handle POST to products/barcode - generate barcode for existing product
+      const subRoute = pathParts[offlineShopIndex + 2];
+      if (req.method === "POST" && subRoute === "barcode") {
+        const body = await req.json();
+        const { productId } = body;
+        
+        if (!productId) {
+          return new Response(JSON.stringify({ error: "Product ID is required" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        
+        // Get the product
+        const { data: product, error: fetchError } = await supabase
+          .from("shop_products")
+          .select("*")
+          .eq("id", productId)
+          .eq("user_id", userId)
+          .single();
+        
+        if (fetchError || !product) {
+          return new Response(JSON.stringify({ error: "Product not found" }), {
+            status: 404,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        
+        // Check if product already has a valid barcode
+        if (product.barcode && product.barcode !== "" && product.barcode !== "N/A") {
+          return new Response(JSON.stringify({ 
+            barcode: product.barcode, 
+            product,
+            message: "Product already has a barcode" 
+          }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        
+        // Generate new barcode
+        const sequence = await getNextBarcodeSequence(supabase, userId, shopId);
+        const newBarcode = generateBarcode(shopId || userId, sequence);
+        
+        // Update product with new barcode
+        const { data: updatedProduct, error: updateError } = await supabase
+          .from("shop_products")
+          .update({ barcode: newBarcode, updated_at: new Date().toISOString() })
+          .eq("id", productId)
+          .eq("user_id", userId)
+          .select()
+          .single();
+        
+        if (updateError) throw updateError;
+        
+        return new Response(JSON.stringify({ barcode: newBarcode, product: updatedProduct }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       if (req.method === "POST") {
         const body = await req.json();
         
