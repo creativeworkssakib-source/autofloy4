@@ -547,14 +547,14 @@ class OfflineShopService {
 
   // Scanner Logs
   async logScannerEvent(data: { event_type: string; device_info?: any; error_message?: string }) {
-    return this.request<{ log: any }>("scanner/logs", {
+    return this.request<{ log: any }>("scanner-logs", {
       method: "POST",
       body: JSON.stringify(data),
     });
   }
 
   async getScannerLogs() {
-    return this.request<{ logs: any[] }>("scanner/logs");
+    return this.request<{ logs: any[] }>("scanner-logs");
   }
 
   // Scanner Devices
