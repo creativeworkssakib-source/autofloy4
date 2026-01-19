@@ -308,35 +308,50 @@ export default function SupplierReturnsTab() {
     
     // Fetch current stock quantity from products list
     let stockQuantity = Number(item.quantity) || 1;
+    let matchedProductId = item.product_id || "";
     
-    if (item.product_id) {
-      const token = getToken();
-      const shopId = localStorage.getItem("current_shop_id");
-      if (token) {
-        try {
-          const url = new URL(`${SUPABASE_URL}/functions/v1/offline-shop/products`);
-          if (shopId) url.searchParams.set("shop_id", shopId);
+    const token = getToken();
+    const shopId = localStorage.getItem("current_shop_id");
+    if (token) {
+      try {
+        const url = new URL(`${SUPABASE_URL}/functions/v1/offline-shop/products`);
+        if (shopId) url.searchParams.set("shop_id", shopId);
+        
+        const response = await fetch(url.toString(), {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+            ...(shopId ? { "X-Shop-Id": shopId } : {}),
+          },
+        });
+        const data = await response.json();
+        
+        if (data.products && Array.isArray(data.products)) {
+          // Find product by name and matching purchase price
+          const matchingProducts = data.products.filter(
+            (p: any) => p.name?.toLowerCase() === item.product_name?.toLowerCase()
+          );
           
-          const response = await fetch(url.toString(), {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-              ...(shopId ? { "X-Shop-Id": shopId } : {}),
-            },
-          });
-          const data = await response.json();
-          
-          // Find the specific product by ID from the products list
-          if (data.products && Array.isArray(data.products)) {
-            const product = data.products.find((p: any) => p.id === item.product_id);
-            if (product && product.stock_quantity !== undefined) {
-              stockQuantity = Number(product.stock_quantity) || 1;
-              console.log("Found product:", product.name, "Stock:", stockQuantity);
+          if (matchingProducts.length > 0) {
+            // Find the one with the closest purchase price
+            let bestMatch = matchingProducts[0];
+            let smallestDiff = Math.abs(Number(bestMatch.purchase_price || 0) - itemUnitPrice);
+            
+            for (const p of matchingProducts) {
+              const diff = Math.abs(Number(p.purchase_price || 0) - itemUnitPrice);
+              if (diff < smallestDiff) {
+                smallestDiff = diff;
+                bestMatch = p;
+              }
             }
+            
+            stockQuantity = Number(bestMatch.stock_quantity) || 1;
+            matchedProductId = bestMatch.id;
+            console.log("Matched product by name+price:", bestMatch.name, "Price:", bestMatch.purchase_price, "Stock:", stockQuantity);
           }
-        } catch (error) {
-          console.error("Error fetching product stock:", error);
         }
+      } catch (error) {
+        console.error("Error fetching product stock:", error);
       }
     }
     
@@ -348,7 +363,7 @@ export default function SupplierReturnsTab() {
     setFormData({
       ...formData,
       purchase_id: purchase.id,
-      product_id: item.product_id || "",
+      product_id: matchedProductId,
       product_name: item.product_name,
       quantity: qty,
       unit_cost: itemUnitPrice,
