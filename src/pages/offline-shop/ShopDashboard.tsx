@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link } from "react-router-dom";
 import { 
@@ -29,6 +29,7 @@ import { AnimatedStatCard } from "@/components/offline-shop/AnimatedStatCard";
 import { PremiumTargetCard } from "@/components/offline-shop/PremiumTargetCard";
 import { ProfitBreakdownCard } from "@/components/offline-shop/ProfitBreakdownCard";
 import { PremiumQuickStats } from "@/components/offline-shop/PremiumQuickStats";
+import { ProfitDetailsModal } from "@/components/offline-shop/ProfitDetailsModal";
 import { useOfflineDashboard, useOfflineTrash } from "@/hooks/useOfflineShopData";
 import { useOfflineSettings } from "@/hooks/useOfflineData";
 import { useIsOnline } from "@/hooks/useOnlineStatus";
@@ -99,6 +100,7 @@ const ShopDashboard = () => {
   const { currentShop } = useShop();
   const { settings } = useOfflineSettings();
   const isOnline = useIsOnline();
+  const [showProfitDetails, setShowProfitDetails] = useState(false);
   
   // Use offline-first dashboard hooks - only 'today' for main dashboard data
   const { data: todayData, loading: isTodayLoading, refetch: loadTodayDashboard } = useOfflineDashboard('today');
@@ -215,6 +217,7 @@ const ShopDashboard = () => {
       gradientTo: monthlyProfit >= 0 ? "to-green-500/5" : "to-red-500/5",
       badge: monthlyProfit >= 0 ? (language === "bn" ? "লাভ" : "Profit") : (language === "bn" ? "লস" : "Loss"),
       badgeVariant: monthlyProfit >= 0 ? "default" : "destructive" as const,
+      onClick: () => setShowProfitDetails(true),
     },
   ];
 
@@ -320,7 +323,7 @@ const ShopDashboard = () => {
         {/* Premium Stats Grid - Consistent sizing across all devices */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 auto-rows-fr">
           {statsCards.map((stat, index) => {
-            const isClickable = !!stat.link;
+            const isClickable = !!stat.link || !!stat.onClick;
             const cardElement = (
               <AnimatedStatCard
                 title={stat.title}
@@ -339,11 +342,19 @@ const ShopDashboard = () => {
               />
             );
             
-            return isClickable ? (
-              <Link key={stat.title} to={stat.link!} className="h-full">{cardElement}</Link>
-            ) : (
-              <div key={stat.title} className="h-full">{cardElement}</div>
-            );
+            if (stat.link) {
+              return <Link key={stat.title} to={stat.link} className="h-full">{cardElement}</Link>;
+            }
+            
+            if (stat.onClick) {
+              return (
+                <div key={stat.title} className="h-full cursor-pointer" onClick={stat.onClick}>
+                  {cardElement}
+                </div>
+              );
+            }
+            
+            return <div key={stat.title} className="h-full">{cardElement}</div>;
           })}
         </div>
 
@@ -693,6 +704,17 @@ const ShopDashboard = () => {
           <ProductPerformanceSection type="offline" shopId={currentShop?.id} />
         </Suspense>
       </div>
+
+      {/* Profit Details Modal */}
+      <ProfitDetailsModal
+        isOpen={showProfitDetails}
+        onClose={() => setShowProfitDetails(false)}
+        language={language}
+        formatCurrency={formatCurrency}
+        grossProfit={data?.monthly?.grossProfit || 0}
+        totalExpenses={data?.monthly?.totalExpenses || 0}
+        netProfit={data?.monthly?.netProfit || 0}
+      />
     </ShopLayout>
   );
 };
