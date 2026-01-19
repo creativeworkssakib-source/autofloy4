@@ -102,11 +102,15 @@ const ShopCash = () => {
     const totalProfit = filteredSales.reduce((sum: number, s: any) => sum + Number(s.total_profit || 0), 0);
     
     // Calculate stock loss (quantity * purchase_price for each loss adjustment)
+    console.log('All adjustments:', adjustments);
+    console.log('Filtered loss adjustments:', filteredAdjustments);
     const totalStockLoss = filteredAdjustments.reduce((sum: number, a: any) => {
       const quantity = Math.abs(Number(a.quantity || 0));
       const unitCost = Number(a.purchase_price || 0);
+      console.log(`Adjustment: ${a.product_name}, qty: ${quantity}, cost: ${unitCost}, loss: ${quantity * unitCost}`);
       return sum + (quantity * unitCost);
     }, 0);
+    console.log('Total stock loss:', totalStockLoss);
 
     // Due calculations (not date filtered - show all due)
     const customersWithDue = customers.filter((c: any) => Number(c.total_due) > 0);
