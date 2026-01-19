@@ -559,25 +559,25 @@ class OfflineShopService {
 
   // Scanner Devices
   async getScannerDevices() {
-    return this.request<{ devices: ScannerDevice[] }>("scanner/devices");
+    return this.request<{ devices: ScannerDevice[] }>("scanner-devices");
   }
 
   async saveScannerDevice(device: Partial<ScannerDevice>) {
-    return this.request<{ device: ScannerDevice }>("scanner/devices", {
+    return this.request<{ device: ScannerDevice }>("scanner-devices", {
       method: "POST",
       body: JSON.stringify(device),
     });
   }
 
   async updateScannerDevice(device: Partial<ScannerDevice>) {
-    return this.request<{ device: ScannerDevice }>("scanner/devices", {
+    return this.request<{ device: ScannerDevice }>("scanner-devices", {
       method: "PUT",
       body: JSON.stringify(device),
     });
   }
 
   async deleteScannerDevice(deviceId: string) {
-    return this.request<{ message: string }>("scanner/devices", {
+    return this.request<{ message: string }>("scanner-devices", {
       method: "DELETE",
       body: JSON.stringify({ deviceId }),
     });
