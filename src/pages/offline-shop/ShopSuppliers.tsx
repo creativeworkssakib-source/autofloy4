@@ -288,6 +288,11 @@ const ShopSuppliers = () => {
   const [isAddToStockModalOpen, setIsAddToStockModalOpen] = useState(false);
   const [productsToAddToStock, setProductsToAddToStock] = useState<PurchasedProduct[]>([]);
 
+  // Existing products from supplier modal state
+  const [showExistingProductsModal, setShowExistingProductsModal] = useState(false);
+  const [supplierProducts, setSupplierProducts] = useState<any[]>([]);
+  const [isLoadingSupplierProducts, setIsLoadingSupplierProducts] = useState(false);
+
   const loadData = async () => {
     setIsLoading(true);
     try {
@@ -447,6 +452,46 @@ const ShopSuppliers = () => {
         location: "",
       },
     ]);
+  };
+
+  // Load products from supplier's previous purchases
+  const loadSupplierProducts = async () => {
+    const supplierName = selectedPreviousSupplier?.name || formData.name;
+    const supplierId = selectedPreviousSupplier?.id;
+    
+    if (!supplierId && !supplierName) {
+      toast.error(language === "bn" ? "প্রথমে সাপ্লায়ার সিলেক্ট করুন" : "Please select a supplier first");
+      return;
+    }
+    
+    setIsLoadingSupplierProducts(true);
+    try {
+      const res = await offlineShopService.getSupplierProducts(supplierId, supplierName);
+      setSupplierProducts(res.products || []);
+      setShowExistingProductsModal(true);
+    } catch (error) {
+      console.error("Failed to load supplier products:", error);
+      toast.error(language === "bn" ? "প্রোডাক্ট লোড করতে সমস্যা" : "Failed to load products");
+    } finally {
+      setIsLoadingSupplierProducts(false);
+    }
+  };
+
+  // Add existing product to purchase items
+  const addExistingProduct = (product: any) => {
+    setPurchaseItems([
+      ...purchaseItems,
+      {
+        id: crypto.randomUUID(),
+        product_name: product.product_name,
+        quantity: 1,
+        unit_price: product.last_unit_price || 0,
+        selling_price: product.last_selling_price || 0,
+        total: product.last_unit_price || 0,
+        location: "",
+      },
+    ]);
+    toast.success(language === "bn" ? `${product.product_name} যোগ হয়েছে` : `${product.product_name} added`);
   };
 
   // Update purchase item
@@ -1839,15 +1884,31 @@ const ShopSuppliers = () => {
 
                   {/* Purchase Items Table */}
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
                       <h3 className="font-semibold flex items-center gap-2 text-sm text-primary">
                         <Package className="h-4 w-4" />
                         {language === "bn" ? "প্রোডাক্ট তালিকা" : "Product List"}
                       </h3>
-                      <Button type="button" variant="outline" size="sm" onClick={addPurchaseItem}>
-                        <Plus className="h-4 w-4 mr-1" />
-                        {language === "bn" ? "প্রোডাক্ট যোগ করুন" : "Add Product"}
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button 
+                          type="button" 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={loadSupplierProducts}
+                          disabled={isLoadingSupplierProducts || (!selectedPreviousSupplier && !formData.name)}
+                        >
+                          {isLoadingSupplierProducts ? (
+                            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                          ) : (
+                            <History className="h-4 w-4 mr-1" />
+                          )}
+                          {language === "bn" ? "আগের প্রোডাক্ট" : "Add Existing Product"}
+                        </Button>
+                        <Button type="button" variant="outline" size="sm" onClick={addPurchaseItem}>
+                          <Plus className="h-4 w-4 mr-1" />
+                          {language === "bn" ? "নতুন প্রোডাক্ট" : "Add New Product"}
+                        </Button>
+                      </div>
                     </div>
 
                     {purchaseItems.length === 0 ? (
@@ -1856,10 +1917,22 @@ const ShopSuppliers = () => {
                         <p className="text-muted-foreground">
                           {language === "bn" ? "কোন প্রোডাক্ট যোগ করা হয়নি" : "No products added"}
                         </p>
-                        <Button type="button" variant="ghost" size="sm" onClick={addPurchaseItem} className="mt-2">
-                          <Plus className="h-4 w-4 mr-1" />
-                          {language === "bn" ? "প্রথম প্রোডাক্ট যোগ করুন" : "Add first product"}
-                        </Button>
+                        <div className="flex gap-2 justify-center mt-2">
+                          <Button 
+                            type="button" 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={loadSupplierProducts}
+                            disabled={isLoadingSupplierProducts || (!selectedPreviousSupplier && !formData.name)}
+                          >
+                            <History className="h-4 w-4 mr-1" />
+                            {language === "bn" ? "আগের প্রোডাক্ট" : "Add Existing"}
+                          </Button>
+                          <Button type="button" variant="ghost" size="sm" onClick={addPurchaseItem}>
+                            <Plus className="h-4 w-4 mr-1" />
+                            {language === "bn" ? "নতুন প্রোডাক্ট" : "Add New"}
+                          </Button>
+                        </div>
                       </div>
                     ) : (
                       <div className="border rounded-lg overflow-hidden">
@@ -2388,6 +2461,73 @@ const ShopSuppliers = () => {
         products={productsToAddToStock}
         onSuccess={loadData}
       />
+
+      {/* Existing Products from Supplier Modal */}
+      <Dialog open={showExistingProductsModal} onOpenChange={setShowExistingProductsModal}>
+        <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="h-5 w-5 text-primary" />
+              {language === "bn" ? "আগে কেনা প্রোডাক্ট" : "Previously Purchased Products"}
+            </DialogTitle>
+            <DialogDescription>
+              {language === "bn" 
+                ? `${selectedPreviousSupplier?.name || formData.name} থেকে আগে যা কেনা হয়েছে`
+                : `Products previously bought from ${selectedPreviousSupplier?.name || formData.name}`}
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="flex-1 pr-4">
+            <div className="space-y-2 py-4">
+              {supplierProducts.length === 0 ? (
+                <div className="text-center py-8">
+                  <Package className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
+                  <p className="text-muted-foreground">
+                    {language === "bn" ? "এই সাপ্লায়ার থেকে আগে কিছু কেনা হয়নি" : "No previous purchases from this supplier"}
+                  </p>
+                </div>
+              ) : (
+                supplierProducts.map((product, index) => (
+                  <div 
+                    key={index}
+                    className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm truncate">{product.product_name}</div>
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
+                        <span className="flex items-center gap-1">
+                          <DollarSign className="h-3 w-3" />
+                          {language === "bn" ? "পাইকারি" : "Cost"}: ৳{product.last_unit_price?.toLocaleString()}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <TrendingUp className="h-3 w-3" />
+                          {language === "bn" ? "বিক্রয়" : "Sell"}: ৳{product.last_selling_price?.toLocaleString()}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <ShoppingCart className="h-3 w-3" />
+                          {product.purchase_count}x
+                        </span>
+                      </div>
+                    </div>
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={() => addExistingProduct(product)}
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      {language === "bn" ? "যোগ করুন" : "Add"}
+                    </Button>
+                  </div>
+                ))
+              )}
+            </div>
+          </ScrollArea>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowExistingProductsModal(false)}>
+              {language === "bn" ? "বন্ধ করুন" : "Close"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </ShopLayout>
   );
 };

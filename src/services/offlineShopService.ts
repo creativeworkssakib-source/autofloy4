@@ -293,6 +293,14 @@ class OfflineShopService {
     return this.request<{ purchases: any[] }>("purchases");
   }
 
+  // Get products previously purchased from a specific supplier
+  async getSupplierProducts(supplierId?: string, supplierName?: string) {
+    const params: Record<string, string> = {};
+    if (supplierId) params.supplier_id = supplierId;
+    if (supplierName) params.supplier_name = supplierName;
+    return this.request<{ products: any[] }>("supplier-products", {}, params);
+  }
+
   async createPurchase(purchase: {
     supplier_id?: string;
     supplier_name?: string;
