@@ -181,20 +181,12 @@ const ShopFollowupSms = () => {
         });
       }
       
-      // Now process sales to add purchase info - including walk-in customers from notes
+      // Now process sales to add purchase info - including walk-in customers
       for (const sale of allSales) {
-        let customerId = sale.customer_id;
-        let customerName = sale.customer?.name || null;
-        let customerPhone = sale.customer?.phone || null;
-        
-        // Try to extract customer info from notes if no customer_id
-        if (!customerId && sale.notes) {
-          const noteMatch = sale.notes.match(/Customer:\s*([^(]+)(?:\(([^)]+)\))?/i);
-          if (noteMatch) {
-            customerName = noteMatch[1].trim();
-            customerPhone = noteMatch[2]?.trim() || null;
-          }
-        }
+        const customerId = sale.customer_id;
+        // Get customer info from direct fields OR nested customer object
+        const customerName = sale.customer_name || sale.customer?.name || null;
+        const customerPhone = sale.customer_phone || sale.customer?.phone || null;
         
         // If we have a customer_id and it exists in our map
         if (customerId && customerMap.has(customerId)) {
@@ -215,9 +207,12 @@ const ShopFollowupSms = () => {
           }
           customer.totalPurchases = customer.purchasedProducts.length;
         } 
-        // For walk-in customers with name/phone in notes
-        else if (customerName && customerPhone) {
-          const key = `walk-in-${customerPhone}`;
+        // For walk-in customers with name and/or phone
+        else if (customerName) {
+          // Use phone as key if available, otherwise use name
+          const key = customerPhone 
+            ? `walk-in-${customerPhone.replace(/\D/g, '')}` 
+            : `walk-in-name-${customerName.toLowerCase().trim()}`;
           
           if (!customerMap.has(key)) {
             customerMap.set(key, {
