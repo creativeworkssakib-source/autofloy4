@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Plus, Wallet, Trash2, Calendar, WifiOff, Cloud, Banknote } from "lucide-react";
+import { Plus, Wallet, Trash2, Calendar, WifiOff, Cloud, Banknote, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -43,6 +43,7 @@ const ShopExpenses = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Date range filter state
   const [dateRange, setDateRange] = useState<DateRangePreset>('this_month');
@@ -79,6 +80,7 @@ const ShopExpenses = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
     try {
       await createExpense({
         ...formData,
@@ -89,6 +91,8 @@ const ShopExpenses = () => {
       resetForm();
     } catch (error) {
       toast.error(t("shop.errorOccurred"));
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -339,10 +343,19 @@ const ShopExpenses = () => {
               </p>
             )}
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>
+              <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)} disabled={isSubmitting}>
                 {t("common.cancel")}
               </Button>
-              <Button type="submit">{t("common.add")}</Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    {language === "bn" ? "প্রক্রিয়াকরণ..." : "Processing..."}
+                  </>
+                ) : (
+                  t("common.add")
+                )}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>

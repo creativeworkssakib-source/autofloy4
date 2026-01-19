@@ -9,7 +9,8 @@ import {
   RotateCcw,
   X,
   ScanBarcode,
-  WifiOff
+  WifiOff,
+  Loader2
 } from "lucide-react";
 import { 
   generateSimplePrintHTML, 
@@ -1022,7 +1023,7 @@ const ShopSales = () => {
             <Button onClick={handleSubmit} disabled={cart.length === 0 || !customerName.trim() || isSubmitting}>
               {isSubmitting ? (
                 <>
-                  <span className="animate-spin mr-2">⏳</span>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   {language === "bn" ? "প্রক্রিয়াকরণ হচ্ছে..." : "Processing..."}
                 </>
               ) : (

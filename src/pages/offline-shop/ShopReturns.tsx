@@ -70,6 +70,7 @@ import {
   WifiOff,
   Cloud,
   Wallet,
+  Loader2,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import SupplierReturnsTab from "@/components/offline-shop/SupplierReturnsTab";
@@ -161,7 +162,7 @@ export default function ShopReturns() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Customer search and history states
   const [customerSearchQuery, setCustomerSearchQuery] = useState("");
@@ -610,6 +611,7 @@ export default function ShopReturns() {
       return;
     }
 
+    setIsSubmitting(true);
     try {
       // Use offlineShopService for return creation with full data
       const result = await offlineShopService.processReturn({
@@ -643,6 +645,8 @@ export default function ShopReturns() {
     } catch (error) {
       console.error("Submit error:", error);
       toast.error("Failed to add return");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -1455,10 +1459,19 @@ export default function ShopReturns() {
                 </div>
 
                 <div className="flex justify-end gap-2 pt-4">
-                  <Button variant="outline" onClick={() => setIsAddOpen(false)}>
+                  <Button variant="outline" onClick={() => setIsAddOpen(false)} disabled={isSubmitting}>
                     Cancel
                   </Button>
-                  <Button onClick={handleSubmit}>Add Return</Button>
+                  <Button onClick={handleSubmit} disabled={isSubmitting}>
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        {language === "bn" ? "প্রক্রিয়াকরণ..." : "Processing..."}
+                      </>
+                    ) : (
+                      "Add Return"
+                    )}
+                  </Button>
                 </div>
               </div>
             </DialogContent>

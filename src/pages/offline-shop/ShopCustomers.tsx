@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, Search, Users, Phone, MapPin, MoreHorizontal, Pencil, Trash2, WifiOff, Cloud } from "lucide-react";
+import { Plus, Search, Users, Phone, MapPin, MoreHorizontal, Pencil, Trash2, WifiOff, Cloud, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -49,6 +49,7 @@ const ShopCustomers = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -109,6 +110,7 @@ const ShopCustomers = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
     try {
       if (editingCustomer) {
         await updateCustomer({ id: editingCustomer.id, ...formData });
@@ -121,6 +123,8 @@ const ShopCustomers = () => {
       resetForm();
     } catch (error) {
       toast.error(t("shop.errorOccurred"));
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -337,10 +341,19 @@ const ShopCustomers = () => {
               />
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>
+              <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)} disabled={isSubmitting}>
                 {t("common.cancel")}
               </Button>
-              <Button type="submit">{editingCustomer ? t("shop.update") : t("common.add")}</Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    {language === "bn" ? "প্রক্রিয়াকরণ..." : "Processing..."}
+                  </>
+                ) : (
+                  editingCustomer ? t("shop.update") : t("common.add")
+                )}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>
