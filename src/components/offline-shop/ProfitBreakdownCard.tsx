@@ -7,7 +7,8 @@ import {
   ArrowRight,
   Calculator,
   Receipt,
-  Wallet2
+  Wallet2,
+  AlertTriangle
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,7 @@ import {
 interface ProfitBreakdownCardProps {
   grossProfit: number;
   totalExpenses: number;
+  adjustmentLoss: number;
   netProfit: number;
   isLoading: boolean;
   formatCurrency: (amount: number) => string;
@@ -32,15 +34,17 @@ interface ProfitBreakdownCardProps {
 export const ProfitBreakdownCard = ({
   grossProfit,
   totalExpenses,
+  adjustmentLoss,
   netProfit,
   isLoading,
   formatCurrency,
   language,
 }: ProfitBreakdownCardProps) => {
   const isProfit = netProfit >= 0;
-  const total = grossProfit + totalExpenses;
+  const total = grossProfit + totalExpenses + adjustmentLoss;
   const grossProfitPercent = total > 0 ? (grossProfit / total) * 100 : 50;
-  const expensePercent = total > 0 ? (totalExpenses / total) * 100 : 50;
+  const expensePercent = total > 0 ? (totalExpenses / total) * 100 : 25;
+  const adjustmentPercent = total > 0 ? (adjustmentLoss / total) * 100 : 25;
 
   const translations = {
     en: {
@@ -50,12 +54,16 @@ export const ProfitBreakdownCard = ({
       grossProfitDesc: "Revenue from sales minus cost of goods sold",
       expenses: "Total Expenses",
       expensesDesc: "Rent, bills, salaries, and other expenses",
+      adjustmentLoss: "Stock Loss",
+      adjustmentLossDesc: "Damage, expired, theft, and other stock losses",
       netProfit: "Net Profit",
       netLoss: "Net Loss",
-      netDesc: "Final profit/loss after all expenses",
+      netDesc: "Final profit/loss after all expenses and losses",
       viewExpenses: "View Expenses",
+      viewAdjustments: "View",
       fromSales: "from sales",
       allExpenses: "all expenses",
+      stockLosses: "stock losses",
       final: "final result",
     },
     bn: {
@@ -65,12 +73,16 @@ export const ProfitBreakdownCard = ({
       grossProfitDesc: "বিক্রয় থেকে আয় - পণ্যের ক্রয় মূল্য",
       expenses: "মোট খরচ",
       expensesDesc: "ভাড়া, বিল, বেতন ও অন্যান্য খরচ",
+      adjustmentLoss: "স্টক ক্ষতি",
+      adjustmentLossDesc: "নষ্ট, মেয়াদ উত্তীর্ণ, চুরি ও অন্যান্য স্টক ক্ষতি",
       netProfit: "নিট লাভ",
       netLoss: "নিট লস",
-      netDesc: "সকল খরচ বাদে চূড়ান্ত লাভ/লস",
+      netDesc: "সকল খরচ ও ক্ষতি বাদে চূড়ান্ত লাভ/লস",
       viewExpenses: "খরচ দেখুন",
+      viewAdjustments: "দেখুন",
       fromSales: "বিক্রয় থেকে",
       allExpenses: "সকল খরচ",
+      stockLosses: "স্টক ক্ষতি",
       final: "চূড়ান্ত ফলাফল",
     },
   };
@@ -84,6 +96,7 @@ export const ProfitBreakdownCard = ({
           <Skeleton className="h-6 w-48" />
         </CardHeader>
         <CardContent className="space-y-4">
+          <Skeleton className="h-16 w-full" />
           <Skeleton className="h-16 w-full" />
           <Skeleton className="h-16 w-full" />
           <Skeleton className="h-20 w-full" />
@@ -206,6 +219,50 @@ export const ProfitBreakdownCard = ({
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
+
+          {/* Adjustment Loss Row - Only show if there are losses */}
+          {adjustmentLoss > 0 && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Link to="/offline-shop/adjustments">
+                    <motion.div
+                      className="p-2.5 sm:p-4 rounded-lg sm:rounded-xl bg-rose-500/10 border border-rose-500/20 cursor-pointer hover:bg-rose-500/15 transition-colors"
+                      whileHover={{ scale: 1.01 }}
+                      transition={{ type: "spring", stiffness: 400 }}
+                    >
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                          <div className="p-1.5 sm:p-2 rounded-md sm:rounded-lg bg-rose-500/20 shrink-0">
+                            <AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4 text-rose-500" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs sm:text-sm font-medium text-rose-600 dark:text-rose-400 truncate">
+                              {t.adjustmentLoss}
+                            </p>
+                            <p className="text-[10px] sm:text-xs text-muted-foreground">{t.stockLosses}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <p className="text-sm sm:text-xl font-bold text-rose-600 dark:text-rose-400">
+                            - {formatCurrency(adjustmentLoss)}
+                          </p>
+                          <ArrowRight className="h-3 w-3 sm:h-4 sm:w-4 text-rose-500" />
+                        </div>
+                      </div>
+                      <Progress 
+                        value={adjustmentPercent} 
+                        className="h-1.5 sm:h-2 bg-rose-500/20" 
+                      />
+                    </motion.div>
+                  </Link>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-xs">
+                  <p>{t.adjustmentLossDesc}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
 
           {/* Divider */}
           <div className="flex items-center gap-2 sm:gap-3 py-0.5 sm:py-1">

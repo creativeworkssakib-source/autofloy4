@@ -767,6 +767,26 @@ serve(async (req) => {
         .sort((a, b) => b.count - a.count)
         .slice(0, 5);
 
+      // === PERIOD ADJUSTMENTS (damage/loss) ===
+      let periodAdjustmentsQuery = supabase
+        .from("shop_stock_adjustments")
+        .select("cost_impact, adjustment_type")
+        .eq("user_id", userId)
+        .gte("adjustment_date", startDate);
+      if (shopId) {
+        periodAdjustmentsQuery = periodAdjustmentsQuery.or(`shop_id.eq.${shopId},shop_id.is.null`);
+      }
+      const { data: periodAdjustments } = await periodAdjustmentsQuery;
+
+      // Calculate period adjustments loss (damage, expired, theft = losses)
+      const periodAdjustmentLoss = (periodAdjustments || []).reduce((sum: number, a: any) => {
+        const lossTypes = ['damaged', 'expired', 'theft', 'lost'];
+        if (lossTypes.includes(a.adjustment_type)) {
+          return sum + Math.abs(Number(a.cost_impact || 0));
+        }
+        return sum;
+      }, 0);
+
       // Calculate period totals - use actual profit from sales (total_profit = selling - cost)
       const periodTotalSales = (periodSales || []).reduce((sum: number, s: any) => sum + Number(s.total), 0);
       const periodTotalPurchases = (periodPurchases || []).reduce((sum: number, p: any) => sum + Number(p.total_amount), 0);
@@ -774,7 +794,8 @@ serve(async (req) => {
       // Use actual profit from each sale (stored as total_profit) instead of Sales - Purchases
       const periodActualProfit = (periodSales || []).reduce((sum: number, s: any) => sum + Number(s.total_profit || 0), 0);
       const periodGrossProfit = periodActualProfit;
-      const periodNetProfit = periodGrossProfit - periodTotalExpenses;
+      // Net profit = Gross Profit - Expenses - Adjustment Losses
+      const periodNetProfit = periodGrossProfit - periodTotalExpenses - periodAdjustmentLoss;
 
       // === THIS MONTH'S DATA (always from start of current month) ===
       let monthSalesQuery = supabase
@@ -793,11 +814,32 @@ serve(async (req) => {
       if (shopId) monthExpensesQuery = monthExpensesQuery.eq("shop_id", shopId);
       const { data: monthExpenses } = await monthExpensesQuery;
 
+      // === THIS MONTH'S ADJUSTMENTS (damage/loss) ===
+      let monthAdjustmentsQuery = supabase
+        .from("shop_stock_adjustments")
+        .select("cost_impact, adjustment_type")
+        .eq("user_id", userId)
+        .gte("adjustment_date", startOfMonth);
+      if (shopId) {
+        monthAdjustmentsQuery = monthAdjustmentsQuery.or(`shop_id.eq.${shopId},shop_id.is.null`);
+      }
+      const { data: monthAdjustments } = await monthAdjustmentsQuery;
+
+      // Calculate adjustments loss (damage, expired, theft = losses)
+      const monthAdjustmentLoss = (monthAdjustments || []).reduce((sum: number, a: any) => {
+        const lossTypes = ['damaged', 'expired', 'theft', 'lost'];
+        if (lossTypes.includes(a.adjustment_type)) {
+          return sum + Math.abs(Number(a.cost_impact || 0));
+        }
+        return sum;
+      }, 0);
+
       // Calculate this month's totals using actual profit from sales
       const monthTotalSales = (monthSales || []).reduce((sum: number, s: any) => sum + Number(s.total), 0);
       const monthGrossProfit = (monthSales || []).reduce((sum: number, s: any) => sum + Number(s.total_profit || 0), 0);
       const monthTotalExpenses = (monthExpenses || []).reduce((sum: number, e: any) => sum + Number(e.amount), 0);
-      const monthNetProfit = monthGrossProfit - monthTotalExpenses;
+      // Net profit = Gross Profit - Expenses - Adjustment Losses
+      const monthNetProfit = monthGrossProfit - monthTotalExpenses - monthAdjustmentLoss;
 
       // === MONTHLY TARGET CALCULATION ===
       // Calculate total inventory value based on selling price (how much worth of products you have)
@@ -842,6 +884,7 @@ serve(async (req) => {
           totalPurchases: periodTotalPurchases,
           grossProfit: periodGrossProfit,
           totalExpenses: periodTotalExpenses,
+          adjustmentLoss: periodAdjustmentLoss,
           netProfit: periodNetProfit,
           customersServed: customersServed || 0,
         },
@@ -849,6 +892,7 @@ serve(async (req) => {
           totalSales: monthTotalSales,
           grossProfit: monthGrossProfit,
           totalExpenses: monthTotalExpenses,
+          adjustmentLoss: monthAdjustmentLoss,
           netProfit: monthNetProfit,
           salesTarget: monthlyTarget,
           targetProgress: targetProgress,

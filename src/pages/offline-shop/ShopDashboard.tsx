@@ -46,6 +46,7 @@ interface DashboardData {
     totalPurchases: number;
     grossProfit: number;
     totalExpenses: number;
+    adjustmentLoss: number;
     netProfit: number;
     customersServed: number;
   };
@@ -53,6 +54,7 @@ interface DashboardData {
     totalSales: number;
     grossProfit: number;
     totalExpenses: number;
+    adjustmentLoss: number;
     netProfit: number;
     salesTarget: number;
     targetProgress: number;
@@ -122,6 +124,7 @@ const ShopDashboard = () => {
       totalPurchases: todayData?.period?.totalPurchases || 0,
       grossProfit: todayData?.period?.grossProfit || 0,
       totalExpenses: todayData?.period?.totalExpenses || 0,
+      adjustmentLoss: todayData?.period?.adjustmentLoss || 0,
       netProfit: todayData?.period?.netProfit || 0,
       customersServed: todayData?.period?.customersServed || 0,
     },
@@ -129,6 +132,7 @@ const ShopDashboard = () => {
       totalSales: todayData?.monthly?.totalSales || 0,
       grossProfit: todayData?.monthly?.grossProfit || 0,
       totalExpenses: todayData?.monthly?.totalExpenses || 0,
+      adjustmentLoss: todayData?.monthly?.adjustmentLoss || 0,
       netProfit: todayData?.monthly?.netProfit || 0,
       salesTarget: todayData?.monthly?.salesTarget || 0,
       targetProgress: todayData?.monthly?.targetProgress || 0,
@@ -362,6 +366,7 @@ const ShopDashboard = () => {
         <ProfitBreakdownCard
           grossProfit={data?.monthly?.grossProfit || 0}
           totalExpenses={data?.monthly?.totalExpenses || 0}
+          adjustmentLoss={data?.monthly?.adjustmentLoss || 0}
           netProfit={data?.monthly?.netProfit || 0}
           isLoading={isLoading}
           formatCurrency={formatCurrency}
