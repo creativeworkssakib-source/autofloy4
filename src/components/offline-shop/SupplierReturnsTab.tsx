@@ -119,6 +119,7 @@ export default function SupplierReturnsTab() {
   const [supplierSearchQuery, setSupplierSearchQuery] = useState("");
   const [selectedSupplierPurchases, setSelectedSupplierPurchases] = useState<Purchase[]>([]);
   const [isPurchasesOpen, setIsPurchasesOpen] = useState(false);
+  const [maxQuantity, setMaxQuantity] = useState<number | null>(null);
 
   const [formData, setFormData] = useState({
     supplier_id: "",
@@ -292,17 +293,19 @@ export default function SupplierReturnsTab() {
   };
 
   const selectPurchaseItem = (purchase: Purchase, item: PurchaseItem) => {
+    const qty = Math.min(1, item.quantity); // Start with 1, max is item.quantity
+    setMaxQuantity(item.quantity);
     setFormData({
       ...formData,
       purchase_id: purchase.id,
       product_id: item.product_id || "",
       product_name: item.product_name,
-      quantity: item.quantity,
+      quantity: qty,
       unit_cost: item.unit_price,
-      refund_amount: item.unit_price * item.quantity,
+      refund_amount: item.unit_price * qty,
     });
     setIsPurchasesOpen(false);
-    toast.success(`Selected: ${item.product_name}`);
+    toast.success(`Selected: ${item.product_name} (max: ${item.quantity})`);
   };
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -468,6 +471,7 @@ export default function SupplierReturnsTab() {
       status: "pending",
     });
     setSelectedSupplierPurchases([]);
+    setMaxQuantity(null);
   };
 
   const getStatusBadge = (status: string) => {
@@ -742,14 +746,21 @@ export default function SupplierReturnsTab() {
                     </div>
                     <div className="grid grid-cols-3 gap-4">
                       <div className="space-y-2">
-                        <Label>Return Quantity *</Label>
+                        <Label>Return Quantity * {maxQuantity && <span className="text-xs text-muted-foreground">(max: {maxQuantity})</span>}</Label>
                         <Input
                           type="number"
                           min={1}
+                          max={maxQuantity || undefined}
                           value={formData.quantity}
                           onChange={(e) => {
                             const val = e.target.value;
-                            const qty = val === "" ? 1 : parseInt(val) || 1;
+                            let qty = val === "" ? 1 : parseInt(val) || 1;
+                            // Enforce max quantity limit
+                            if (maxQuantity && qty > maxQuantity) {
+                              qty = maxQuantity;
+                              toast.error(`Maximum return quantity is ${maxQuantity}`);
+                            }
+                            if (qty < 1) qty = 1;
                             setFormData({ 
                               ...formData, 
                               quantity: qty,
