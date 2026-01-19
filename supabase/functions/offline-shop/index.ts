@@ -6453,6 +6453,19 @@ serve(async (req) => {
           
           const totalPurchases = (purchases || []).reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
           
+          // Get today's supplier payments from cash transactions
+          const { data: supplierPayments } = await supabase
+            .from("shop_cash_transactions")
+            .select("amount")
+            .eq("user_id", userId)
+            .eq("shop_id", shopId)
+            .eq("type", "out")
+            .eq("source", "supplier_payment")
+            .gte("transaction_date", todayStart)
+            .lte("transaction_date", todayEnd);
+          
+          const totalSupplierPayments = (supplierPayments || []).reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
+          
           // Get today's return refunds/losses from cash transactions
           const { data: returnTransactions } = await supabase
             .from("shop_cash_transactions")
@@ -6466,8 +6479,8 @@ serve(async (req) => {
           
           const totalReturns = (returnTransactions || []).reduce((sum: number, r: any) => sum + Number(r.amount || 0), 0);
           
-          // Total Cash Out = Expenses + Purchases + Quick Expenses + Change Returns + Withdrawals + Returns
-          const totalCashOut = totalExpenses + totalPurchases + totalQuickExpenses + totalChangeReturns + totalWithdrawals + totalReturns;
+          // Total Cash Out = Expenses + Purchases + Supplier Payments + Quick Expenses + Change Returns + Withdrawals + Returns
+          const totalCashOut = totalExpenses + totalPurchases + totalSupplierPayments + totalQuickExpenses + totalChangeReturns + totalWithdrawals + totalReturns;
           
           // Merge live data into today's register
           todayRegister = {
