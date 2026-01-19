@@ -718,6 +718,7 @@ const ShopDashboard = () => {
         formatCurrency={formatCurrency}
         grossProfit={data?.monthly?.grossProfit || 0}
         totalExpenses={data?.monthly?.totalExpenses || 0}
+        adjustmentLoss={data?.monthly?.adjustmentLoss || 0}
         netProfit={data?.monthly?.netProfit || 0}
       />
     </ShopLayout>

@@ -120,7 +120,7 @@ export function useOfflineAdjustments(filterType?: string) {
   const refetch = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await offlineShopService.getStockAdjustments(filterType);
+      const result = await offlineShopService.getStockAdjustments({ filterType });
       setAdjustments(result.adjustments || []);
     } catch (error) {
       console.error('Failed to fetch adjustments:', error);

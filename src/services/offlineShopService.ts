@@ -375,10 +375,12 @@ class OfflineShopService {
   }
 
   // Stock Adjustments
-  async getStockAdjustments(filterType?: string) {
-    const params: Record<string, string> = {};
-    if (filterType && filterType !== "all") params.type = filterType;
-    return this.request<{ adjustments: any[] }>("adjustments", {}, params);
+  async getStockAdjustments(params?: { filterType?: string; startDate?: string; endDate?: string }) {
+    const queryParams: Record<string, string> = {};
+    if (params?.filterType && params.filterType !== "all") queryParams.type = params.filterType;
+    if (params?.startDate) queryParams.startDate = params.startDate;
+    if (params?.endDate) queryParams.endDate = params.endDate;
+    return this.request<{ adjustments: any[] }>("adjustments", {}, queryParams);
   }
 
   async createStockAdjustment(data: {
