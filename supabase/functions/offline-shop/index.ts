@@ -964,12 +964,11 @@ serve(async (req) => {
       if (shopId) monthlySalesQuery = monthlySalesQuery.eq("shop_id", shopId);
       const { data: allSales } = await monthlySalesQuery;
 
-      // Top customers by purchases
+      // Top customers by purchases (include both linked customers and customer_name text)
       let customersQuery = supabase
         .from("shop_sales")
-        .select("customer_id, total, customer:shop_customers(name)")
-        .eq("user_id", userId)
-        .not("customer_id", "is", null);
+        .select("customer_id, customer_name, total, customer:shop_customers(name)")
+        .eq("user_id", userId);
       if (shopId) customersQuery = customersQuery.eq("shop_id", shopId);
       const { data: customerSales } = await customersQuery;
 
@@ -1014,15 +1013,19 @@ serve(async (req) => {
         worstMonth = { month: sorted[sorted.length - 1].month, monthBn: sorted[sorted.length - 1].monthBn, sales: sorted[sorted.length - 1].sales };
       }
 
-      // Top customers calculation
+      // Top customers calculation - support both linked customers and customer_name text
       const customerMap: Record<string, { name: string; total: number }> = {};
       let totalAllSales = 0;
       (customerSales || []).forEach((sale: any) => {
-        if (sale.customer?.name) {
-          if (!customerMap[sale.customer_id]) {
-            customerMap[sale.customer_id] = { name: sale.customer.name, total: 0 };
+        // Get customer name from linked customer or from customer_name field
+        const customerName = sale.customer?.name || sale.customer_name;
+        if (customerName && customerName.trim()) {
+          // Use customer_id as key if available, otherwise use customer_name
+          const key = sale.customer_id || `name_${customerName.toLowerCase().trim()}`;
+          if (!customerMap[key]) {
+            customerMap[key] = { name: customerName, total: 0 };
           }
-          customerMap[sale.customer_id].total += Number(sale.total);
+          customerMap[key].total += Number(sale.total);
           totalAllSales += Number(sale.total);
         }
       });
