@@ -225,48 +225,50 @@ export const ProfitBreakdownCard = ({
 
           {/* Adjustment Loss Row - Only show if there are losses */}
           {adjustmentLoss > 0 && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Link to="/offline-shop/adjustments">
-                    <motion.div
-                      className="p-2.5 sm:p-4 rounded-lg sm:rounded-xl bg-rose-500/10 border border-rose-500/20 cursor-pointer hover:bg-rose-500/15 transition-colors"
-                      whileHover={{ scale: 1.01 }}
-                      transition={{ type: "spring", stiffness: 400 }}
-                    >
-                      <div className="flex items-center justify-between gap-2 mb-2">
-                        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                          <div className="p-1.5 sm:p-2 rounded-md sm:rounded-lg bg-rose-500/20 shrink-0">
-                            <AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4 text-rose-500" />
+            <div className="mt-4 sm:mt-5">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Link to="/offline-shop/adjustments">
+                      <motion.div
+                        className="p-2.5 sm:p-4 rounded-lg sm:rounded-xl bg-rose-500/10 border-2 border-rose-500/30 cursor-pointer hover:bg-rose-500/15 transition-colors"
+                        whileHover={{ scale: 1.01 }}
+                        transition={{ type: "spring", stiffness: 400 }}
+                      >
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                            <div className="p-1.5 sm:p-2 rounded-md sm:rounded-lg bg-rose-500/20 shrink-0">
+                              <AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4 text-rose-500" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-xs sm:text-sm font-medium text-rose-600 dark:text-rose-400 truncate">
+                                {t.adjustmentLoss}
+                              </p>
+                              <p className="text-[10px] sm:text-xs text-muted-foreground">{t.stockLosses}</p>
+                            </div>
                           </div>
-                          <div className="min-w-0">
-                            <p className="text-xs sm:text-sm font-medium text-rose-600 dark:text-rose-400 truncate">
-                              {t.adjustmentLoss}
+                          <div className="flex items-center gap-2 shrink-0">
+                            <p className="text-sm sm:text-xl font-bold text-rose-600 dark:text-rose-400">
+                              - {formatCurrency(adjustmentLoss)}
                             </p>
-                            <p className="text-[10px] sm:text-xs text-muted-foreground">{t.stockLosses}</p>
+                            <ArrowRight className="h-3 w-3 sm:h-4 sm:w-4 text-rose-500" />
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <p className="text-sm sm:text-xl font-bold text-rose-600 dark:text-rose-400">
-                            - {formatCurrency(adjustmentLoss)}
-                          </p>
-                          <ArrowRight className="h-3 w-3 sm:h-4 sm:w-4 text-rose-500" />
+                        <div className="h-1.5 sm:h-2 bg-rose-500/20 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-rose-500 rounded-full transition-all" 
+                            style={{ width: `${adjustmentPercent}%` }} 
+                          />
                         </div>
-                      </div>
-                      <div className="h-1.5 sm:h-2 bg-rose-500/20 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-rose-500 rounded-full transition-all" 
-                          style={{ width: `${adjustmentPercent}%` }} 
-                        />
-                      </div>
-                    </motion.div>
-                  </Link>
-                </TooltipTrigger>
-                <TooltipContent side="top" className="max-w-xs">
-                  <p>{t.adjustmentLossDesc}</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+                      </motion.div>
+                    </Link>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-xs">
+                    <p>{t.adjustmentLossDesc}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
           )}
 
           {/* Divider */}
