@@ -202,7 +202,8 @@ const ShopPurchases = () => {
   const loadPaymentHistory = async (purchaseId: string) => {
     try {
       const response = await offlineShopService.getPurchasePayments(purchaseId);
-      setPaymentHistory(response.payments.map(p => ({
+      const payments = response?.payments || [];
+      setPaymentHistory(payments.map(p => ({
         id: p.id,
         amount: p.amount,
         payment_method: p.payment_method,
@@ -241,9 +242,12 @@ const ShopPurchases = () => {
 
   // Open payment modal
   const openPaymentModal = async (purchase: Purchase) => {
+    setPaymentHistory([]); // Clear old history first
     setPaymentPurchase(purchase);
     setPaymentAmount(Number(purchase.due_amount) || 0);
-    await loadPaymentHistory(purchase.id);
+    setPaymentMethod("cash");
+    setPaymentNotes("");
+    loadPaymentHistory(purchase.id); // Load in background
   };
 
   // Restore from trash
