@@ -964,13 +964,15 @@ serve(async (req) => {
       if (shopId) monthlySalesQuery = monthlySalesQuery.eq("shop_id", shopId);
       const { data: allSales } = await monthlySalesQuery;
 
-      // Top customers by purchases (include both linked customers and customer_name text)
+      // Top customers by purchases (include both linked customers and customer_name/phone text)
       let customersQuery = supabase
         .from("shop_sales")
-        .select("customer_id, customer_name, total, customer:shop_customers(name)")
+        .select("customer_id, customer_name, customer_phone, total, customer:shop_customers(name, phone)")
         .eq("user_id", userId);
       if (shopId) customersQuery = customersQuery.eq("shop_id", shopId);
-      const { data: customerSales } = await customersQuery;
+      const { data: customerSales, error: customerError } = await customersQuery;
+      
+      console.log("Customer sales query result:", { count: customerSales?.length, error: customerError });
 
       // Calculate totals
       const currentTotal = (currentMonthSales || []).reduce((sum: number, s: any) => sum + Number(s.total), 0);
@@ -1013,31 +1015,50 @@ serve(async (req) => {
         worstMonth = { month: sorted[sorted.length - 1].month, monthBn: sorted[sorted.length - 1].monthBn, sales: sorted[sorted.length - 1].sales };
       }
 
-      // Top customers calculation - support both linked customers and customer_name text
-      const customerMap: Record<string, { name: string; total: number }> = {};
+      // Top customers calculation - support both linked customers and customer_name/phone text
+      // Match by: 1) customer_id if exists, 2) name+phone combo, 3) phone only, 4) name only
+      const customerMap: Record<string, { name: string; phone: string | null; total: number }> = {};
       let totalAllSales = 0;
+      
       (customerSales || []).forEach((sale: any) => {
-        // Get customer name from linked customer or from customer_name field
+        // Get customer info from linked customer or from direct fields
         const customerName = sale.customer?.name || sale.customer_name;
+        const customerPhone = sale.customer?.phone || sale.customer_phone;
+        
         if (customerName && customerName.trim()) {
-          // Use customer_id as key if available, otherwise use customer_name
-          const key = sale.customer_id || `name_${customerName.toLowerCase().trim()}`;
+          // Create a unique key: prefer customer_id, then phone+name, then phone, then name
+          let key: string;
+          if (sale.customer_id) {
+            key = sale.customer_id;
+          } else if (customerPhone && customerPhone.trim()) {
+            // Match by phone (normalized) + name for accuracy
+            key = `phone_${customerPhone.replace(/\D/g, '')}_${customerName.toLowerCase().trim()}`;
+          } else {
+            // Fallback to name only
+            key = `name_${customerName.toLowerCase().trim()}`;
+          }
+          
           if (!customerMap[key]) {
-            customerMap[key] = { name: customerName, total: 0 };
+            customerMap[key] = { name: customerName, phone: customerPhone || null, total: 0 };
           }
           customerMap[key].total += Number(sale.total);
           totalAllSales += Number(sale.total);
         }
       });
+      
+      console.log("Customer map entries:", Object.keys(customerMap).length, "Total sales:", totalAllSales);
 
       const topCustomers = Object.values(customerMap)
         .sort((a, b) => b.total - a.total)
         .slice(0, 5)
         .map(c => ({
           name: c.name,
+          phone: c.phone,
           totalPurchases: c.total,
           percentage: totalAllSales > 0 ? (c.total / totalAllSales) * 100 : 0
         }));
+      
+      console.log("Top customers result:", topCustomers);
 
       // Generate smart insights
       const insights: string[] = [];
