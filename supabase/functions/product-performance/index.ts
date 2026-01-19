@@ -143,7 +143,7 @@ serve(async (req) => {
       // Get stock adjustments (damages, expired, theft, lost)
       const { data: adjustments } = await supabase
         .from("shop_stock_adjustments")
-        .select("product_id, product_name, quantity, cost_impact, adjustment_type")
+        .select("product_id, product_name, quantity, cost_impact, type")
         .eq("user_id", userId)
         .or(`shop_id.eq.${targetShopId},shop_id.is.null`);
       
@@ -185,7 +185,7 @@ serve(async (req) => {
       // Aggregate adjustments (damages, expired, theft)
       const lossTypes = ['damaged', 'expired', 'theft', 'lost'];
       (adjustments || []).forEach(adj => {
-        if (!lossTypes.includes(adj.adjustment_type)) return;
+        if (!lossTypes.includes(adj.type)) return;
         
         const baseKey = adj.product_id || adj.product_name;
         const product = (products || []).find(p => p.id === adj.product_id);
