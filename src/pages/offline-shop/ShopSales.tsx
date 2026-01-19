@@ -990,7 +990,7 @@ const ShopSales = () => {
                   <span>{t("shop.total")}:</span>
                   <span className="text-primary">{formatCurrency(total)}</span>
                 </div>
-                {paidValue > 0 && paidValue < total && (
+                {paidAmount !== "" && paidValue < total && (
                   <div className="flex justify-between text-destructive">
                     <span>{t("common.due")}:</span>
                     <span>{formatCurrency(total - paidValue)}</span>
