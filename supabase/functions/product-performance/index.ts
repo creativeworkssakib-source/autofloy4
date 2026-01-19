@@ -183,7 +183,7 @@ serve(async (req) => {
       });
       
       // Aggregate adjustments (damages, expired, theft)
-      const lossTypes = ['damaged', 'expired', 'theft', 'lost'];
+      const lossTypes = ['damaged', 'damage', 'expired', 'theft', 'lost'];
       (adjustments || []).forEach(adj => {
         if (!lossTypes.includes(adj.type)) return;
         
