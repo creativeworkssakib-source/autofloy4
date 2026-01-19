@@ -5917,6 +5917,93 @@ serve(async (req) => {
       }
     }
 
+    // ===== SUPPLIER PRODUCTS (products previously bought from a supplier) =====
+    if (resource === "supplier-products") {
+      if (req.method === "GET") {
+        const supplierId = url.searchParams.get("supplier_id");
+        const supplierName = url.searchParams.get("supplier_name");
+        
+        if (!supplierId && !supplierName) {
+          return new Response(JSON.stringify({ error: "supplier_id or supplier_name required" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        
+        // Get all purchase items from this supplier's purchases
+        let purchaseQuery = supabase
+          .from("shop_purchases")
+          .select("id")
+          .eq("user_id", userId);
+        
+        if (shopId) purchaseQuery = purchaseQuery.eq("shop_id", shopId);
+        
+        if (supplierId) {
+          purchaseQuery = purchaseQuery.eq("supplier_id", supplierId);
+        } else if (supplierName) {
+          purchaseQuery = purchaseQuery.ilike("supplier_name", supplierName);
+        }
+        
+        const { data: purchases, error: purchaseError } = await purchaseQuery;
+        
+        if (purchaseError) throw purchaseError;
+        
+        if (!purchases || purchases.length === 0) {
+          return new Response(JSON.stringify({ products: [] }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        
+        const purchaseIds = purchases.map((p: any) => p.id);
+        
+        // Get all items from these purchases
+        const { data: items, error: itemsError } = await supabase
+          .from("shop_purchase_items")
+          .select("product_name, quantity, unit_price, selling_price, expiry_date, purchase_id, created_at")
+          .in("purchase_id", purchaseIds)
+          .order("created_at", { ascending: false });
+        
+        if (itemsError) throw itemsError;
+        
+        // Aggregate by product name (case-insensitive) to get unique products
+        const productMap: Record<string, any> = {};
+        for (const item of (items || [])) {
+          const key = (item.product_name || "").toLowerCase().trim();
+          if (!key) continue;
+          
+          if (!productMap[key]) {
+            productMap[key] = {
+              product_name: item.product_name,
+              last_unit_price: Number(item.unit_price || 0),
+              last_selling_price: Number(item.selling_price || 0),
+              total_quantity: Number(item.quantity || 0),
+              purchase_count: 1,
+              last_purchase_date: item.created_at,
+            };
+          } else {
+            productMap[key].total_quantity += Number(item.quantity || 0);
+            productMap[key].purchase_count += 1;
+            // Keep the latest price
+            if (new Date(item.created_at) > new Date(productMap[key].last_purchase_date)) {
+              productMap[key].last_unit_price = Number(item.unit_price || 0);
+              productMap[key].last_selling_price = Number(item.selling_price || 0);
+              productMap[key].last_purchase_date = item.created_at;
+            }
+          }
+        }
+        
+        const products = Object.values(productMap).sort((a: any, b: any) => 
+          new Date(b.last_purchase_date).getTime() - new Date(a.last_purchase_date).getTime()
+        );
+        
+        return new Response(JSON.stringify({ products }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     // ===== STOCK BATCHES CRUD =====
     if (resource === "stock-batches") {
       if (req.method === "GET") {
