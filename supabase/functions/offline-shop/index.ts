@@ -228,9 +228,11 @@ serve(async (req) => {
   
   // Find resource after "offline-shop" in the path
   const offlineShopIndex = pathParts.findIndex(p => p === "offline-shop");
-  const resource = offlineShopIndex >= 0 && pathParts.length > offlineShopIndex + 1
-    ? pathParts[offlineShopIndex + 1]
-    : pathParts[pathParts.length - 1] || "dashboard";
+  // Join remaining path parts after offline-shop to support sub-routes like "loans/payment"
+  const resourceParts = offlineShopIndex >= 0 && pathParts.length > offlineShopIndex + 1
+    ? pathParts.slice(offlineShopIndex + 1)
+    : [pathParts[pathParts.length - 1] || "dashboard"];
+  const resource = resourceParts.join("/");
   
   // Get shop_id from query params or header
   const shopId = url.searchParams.get("shop_id") || req.headers.get("X-Shop-Id");
