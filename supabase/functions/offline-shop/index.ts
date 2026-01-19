@@ -7496,6 +7496,211 @@ serve(async (req) => {
       }
     }
 
+    // ===== LOANS CRUD =====
+    if (resource === "loans" || resource === "loans/payment") {
+      const isPaymentRoute = resource === "loans/payment";
+      
+      // GET - List all loans
+      if (req.method === "GET" && !isPaymentRoute) {
+        const status = url.searchParams.get("status");
+        
+        let query = supabase
+          .from("shop_loans")
+          .select("*")
+          .eq("user_id", userId)
+          .order("next_payment_date", { ascending: true });
+        
+        if (shopId) {
+          query = query.eq("shop_id", shopId);
+        }
+        if (status && status !== "all") {
+          query = query.eq("status", status);
+        }
+
+        const { data, error } = await query;
+
+        if (error) throw error;
+
+        // Calculate upcoming payments (within 7 days)
+        const today = new Date();
+        const upcoming = data?.filter(loan => {
+          if (!loan.next_payment_date || loan.status !== 'active') return false;
+          const paymentDate = new Date(loan.next_payment_date);
+          const diffDays = Math.ceil((paymentDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+          return diffDays >= 0 && diffDays <= 7;
+        }) || [];
+
+        // Calculate overdue payments
+        const overdue = data?.filter(loan => {
+          if (!loan.next_payment_date || loan.status !== 'active') return false;
+          const paymentDate = new Date(loan.next_payment_date);
+          return paymentDate < today;
+        }) || [];
+
+        // Calculate totals
+        const totalLoans = data?.reduce((sum, loan) => sum + Number(loan.loan_amount || 0), 0) || 0;
+        const totalPaid = data?.reduce((sum, loan) => sum + Number(loan.total_paid || 0), 0) || 0;
+        const totalRemaining = data?.reduce((sum, loan) => sum + Number(loan.remaining_amount || 0), 0) || 0;
+        const monthlyEmi = data?.filter(l => l.status === 'active')
+          .reduce((sum, loan) => sum + Number(loan.installment_amount || 0), 0) || 0;
+
+        return new Response(JSON.stringify({ 
+          loans: data,
+          stats: {
+            totalLoans,
+            totalPaid,
+            totalRemaining,
+            monthlyEmi,
+            upcomingCount: upcoming.length,
+            overdueCount: overdue.length,
+            activeCount: data?.filter(l => l.status === 'active').length || 0,
+            completedCount: data?.filter(l => l.status === 'completed').length || 0,
+          },
+          upcoming,
+          overdue
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      
+      // POST - Create new loan
+      if (req.method === "POST" && !isPaymentRoute) {
+        const body = await req.json();
+        
+        // Calculate remaining amount
+        const loanAmount = Number(body.loan_amount) || 0;
+        const interestRate = Number(body.interest_rate) || 0;
+        const totalInstallments = Number(body.total_installments) || 1;
+        
+        // Simple interest calculation for total amount
+        const totalWithInterest = loanAmount + (loanAmount * interestRate * totalInstallments / 12 / 100);
+        const installmentAmount = body.installment_amount || (totalWithInterest / totalInstallments);
+        
+        // Calculate next payment date
+        const startDate = new Date(body.start_date || new Date());
+        const paymentDay = body.payment_day || startDate.getDate();
+        let nextPaymentDate = new Date(startDate);
+        nextPaymentDate.setDate(paymentDay);
+        if (nextPaymentDate <= new Date()) {
+          nextPaymentDate.setMonth(nextPaymentDate.getMonth() + 1);
+        }
+
+        const { data, error } = await supabase
+          .from("shop_loans")
+          .insert({
+            user_id: userId,
+            shop_id: shopId || null,
+            lender_name: body.lender_name,
+            lender_type: body.lender_type || 'bank',
+            loan_amount: loanAmount,
+            interest_rate: interestRate,
+            total_installments: totalInstallments,
+            installment_amount: installmentAmount,
+            start_date: body.start_date || new Date().toISOString().split('T')[0],
+            next_payment_date: nextPaymentDate.toISOString().split('T')[0],
+            payment_day: paymentDay,
+            remaining_amount: totalWithInterest,
+            notes: body.notes || null,
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        return new Response(JSON.stringify({ loan: data }), {
+          status: 201,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      
+      // POST loans/payment - Add payment to loan
+      if (req.method === "POST" && isPaymentRoute) {
+        const body = await req.json();
+        const loanId = body.loanId;
+
+        // Get current loan
+        const { data: loan, error: loanError } = await supabase
+          .from("shop_loans")
+          .select("*")
+          .eq("id", loanId)
+          .eq("user_id", userId)
+          .single();
+
+        if (loanError) throw loanError;
+
+        const paymentAmount = Number(body.amount) || 0;
+        const newTotalPaid = Number(loan.total_paid) + paymentAmount;
+        const newRemaining = Number(loan.remaining_amount) - paymentAmount;
+        const newPaidInstallments = (loan.paid_installments || 0) + 1;
+
+        // Insert payment record
+        const { data: payment, error: paymentError } = await supabase
+          .from("shop_loan_payments")
+          .insert({
+            loan_id: loanId,
+            user_id: userId,
+            amount: paymentAmount,
+            payment_date: body.payment_date || new Date().toISOString().split('T')[0],
+            payment_method: body.payment_method || 'cash',
+            installment_number: newPaidInstallments,
+            late_fee: body.late_fee || 0,
+            notes: body.notes || null,
+          })
+          .select()
+          .single();
+
+        if (paymentError) throw paymentError;
+
+        // Calculate next payment date
+        let nextPaymentDate = new Date(loan.next_payment_date);
+        nextPaymentDate.setMonth(nextPaymentDate.getMonth() + 1);
+
+        // Update loan
+        const isCompleted = newRemaining <= 0 || newPaidInstallments >= loan.total_installments;
+        
+        const { data: updatedLoan, error: updateError } = await supabase
+          .from("shop_loans")
+          .update({
+            total_paid: newTotalPaid,
+            remaining_amount: Math.max(0, newRemaining),
+            paid_installments: newPaidInstallments,
+            next_payment_date: isCompleted ? null : nextPaymentDate.toISOString().split('T')[0],
+            status: isCompleted ? 'completed' : 'active',
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", loanId)
+          .select()
+          .single();
+
+        if (updateError) throw updateError;
+
+        return new Response(JSON.stringify({ payment, loan: updatedLoan, isCompleted }), {
+          status: 201,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      
+      // DELETE - Delete loan
+      if (req.method === "DELETE") {
+        const body = await req.json();
+        const loanId = body.id;
+        
+        const { error } = await supabase
+          .from("shop_loans")
+          .delete()
+          .eq("id", loanId)
+          .eq("user_id", userId);
+
+        if (error) throw error;
+
+        return new Response(JSON.stringify({ success: true, message: "Loan deleted" }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     return new Response(JSON.stringify({ error: "Not found" }), {
       status: 404,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
