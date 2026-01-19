@@ -7530,16 +7530,21 @@ serve(async (req) => {
 
         if (paymentsError) throw paymentsError;
 
-        // Calculate interest breakdown per installment
+        // Calculate interest breakdown per installment - ALWAYS recalculate from principal
         const loanAmount = Number(loan.loan_amount);
         const interestRate = Number(loan.interest_rate);
         const totalInstallments = Number(loan.total_installments);
-        const installmentAmount = Number(loan.installment_amount);
         
-        // Simple interest: total interest = principal * rate * time (in years)
-        const totalInterest = (loanAmount * interestRate * totalInstallments / 12) / 100;
+        // Simple interest: total interest = principal * rate% * (months/12 = years)
+        // For annual rate: if 10% for 12 months = 10% of principal
+        const totalInterest = (loanAmount * interestRate * (totalInstallments / 12)) / 100;
+        const totalWithInterest = loanAmount + totalInterest;
+        
+        // Use calculated installment amount (ignore stored value which might be wrong)
+        const correctInstallmentAmount = totalWithInterest / totalInstallments;
+        
         const interestPerInstallment = totalInterest / totalInstallments;
-        const principalPerInstallment = installmentAmount - interestPerInstallment;
+        const principalPerInstallment = loanAmount / totalInstallments;
         
         // Generate payment schedule
         const startDate = new Date(loan.start_date);
@@ -7557,7 +7562,7 @@ serve(async (req) => {
           schedule.push({
             installment_number: i + 1,
             due_date: scheduleDate.toISOString().split('T')[0],
-            amount: installmentAmount,
+            amount: correctInstallmentAmount,
             principal: principalPerInstallment,
             interest: interestPerInstallment,
             is_paid: isPaid,
@@ -7663,11 +7668,13 @@ serve(async (req) => {
         const interestRate = Number(body.interest_rate) || 0;
         const totalInstallments = Number(body.total_installments) || 1;
         
-        // Simple interest calculation for total amount
-        const totalWithInterest = body.total_amount 
-          ? Number(body.total_amount) 
-          : loanAmount + (loanAmount * interestRate * totalInstallments / 12 / 100);
-        const installmentAmount = body.installment_amount || (totalWithInterest / totalInstallments);
+        // Simple interest calculation: Interest = Principal × Rate% × (Months/12)
+        // For 10% annual rate over 12 months: Interest = Principal × 10%
+        const totalInterest = (loanAmount * interestRate * (totalInstallments / 12)) / 100;
+        const totalWithInterest = loanAmount + totalInterest;
+        
+        // Always calculate installment amount correctly (ignore user input to prevent errors)
+        const installmentAmount = totalWithInterest / totalInstallments;
         
         // Calculate next payment date - support both start_date and loan_date
         const startDateStr = body.start_date || body.loan_date || new Date().toISOString().split('T')[0];
