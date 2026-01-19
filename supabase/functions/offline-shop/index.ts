@@ -7801,6 +7801,181 @@ serve(async (req) => {
       }
     }
 
+    // ===== SMS FOLLOWUP =====
+    if (resource === "sms/followup" && req.method === "POST") {
+      console.log("[offline-shop] SMS Followup request");
+      
+      // Get request body
+      const { customerName, customerPhone, message } = await req.json();
+      
+      if (!customerPhone || !message) {
+        return new Response(JSON.stringify({ error: "Phone and message are required" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Get shop settings for SMS config
+      const { data: shopSettings } = await supabase
+        .from("shop_settings")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("shop_id", shopId)
+        .single();
+
+      // SMS providers config
+      const SMS_PROVIDERS: Record<string, {
+        sendSms: (phone: string, msg: string, config: any) => Promise<boolean>;
+      }> = {
+        ssl_wireless: {
+          async sendSms(phone: string, msg: string, config: any) {
+            const response = await fetch("https://smsplus.sslwireless.com/api/v3/send-sms", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                api_token: config.api_key,
+                sid: config.sender_id,
+                msisdn: phone,
+                sms: msg,
+                csms_id: `followup_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+              }),
+            });
+            const data = await response.json();
+            return data.status === "SUCCESS";
+          },
+        },
+        bulksms_bd: {
+          async sendSms(phone: string, msg: string, config: any) {
+            const response = await fetch("https://bulksmsbd.net/api/smsapi", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                api_key: config.api_key,
+                type: "text",
+                number: phone,
+                senderid: config.sender_id,
+                message: msg,
+              }),
+            });
+            const data = await response.json();
+            return data.response_code === 202;
+          },
+        },
+        twilio: {
+          async sendSms(phone: string, msg: string, config: any) {
+            const [accountSid, authToken] = config.api_key.split(":");
+            const response = await fetch(
+              `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/x-www-form-urlencoded",
+                  Authorization: `Basic ${btoa(`${accountSid}:${authToken}`)}`,
+                },
+                body: new URLSearchParams({
+                  To: phone,
+                  From: config.sender_id,
+                  Body: msg,
+                }),
+              }
+            );
+            return response.ok;
+          },
+        },
+        mim_sms: {
+          async sendSms(phone: string, msg: string, config: any) {
+            const response = await fetch(
+              `http://api.mimsms.com/smsapi?api_key=${config.api_key}&type=text&contacts=${phone}&senderid=${config.sender_id}&msg=${encodeURIComponent(msg)}`
+            );
+            const data = await response.text();
+            return data.includes("success") || data.includes("1");
+          },
+        },
+        greenweb: {
+          async sendSms(phone: string, msg: string, config: any) {
+            const response = await fetch("http://api.greenweb.com.bd/api.php", {
+              method: "POST",
+              headers: { "Content-Type": "application/x-www-form-urlencoded" },
+              body: new URLSearchParams({
+                token: config.api_key,
+                to: phone,
+                message: msg,
+              }),
+            });
+            const data = await response.text();
+            return data.includes("Ok") || data.includes("1");
+          },
+        },
+      };
+
+      // Get platform SMS settings if shop uses platform SMS
+      let smsConfig: {
+        provider: string;
+        api_key: string;
+        sender_id: string;
+      } | null = null;
+
+      const usePlatformSms = shopSettings?.use_platform_sms !== false;
+
+      if (usePlatformSms) {
+        const { data: siteSettings } = await supabase
+          .from("site_settings")
+          .select("platform_sms_provider, platform_sms_api_key, platform_sms_sender_id, platform_sms_enabled")
+          .single();
+
+        if (siteSettings?.platform_sms_enabled && siteSettings?.platform_sms_api_key) {
+          smsConfig = {
+            provider: siteSettings.platform_sms_provider || "ssl_wireless",
+            api_key: siteSettings.platform_sms_api_key,
+            sender_id: siteSettings.platform_sms_sender_id || "AutoFloy",
+          };
+        }
+      } else if (shopSettings?.sms_api_key) {
+        smsConfig = {
+          provider: "ssl_wireless",
+          api_key: shopSettings.sms_api_key,
+          sender_id: shopSettings.sms_sender_id || "ShopSMS",
+        };
+      }
+
+      if (!smsConfig) {
+        return new Response(
+          JSON.stringify({
+            error: "SMS not configured. Please configure SMS settings.",
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      // Clean phone number
+      let phone = customerPhone.replace(/\s+/g, "").replace(/-/g, "");
+      if (phone.startsWith("0")) {
+        phone = "+880" + phone.substring(1);
+      } else if (!phone.startsWith("+")) {
+        phone = "+880" + phone;
+      }
+
+      console.log(`[offline-shop] Sending followup SMS to ${phone}`);
+      
+      const provider = SMS_PROVIDERS[smsConfig.provider] || SMS_PROVIDERS.ssl_wireless;
+      const success = await provider.sendSms(phone, message, smsConfig);
+
+      if (success) {
+        return new Response(JSON.stringify({ success: true, message: "SMS sent successfully" }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } else {
+        return new Response(JSON.stringify({ success: false, message: "Failed to send SMS" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     return new Response(JSON.stringify({ error: "Not found" }), {
       status: 404,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
