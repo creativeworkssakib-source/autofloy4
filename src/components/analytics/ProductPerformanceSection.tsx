@@ -12,7 +12,7 @@ import {
   ThumbsDown,
   BarChart3,
   RefreshCw,
-  Trash2,
+  PackageX,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -306,7 +306,7 @@ export const ProductPerformanceSection = ({ type, shopId, syncEnabled, title }: 
               <span className="sm:hidden">{language === "bn" ? "রিটার্ন" : "Returns"}</span>
             </TabsTrigger>
             <TabsTrigger value="damages" className="text-xs sm:text-sm py-2 px-1 sm:px-3 flex flex-col sm:flex-row items-center gap-0.5 sm:gap-1">
-              <Trash2 className="h-3.5 w-3.5 text-rose-500" />
+              <PackageX className="h-3.5 w-3.5 text-rose-500" />
               <span className="hidden sm:inline">{language === "bn" ? "নষ্ট" : "Damages"}</span>
               <span className="sm:hidden">{language === "bn" ? "নষ্ট" : "Dmg"}</span>
             </TabsTrigger>
@@ -364,7 +364,7 @@ export const ProductPerformanceSection = ({ type, shopId, syncEnabled, title }: 
                 ))}
                 <Link to="/offline-shop/adjustments" className="block">
                   <div className="flex items-center justify-center gap-2 p-3 mt-3 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-600 dark:text-rose-400 transition-colors cursor-pointer">
-                    <Trash2 className="h-4 w-4" />
+                    <PackageX className="h-4 w-4" />
                     <span className="text-sm font-medium">
                       {language === "bn" ? "সব নষ্ট দেখুন" : "View All Damages"}
                     </span>
