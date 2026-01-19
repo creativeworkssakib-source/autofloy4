@@ -192,8 +192,6 @@ const ShopSuppliers = () => {
   const [searchParams] = useSearchParams();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Main view tab - suppliers or purchases list
-  const [mainViewTab, setMainViewTab] = useState<"suppliers" | "purchases">("suppliers");
 
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
@@ -1184,364 +1182,350 @@ const ShopSuppliers = () => {
           </Card>
         )}
 
-        {/* Main View Tabs */}
-        <Tabs value={mainViewTab} onValueChange={(v) => setMainViewTab(v as "suppliers" | "purchases")} className="w-full">
-          <TabsList className="grid w-full max-w-md grid-cols-2">
-            <TabsTrigger value="suppliers" className="flex items-center gap-2">
-              <Truck className="h-4 w-4" />
-              {language === "bn" ? "সরবরাহকারী" : "Suppliers"} ({suppliers.length})
-            </TabsTrigger>
-            <TabsTrigger value="purchases" className="flex items-center gap-2">
-              <ShoppingCart className="h-4 w-4" />
-              {language === "bn" ? "ক্রয় তালিকা" : "Purchases"} ({purchases.length})
-            </TabsTrigger>
-          </TabsList>
+        {/* Suppliers Section */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <Truck className="h-5 w-5" />
+              {language === "bn" ? "সরবরাহকারী তালিকা" : "Supplier List"} ({filteredSuppliers.length})
+            </h2>
+          </div>
+          
+          <div className="flex items-center gap-4">
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+              <Input
+                placeholder={t("shop.searchSuppliers")}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            {selectedSupplierIds.length > 0 && (
+              <Button variant="destructive" size="sm" disabled={isBulkDeleting} onClick={() => setDeleteDialogOpen(true)}>
+                <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
+                {language === "bn" ? "মুছুন" : "Delete"} ({selectedSupplierIds.length})
+              </Button>
+            )}
+          </div>
 
-          {/* Suppliers Tab */}
-          <TabsContent value="suppliers" className="mt-4 space-y-4">
-            <div className="flex items-center gap-4">
-              <div className="relative flex-1 max-w-md">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                <Input
-                  placeholder={t("shop.searchSuppliers")}
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
+          <Card>
+            <CardContent className="p-0 overflow-x-auto">
+              <Table className="min-w-[900px]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12">
+                      <Checkbox
+                        checked={selectedSupplierIds.length === filteredSuppliers.length && filteredSuppliers.length > 0}
+                        onCheckedChange={toggleSelectAllSuppliers}
+                      />
+                    </TableHead>
+                    <TableHead>{language === "bn" ? "সরবরাহকারী" : "Supplier"}</TableHead>
+                    <TableHead>{language === "bn" ? "ধরন" : "Type"}</TableHead>
+                    <TableHead>{language === "bn" ? "মোবাইল" : "Mobile"}</TableHead>
+                    <TableHead className="text-right">{language === "bn" ? "মোট ক্রয়" : "Total Purchase"}</TableHead>
+                    <TableHead className="text-right">{language === "bn" ? "পরিশোধিত" : "Paid"}</TableHead>
+                    <TableHead className="text-right">{language === "bn" ? "বাকি" : "Due"}</TableHead>
+                    <TableHead>{language === "bn" ? "সর্বশেষ ক্রয়" : "Last Purchase"}</TableHead>
+                    <TableHead className="text-right">{language === "bn" ? "অ্যাকশন" : "Actions"}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {isLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={9} className="text-center py-12">
+                        <div className="flex items-center justify-center gap-2">
+                          <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
+                          {t("common.loading")}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : filteredSuppliers.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={9} className="text-center py-12">
+                        <Truck className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
+                        <p className="text-muted-foreground">{t("shop.noSuppliers")}</p>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredSuppliers.map((supplier) => {
+                      const dueCountdown = getDueCountdown(supplier);
+                      return (
+                        <TableRow key={supplier.id} className={selectedSupplierIds.includes(supplier.id) ? "bg-muted/50" : ""}>
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedSupplierIds.includes(supplier.id)}
+                              onCheckedChange={() => toggleSelectOneSupplier(supplier.id)}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-3">
+                              <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                                <Building2 className="h-5 w-5 text-primary" />
+                              </div>
+                              <div>
+                                <p className="font-medium">{supplier.name}</p>
+                                <p className="text-xs text-muted-foreground">{getBusinessTypeLabel(supplier.business_type || "wholesale")}</p>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{getCategoryLabel(supplier.category || "local")}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            {supplier.phone && (
+                              <div className="flex items-center gap-1 text-sm">
+                                <Phone className="h-3 w-3 text-muted-foreground" />
+                                {supplier.phone}
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right font-medium">
+                            {formatCurrency(Number(supplier.total_purchases) || 0)}
+                          </TableCell>
+                          <TableCell className="text-right font-medium text-green-600">
+                            {formatCurrency((Number(supplier.total_purchases) || 0) - (Number(supplier.total_due) || 0))}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex flex-col items-end gap-1">
+                              {Number(supplier.total_due) > 0 ? (
+                                <>
+                                  <Badge variant="destructive">{formatCurrency(Number(supplier.total_due))}</Badge>
+                                  {dueCountdown && (
+                                    <span className={`text-xs flex items-center gap-1 ${dueCountdown.overdue ? 'text-destructive' : 'text-muted-foreground'}`}>
+                                      <Timer className="h-3 w-3" />
+                                      {dueCountdown.text}
+                                    </span>
+                                  )}
+                                </>
+                              ) : (
+                                <Badge variant="secondary">{language === "bn" ? "০" : "0"}</Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {supplier.last_purchase_date 
+                              ? formatDate(supplier.last_purchase_date)
+                              : "-"
+                            }
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              {Number(supplier.total_due) > 0 && (
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  onClick={() => handleOpenPayDue(supplier)}
+                                  className="text-green-600 border-green-600 hover:bg-green-50 dark:hover:bg-green-950"
+                                >
+                                  <Banknote className="h-4 w-4 mr-1" />
+                                  {language === "bn" ? "পরিশোধ" : "Pay"}
+                                </Button>
+                              )}
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => navigate(`/offline-shop/suppliers/${supplier.id}`)}>
+                                    <Eye className="mr-2 h-4 w-4" />
+                                    {t("shop.details")}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleEditSupplier(supplier)}>
+                                    <Pencil className="mr-2 h-4 w-4" />
+                                    {t("common.edit")}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleDeleteSupplier(supplier.id)} className="text-destructive">
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    {t("common.delete")}
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Purchases Section */}
+        <div className="space-y-4 mt-8 pt-6 border-t">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <ShoppingCart className="h-5 w-5" />
+              {language === "bn" ? "ক্রয় তালিকা" : "Purchase List"} ({filteredPurchases.length})
+            </h2>
+          </div>
+          
+          {/* Search and Filter */}
+          <Card className="p-4">
+            <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+              <div className="flex flex-col sm:flex-row gap-3 flex-1 w-full md:w-auto">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="min-w-[140px] justify-start text-left font-normal">
+                      <Calendar className="mr-2 h-4 w-4" />
+                      {purchaseDateFrom ? format(purchaseDateFrom, "dd/MM/yyyy") : (language === "bn" ? "থেকে" : "From")}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <CalendarComponent
+                      mode="single"
+                      selected={purchaseDateFrom}
+                      onSelect={setPurchaseDateFrom}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="min-w-[140px] justify-start text-left font-normal">
+                      <Calendar className="mr-2 h-4 w-4" />
+                      {purchaseDateTo ? format(purchaseDateTo, "dd/MM/yyyy") : (language === "bn" ? "পর্যন্ত" : "To")}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <CalendarComponent
+                      mode="single"
+                      selected={purchaseDateTo}
+                      onSelect={setPurchaseDateTo}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
-              {selectedSupplierIds.length > 0 && (
-                <Button variant="destructive" size="sm" disabled={isBulkDeleting} onClick={() => setDeleteDialogOpen(true)}>
-                  <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
-                  {language === "bn" ? "মুছুন" : "Delete"} ({selectedSupplierIds.length})
+
+              {selectedPurchaseIds.size > 0 && (
+                <Button variant="destructive" size="sm" disabled={isBulkDeleting} onClick={() => setPurchaseDeleteDialogOpen(true)}>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  {language === "bn" ? "মুছুন" : "Delete"} ({selectedPurchaseIds.size})
                 </Button>
               )}
             </div>
+          </Card>
 
-            <Card>
-              <CardContent className="p-0 overflow-x-auto">
-                <Table className="min-w-[900px]">
-                  <TableHeader>
+          <Card>
+            <CardContent className="p-0 overflow-x-auto">
+              <Table className="min-w-[800px]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12">
+                      <Checkbox
+                        checked={selectedPurchaseIds.size === filteredPurchases.length && filteredPurchases.length > 0}
+                        onCheckedChange={toggleSelectAllPurchases}
+                      />
+                    </TableHead>
+                    <TableHead>{language === "bn" ? "তারিখ" : "Date"}</TableHead>
+                    <TableHead>{language === "bn" ? "সরবরাহকারী" : "Supplier"}</TableHead>
+                    <TableHead className="hidden md:table-cell">{language === "bn" ? "পণ্য" : "Products"}</TableHead>
+                    <TableHead className="text-right">{language === "bn" ? "মোট" : "Total"}</TableHead>
+                    <TableHead className="text-right">{language === "bn" ? "বাকি" : "Due"}</TableHead>
+                    <TableHead>{language === "bn" ? "স্ট্যাটাস" : "Status"}</TableHead>
+                    <TableHead className="text-right">{language === "bn" ? "অ্যাকশন" : "Actions"}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {isLoading ? (
                     <TableRow>
-                      <TableHead className="w-12">
-                        <Checkbox
-                          checked={selectedSupplierIds.length === filteredSuppliers.length && filteredSuppliers.length > 0}
-                          onCheckedChange={toggleSelectAllSuppliers}
-                        />
-                      </TableHead>
-                      <TableHead>{language === "bn" ? "সরবরাহকারী" : "Supplier"}</TableHead>
-                      <TableHead>{language === "bn" ? "ধরন" : "Type"}</TableHead>
-                      <TableHead>{language === "bn" ? "মোবাইল" : "Mobile"}</TableHead>
-                      <TableHead className="text-right">{language === "bn" ? "মোট ক্রয়" : "Total Purchase"}</TableHead>
-                      <TableHead className="text-right">{language === "bn" ? "পরিশোধিত" : "Paid"}</TableHead>
-                      <TableHead className="text-right">{language === "bn" ? "বাকি" : "Due"}</TableHead>
-                      <TableHead>{language === "bn" ? "সর্বশেষ ক্রয়" : "Last Purchase"}</TableHead>
-                      <TableHead className="text-right">{language === "bn" ? "অ্যাকশন" : "Actions"}</TableHead>
+                      <TableCell colSpan={8} className="text-center py-8">{t("common.loading")}</TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {isLoading ? (
-                      <TableRow>
-                        <TableCell colSpan={9} className="text-center py-12">
-                          <div className="flex items-center justify-center gap-2">
-                            <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
-                            {t("common.loading")}
+                  ) : filteredPurchases.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center py-8">
+                        <PackagePlus className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
+                        <p>{language === "bn" ? "কোনো ক্রয় পাওয়া যায়নি" : "No purchases found"}</p>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredPurchases.map((purchase) => (
+                      <TableRow key={purchase.id} className={selectedPurchaseIds.has(purchase.id) ? "bg-muted/50" : ""}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedPurchaseIds.has(purchase.id)}
+                            onCheckedChange={() => toggleSelectOnePurchase(purchase.id)}
+                          />
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          <div>
+                            <p className="whitespace-nowrap">{new Date(purchase.purchase_date).toLocaleDateString(language === "bn" ? "bn-BD" : "en-US")}</p>
+                            <p className="text-xs text-muted-foreground hidden sm:block">
+                              {new Date(purchase.purchase_date).toLocaleTimeString(language === "bn" ? "bn-BD" : "en-US", { hour: '2-digit', minute: '2-digit' })}
+                            </p>
                           </div>
                         </TableCell>
-                      </TableRow>
-                    ) : filteredSuppliers.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={9} className="text-center py-12">
-                          <Truck className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
-                          <p className="text-muted-foreground">{t("shop.noSuppliers")}</p>
+                        <TableCell className="max-w-[150px]">
+                          <span className="truncate block">{purchase.supplier_name || "-"}</span>
                         </TableCell>
-                      </TableRow>
-                    ) : (
-                      filteredSuppliers.map((supplier) => {
-                        const dueCountdown = getDueCountdown(supplier);
-                        return (
-                          <TableRow key={supplier.id} className={selectedSupplierIds.includes(supplier.id) ? "bg-muted/50" : ""}>
-                            <TableCell>
-                              <Checkbox
-                                checked={selectedSupplierIds.includes(supplier.id)}
-                                onCheckedChange={() => toggleSelectOneSupplier(supplier.id)}
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-3">
-                                <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                                  <Building2 className="h-5 w-5 text-primary" />
-                                </div>
-                                <div>
-                                  <p className="font-medium">{supplier.name}</p>
-                                  <p className="text-xs text-muted-foreground">{getBusinessTypeLabel(supplier.business_type || "wholesale")}</p>
-                                </div>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant="outline">{getCategoryLabel(supplier.category || "local")}</Badge>
-                            </TableCell>
-                            <TableCell>
-                              {supplier.phone && (
-                                <div className="flex items-center gap-1 text-sm">
-                                  <Phone className="h-3 w-3 text-muted-foreground" />
-                                  {supplier.phone}
-                                </div>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-right font-medium">
-                              {formatCurrency(Number(supplier.total_purchases) || 0)}
-                            </TableCell>
-                            <TableCell className="text-right font-medium text-green-600">
-                              {formatCurrency((Number(supplier.total_purchases) || 0) - (Number(supplier.total_due) || 0))}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <div className="flex flex-col items-end gap-1">
-                                {Number(supplier.total_due) > 0 ? (
-                                  <>
-                                    <Badge variant="destructive">{formatCurrency(Number(supplier.total_due))}</Badge>
-                                    {dueCountdown && (
-                                      <span className={`text-xs flex items-center gap-1 ${dueCountdown.overdue ? 'text-destructive' : 'text-muted-foreground'}`}>
-                                        <Timer className="h-3 w-3" />
-                                        {dueCountdown.text}
-                                      </span>
-                                    )}
-                                  </>
-                                ) : (
-                                  <Badge variant="secondary">{language === "bn" ? "০" : "0"}</Badge>
-                                )}
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-sm text-muted-foreground">
-                              {supplier.last_purchase_date 
-                                ? formatDate(supplier.last_purchase_date)
-                                : "-"
-                              }
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <div className="flex items-center justify-end gap-1">
-                                {Number(supplier.total_due) > 0 && (
-                                  <Button 
-                                    variant="outline" 
-                                    size="sm" 
-                                    onClick={() => handleOpenPayDue(supplier)}
-                                    className="text-green-600 border-green-600 hover:bg-green-50 dark:hover:bg-green-950"
-                                  >
-                                    <Banknote className="h-4 w-4 mr-1" />
-                                    {language === "bn" ? "পরিশোধ" : "Pay"}
-                                  </Button>
-                                )}
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="icon">
-                                      <MoreHorizontal className="h-4 w-4" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end">
-                                    <DropdownMenuItem onClick={() => navigate(`/offline-shop/suppliers/${supplier.id}`)}>
-                                      <Eye className="mr-2 h-4 w-4" />
-                                      {t("shop.details")}
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleEditSupplier(supplier)}>
-                                      <Pencil className="mr-2 h-4 w-4" />
-                                      {t("common.edit")}
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleDeleteSupplier(supplier.id)} className="text-destructive">
-                                      <Trash2 className="mr-2 h-4 w-4" />
-                                      {t("common.delete")}
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })
-                    )}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Purchases Tab */}
-          <TabsContent value="purchases" className="mt-4 space-y-4">
-            {/* Search and Filter */}
-            <Card className="p-4">
-              <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
-                <div className="flex flex-col sm:flex-row gap-3 flex-1 w-full md:w-auto">
-                  <div className="relative flex-1 max-w-sm">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder={language === "bn" ? "সার্চ করুন..." : "Search..."}
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-9"
-                    />
-                  </div>
-
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" className="min-w-[140px] justify-start text-left font-normal">
-                        <Calendar className="mr-2 h-4 w-4" />
-                        {purchaseDateFrom ? format(purchaseDateFrom, "dd/MM/yyyy") : (language === "bn" ? "থেকে" : "From")}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <CalendarComponent
-                        mode="single"
-                        selected={purchaseDateFrom}
-                        onSelect={setPurchaseDateFrom}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" className="min-w-[140px] justify-start text-left font-normal">
-                        <Calendar className="mr-2 h-4 w-4" />
-                        {purchaseDateTo ? format(purchaseDateTo, "dd/MM/yyyy") : (language === "bn" ? "পর্যন্ত" : "To")}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <CalendarComponent
-                        mode="single"
-                        selected={purchaseDateTo}
-                        onSelect={setPurchaseDateTo}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-
-                {selectedPurchaseIds.size > 0 && (
-                  <Button variant="destructive" size="sm" disabled={isBulkDeleting} onClick={() => setPurchaseDeleteDialogOpen(true)}>
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    {language === "bn" ? "মুছুন" : "Delete"} ({selectedPurchaseIds.size})
-                  </Button>
-                )}
-              </div>
-            </Card>
-
-            <p className="text-sm text-muted-foreground">
-              {filteredPurchases.length} {language === "bn" ? "টি ক্রয় পাওয়া গেছে" : "purchases found"}
-            </p>
-
-            <Card>
-              <CardContent className="p-0 overflow-x-auto">
-                <Table className="min-w-[800px]">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-12">
-                        <Checkbox
-                          checked={selectedPurchaseIds.size === filteredPurchases.length && filteredPurchases.length > 0}
-                          onCheckedChange={toggleSelectAllPurchases}
-                        />
-                      </TableHead>
-                      <TableHead>{language === "bn" ? "তারিখ" : "Date"}</TableHead>
-                      <TableHead>{language === "bn" ? "সরবরাহকারী" : "Supplier"}</TableHead>
-                      <TableHead className="hidden md:table-cell">{language === "bn" ? "পণ্য" : "Products"}</TableHead>
-                      <TableHead className="text-right">{language === "bn" ? "মোট" : "Total"}</TableHead>
-                      <TableHead className="text-right">{language === "bn" ? "বাকি" : "Due"}</TableHead>
-                      <TableHead>{language === "bn" ? "স্ট্যাটাস" : "Status"}</TableHead>
-                      <TableHead className="text-right">{language === "bn" ? "অ্যাকশন" : "Actions"}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {isLoading ? (
-                      <TableRow>
-                        <TableCell colSpan={8} className="text-center py-8">{t("common.loading")}</TableCell>
-                      </TableRow>
-                    ) : filteredPurchases.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={8} className="text-center py-8">
-                          <PackagePlus className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
-                          <p>{language === "bn" ? "কোনো ক্রয় পাওয়া যায়নি" : "No purchases found"}</p>
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      filteredPurchases.map((purchase) => (
-                        <TableRow key={purchase.id} className={selectedPurchaseIds.has(purchase.id) ? "bg-muted/50" : ""}>
-                          <TableCell>
-                            <Checkbox
-                              checked={selectedPurchaseIds.has(purchase.id)}
-                              onCheckedChange={() => toggleSelectOnePurchase(purchase.id)}
-                            />
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            <div>
-                              <p className="whitespace-nowrap">{new Date(purchase.purchase_date).toLocaleDateString(language === "bn" ? "bn-BD" : "en-US")}</p>
-                              <p className="text-xs text-muted-foreground hidden sm:block">
-                                {new Date(purchase.purchase_date).toLocaleTimeString(language === "bn" ? "bn-BD" : "en-US", { hour: '2-digit', minute: '2-digit' })}
-                              </p>
-                            </div>
-                          </TableCell>
-                          <TableCell className="max-w-[150px]">
-                            <span className="truncate block">{purchase.supplier_name || "-"}</span>
-                          </TableCell>
-                          <TableCell className="hidden md:table-cell">
-                            <div className="max-w-[150px]">
-                              {purchase.items?.slice(0, 2).map((item, i) => (
-                                <span key={i} className="text-xs">
-                                  {item.product_name}{i < Math.min(purchase.items!.length, 2) - 1 ? ", " : ""}
-                                </span>
-                              ))}
-                              {purchase.items && purchase.items.length > 2 && (
-                                <span className="text-xs text-muted-foreground"> +{purchase.items.length - 2}</span>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right font-medium whitespace-nowrap">{formatCurrency(Number(purchase.total_amount))}</TableCell>
-                          <TableCell className="text-right">
-                            {Number(purchase.due_amount) > 0 ? (
-                              <span className="text-destructive font-medium whitespace-nowrap">
-                                {formatCurrency(Number(purchase.due_amount))}
+                        <TableCell className="hidden md:table-cell">
+                          <div className="max-w-[150px]">
+                            {purchase.items?.slice(0, 2).map((item, i) => (
+                              <span key={i} className="text-xs">
+                                {item.product_name}{i < Math.min(purchase.items!.length, 2) - 1 ? ", " : ""}
                               </span>
-                            ) : (
-                              <span className="text-muted-foreground">-</span>
+                            ))}
+                            {purchase.items && purchase.items.length > 2 && (
+                              <span className="text-xs text-muted-foreground"> +{purchase.items.length - 2}</span>
                             )}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={purchase.payment_status === "paid" ? "default" : purchase.payment_status === "partial" ? "secondary" : "destructive"} className="text-xs">
-                              {purchase.payment_status === "paid" 
-                                ? (language === "bn" ? "পরিশোধিত" : "Paid") 
-                                : purchase.payment_status === "partial"
-                                ? (language === "bn" ? "আংশিক" : "Partial")
-                                : (language === "bn" ? "বাকি" : "Due")}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-1">
-                              {Number(purchase.due_amount) > 0 && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8"
-                                  onClick={() => openPurchasePaymentModal(purchase)}
-                                  title={language === "bn" ? "পেমেন্ট করুন" : "Add Payment"}
-                                >
-                                  <CreditCard className="h-4 w-4 text-primary" />
-                                </Button>
-                              )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right font-medium whitespace-nowrap">{formatCurrency(Number(purchase.total_amount))}</TableCell>
+                        <TableCell className="text-right">
+                          {Number(purchase.due_amount) > 0 ? (
+                            <span className="text-destructive font-medium whitespace-nowrap">
+                              {formatCurrency(Number(purchase.due_amount))}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={purchase.payment_status === "paid" ? "default" : purchase.payment_status === "partial" ? "secondary" : "destructive"} className="text-xs">
+                            {purchase.payment_status === "paid" 
+                              ? (language === "bn" ? "পরিশোধিত" : "Paid") 
+                              : purchase.payment_status === "partial"
+                              ? (language === "bn" ? "আংশিক" : "Partial")
+                              : (language === "bn" ? "বাকি" : "Due")}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+                            {Number(purchase.due_amount) > 0 && (
                               <Button
                                 variant="ghost"
                                 size="icon"
                                 className="h-8 w-8"
-                                onClick={() => setViewingPurchase(purchase)}
+                                onClick={() => openPurchasePaymentModal(purchase)}
+                                title={language === "bn" ? "পেমেন্ট করুন" : "Add Payment"}
                               >
-                                <Eye className="h-4 w-4" />
+                                <CreditCard className="h-4 w-4 text-primary" />
                               </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => setViewingPurchase(purchase)}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       {/* Add/Edit Supplier Modal */}
