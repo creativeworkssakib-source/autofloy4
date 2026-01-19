@@ -306,26 +306,33 @@ export default function SupplierReturnsTab() {
   const selectPurchaseItem = async (purchase: Purchase, item: PurchaseItem) => {
     const itemUnitPrice = Number(item.unit_price) || 0;
     
-    // Fetch current stock quantity from products
+    // Fetch current stock quantity from products list
     let stockQuantity = Number(item.quantity) || 1;
     
     if (item.product_id) {
       const token = getToken();
+      const shopId = localStorage.getItem("current_shop_id");
       if (token) {
         try {
-          const response = await fetch(
-            `${SUPABASE_URL}/functions/v1/offline-shop/products/${item.product_id}`,
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
-                "Content-Type": "application/json",
-              },
-            }
-          );
+          const url = new URL(`${SUPABASE_URL}/functions/v1/offline-shop/products`);
+          if (shopId) url.searchParams.set("shop_id", shopId);
+          
+          const response = await fetch(url.toString(), {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+              ...(shopId ? { "X-Shop-Id": shopId } : {}),
+            },
+          });
           const data = await response.json();
-          if (data.product && data.product.stock_quantity !== undefined) {
-            stockQuantity = Number(data.product.stock_quantity) || 1;
-            console.log("Product stock from API:", stockQuantity);
+          
+          // Find the specific product by ID from the products list
+          if (data.products && Array.isArray(data.products)) {
+            const product = data.products.find((p: any) => p.id === item.product_id);
+            if (product && product.stock_quantity !== undefined) {
+              stockQuantity = Number(product.stock_quantity) || 1;
+              console.log("Found product:", product.name, "Stock:", stockQuantity);
+            }
           }
         } catch (error) {
           console.error("Error fetching product stock:", error);
