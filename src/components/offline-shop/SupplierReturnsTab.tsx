@@ -303,16 +303,41 @@ export default function SupplierReturnsTab() {
     }
   };
 
-  const selectPurchaseItem = (purchase: Purchase, item: PurchaseItem) => {
-    // Ensure quantity is properly parsed as a number
-    const itemQuantity = Number(item.quantity) || 1;
+  const selectPurchaseItem = async (purchase: Purchase, item: PurchaseItem) => {
     const itemUnitPrice = Number(item.unit_price) || 0;
     
-    console.log("Selected item:", item, "Parsed quantity:", itemQuantity);
+    // Fetch current stock quantity from products
+    let stockQuantity = Number(item.quantity) || 1;
     
-    // Start with 1, max is the item's purchased quantity
-    const qty = Math.min(1, itemQuantity);
-    setMaxQuantity(itemQuantity);
+    if (item.product_id) {
+      const token = getToken();
+      if (token) {
+        try {
+          const response = await fetch(
+            `${SUPABASE_URL}/functions/v1/offline-shop/products/${item.product_id}`,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+              },
+            }
+          );
+          const data = await response.json();
+          if (data.product && data.product.stock_quantity !== undefined) {
+            stockQuantity = Number(data.product.stock_quantity) || 1;
+            console.log("Product stock from API:", stockQuantity);
+          }
+        } catch (error) {
+          console.error("Error fetching product stock:", error);
+        }
+      }
+    }
+    
+    console.log("Selected item:", item, "Stock quantity:", stockQuantity);
+    
+    // Start with 1, max is the product's current stock
+    const qty = Math.min(1, stockQuantity);
+    setMaxQuantity(stockQuantity);
     setFormData({
       ...formData,
       purchase_id: purchase.id,
@@ -323,7 +348,7 @@ export default function SupplierReturnsTab() {
       refund_amount: itemUnitPrice * qty,
     });
     setIsPurchasesOpen(false);
-    toast.success(`Selected: ${item.product_name} (max: ${itemQuantity})`);
+    toast.success(`Selected: ${item.product_name} (max: ${stockQuantity})`);
   };
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
