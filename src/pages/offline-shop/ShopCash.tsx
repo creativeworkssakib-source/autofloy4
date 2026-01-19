@@ -38,6 +38,8 @@ interface SummaryData {
   totalStockPurchaseValue: number;
   totalStockSellingValue: number;
   totalProductsCount: number;
+  // Stock loss
+  totalStockLoss: number;
 }
 
 const ShopCash = () => {
@@ -66,7 +68,7 @@ const ShopCash = () => {
 
   // Compute filtered summary based on date range
   const summaryData = useMemo<SummaryData>(() => {
-    const { sales, purchases, expenses, customers, suppliers, products } = rawData;
+    const { sales, purchases, expenses, customers, suppliers, products, adjustments } = rawData;
     
     // Filter by date range
     const filteredSales = sales.filter((s: any) => {
@@ -83,12 +85,28 @@ const ShopCash = () => {
       const expenseDate = new Date(e.expense_date);
       return isWithinInterval(expenseDate, { start: startOfDay(dateRange.from), end: endOfDay(dateRange.to) });
     });
+
+    // Filter adjustments by date and only loss types
+    const lossTypes = ['damaged', 'damage', 'expired', 'theft', 'lost'];
+    const filteredAdjustments = (adjustments || []).filter((a: any) => {
+      const adjustmentDate = new Date(a.adjustment_date || a.created_at);
+      const isLossType = lossTypes.includes(a.type);
+      const inDateRange = isWithinInterval(adjustmentDate, { start: startOfDay(dateRange.from), end: endOfDay(dateRange.to) });
+      return isLossType && inDateRange;
+    });
     
     // Calculate totals
     const totalSales = filteredSales.reduce((sum: number, s: any) => sum + Number(s.total || 0), 0);
     const totalPurchases = filteredPurchases.reduce((sum: number, p: any) => sum + Number(p.total_amount || 0), 0);
     const totalExpenses = filteredExpenses.reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
     const totalProfit = filteredSales.reduce((sum: number, s: any) => sum + Number(s.total_profit || 0), 0);
+    
+    // Calculate stock loss (quantity * purchase_price for each loss adjustment)
+    const totalStockLoss = filteredAdjustments.reduce((sum: number, a: any) => {
+      const quantity = Math.abs(Number(a.quantity || 0));
+      const unitCost = Number(a.purchase_price || 0);
+      return sum + (quantity * unitCost);
+    }, 0);
 
     // Due calculations (not date filtered - show all due)
     const customersWithDue = customers.filter((c: any) => Number(c.total_due) > 0);
@@ -120,6 +138,7 @@ const ShopCash = () => {
       totalStockPurchaseValue,
       totalStockSellingValue,
       totalProductsCount: products.length,
+      totalStockLoss,
     };
   }, [rawData, dateRange]);
 
@@ -148,8 +167,8 @@ const ShopCash = () => {
     toast.success(t("shop.excelDownloaded"));
   };
 
-  // Net income = Sales - Purchases - Expenses
-  const netIncome = summaryData.totalSales - summaryData.totalPurchases - summaryData.totalExpenses;
+  // Net income = Sales - Purchases - Expenses - Stock Loss (damage, expired, theft, lost)
+  const netIncome = summaryData.totalSales - summaryData.totalPurchases - summaryData.totalExpenses - summaryData.totalStockLoss;
 
   return (
     <ShopLayout>
@@ -315,7 +334,7 @@ const ShopCash = () => {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">
-                    {language === "bn" ? "নিট আয় (বিক্রয় - ক্রয় - খরচ)" : "Net Income (Sales - Purchases - Expenses)"}
+                    {language === "bn" ? "নিট আয় (বিক্রয় - ক্রয় - খরচ - ক্ষতি)" : "Net Income (Sales - Purchases - Expenses - Loss)"}
                   </p>
                   <p className={`text-3xl font-bold ${netIncome >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                     {formatCurrency(netIncome)}
