@@ -201,10 +201,17 @@ const ShopPurchases = () => {
   // Load payment history for a purchase
   const loadPaymentHistory = async (purchaseId: string) => {
     try {
-      // Payment history is embedded in purchase data
-      setPaymentHistory([]);
+      const response = await offlineShopService.getPurchasePayments(purchaseId);
+      setPaymentHistory(response.payments.map(p => ({
+        id: p.id,
+        amount: p.amount,
+        payment_method: p.payment_method,
+        payment_date: p.payment_date,
+        notes: p.notes,
+      })));
     } catch (error) {
       console.error("Failed to load payment history:", error);
+      setPaymentHistory([]);
     }
   };
 
