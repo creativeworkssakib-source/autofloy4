@@ -194,8 +194,8 @@ export const ProfitDetailsModal = ({
           </DialogTitle>
         </DialogHeader>
 
-        <ScrollArea className="max-h-[calc(85vh-80px)]">
-          <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+        <ScrollArea className="h-[calc(85vh-80px)]">
+          <div className="p-4 sm:p-6 pb-8 sm:pb-10 space-y-4 sm:space-y-6">
             {/* Summary Cards */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
               <motion.div
