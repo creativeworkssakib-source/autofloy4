@@ -6732,7 +6732,7 @@ serve(async (req) => {
             if (dc.reference_id) {
               const { data: sale } = await supabase
                 .from("shop_sales")
-                .select("invoice_number, customer_name, customer_phone, notes")
+                .select("invoice_number, customer_name, customer_phone, customer_id, notes")
                 .eq("id", dc.reference_id)
                 .maybeSingle();
               
@@ -6740,6 +6740,22 @@ serve(async (req) => {
                 invoiceNumber = sale.invoice_number || '';
                 customerName = sale.customer_name || '';
                 customerPhone = sale.customer_phone || '';
+                
+                // If customer_name is empty but customer_id exists, look up from shop_customers
+                if (!customerName && sale.customer_id) {
+                  const { data: customer } = await supabase
+                    .from("shop_customers")
+                    .select("name, phone")
+                    .eq("id", sale.customer_id)
+                    .maybeSingle();
+                  
+                  if (customer) {
+                    customerName = customer.name || '';
+                    customerPhone = customerPhone || customer.phone || '';
+                  }
+                }
+                
+                // Fallback: parse from notes if still not found
                 if (!customerName && sale.notes) {
                   const match = sale.notes.match(/Customer:\s*(.+?)(?:\s*\((.+?)\))?$/);
                   if (match) {
@@ -6796,7 +6812,7 @@ serve(async (req) => {
             if (dc.reference_id) {
               const { data: sale } = await supabase
                 .from("shop_sales")
-                .select("invoice_number, customer_name, customer_phone, notes")
+                .select("invoice_number, customer_name, customer_phone, customer_id, notes")
                 .eq("id", dc.reference_id)
                 .maybeSingle();
               
@@ -6804,7 +6820,22 @@ serve(async (req) => {
                 invoiceNumber = sale.invoice_number || '';
                 customerName = sale.customer_name || '';
                 customerPhone = sale.customer_phone || '';
-                // Parse from notes if not in direct fields
+                
+                // If customer_name is empty but customer_id exists, look up from shop_customers
+                if (!customerName && sale.customer_id) {
+                  const { data: customer } = await supabase
+                    .from("shop_customers")
+                    .select("name, phone")
+                    .eq("id", sale.customer_id)
+                    .maybeSingle();
+                  
+                  if (customer) {
+                    customerName = customer.name || '';
+                    customerPhone = customerPhone || customer.phone || '';
+                  }
+                }
+                
+                // Fallback: parse from notes if still not found
                 if (!customerName && sale.notes) {
                   const match = sale.notes.match(/Customer:\s*(.+?)(?:\s*\((.+?)\))?$/);
                   if (match) {
