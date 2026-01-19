@@ -83,7 +83,6 @@ const ScannerSetup = () => {
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const cameraScannerRef = useRef<Html5QrcodeScanner | null>(null);
-  const cameraContainerRef = useRef<HTMLDivElement>(null);
   
   const barcodeBufferRef = useRef<string>("");
   const lastKeyTimeRef = useRef<number>(0);
@@ -380,46 +379,65 @@ const ScannerSetup = () => {
 
   // Camera Scanner Functions
   const initCameraScanner = useCallback(() => {
-    if (!cameraContainerRef.current || cameraScannerRef.current) return;
-    
+    // First set camera active to render the container
+    setIsCameraActive(true);
     setCameraError(null);
-    
-    try {
-      const scanner = new Html5QrcodeScanner(
-        "camera-scanner-container",
-        {
-          fps: 10,
-          qrbox: { width: 250, height: 150 },
-          supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA],
-          rememberLastUsedCamera: true,
-        },
-        false
-      );
+  }, []);
 
-      scanner.render(
-        (decodedText) => {
-          handleScanResult(decodedText);
-        },
-        (errorMessage) => {
-          console.debug("Camera scan error:", errorMessage);
-        }
-      );
+  // Initialize camera scanner when container is available
+  useEffect(() => {
+    if (!isCameraActive || cameraScannerRef.current) return;
 
-      cameraScannerRef.current = scanner;
-      setIsCameraActive(true);
-      
-      // Register camera as scanner device
-      if (!savedDevices.some(d => d.device_type === 'camera')) {
-        registerScannerDevice(
-          language === 'bn' ? 'ক্যামেরা স্ক্যানার' : 'Camera Scanner',
-          'camera'
-        );
+    // Wait for container to render
+    const timer = setTimeout(() => {
+      const container = document.getElementById("camera-scanner-container");
+      if (!container) {
+        setCameraError(language === 'bn' ? 'ক্যামেরা কন্টেইনার পাওয়া যায়নি' : 'Camera container not found');
+        return;
       }
-    } catch (err) {
-      console.error("Failed to initialize camera scanner:", err);
-      setCameraError(language === 'bn' ? 'ক্যামেরা চালু করা যায়নি' : 'Failed to start camera');
-    }
-  }, [handleScanResult, language, savedDevices, registerScannerDevice]);
+
+      try {
+        const scanner = new Html5QrcodeScanner(
+          "camera-scanner-container",
+          {
+            fps: 10,
+            qrbox: { width: 250, height: 150 },
+            supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA],
+            rememberLastUsedCamera: true,
+          },
+          false
+        );
+
+        scanner.render(
+          (decodedText) => {
+            handleScanResult(decodedText);
+          },
+          (errorMessage) => {
+            // Ignore non-critical scan errors
+            if (!errorMessage.includes("No MultiFormat Readers")) {
+              console.debug("Camera scan error:", errorMessage);
+            }
+          }
+        );
+
+        cameraScannerRef.current = scanner;
+
+        // Register camera as scanner device
+        if (!savedDevices.some(d => d.device_type === 'camera')) {
+          registerScannerDevice(
+            language === 'bn' ? 'ক্যামেরা স্ক্যানার' : 'Camera Scanner',
+            'camera'
+          );
+        }
+      } catch (err) {
+        console.error("Failed to initialize camera scanner:", err);
+        setCameraError(language === 'bn' ? 'ক্যামেরা চালু করা যায়নি। ব্রাউজার permission চেক করুন।' : 'Failed to start camera. Check browser permissions.');
+        setIsCameraActive(false);
+      }
+    }, 200);
+
+    return () => clearTimeout(timer);
+  }, [isCameraActive, handleScanResult, language, savedDevices, registerScannerDevice]);
 
   const stopCameraScanner = useCallback(() => {
     if (cameraScannerRef.current) {
@@ -793,7 +811,6 @@ const ScannerSetup = () => {
                     <div className="space-y-4">
                       <div 
                         id="camera-scanner-container"
-                        ref={cameraContainerRef}
                         className="w-full min-h-[280px] bg-muted rounded-lg overflow-hidden"
                       />
                       <div className="flex justify-center">
