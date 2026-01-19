@@ -17,7 +17,8 @@ import {
   Printer,
   Wand2,
   Layers,
-  WifiOff
+  WifiOff,
+  Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -169,6 +170,7 @@ const ShopProducts = () => {
   // Stock batches state
   const [batchesModalOpen, setBatchesModalOpen] = useState(false);
   const [selectedProductForBatches, setSelectedProductForBatches] = useState<Product | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -243,6 +245,7 @@ const ShopProducts = () => {
   };
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
     try {
       let categoryId = formData.category_id;
 
@@ -285,6 +288,8 @@ const ShopProducts = () => {
       // Products will auto-refresh via hook
     } catch (error) {
       toast.error(t("shop.errorOccurred"));
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -1223,11 +1228,18 @@ const ShopProducts = () => {
 
 
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>
+              <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)} disabled={isSubmitting}>
                 {t("common.cancel")}
               </Button>
-              <Button type="submit">
-                {editingProduct ? t("common.save") : t("common.add")}
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    {language === "bn" ? "প্রক্রিয়াকরণ..." : "Processing..."}
+                  </>
+                ) : (
+                  editingProduct ? t("common.save") : t("common.add")
+                )}
               </Button>
             </DialogFooter>
           </form>
