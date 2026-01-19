@@ -3252,7 +3252,7 @@ serve(async (req) => {
 
         const { data, error } = await supabase
           .from("shop_stock_adjustments")
-          .insert({ ...body, user_id: userId, cost_impact: costImpact })
+          .insert({ ...body, user_id: userId, shop_id: shopId || null, cost_impact: costImpact })
           .select()
           .single();
 
