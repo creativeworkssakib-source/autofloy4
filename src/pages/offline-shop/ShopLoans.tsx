@@ -63,6 +63,7 @@ import {
   Search,
   WifiOff,
   Cloud,
+  Loader2,
 } from "lucide-react";
 
 interface Loan {
@@ -113,6 +114,8 @@ const ShopLoans = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [deleting, setDeleting] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPaymentSubmitting, setIsPaymentSubmitting] = useState(false);
 
   // Use offline-first hook
   const {
@@ -274,6 +277,7 @@ const ShopLoans = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
 
     try {
       if (isEditing && selectedLoan) {
@@ -325,11 +329,14 @@ const ShopLoans = () => {
       fetchLoans();
     } catch (error: any) {
       toast.error(error.message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
   const handlePayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedLoan) return;
+    setIsPaymentSubmitting(true);
 
     try {
       const result = await addPayment(selectedLoan.id, {
@@ -354,6 +361,8 @@ const ShopLoans = () => {
       }
     } catch (error: any) {
       toast.error(error.message);
+    } finally {
+      setIsPaymentSubmitting(false);
     }
   };
 
@@ -725,8 +734,15 @@ const ShopLoans = () => {
                     />
                   </div>
                 </div>
-                <Button type="submit" className="w-full">
-                  {isEditing ? t.update : t.addLoanBtn}
+                <Button type="submit" className="w-full" disabled={isSubmitting}>
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      {language === "bn" ? "প্রক্রিয়াকরণ..." : "Processing..."}
+                    </>
+                  ) : (
+                    isEditing ? t.update : t.addLoanBtn
+                  )}
                 </Button>
               </form>
             </DialogContent>
@@ -1109,9 +1125,13 @@ const ShopLoans = () => {
                 />
               </div>
 
-              <Button type="submit" className="w-full">
-                <CheckCircle2 className="h-4 w-4 mr-2" />
-                {t.completePayment}
+              <Button type="submit" className="w-full" disabled={isPaymentSubmitting}>
+                {isPaymentSubmitting ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                )}
+                {isPaymentSubmitting ? (language === "bn" ? "প্রক্রিয়াকরণ..." : "Processing...") : t.completePayment}
               </Button>
             </form>
           )}

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, Search, AlertTriangle, Download, Trash2, WifiOff, Wifi, RefreshCw } from "lucide-react";
+import { Plus, Search, AlertTriangle, Download, Trash2, WifiOff, Wifi, RefreshCw, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -78,6 +78,7 @@ const ShopAdjustments = () => {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Use offline hooks
   const { adjustments, loading: isLoading, refetch, createAdjustment, deleteAdjustments } = useOfflineAdjustments(filterType);
@@ -153,6 +154,7 @@ const ShopAdjustments = () => {
       toast.error(t("shop.selectProductAdj"));
       return;
     }
+    setIsSubmitting(true);
     try {
       const selectedProduct = products.find((p: any) => p.id === formData.product_id);
       const adjustmentData = {
@@ -172,6 +174,8 @@ const ShopAdjustments = () => {
     } catch (error: any) {
       console.error("Adjustment error:", error);
       toast.error(error.message || t("shop.errorOccurred"));
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -464,11 +468,18 @@ const ShopAdjustments = () => {
             </div>
 
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>
+              <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)} disabled={isSubmitting}>
                 {t("common.cancel")}
               </Button>
-              <Button type="submit" disabled={!formData.product_id}>
-                {t("common.save")}
+              <Button type="submit" disabled={!formData.product_id || isSubmitting}>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    {language === "bn" ? "প্রক্রিয়াকরণ..." : "Processing..."}
+                  </>
+                ) : (
+                  t("common.save")
+                )}
               </Button>
             </DialogFooter>
           </form>
