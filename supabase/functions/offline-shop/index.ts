@@ -2485,6 +2485,152 @@ serve(async (req) => {
         });
       }
 
+      // Handle purchases/payment sub-route (POST)
+      const subResource = pathParts[offlineShopIndex + 2];
+      if (subResource === "payment" && req.method === "POST") {
+        try {
+          const body = await req.json();
+          const { purchaseId, amount, paymentMethod, notes } = body;
+          const paymentAmount = Number(amount) || 0;
+          
+          console.log(`Processing purchase payment (POST): purchaseId=${purchaseId}, amount=${paymentAmount}`);
+          
+          if (!purchaseId) {
+            return new Response(JSON.stringify({ error: "Purchase ID required" }), {
+              status: 400,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+          
+          // Get current purchase
+          const { data: purchase, error: fetchError } = await supabase
+            .from("shop_purchases")
+            .select("*")
+            .eq("id", purchaseId)
+            .eq("user_id", userId)
+            .maybeSingle();
+
+          if (fetchError) {
+            console.error(`Purchase fetch error: ${purchaseId}`, fetchError);
+            return new Response(JSON.stringify({ error: "Database error" }), {
+              status: 500,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+
+          if (!purchase) {
+            console.error(`Purchase not found: ${purchaseId}`);
+            return new Response(JSON.stringify({ error: "Purchase not found" }), {
+              status: 404,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+
+          const dueAmount = Number(purchase.due_amount) || 0;
+          const actualPayment = Math.min(paymentAmount, dueAmount);
+          
+          if (actualPayment <= 0) {
+            return new Response(JSON.stringify({ error: "Invalid payment amount or no due" }), {
+              status: 400,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+
+          // Record payment
+          const { data: payment, error: paymentError } = await supabase
+            .from("shop_purchase_payments")
+            .insert({
+              user_id: userId,
+              purchase_id: purchaseId,
+              amount: actualPayment,
+              payment_method: paymentMethod || "cash",
+              notes: notes || null,
+            })
+            .select()
+            .maybeSingle();
+
+          if (paymentError) {
+            console.error("Payment insert error:", paymentError);
+            return new Response(JSON.stringify({ error: "Failed to record payment" }), {
+              status: 500,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+
+          // Update purchase totals
+          const newPaidAmount = Number(purchase.paid_amount || 0) + actualPayment;
+          const newDueAmount = Math.max(0, dueAmount - actualPayment);
+          const newStatus = newDueAmount <= 0 ? "paid" : "partial";
+
+          const { data: updatedPurchase, error: updateError } = await supabase
+            .from("shop_purchases")
+            .update({
+              paid_amount: newPaidAmount,
+              due_amount: newDueAmount,
+              payment_status: newStatus,
+            })
+            .eq("id", purchaseId)
+            .select()
+            .single();
+
+          if (updateError) {
+            console.error("Purchase update error:", updateError);
+          }
+
+          // Update supplier totals if has supplier
+          if (purchase.supplier_id) {
+            const { data: supplier } = await supabase
+              .from("shop_suppliers")
+              .select("total_due")
+              .eq("id", purchase.supplier_id)
+              .single();
+
+            if (supplier) {
+              await supabase
+                .from("shop_suppliers")
+                .update({
+                  total_due: Math.max(0, Number(supplier.total_due) - actualPayment),
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("id", purchase.supplier_id);
+            }
+          }
+
+          // Record cash transaction if paid from cash
+          await supabase
+            .from("shop_cash_transactions")
+            .insert({
+              user_id: userId,
+              shop_id: shopId,
+              type: "out",
+              source: "purchase_payment",
+              amount: actualPayment,
+              reference_type: "purchase_payment",
+              reference_id: purchaseId,
+              notes: `Purchase payment - ${purchase.invoice_number || purchaseId}`,
+              transaction_date: new Date().toISOString(),
+            });
+
+          console.log(`Payment recorded: new_paid=${newPaidAmount}, new_due=${newDueAmount}`);
+
+          return new Response(JSON.stringify({ 
+            payment, 
+            new_paid_amount: newPaidAmount, 
+            new_due_amount: newDueAmount,
+            purchase: updatedPurchase
+          }), {
+            status: 201,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        } catch (err: any) {
+          console.error("Purchase payment error:", err);
+          return new Response(JSON.stringify({ error: err.message || "Payment failed" }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
+
       if (req.method === "POST") {
         const { supplier_id, supplier_name, supplier_contact, invoice_number, items, paid_amount, paid_from_cash, payment_method, notes } = await req.json();
         const totalAmount = items.reduce((sum: number, item: any) => sum + item.total, 0);
