@@ -264,6 +264,7 @@ export function useOfflineCashSummary() {
     customers: any[];
     suppliers: any[];
     products: any[];
+    adjustments: any[];
   }>({
     sales: [],
     purchases: [],
@@ -271,6 +272,7 @@ export function useOfflineCashSummary() {
     customers: [],
     suppliers: [],
     products: [],
+    adjustments: [],
   });
   const [loading, setLoading] = useState(true);
   const { currentShop } = useShop();
@@ -278,13 +280,14 @@ export function useOfflineCashSummary() {
   const refetch = useCallback(async () => {
     setLoading(true);
     try {
-      const [salesRes, purchasesRes, expensesRes, customersRes, suppliersRes, productsRes] = await Promise.all([
+      const [salesRes, purchasesRes, expensesRes, customersRes, suppliersRes, productsRes, adjustmentsRes] = await Promise.all([
         offlineShopService.getSales(),
         offlineShopService.getPurchases(),
         offlineShopService.getExpenses(),
         offlineShopService.getCustomers(),
         offlineShopService.getSuppliers(),
         offlineShopService.getProducts(),
+        offlineShopService.getStockAdjustments(),
       ]);
 
       setData({
@@ -294,6 +297,7 @@ export function useOfflineCashSummary() {
         customers: customersRes.customers || [],
         suppliers: suppliersRes.suppliers || [],
         products: productsRes.products || [],
+        adjustments: adjustmentsRes.adjustments || [],
       });
     } catch (error) {
       console.error('Failed to fetch cash summary:', error);
