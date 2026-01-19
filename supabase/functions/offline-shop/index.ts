@@ -770,7 +770,7 @@ serve(async (req) => {
       // === PERIOD ADJUSTMENTS (damage/loss) ===
       let periodAdjustmentsQuery = supabase
         .from("shop_stock_adjustments")
-        .select("cost_impact, adjustment_type")
+        .select("cost_impact, type")
         .eq("user_id", userId)
         .gte("adjustment_date", startDate);
       if (shopId) {
@@ -780,8 +780,8 @@ serve(async (req) => {
 
       // Calculate period adjustments loss (damage, expired, theft = losses)
       const periodAdjustmentLoss = (periodAdjustments || []).reduce((sum: number, a: any) => {
-        const lossTypes = ['damaged', 'expired', 'theft', 'lost'];
-        if (lossTypes.includes(a.adjustment_type)) {
+        const lossTypes = ['damaged', 'damage', 'expired', 'theft', 'lost'];
+        if (lossTypes.includes(a.type)) {
           return sum + Math.abs(Number(a.cost_impact || 0));
         }
         return sum;
@@ -817,7 +817,7 @@ serve(async (req) => {
       // === THIS MONTH'S ADJUSTMENTS (damage/loss) ===
       let monthAdjustmentsQuery = supabase
         .from("shop_stock_adjustments")
-        .select("cost_impact, adjustment_type")
+        .select("cost_impact, type")
         .eq("user_id", userId)
         .gte("adjustment_date", startOfMonth);
       if (shopId) {
@@ -827,8 +827,8 @@ serve(async (req) => {
 
       // Calculate adjustments loss (damage, expired, theft = losses)
       const monthAdjustmentLoss = (monthAdjustments || []).reduce((sum: number, a: any) => {
-        const lossTypes = ['damaged', 'expired', 'theft', 'lost'];
-        if (lossTypes.includes(a.adjustment_type)) {
+        const lossTypes = ['damaged', 'damage', 'expired', 'theft', 'lost'];
+        if (lossTypes.includes(a.type)) {
           return sum + Math.abs(Number(a.cost_impact || 0));
         }
         return sum;
