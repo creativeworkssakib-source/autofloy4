@@ -1153,8 +1153,20 @@ const ShopLoans = () => {
                                 {isSelected && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
                               </span>
                             )}
-                            <span className="font-medium">#{item.installment_number}</span>
-                            <span className="text-muted-foreground">{formatDateFull(item.due_date)}</span>
+                            <div>
+                              <div className="flex items-center gap-1">
+                                <span className="font-medium">#{item.installment_number}</span>
+                                <span className="text-muted-foreground">{formatDateFull(item.due_date)}</span>
+                              </div>
+                              {!item.is_paid && item.principal && item.interest && (
+                                <div className="text-[10px] text-muted-foreground">
+                                  <span className="text-green-600">৳{Math.round(item.principal).toLocaleString()}</span>
+                                  <span className="mx-0.5">+</span>
+                                  <span className="text-orange-500">৳{Math.round(item.interest).toLocaleString()}</span>
+                                  <span className="ml-0.5 opacity-60">({t.principal}+{t.interest})</span>
+                                </div>
+                              )}
+                            </div>
                           </div>
                           <div className="text-right">
                             <span className="font-medium">৳{Math.round(item.amount).toLocaleString()}</span>
