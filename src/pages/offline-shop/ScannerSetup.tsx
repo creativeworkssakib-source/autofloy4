@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { Html5QrcodeScanner, Html5QrcodeScanType } from "html5-qrcode";
 import { 
   Scan, 
   Usb, 
@@ -19,7 +20,15 @@ import {
   Save,
   Plug,
   Play,
-  Info
+  Info,
+  Camera,
+  Bluetooth,
+  Smartphone,
+  Laptop,
+  HelpCircle,
+  CheckCircle,
+  Circle,
+  ChevronRight
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -31,6 +40,7 @@ import { offlineShopService, ScannerDevice } from "@/services/offlineShopService
 import { useShop } from "@/contexts/ShopContext";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface ScanLog {
   id: string;
@@ -44,6 +54,7 @@ interface ScanLog {
 const ScannerSetup = () => {
   const { language } = useLanguage();
   const { currentShop } = useShop();
+  const [activeTab, setActiveTab] = useState<"usb" | "camera" | "bluetooth">("usb");
   const [isTestMode, setIsTestMode] = useState(false);
   const [lastScannedCode, setLastScannedCode] = useState<string | null>(null);
   const [scannerConnected, setScannerConnected] = useState(false);
@@ -67,6 +78,12 @@ const ScannerSetup = () => {
     matchRate: 0,
   });
   const [recentLogs, setRecentLogs] = useState<ScanLog[]>([]);
+  
+  // Camera scanner state
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const cameraScannerRef = useRef<Html5QrcodeScanner | null>(null);
+  const cameraContainerRef = useRef<HTMLDivElement>(null);
   
   const barcodeBufferRef = useRef<string>("");
   const lastKeyTimeRef = useRef<number>(0);
@@ -105,14 +122,80 @@ const ScannerSetup = () => {
     }
   }, [currentShop?.id]);
 
+  // Handle scan result - unified for all scanner types
+  const handleScanResult = useCallback((scannedCode: string, speed?: number) => {
+    setLastScannedCode(scannedCode);
+    if (speed) setScanSpeed(speed);
+    
+    // Find product
+    const product = products.find(p => 
+      p.barcode === scannedCode || 
+      p.sku === scannedCode
+    );
+    
+    // Update stats
+    setScannerStats(prev => ({
+      ...prev,
+      totalScans: prev.totalScans + 1,
+      matchedScans: product ? prev.matchedScans + 1 : prev.matchedScans,
+      unmatchedScans: product ? prev.unmatchedScans : prev.unmatchedScans + 1,
+      avgSpeed: speed ? Math.round((prev.avgSpeed * prev.totalScans + speed) / (prev.totalScans + 1)) : prev.avgSpeed,
+      matchRate: Math.round(((product ? prev.matchedScans + 1 : prev.matchedScans) / (prev.totalScans + 1)) * 100),
+    }));
+    
+    // Add to test results
+    setTestResults(prev => [{
+      code: scannedCode,
+      product: product?.name || null,
+      time: new Date(),
+    }, ...prev.slice(0, 9)]);
+    
+    // Play sound feedback
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      oscillator.frequency.value = product ? 800 : 300;
+      oscillator.type = 'sine';
+      gainNode.gain.value = 0.1;
+      oscillator.start();
+      oscillator.stop(audioContext.currentTime + 0.1);
+    } catch (e) {
+      // Sound not available
+    }
+    
+    // Vibrate on mobile
+    if (navigator.vibrate) {
+      navigator.vibrate(product ? [100] : [50, 50, 50]);
+    }
+    
+    if (product) {
+      toast.success(
+        language === 'bn' 
+          ? `✓ পাওয়া গেছে: ${product.name}`
+          : `✓ Found: ${product.name}`
+      );
+    } else {
+      toast.warning(
+        language === 'bn'
+          ? `✗ পাওয়া যায়নি: ${scannedCode}`
+          : `✗ Not found: ${scannedCode}`
+      );
+    }
+    
+    return product;
+  }, [products, language]);
+
   // Register scanner device
-  const registerScannerDevice = useCallback(async (deviceName: string) => {
+  const registerScannerDevice = useCallback(async (deviceName: string, deviceType: 'keyboard' | 'camera' | 'bluetooth' = 'keyboard') => {
     try {
       const result = await offlineShopService.saveScannerDevice({
         name: deviceName,
         device_name: deviceName,
         device_id: `scanner_${Date.now()}`,
-        device_type: 'keyboard',
+        device_type: deviceType,
         is_active: true,
       });
       
@@ -222,7 +305,7 @@ const ScannerSetup = () => {
     }
   }, [language]);
 
-  // Start scanner detection
+  // Start scanner detection (USB/Bluetooth)
   const startScannerDetection = useCallback(() => {
     setIsDetecting(true);
     setConnectionStatus('checking');
@@ -248,9 +331,14 @@ const ScannerSetup = () => {
     }, 30000);
   }, [language, scannerConnected]);
 
-  // USB Scanner listener
+  // USB/Bluetooth Scanner listener (both work via keyboard events)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Skip if user is typing in an input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+      
       const currentTime = Date.now();
       const timeDiff = currentTime - lastKeyTimeRef.current;
       
@@ -264,56 +352,17 @@ const ScannerSetup = () => {
         const totalTime = currentTime - (scanTimesRef.current[0] || currentTime);
         const speed = totalTime > 0 ? (scannedCode.length / (totalTime / 1000)) : 0;
         
-        setScanSpeed(speed);
-        setLastScannedCode(scannedCode);
-        
-        // Find product
-        const product = products.find(p => 
-          p.barcode === scannedCode || 
-          p.sku === scannedCode
-        );
-        
         // Auto-detect scanner on first fast scan
         if (speed >= 25 && !scannerConnected && isDetecting) {
+          const scannerType = activeTab === 'bluetooth' ? 'bluetooth' : 'keyboard';
           const deviceName = language === 'bn' 
-            ? `USB স্ক্যানার (${Math.round(speed)} c/s)` 
-            : `USB Scanner (${Math.round(speed)} c/s)`;
-          registerScannerDevice(deviceName);
+            ? `${activeTab === 'bluetooth' ? 'Bluetooth' : 'USB'} স্ক্যানার (${Math.round(speed)} c/s)` 
+            : `${activeTab === 'bluetooth' ? 'Bluetooth' : 'USB'} Scanner (${Math.round(speed)} c/s)`;
+          registerScannerDevice(deviceName, scannerType);
           setIsDetecting(false);
         }
         
-        // Update stats
-        setScannerStats(prev => ({
-          ...prev,
-          totalScans: prev.totalScans + 1,
-          matchedScans: product ? prev.matchedScans + 1 : prev.matchedScans,
-          unmatchedScans: product ? prev.unmatchedScans : prev.unmatchedScans + 1,
-          avgSpeed: Math.round((prev.avgSpeed * prev.totalScans + speed) / (prev.totalScans + 1)),
-          matchRate: Math.round(((product ? prev.matchedScans + 1 : prev.matchedScans) / (prev.totalScans + 1)) * 100),
-        }));
-        
-        // Add to test results in test mode
-        if (isTestMode) {
-          setTestResults(prev => [{
-            code: scannedCode,
-            product: product?.name || null,
-            time: new Date(),
-          }, ...prev.slice(0, 9)]);
-          
-          if (product) {
-            toast.success(
-              language === 'bn' 
-                ? `✓ পাওয়া গেছে: ${product.name}`
-                : `✓ Found: ${product.name}`
-            );
-          } else {
-            toast.warning(
-              language === 'bn'
-                ? `✗ পাওয়া যায়নি: ${scannedCode}`
-                : `✗ Not found: ${scannedCode}`
-            );
-          }
-        }
+        handleScanResult(scannedCode, speed);
         
         barcodeBufferRef.current = "";
         scanTimesRef.current = [];
@@ -327,10 +376,74 @@ const ScannerSetup = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [products, isTestMode, language, scannerConnected, isDetecting, registerScannerDevice]);
+  }, [products, language, scannerConnected, isDetecting, registerScannerDevice, handleScanResult, activeTab]);
+
+  // Camera Scanner Functions
+  const initCameraScanner = useCallback(() => {
+    if (!cameraContainerRef.current || cameraScannerRef.current) return;
+    
+    setCameraError(null);
+    
+    try {
+      const scanner = new Html5QrcodeScanner(
+        "camera-scanner-container",
+        {
+          fps: 10,
+          qrbox: { width: 250, height: 150 },
+          supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA],
+          rememberLastUsedCamera: true,
+        },
+        false
+      );
+
+      scanner.render(
+        (decodedText) => {
+          handleScanResult(decodedText);
+        },
+        (errorMessage) => {
+          console.debug("Camera scan error:", errorMessage);
+        }
+      );
+
+      cameraScannerRef.current = scanner;
+      setIsCameraActive(true);
+      
+      // Register camera as scanner device
+      if (!savedDevices.some(d => d.device_type === 'camera')) {
+        registerScannerDevice(
+          language === 'bn' ? 'ক্যামেরা স্ক্যানার' : 'Camera Scanner',
+          'camera'
+        );
+      }
+    } catch (err) {
+      console.error("Failed to initialize camera scanner:", err);
+      setCameraError(language === 'bn' ? 'ক্যামেরা চালু করা যায়নি' : 'Failed to start camera');
+    }
+  }, [handleScanResult, language, savedDevices, registerScannerDevice]);
+
+  const stopCameraScanner = useCallback(() => {
+    if (cameraScannerRef.current) {
+      try {
+        cameraScannerRef.current.clear();
+      } catch (e) {
+        console.debug("Camera cleanup error:", e);
+      }
+      cameraScannerRef.current = null;
+    }
+    setIsCameraActive(false);
+  }, []);
+
+  // Cleanup camera on tab change or unmount
+  useEffect(() => {
+    if (activeTab !== 'camera') {
+      stopCameraScanner();
+    }
+    return () => stopCameraScanner();
+  }, [activeTab, stopCameraScanner]);
 
   const clearLogs = async () => {
     setRecentLogs([]);
+    setTestResults([]);
     setScannerStats({
       totalScans: 0,
       matchedScans: 0,
@@ -363,8 +476,8 @@ const ScannerSetup = () => {
             </h1>
             <p className="text-muted-foreground">
               {language === 'bn' 
-                ? 'আপনার USB বারকোড স্ক্যানার কনফিগার করুন' 
-                : 'Configure your USB barcode scanner'}
+                ? 'USB, ক্যামেরা বা Bluetooth স্ক্যানার কনফিগার করুন' 
+                : 'Configure USB, Camera or Bluetooth scanner'}
             </p>
           </div>
           
@@ -391,250 +504,560 @@ const ScannerSetup = () => {
           </div>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2">
-          {/* Scanner Detection Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Usb className="h-5 w-5" />
-                {language === 'bn' ? 'স্ক্যানার সনাক্তকরণ' : 'Scanner Detection'}
-              </CardTitle>
-              <CardDescription>
-                {language === 'bn' 
-                  ? 'আপনার USB স্ক্যানার স্বয়ংক্রিয়ভাবে সনাক্ত করুন'
-                  : 'Automatically detect your USB scanner'}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {!scannerConnected ? (
-                <div className="text-center py-6">
-                  <Monitor className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-                  <p className="text-muted-foreground mb-4">
-                    {language === 'bn' 
-                      ? 'কোনো স্ক্যানার সংযুক্ত নেই'
-                      : 'No scanner connected'}
-                  </p>
-                  <Button 
-                    onClick={startScannerDetection}
-                    disabled={isDetecting}
-                    className="gap-2"
-                  >
-                    {isDetecting ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        {language === 'bn' ? 'সনাক্ত করা হচ্ছে...' : 'Detecting...'}
-                      </>
-                    ) : (
-                      <>
-                        <Play className="h-4 w-4" />
-                        {language === 'bn' ? 'সনাক্তকরণ শুরু করুন' : 'Start Detection'}
-                      </>
-                    )}
-                  </Button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-4 p-4 bg-green-500/10 rounded-lg border border-green-500/30">
-                  <CheckCircle2 className="h-8 w-8 text-green-600" />
-                  <div>
-                    <p className="font-medium text-green-700 dark:text-green-400">
-                      {language === 'bn' ? 'স্ক্যানার সক্রিয়' : 'Scanner Active'}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {language === 'bn' 
-                        ? 'আপনার স্ক্যানার ব্যবহারের জন্য প্রস্তুত'
-                        : 'Your scanner is ready to use'}
-                    </p>
-                  </div>
-                </div>
-              )}
+        {/* Scanner Type Tabs */}
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full">
+          <TabsList className="grid w-full grid-cols-3 mb-6">
+            <TabsTrigger value="usb" className="gap-2">
+              <Usb className="h-4 w-4" />
+              <span className="hidden sm:inline">{language === 'bn' ? 'USB স্ক্যানার' : 'USB Scanner'}</span>
+              <span className="sm:hidden">USB</span>
+            </TabsTrigger>
+            <TabsTrigger value="camera" className="gap-2">
+              <Camera className="h-4 w-4" />
+              <span className="hidden sm:inline">{language === 'bn' ? 'ক্যামেরা' : 'Camera'}</span>
+              <span className="sm:hidden">{language === 'bn' ? 'ক্যামেরা' : 'Cam'}</span>
+            </TabsTrigger>
+            <TabsTrigger value="bluetooth" className="gap-2">
+              <Bluetooth className="h-4 w-4" />
+              <span className="hidden sm:inline">Bluetooth</span>
+              <span className="sm:hidden">BT</span>
+            </TabsTrigger>
+          </TabsList>
 
-              {/* Test Mode */}
-              <div className="pt-4 border-t">
-                <div className="flex items-center justify-between mb-4">
-                  <h4 className="font-medium">
-                    {language === 'bn' ? 'টেস্ট মোড' : 'Test Mode'}
-                  </h4>
-                  <Button
-                    variant={isTestMode ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setIsTestMode(!isTestMode)}
-                  >
-                    {isTestMode 
-                      ? (language === 'bn' ? 'বন্ধ করুন' : 'Stop')
-                      : (language === 'bn' ? 'শুরু করুন' : 'Start')}
-                  </Button>
-                </div>
-                
-                {isTestMode && (
-                  <div className="space-y-3">
-                    <div className="p-3 bg-muted rounded-lg text-center">
-                      <p className="text-sm text-muted-foreground mb-2">
-                        {language === 'bn' ? 'সর্বশেষ স্ক্যান:' : 'Last Scan:'}
+          {/* USB Scanner Tab */}
+          <TabsContent value="usb" className="space-y-6">
+            <div className="grid gap-6 md:grid-cols-2">
+              {/* USB Scanner Detection Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Usb className="h-5 w-5" />
+                    {language === 'bn' ? 'USB স্ক্যানার সনাক্তকরণ' : 'USB Scanner Detection'}
+                  </CardTitle>
+                  <CardDescription>
+                    {language === 'bn' 
+                      ? 'আপনার USB স্ক্যানার স্বয়ংক্রিয়ভাবে সনাক্ত করুন'
+                      : 'Automatically detect your USB scanner'}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {!scannerConnected ? (
+                    <div className="text-center py-6">
+                      <div className="relative mx-auto w-24 h-16 mb-4">
+                        <div className="absolute inset-0 border-4 border-primary/40 rounded-lg flex items-center justify-center animate-pulse">
+                          <div className="flex gap-0.5">
+                            {[...Array(12)].map((_, i) => (
+                              <div
+                                key={i}
+                                className="bg-primary/60 rounded-full"
+                                style={{
+                                  width: i % 3 === 0 ? "3px" : "2px",
+                                  height: `${15 + Math.random() * 15}px`,
+                                }}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                      <p className="text-muted-foreground mb-4">
+                        {language === 'bn' 
+                          ? 'কোনো স্ক্যানার সংযুক্ত নেই'
+                          : 'No scanner connected'}
                       </p>
-                      <p className="font-mono text-lg font-bold">
-                        {lastScannedCode || '-'}
-                      </p>
-                      {scanSpeed > 0 && (
-                        <p className="text-xs text-muted-foreground">
-                          {Math.round(scanSpeed)} {language === 'bn' ? 'অক্ষর/সেকেন্ড' : 'chars/sec'}
+                      <Button 
+                        onClick={startScannerDetection}
+                        disabled={isDetecting}
+                        className="gap-2"
+                      >
+                        {isDetecting ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            {language === 'bn' ? 'সনাক্ত করা হচ্ছে...' : 'Detecting...'}
+                          </>
+                        ) : (
+                          <>
+                            <Play className="h-4 w-4" />
+                            {language === 'bn' ? 'সনাক্তকরণ শুরু করুন' : 'Start Detection'}
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-4 p-4 bg-green-500/10 rounded-lg border border-green-500/30">
+                      <CheckCircle2 className="h-8 w-8 text-green-600" />
+                      <div>
+                        <p className="font-medium text-green-700 dark:text-green-400">
+                          {language === 'bn' ? 'স্ক্যানার সক্রিয়' : 'Scanner Active'}
                         </p>
+                        <p className="text-sm text-muted-foreground">
+                          {language === 'bn' 
+                            ? 'আপনার স্ক্যানার ব্যবহারের জন্য প্রস্তুত'
+                            : 'Your scanner is ready to use'}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Quick Setup Steps */}
+                  <div className="pt-4 border-t">
+                    <h4 className="font-medium mb-3 flex items-center gap-2">
+                      <Info className="h-4 w-4" />
+                      {language === 'bn' ? 'দ্রুত সেটআপ' : 'Quick Setup'}
+                    </h4>
+                    <div className="space-y-2">
+                      {[
+                        language === 'bn' ? 'USB স্ক্যানার কম্পিউটারে লাগান' : 'Plug USB scanner into computer',
+                        language === 'bn' ? '"সনাক্তকরণ শুরু করুন" চাপুন' : 'Click "Start Detection"',
+                        language === 'bn' ? 'যেকোনো বারকোড স্ক্যান করুন' : 'Scan any barcode',
+                      ].map((step, i) => (
+                        <div key={i} className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium">
+                            {i + 1}
+                          </div>
+                          <span>{step}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Saved Devices Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Settings className="h-5 w-5" />
+                    {language === 'bn' ? 'সংরক্ষিত স্ক্যানার' : 'Saved Scanners'}
+                  </CardTitle>
+                  <CardDescription>
+                    {language === 'bn' 
+                      ? 'আপনার সংযুক্ত স্ক্যানার ডিভাইসগুলি পরিচালনা করুন'
+                      : 'Manage your connected scanner devices'}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {savedDevices.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <AlertCircle className="h-10 w-10 mx-auto mb-3 opacity-50" />
+                      <p>{language === 'bn' ? 'কোনো স্ক্যানার সংরক্ষিত নেই' : 'No scanners saved'}</p>
+                      <p className="text-sm mt-1">
+                        {language === 'bn' 
+                          ? 'স্ক্যান করলে স্বয়ংক্রিয়ভাবে সংরক্ষণ হবে'
+                          : 'Scanners will be saved automatically when detected'}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3 max-h-[300px] overflow-y-auto">
+                      {savedDevices.map((device) => {
+                        const displayName = device.device_name || device.name;
+                        const DeviceIcon = device.device_type === 'camera' ? Camera : 
+                                          device.device_type === 'bluetooth' ? Bluetooth : Usb;
+                        return (
+                          <div 
+                            key={device.id}
+                            className={cn(
+                              "p-3 rounded-lg border flex items-center justify-between",
+                              device.is_active && device.id === activeDeviceId
+                                ? "bg-green-500/10 border-green-500/30"
+                                : "bg-muted/50"
+                            )}
+                          >
+                            <div className="flex items-center gap-3">
+                              <DeviceIcon className={cn(
+                                "h-5 w-5",
+                                device.is_active && device.id === activeDeviceId
+                                  ? "text-green-600"
+                                  : "text-muted-foreground"
+                              )} />
+                              <div>
+                                {editingDeviceId === device.id ? (
+                                  <div className="flex items-center gap-2">
+                                    <Input
+                                      value={editingDeviceName}
+                                      onChange={(e) => setEditingDeviceName(e.target.value)}
+                                      className="h-7 w-40"
+                                      autoFocus
+                                    />
+                                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={saveDeviceName}>
+                                      <Save className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <p className="font-medium text-sm">{displayName}</p>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Badge 
+                                variant={device.is_active && device.id === activeDeviceId ? "default" : "secondary"}
+                                className={cn(
+                                  "text-xs",
+                                  device.is_active && device.id === activeDeviceId && "bg-green-600"
+                                )}
+                              >
+                                {device.is_active && device.id === activeDeviceId
+                                  ? (language === 'bn' ? 'সক্রিয়' : 'Active')
+                                  : (language === 'bn' ? 'নিষ্ক্রিয়' : 'Inactive')}
+                              </Badge>
+                              
+                              {!(device.is_active && device.id === activeDeviceId) && (
+                                <Button 
+                                  size="sm" 
+                                  variant="outline"
+                                  className="h-7 px-2 text-xs text-green-600 border-green-600 hover:bg-green-50"
+                                  onClick={() => reconnectDevice(device)}
+                                >
+                                  <Plug className="h-3 w-3 mr-1" />
+                                  {language === 'bn' ? 'সংযুক্ত' : 'Connect'}
+                                </Button>
+                              )}
+                              
+                              <Button 
+                                size="sm" 
+                                variant="ghost" 
+                                className="h-7 w-7 p-0"
+                                onClick={() => {
+                                  setEditingDeviceId(device.id);
+                                  setEditingDeviceName(displayName);
+                                }}
+                              >
+                                <Edit2 className="h-3 w-3" />
+                              </Button>
+                              
+                              {device.is_active && device.id === activeDeviceId ? (
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost" 
+                                  className="h-7 w-7 p-0 text-orange-600"
+                                  onClick={() => disconnectDevice(device.id)}
+                                >
+                                  <Power className="h-3 w-3" />
+                                </Button>
+                              ) : (
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost" 
+                                  className="h-7 w-7 p-0 text-red-600"
+                                  onClick={() => deleteDevice(device.id)}
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          {/* Camera Scanner Tab */}
+          <TabsContent value="camera" className="space-y-6">
+            <div className="grid gap-6 md:grid-cols-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Camera className="h-5 w-5" />
+                    {language === 'bn' ? 'ক্যামেরা স্ক্যানার' : 'Camera Scanner'}
+                  </CardTitle>
+                  <CardDescription>
+                    {language === 'bn' 
+                      ? 'মোবাইল বা ল্যাপটপ ক্যামেরা দিয়ে বারকোড স্ক্যান করুন'
+                      : 'Scan barcodes using your mobile or laptop camera'}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {!isCameraActive ? (
+                    <div className="text-center py-6">
+                      <div className="relative mx-auto w-20 h-20 mb-4 bg-muted rounded-full flex items-center justify-center">
+                        <Camera className="h-10 w-10 text-muted-foreground" />
+                      </div>
+                      <p className="text-muted-foreground mb-4">
+                        {language === 'bn' 
+                          ? 'ক্যামেরা স্ক্যানার শুরু করতে নিচের বাটনে ক্লিক করুন'
+                          : 'Click the button below to start camera scanner'}
+                      </p>
+                      <Button onClick={initCameraScanner} className="gap-2">
+                        <Camera className="h-4 w-4" />
+                        {language === 'bn' ? 'ক্যামেরা চালু করুন' : 'Start Camera'}
+                      </Button>
+                      
+                      {cameraError && (
+                        <p className="text-sm text-red-500 mt-4">{cameraError}</p>
                       )}
                     </div>
-                    
-                    {testResults.length > 0 && (
-                      <div className="space-y-2 max-h-48 overflow-y-auto">
-                        {testResults.map((result, i) => (
-                          <div 
-                            key={i}
-                            className={cn(
-                              "p-2 rounded flex items-center justify-between text-sm",
-                              result.product 
-                                ? "bg-green-500/10 border border-green-500/30" 
-                                : "bg-red-500/10 border border-red-500/30"
-                            )}
-                          >
-                            <span className="font-mono">{result.code}</span>
-                            <span className={result.product ? "text-green-600" : "text-red-600"}>
-                              {result.product || (language === 'bn' ? 'পাওয়া যায়নি' : 'Not found')}
-                            </span>
+                  ) : (
+                    <div className="space-y-4">
+                      <div 
+                        id="camera-scanner-container"
+                        ref={cameraContainerRef}
+                        className="w-full min-h-[280px] bg-muted rounded-lg overflow-hidden"
+                      />
+                      <div className="flex justify-center">
+                        <Button variant="outline" onClick={stopCameraScanner} className="gap-2">
+                          <XCircle className="h-4 w-4" />
+                          {language === 'bn' ? 'ক্যামেরা বন্ধ করুন' : 'Stop Camera'}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Camera Tips */}
+                  <div className="pt-4 border-t">
+                    <h4 className="font-medium mb-3 flex items-center gap-2">
+                      <HelpCircle className="h-4 w-4" />
+                      {language === 'bn' ? 'ভালো স্ক্যানের জন্য টিপস' : 'Tips for better scanning'}
+                    </h4>
+                    <ul className="space-y-2 text-sm text-muted-foreground">
+                      <li className="flex items-start gap-2">
+                        <CheckCircle className="h-4 w-4 mt-0.5 text-green-500" />
+                        {language === 'bn' ? 'পর্যাপ্ত আলো রাখুন' : 'Ensure good lighting'}
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <CheckCircle className="h-4 w-4 mt-0.5 text-green-500" />
+                        {language === 'bn' ? 'বারকোড সোজা ধরুন' : 'Hold barcode straight'}
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <CheckCircle className="h-4 w-4 mt-0.5 text-green-500" />
+                        {language === 'bn' ? '১০-১৫ সেমি দূরত্ব রাখুন' : 'Keep 10-15cm distance'}
+                      </li>
+                    </ul>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Scan Results */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Scan className="h-5 w-5" />
+                    {language === 'bn' ? 'স্ক্যান ফলাফল' : 'Scan Results'}
+                  </CardTitle>
+                  <CardDescription>
+                    {language === 'bn' ? 'সাম্প্রতিক স্ক্যান করা বারকোড' : 'Recently scanned barcodes'}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {testResults.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <Scan className="h-10 w-10 mx-auto mb-3 opacity-50" />
+                      <p>{language === 'bn' ? 'এখনো কিছু স্ক্যান করা হয়নি' : 'No scans yet'}</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-[350px] overflow-y-auto">
+                      {testResults.map((result, i) => (
+                        <div 
+                          key={i}
+                          className={cn(
+                            "p-3 rounded-lg flex items-center justify-between",
+                            result.product 
+                              ? "bg-green-500/10 border border-green-500/30" 
+                              : "bg-red-500/10 border border-red-500/30"
+                          )}
+                        >
+                          <div>
+                            <p className="font-mono text-sm">{result.code}</p>
+                            <p className={cn(
+                              "text-sm",
+                              result.product ? "text-green-600" : "text-red-600"
+                            )}>
+                              {result.product || (language === 'bn' ? 'প্রোডাক্ট পাওয়া যায়নি' : 'Product not found')}
+                            </p>
                           </div>
-                        ))}
+                          {result.product ? (
+                            <CheckCircle2 className="h-5 w-5 text-green-600" />
+                          ) : (
+                            <XCircle className="h-5 w-5 text-red-600" />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          {/* Bluetooth Scanner Tab */}
+          <TabsContent value="bluetooth" className="space-y-6">
+            <div className="grid gap-6 md:grid-cols-2">
+              {/* Bluetooth Pairing Guide */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Bluetooth className="h-5 w-5" />
+                    {language === 'bn' ? 'Bluetooth স্ক্যানার সেটআপ' : 'Bluetooth Scanner Setup'}
+                  </CardTitle>
+                  <CardDescription>
+                    {language === 'bn' 
+                      ? 'Bluetooth স্ক্যানার কিভাবে সংযুক্ত করবেন তা দেখুন'
+                      : 'Learn how to connect your Bluetooth scanner'}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {/* Pairing Steps */}
+                  <div className="space-y-4">
+                    <h4 className="font-medium">
+                      {language === 'bn' ? 'সংযোগ নির্দেশাবলী' : 'Connection Instructions'}
+                    </h4>
+                    
+                    <div className="space-y-3">
+                      {[
+                        {
+                          icon: Power,
+                          title: language === 'bn' ? 'স্ক্যানার চালু করুন' : 'Turn on scanner',
+                          desc: language === 'bn' ? 'Bluetooth স্ক্যানারের পাওয়ার বাটন চাপুন' : 'Press the power button on your Bluetooth scanner'
+                        },
+                        {
+                          icon: Bluetooth,
+                          title: language === 'bn' ? 'Pairing মোডে রাখুন' : 'Enable pairing mode',
+                          desc: language === 'bn' ? 'সাধারণত ৫ সেকেন্ড পাওয়ার বাটন ধরে রাখুন' : 'Usually hold power button for 5 seconds'
+                        },
+                        {
+                          icon: Smartphone,
+                          title: language === 'bn' ? 'ডিভাইসে Bluetooth খুলুন' : 'Open device Bluetooth',
+                          desc: language === 'bn' ? 'ফোন/ল্যাপটপের Bluetooth সেটিংস খুলুন' : 'Open Bluetooth settings on your phone/laptop'
+                        },
+                        {
+                          icon: Plug,
+                          title: language === 'bn' ? 'স্ক্যানার Pair করুন' : 'Pair the scanner',
+                          desc: language === 'bn' ? 'নতুন ডিভাইস লিস্টে স্ক্যানার সিলেক্ট করুন' : 'Select scanner from new devices list'
+                        },
+                        {
+                          icon: CheckCircle2,
+                          title: language === 'bn' ? 'সংযোগ সম্পন্ন!' : 'Connected!',
+                          desc: language === 'bn' ? 'এখন USB স্ক্যানারের মতোই কাজ করবে' : 'Now works just like a USB scanner'
+                        }
+                      ].map((step, i) => (
+                        <div key={i} className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                            <step.icon className="h-4 w-4 text-primary" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-sm">{step.title}</p>
+                            <p className="text-xs text-muted-foreground">{step.desc}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Test Bluetooth Scanner */}
+                  <div className="pt-4 border-t">
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="font-medium">
+                        {language === 'bn' ? 'Bluetooth স্ক্যানার টেস্ট' : 'Test Bluetooth Scanner'}
+                      </h4>
+                    </div>
+                    <Button 
+                      onClick={startScannerDetection}
+                      disabled={isDetecting}
+                      className="w-full gap-2"
+                    >
+                      {isDetecting ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          {language === 'bn' ? 'স্ক্যান করুন...' : 'Waiting for scan...'}
+                        </>
+                      ) : (
+                        <>
+                          <Play className="h-4 w-4" />
+                          {language === 'bn' ? 'টেস্ট শুরু করুন' : 'Start Test'}
+                        </>
+                      )}
+                    </Button>
+                    {lastScannedCode && (
+                      <div className="mt-4 p-3 bg-muted rounded-lg text-center">
+                        <p className="text-sm text-muted-foreground mb-1">
+                          {language === 'bn' ? 'শেষ স্ক্যান:' : 'Last scan:'}
+                        </p>
+                        <p className="font-mono font-bold">{lastScannedCode}</p>
                       </div>
                     )}
                   </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+                </CardContent>
+              </Card>
 
-          {/* Saved Devices Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Settings className="h-5 w-5" />
-                {language === 'bn' ? 'সংরক্ষিত স্ক্যানার' : 'Saved Scanners'}
-              </CardTitle>
-              <CardDescription>
-                {language === 'bn' 
-                  ? 'আপনার সংযুক্ত স্ক্যানার ডিভাইসগুলি পরিচালনা করুন'
-                  : 'Manage your connected scanner devices'}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {savedDevices.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <AlertCircle className="h-10 w-10 mx-auto mb-3 opacity-50" />
-                  <p>{language === 'bn' ? 'কোনো স্ক্যানার সংরক্ষিত নেই' : 'No scanners saved'}</p>
-                  <p className="text-sm mt-1">
+              {/* Supported Brands */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Info className="h-5 w-5" />
+                    {language === 'bn' ? 'সাপোর্টেড ব্র্যান্ড' : 'Supported Brands'}
+                  </CardTitle>
+                  <CardDescription>
                     {language === 'bn' 
-                      ? 'স্ক্যান করলে স্বয়ংক্রিয়ভাবে সংরক্ষণ হবে'
-                      : 'Scanners will be saved automatically when detected'}
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {savedDevices.map((device) => {
-                    const displayName = device.device_name || device.name;
-                    return (
-                      <div 
-                        key={device.id}
-                        className={cn(
-                          "p-3 rounded-lg border flex items-center justify-between",
-                          device.is_active && device.id === activeDeviceId
-                            ? "bg-green-500/10 border-green-500/30"
-                            : "bg-muted/50"
-                        )}
-                      >
-                        <div className="flex items-center gap-3">
-                          <Usb className={cn(
-                            "h-5 w-5",
-                            device.is_active && device.id === activeDeviceId
-                              ? "text-green-600"
-                              : "text-muted-foreground"
-                          )} />
-                          <div>
-                            {editingDeviceId === device.id ? (
-                              <div className="flex items-center gap-2">
-                                <Input
-                                  value={editingDeviceName}
-                                  onChange={(e) => setEditingDeviceName(e.target.value)}
-                                  className="h-7 w-40"
-                                  autoFocus
-                                />
-                                <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={saveDeviceName}>
-                                  <Save className="h-3 w-3" />
-                                </Button>
-                              </div>
-                            ) : (
-                              <p className="font-medium text-sm">{displayName}</p>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Badge 
-                            variant={device.is_active && device.id === activeDeviceId ? "default" : "secondary"}
-                            className={cn(
-                              "text-xs",
-                              device.is_active && device.id === activeDeviceId && "bg-green-600"
-                            )}
-                          >
-                            {device.is_active && device.id === activeDeviceId
-                              ? (language === 'bn' ? 'সক্রিয়' : 'Active')
-                              : (language === 'bn' ? 'নিষ্ক্রিয়' : 'Inactive')}
-                          </Badge>
-                          
-                          {!(device.is_active && device.id === activeDeviceId) && (
-                            <Button 
-                              size="sm" 
-                              variant="outline"
-                              className="h-7 px-2 text-xs text-green-600 border-green-600 hover:bg-green-50"
-                              onClick={() => reconnectDevice(device)}
-                            >
-                              <Plug className="h-3 w-3 mr-1" />
-                              {language === 'bn' ? 'সংযুক্ত' : 'Connect'}
-                            </Button>
-                          )}
-                          
-                          <Button 
-                            size="sm" 
-                            variant="ghost" 
-                            className="h-7 w-7 p-0"
-                            onClick={() => {
-                              setEditingDeviceId(device.id);
-                              setEditingDeviceName(displayName);
-                            }}
-                          >
-                            <Edit2 className="h-3 w-3" />
-                          </Button>
-                          
-                          {device.is_active && device.id === activeDeviceId ? (
-                            <Button 
-                              size="sm" 
-                              variant="ghost" 
-                              className="h-7 w-7 p-0 text-orange-600"
-                              onClick={() => disconnectDevice(device.id)}
-                            >
-                              <Power className="h-3 w-3" />
-                            </Button>
-                          ) : (
-                            <Button 
-                              size="sm" 
-                              variant="ghost" 
-                              className="h-7 w-7 p-0 text-red-600"
-                              onClick={() => deleteDevice(device.id)}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          )}
-                        </div>
+                      ? 'এই Bluetooth স্ক্যানারগুলো সাপোর্ট করা হয়'
+                      : 'These Bluetooth scanners are supported'}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { name: 'Honeywell', models: 'Voyager 1602g, 1902g' },
+                      { name: 'Zebra/Symbol', models: 'CS4070, DS2278' },
+                      { name: 'Datalogic', models: 'Gryphon GBT4500' },
+                      { name: 'Socket Mobile', models: 'SocketScan S700' },
+                      { name: 'Tera', models: 'HW0002, HW0006' },
+                      { name: 'Eyoyo', models: 'EY-015, EY-017' },
+                    ].map((brand, i) => (
+                      <div key={i} className="p-3 bg-muted/50 rounded-lg">
+                        <p className="font-medium text-sm">{brand.name}</p>
+                        <p className="text-xs text-muted-foreground">{brand.models}</p>
                       </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+                    ))}
+                  </div>
+                  
+                  <div className="mt-4 p-3 bg-blue-500/10 rounded-lg border border-blue-500/30">
+                    <p className="text-sm text-blue-700 dark:text-blue-400">
+                      <Info className="h-4 w-4 inline mr-2" />
+                      {language === 'bn' 
+                        ? 'যেকোনো HID মোড সাপোর্টিং Bluetooth স্ক্যানার কাজ করবে।'
+                        : 'Any Bluetooth scanner with HID mode support will work.'}
+                    </p>
+                  </div>
+
+                  {/* Troubleshooting */}
+                  <div className="mt-6">
+                    <h4 className="font-medium mb-3 flex items-center gap-2">
+                      <HelpCircle className="h-4 w-4" />
+                      {language === 'bn' ? 'সমস্যা সমাধান' : 'Troubleshooting'}
+                    </h4>
+                    <div className="space-y-2 text-sm">
+                      <div className="p-2 rounded bg-muted/50">
+                        <p className="font-medium">{language === 'bn' ? 'স্ক্যানার দেখাচ্ছে না?' : 'Scanner not showing?'}</p>
+                        <p className="text-muted-foreground text-xs">
+                          {language === 'bn' 
+                            ? 'স্ক্যানার pairing মোডে আছে কিনা নিশ্চিত করুন'
+                            : 'Make sure scanner is in pairing mode'}
+                        </p>
+                      </div>
+                      <div className="p-2 rounded bg-muted/50">
+                        <p className="font-medium">{language === 'bn' ? 'সংযোগ বিচ্ছিন্ন হচ্ছে?' : 'Connection dropping?'}</p>
+                        <p className="text-muted-foreground text-xs">
+                          {language === 'bn' 
+                            ? 'স্ক্যানার চার্জ করুন এবং ডিভাইসের কাছে রাখুন'
+                            : 'Charge scanner and keep it close to device'}
+                        </p>
+                      </div>
+                      <div className="p-2 rounded bg-muted/50">
+                        <p className="font-medium">{language === 'bn' ? 'স্ক্যান কাজ করছে না?' : 'Scans not working?'}</p>
+                        <p className="text-muted-foreground text-xs">
+                          {language === 'bn' 
+                            ? 'স্ক্যানার HID/Keyboard মোডে সেট করুন'
+                            : 'Set scanner to HID/Keyboard mode'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+        </Tabs>
 
         {/* Stats Card */}
         <Card>
@@ -686,40 +1109,6 @@ const ScannerSetup = () => {
                 </p>
               </div>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Instructions */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Info className="h-5 w-5" />
-              {language === 'bn' ? 'সেটআপ নির্দেশাবলী' : 'Setup Instructions'}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ol className="space-y-3 list-decimal list-inside text-sm text-muted-foreground">
-              <li>
-                {language === 'bn' 
-                  ? 'আপনার USB বারকোড স্ক্যানার কম্পিউটারে প্লাগ ইন করুন'
-                  : 'Plug your USB barcode scanner into your computer'}
-              </li>
-              <li>
-                {language === 'bn' 
-                  ? '"সনাক্তকরণ শুরু করুন" বাটনে ক্লিক করুন'
-                  : 'Click "Start Detection" button'}
-              </li>
-              <li>
-                {language === 'bn' 
-                  ? 'যেকোনো বারকোড স্ক্যান করুন - স্ক্যানার স্বয়ংক্রিয়ভাবে সনাক্ত হবে'
-                  : 'Scan any barcode - the scanner will be detected automatically'}
-              </li>
-              <li>
-                {language === 'bn' 
-                  ? 'টেস্ট মোডে স্ক্যান করে পণ্য খোঁজা পরীক্ষা করুন'
-                  : 'Test product lookup by scanning in test mode'}
-              </li>
-            </ol>
           </CardContent>
         </Card>
       </div>
