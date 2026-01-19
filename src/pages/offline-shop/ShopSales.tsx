@@ -864,6 +864,9 @@ const ShopSales = () => {
                         <p className="text-xs text-muted-foreground">
                           {formatCurrency(item.unit_price)} x {item.quantity}
                         </p>
+                        <p className="text-[10px] text-muted-foreground/70">
+                          {language === "bn" ? "ক্রয়" : "Cost"}: {formatCurrency(item.purchase_price || 0)}
+                        </p>
                       </div>
                       <div className="flex items-center gap-2">
                         <Input
