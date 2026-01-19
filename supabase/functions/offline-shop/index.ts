@@ -1205,10 +1205,13 @@ serve(async (req) => {
         const purchasePrice = Number(body.purchase_price) || 0;
         const stockQuantity = Number(body.stock_quantity) || 0;
         
+        // Remove non-database fields before inserting
+        const { custom_category, ...productData } = body;
+        
         const { data, error } = await supabase
           .from("shop_products")
           .insert({ 
-            ...body, 
+            ...productData, 
             barcode, 
             user_id: userId, 
             shop_id: shopId,
@@ -1261,7 +1264,8 @@ serve(async (req) => {
 
       if (req.method === "PUT") {
         const body = await req.json();
-        const { id, ...updates } = body;
+        // Remove non-database fields before updating
+        const { id, custom_category, ...updates } = body;
         const { data, error } = await supabase
           .from("shop_products")
           .update({ ...updates, updated_at: new Date().toISOString() })
