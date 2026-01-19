@@ -341,8 +341,8 @@ const ShopSales = () => {
   const discountValue = discount === "" ? 0 : discount;
   const discountAmount = discountType === "percent" ? (subtotal * discountValue) / 100 : discountValue;
   const total = subtotal + taxAmount - discountAmount;
-  const paidValue = paidAmount === "" ? 0 : paidAmount;
-  const dueAmount = total - (paidValue || total);
+  const paidValue = paidAmount === "" ? total : paidAmount;
+  const dueAmount = total - paidValue;
   const changeAmount = paidValue > total ? paidValue - total : 0;
 
   const handleSubmit = async () => {
@@ -962,10 +962,10 @@ const ShopSales = () => {
                 <Label>{t("shop.paidAmount")}</Label>
                 <Input
                   type="number"
-                  value={paidAmount === "" ? "" : (paidAmount || total)}
+                  value={paidAmount}
                   onChange={(e) => {
                     const val = e.target.value;
-                    setPaidAmount(val === "" ? "" : parseFloat(val) || 0);
+                    setPaidAmount(val === "" ? "" : parseFloat(val));
                   }}
                 />
               </div>
