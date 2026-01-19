@@ -964,15 +964,18 @@ serve(async (req) => {
       if (shopId) monthlySalesQuery = monthlySalesQuery.eq("shop_id", shopId);
       const { data: allSales } = await monthlySalesQuery;
 
-      // Top customers by purchases (include both linked customers and customer_name/phone text)
+      // Top customers by purchases - use direct columns (customer_name, customer_phone)
       let customersQuery = supabase
         .from("shop_sales")
-        .select("customer_id, customer_name, customer_phone, total, customer:shop_customers(name, phone)")
+        .select("customer_id, customer_name, customer_phone, total")
         .eq("user_id", userId);
       if (shopId) customersQuery = customersQuery.eq("shop_id", shopId);
       const { data: customerSales, error: customerError } = await customersQuery;
       
-      console.log("Customer sales query result:", { count: customerSales?.length, error: customerError });
+      if (customerError) {
+        console.error("Customer sales query error:", customerError);
+      }
+      console.log("Customer sales count:", customerSales?.length || 0);
 
       // Calculate totals
       const currentTotal = (currentMonthSales || []).reduce((sum: number, s: any) => sum + Number(s.total), 0);
@@ -1015,18 +1018,17 @@ serve(async (req) => {
         worstMonth = { month: sorted[sorted.length - 1].month, monthBn: sorted[sorted.length - 1].monthBn, sales: sorted[sorted.length - 1].sales };
       }
 
-      // Top customers calculation - support both linked customers and customer_name/phone text
-      // Match by: 1) customer_id if exists, 2) name+phone combo, 3) phone only, 4) name only
+      // Top customers calculation - use customer_name and customer_phone directly
+      // Match by: 1) customer_id if exists, 2) name+phone combo, 3) name only
       const customerMap: Record<string, { name: string; phone: string | null; total: number }> = {};
       let totalAllSales = 0;
       
       (customerSales || []).forEach((sale: any) => {
-        // Get customer info from linked customer or from direct fields
-        const customerName = sale.customer?.name || sale.customer_name;
-        const customerPhone = sale.customer?.phone || sale.customer_phone;
+        const customerName = sale.customer_name;
+        const customerPhone = sale.customer_phone;
         
         if (customerName && customerName.trim()) {
-          // Create a unique key: prefer customer_id, then phone+name, then phone, then name
+          // Create a unique key: prefer customer_id, then phone+name, then name only
           let key: string;
           if (sale.customer_id) {
             key = sale.customer_id;
