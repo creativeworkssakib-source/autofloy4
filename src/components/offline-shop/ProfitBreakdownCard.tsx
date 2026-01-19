@@ -13,7 +13,6 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Progress } from "@/components/ui/progress";
 import {
   Tooltip,
   TooltipContent,
@@ -171,10 +170,12 @@ export const ProfitBreakdownCard = ({
                       + {formatCurrency(grossProfit)}
                     </p>
                   </div>
-                  <Progress 
-                    value={grossProfitPercent} 
-                    className="h-1.5 sm:h-2 bg-emerald-500/20" 
-                  />
+                  <div className="h-1.5 sm:h-2 bg-emerald-500/20 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-emerald-500 rounded-full transition-all" 
+                      style={{ width: `${grossProfitPercent}%` }} 
+                    />
+                  </div>
                 </motion.div>
               </TooltipTrigger>
               <TooltipContent side="top" className="max-w-xs">
@@ -208,10 +209,12 @@ export const ProfitBreakdownCard = ({
                       - {formatCurrency(totalExpenses)}
                     </p>
                   </div>
-                  <Progress 
-                    value={expensePercent} 
-                    className="h-1.5 sm:h-2 bg-amber-500/20" 
-                  />
+                  <div className="h-1.5 sm:h-2 bg-amber-500/20 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-amber-500 rounded-full transition-all" 
+                      style={{ width: `${expensePercent}%` }} 
+                    />
+                  </div>
                 </motion.div>
               </TooltipTrigger>
               <TooltipContent side="top" className="max-w-xs">
@@ -250,10 +253,12 @@ export const ProfitBreakdownCard = ({
                           <ArrowRight className="h-3 w-3 sm:h-4 sm:w-4 text-rose-500" />
                         </div>
                       </div>
-                      <Progress 
-                        value={adjustmentPercent} 
-                        className="h-1.5 sm:h-2 bg-rose-500/20" 
-                      />
+                      <div className="h-1.5 sm:h-2 bg-rose-500/20 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-rose-500 rounded-full transition-all" 
+                          style={{ width: `${adjustmentPercent}%` }} 
+                        />
+                      </div>
                     </motion.div>
                   </Link>
                 </TooltipTrigger>
