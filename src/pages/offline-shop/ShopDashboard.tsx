@@ -76,6 +76,7 @@ interface DashboardData {
     sale_date: string;
     payment_status: string;
     customer: { name: string } | null;
+    items?: Array<{ product_name: string }>;
   }>;
   recentProducts: Array<{
     id: string;
@@ -597,9 +598,14 @@ const ShopDashboard = () => {
                       key={sale.id}
                       className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
                     >
-                      <div>
-                        <p className="font-medium">{sale.customer?.name || t("shop.invoiceNumber")}</p>
-                        <p className="text-sm text-muted-foreground">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">
+                          {sale.customer?.name || (language === "bn" ? "সাধারণ বিক্রি" : "General Sale")}
+                        </p>
+                        <p className="text-sm text-muted-foreground truncate">
+                          {sale.items?.map((item: { product_name: string }) => item.product_name).join(", ") || "-"}
+                        </p>
+                        <p className="text-xs text-muted-foreground/70">
                           {sale.invoice_number}
                         </p>
                       </div>

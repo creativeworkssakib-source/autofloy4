@@ -681,12 +681,13 @@ serve(async (req) => {
         (p: any) => p.stock_quantity <= p.min_stock_alert
       );
 
-      // Get recent sales
+      // Get recent sales with items
       let recentSalesQuery = supabase
         .from("shop_sales")
         .select(`
-          id, invoice_number, total, total_profit, sale_date, payment_status,
-          customer:shop_customers(name)
+          id, invoice_number, total, total_profit, sale_date, payment_status, customer_id,
+          customer:shop_customers(name),
+          items:shop_sale_items(product_name)
         `)
         .eq("user_id", userId)
         .order("sale_date", { ascending: false })
