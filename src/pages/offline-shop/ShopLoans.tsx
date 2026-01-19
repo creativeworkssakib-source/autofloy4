@@ -139,6 +139,8 @@ const ShopLoans = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
   const [loanPayments, setLoanPayments] = useState<Payment[]>([]);
+  const [loanSchedule, setLoanSchedule] = useState<any[]>([]);
+  const [interestBreakdown, setInterestBreakdown] = useState<any>(null);
   const [isEditing, setIsEditing] = useState(false);
 
   // Translations
@@ -220,6 +222,16 @@ const ShopLoans = () => {
     loanCompleted: language === "bn" ? "🎉 লোন সম্পূর্ণ পরিশোধ হয়েছে!" : "🎉 Loan fully paid!",
     loadError: language === "bn" ? "লোন লোড করতে সমস্যা হয়েছে" : "Failed to load loans",
     of: language === "bn" ? "/" : "of",
+    interestBreakdown: language === "bn" ? "সুদের বিবরণ" : "Interest Breakdown",
+    totalInterest: language === "bn" ? "মোট সুদ" : "Total Interest",
+    interestPerMonth: language === "bn" ? "প্রতি মাসে সুদ" : "Interest per Month",
+    principalPerMonth: language === "bn" ? "প্রতি মাসে আসল" : "Principal per Month",
+    paymentSchedule: language === "bn" ? "মাসিক পেমেন্ট তারিখ" : "Payment Schedule",
+    dueDate: language === "bn" ? "তারিখ" : "Due Date",
+    principal: language === "bn" ? "আসল" : "Principal",
+    paidOn: language === "bn" ? "পরিশোধ" : "Paid on",
+    pending: language === "bn" ? "বাকি" : "Pending",
+    upcomingPayments: language === "bn" ? "আসন্ন পেমেন্ট" : "Upcoming Payments",
   };
 
   // Form states
@@ -243,8 +255,9 @@ const ShopLoans = () => {
     notes: "",
   });
 
-  // fetchLoanDetails for viewing payment history (still uses API when online, or local data when offline)
+  // fetchLoanDetails for viewing payment history
   const API_BASE = import.meta.env.VITE_SUPABASE_URL;
+  const shopId = localStorage.getItem("autofloy_current_shop_id");
   
   const fetchLoanDetails = async (loanId: string) => {
     if (!token || !isOnline) {
@@ -252,12 +265,17 @@ const ShopLoans = () => {
       const loan = loans.find((l: any) => l.id === loanId);
       if (loan) {
         setSelectedLoan(loan);
-        setLoanPayments([]); // Payments are not stored locally currently
+        setLoanPayments([]);
+        setLoanSchedule([]);
+        setInterestBreakdown(null);
       }
       return;
     }
     try {
-      const res = await fetch(`${API_BASE}/functions/v1/shop-loans/${loanId}`, {
+      const url = shopId 
+        ? `${API_BASE}/functions/v1/offline-shop/loans/${loanId}?shop_id=${shopId}`
+        : `${API_BASE}/functions/v1/offline-shop/loans/${loanId}`;
+      const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
@@ -265,12 +283,16 @@ const ShopLoans = () => {
 
       setSelectedLoan(data.loan);
       setLoanPayments(data.payments || []);
+      setLoanSchedule(data.schedule || []);
+      setInterestBreakdown(data.interestBreakdown || null);
     } catch (error: any) {
       // Fallback to local
       const loan = loans.find((l: any) => l.id === loanId);
       if (loan) {
         setSelectedLoan(loan);
         setLoanPayments([]);
+        setLoanSchedule([]);
+        setInterestBreakdown(null);
       }
     }
   };
@@ -423,6 +445,7 @@ const ShopLoans = () => {
 
   const openPaymentModal = (loan: Loan) => {
     setSelectedLoan(loan);
+    fetchLoanDetails(loan.id); // Fetch details including schedule and payments
     setPaymentData({
       amount: loan.installment_amount.toString(),
       payment_date: new Date().toISOString().split("T")[0],
@@ -1041,7 +1064,7 @@ const ShopLoans = () => {
 
       {/* Payment Modal */}
       <Dialog open={isPaymentModalOpen} onOpenChange={setIsPaymentModalOpen}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{t.installmentPayment}</DialogTitle>
             <DialogDescription>
@@ -1050,12 +1073,90 @@ const ShopLoans = () => {
           </DialogHeader>
           {selectedLoan && (
             <form onSubmit={handlePayment} className="space-y-4">
+              {/* Loan Summary */}
               <div className="p-3 bg-muted/50 rounded-lg">
                 <p className="font-medium">{selectedLoan.lender_name}</p>
                 <p className="text-sm text-muted-foreground">
                   {t.installment} #{selectedLoan.paid_installments + 1} {t.of} {selectedLoan.total_installments}
                 </p>
               </div>
+
+              {/* Interest Breakdown */}
+              {interestBreakdown && (
+                <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <h4 className="font-medium text-sm mb-2 text-blue-700 dark:text-blue-300">{t.interestBreakdown}</h4>
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    <div>
+                      <p className="text-muted-foreground">{t.totalInterest}</p>
+                      <p className="font-semibold text-orange-600">৳{Math.round(interestBreakdown.totalInterest).toLocaleString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">{t.interestPerMonth}</p>
+                      <p className="font-semibold text-orange-500">৳{Math.round(interestBreakdown.interestPerInstallment).toLocaleString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">{t.principalPerMonth}</p>
+                      <p className="font-semibold text-green-600">৳{Math.round(interestBreakdown.principalPerInstallment).toLocaleString()}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Payment Schedule (upcoming) */}
+              {loanSchedule.length > 0 && (
+                <div className="p-3 bg-muted/30 rounded-lg">
+                  <h4 className="font-medium text-sm mb-2">{t.paymentSchedule}</h4>
+                  <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                    {loanSchedule.map((item: any) => (
+                      <div 
+                        key={item.installment_number} 
+                        className={`flex items-center justify-between text-xs p-2 rounded ${
+                          item.is_paid 
+                            ? 'bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800' 
+                            : item.installment_number === selectedLoan.paid_installments + 1
+                            ? 'bg-blue-50 dark:bg-blue-950/30 border-2 border-blue-400'
+                            : 'bg-background border'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          {item.is_paid ? (
+                            <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                          ) : (
+                            <span className="h-3.5 w-3.5 rounded-full border-2 border-muted-foreground/30" />
+                          )}
+                          <span className="font-medium">#{item.installment_number}</span>
+                          <span className="text-muted-foreground">{formatDateFull(item.due_date)}</span>
+                        </div>
+                        <div className="text-right">
+                          <span className="font-medium">৳{Math.round(item.amount).toLocaleString()}</span>
+                          {item.is_paid && item.payment_date && (
+                            <p className="text-green-600 text-[10px]">{t.paidOn}: {formatDate(item.payment_date)}</p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Previous Payments */}
+              {loanPayments.length > 0 && (
+                <div className="p-3 bg-muted/30 rounded-lg">
+                  <h4 className="font-medium text-sm mb-2">{t.paymentHistory}</h4>
+                  <div className="space-y-1.5 max-h-24 overflow-y-auto">
+                    {loanPayments.slice(0, 5).map((payment) => (
+                      <div key={payment.id} className="flex items-center justify-between text-xs p-2 bg-green-50 dark:bg-green-950/30 rounded">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                          <span>#{payment.installment_number}</span>
+                        </div>
+                        <span className="font-medium">৳{payment.amount.toLocaleString()}</span>
+                        <span className="text-muted-foreground">{formatDate(payment.payment_date)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div>
                 <Label>{t.paymentAmount} *</Label>
