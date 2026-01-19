@@ -1988,7 +1988,8 @@ serve(async (req) => {
         const totalCost = items.reduce((sum: number, item: any) => sum + (item.purchase_price || 0) * item.quantity, 0);
         const total = subtotal - (discount || 0) + (tax || 0);
         const totalProfit = total - totalCost;
-        const dueAmount = total - (paid_amount || total);
+        const actualPaidAmount = paid_amount !== undefined && paid_amount !== null ? paid_amount : total;
+        const dueAmount = total - actualPaidAmount;
 
         // Create sale with optional customer info
         const saleData: any = {
@@ -2001,7 +2002,7 @@ serve(async (req) => {
           total,
           total_cost: totalCost,
           total_profit: totalProfit,
-          paid_amount: paid_amount || total,
+          paid_amount: actualPaidAmount,
           due_amount: dueAmount,
           payment_method: payment_method || "cash",
           payment_status: dueAmount > 0 ? "partial" : "paid",
@@ -2157,12 +2158,12 @@ serve(async (req) => {
           // Create cash IN transaction ONLY if payment_method is 'cash'
           // Use the actual sale amount (paid_amount), NOT received_amount
           // received_amount includes change which is returned, so we only track what's kept
-          (payment_method === 'cash' && (paid_amount > 0 || total > 0)) ? supabase.from("shop_cash_transactions").insert({
+          (payment_method === 'cash' && actualPaidAmount > 0) ? supabase.from("shop_cash_transactions").insert({
             user_id: userId,
             shop_id: shopId || null,
             type: "in",
             source: "sale",
-            amount: paid_amount || total, // Actual sale value, not what customer handed over
+            amount: actualPaidAmount, // Only add what was actually paid
             reference_id: sale.id,
             reference_type: "sale",
             notes: `Sale ${invoiceNumber}`,
