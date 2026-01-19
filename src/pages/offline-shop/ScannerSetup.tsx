@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Html5QrcodeScanner, Html5QrcodeScanType } from "html5-qrcode";
+import { Html5Qrcode } from "html5-qrcode";
 import { 
   Scan, 
   Usb, 
@@ -82,7 +82,9 @@ const ScannerSetup = () => {
   // Camera scanner state
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
-  const cameraScannerRef = useRef<Html5QrcodeScanner | null>(null);
+  const [cameraLoading, setCameraLoading] = useState(false);
+  const cameraScannerRef = useRef<Html5Qrcode | null>(null);
+  const videoContainerRef = useRef<HTMLDivElement>(null);
   
   const barcodeBufferRef = useRef<string>("");
   const lastKeyTimeRef = useRef<number>(0);
@@ -378,70 +380,77 @@ const ScannerSetup = () => {
   }, [products, language, scannerConnected, isDetecting, registerScannerDevice, handleScanResult, activeTab]);
 
   // Camera Scanner Functions
-  const initCameraScanner = useCallback(() => {
-    // First set camera active to render the container
-    setIsCameraActive(true);
+  const initCameraScanner = useCallback(async () => {
+    if (cameraScannerRef.current) return;
+    
+    setCameraLoading(true);
     setCameraError(null);
-  }, []);
+    setIsCameraActive(true);
 
-  // Initialize camera scanner when container is available
-  useEffect(() => {
-    if (!isCameraActive || cameraScannerRef.current) return;
+    // Wait a bit for container to render
+    await new Promise(resolve => setTimeout(resolve, 100));
 
-    // Wait for container to render
-    const timer = setTimeout(() => {
-      const container = document.getElementById("camera-scanner-container");
-      if (!container) {
-        setCameraError(language === 'bn' ? 'ক্যামেরা কন্টেইনার পাওয়া যায়নি' : 'Camera container not found');
-        return;
-      }
+    const containerId = "camera-scanner-container";
+    const container = document.getElementById(containerId);
+    
+    if (!container) {
+      setCameraError(language === 'bn' ? 'ক্যামেরা কন্টেইনার পাওয়া যায়নি' : 'Camera container not found');
+      setCameraLoading(false);
+      setIsCameraActive(false);
+      return;
+    }
 
-      try {
-        const scanner = new Html5QrcodeScanner(
-          "camera-scanner-container",
-          {
-            fps: 10,
-            qrbox: { width: 250, height: 150 },
-            supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA],
-            rememberLastUsedCamera: true,
-          },
-          false
-        );
+    try {
+      const html5Qrcode = new Html5Qrcode(containerId);
+      cameraScannerRef.current = html5Qrcode;
 
-        scanner.render(
-          (decodedText) => {
-            handleScanResult(decodedText);
-          },
-          (errorMessage) => {
-            // Ignore non-critical scan errors
-            if (!errorMessage.includes("No MultiFormat Readers")) {
-              console.debug("Camera scan error:", errorMessage);
-            }
-          }
-        );
-
-        cameraScannerRef.current = scanner;
-
-        // Register camera as scanner device
-        if (!savedDevices.some(d => d.device_type === 'camera')) {
-          registerScannerDevice(
-            language === 'bn' ? 'ক্যামেরা স্ক্যানার' : 'Camera Scanner',
-            'camera'
-          );
+      await html5Qrcode.start(
+        { facingMode: "environment" }, // Prefer back camera
+        {
+          fps: 15,
+          qrbox: { width: 280, height: 150 },
+          aspectRatio: 1.777778, // 16:9
+        },
+        (decodedText) => {
+          handleScanResult(decodedText);
+        },
+        () => {
+          // Ignore QR code scan errors (happens constantly when no code is in view)
         }
-      } catch (err) {
-        console.error("Failed to initialize camera scanner:", err);
-        setCameraError(language === 'bn' ? 'ক্যামেরা চালু করা যায়নি। ব্রাউজার permission চেক করুন।' : 'Failed to start camera. Check browser permissions.');
-        setIsCameraActive(false);
+      );
+
+      setCameraLoading(false);
+
+      // Register camera as scanner device
+      if (!savedDevices.some(d => d.device_type === 'camera')) {
+        registerScannerDevice(
+          language === 'bn' ? 'ক্যামেরা স্ক্যানার' : 'Camera Scanner',
+          'camera'
+        );
       }
-    }, 200);
 
-    return () => clearTimeout(timer);
-  }, [isCameraActive, handleScanResult, language, savedDevices, registerScannerDevice]);
+      toast.success(language === 'bn' ? 'ক্যামেরা চালু হয়েছে!' : 'Camera started!');
+    } catch (err: any) {
+      console.error("Failed to start camera:", err);
+      setCameraLoading(false);
+      setIsCameraActive(false);
+      
+      if (err?.message?.includes("Permission")) {
+        setCameraError(language === 'bn' ? 'ক্যামেরা permission দেননি। ব্রাউজার সেটিংস থেকে permission দিন।' : 'Camera permission denied. Allow camera access in browser settings.');
+      } else if (err?.message?.includes("NotFound") || err?.message?.includes("Requested device not found")) {
+        setCameraError(language === 'bn' ? 'কোনো ক্যামেরা পাওয়া যায়নি। ক্যামেরা সংযুক্ত আছে কিনা দেখুন।' : 'No camera found. Make sure a camera is connected.');
+      } else {
+        setCameraError(language === 'bn' ? 'ক্যামেরা চালু করা যায়নি। আবার চেষ্টা করুন।' : 'Failed to start camera. Please try again.');
+      }
+    }
+  }, [handleScanResult, language, savedDevices, registerScannerDevice]);
 
-  const stopCameraScanner = useCallback(() => {
+  const stopCameraScanner = useCallback(async () => {
     if (cameraScannerRef.current) {
       try {
+        if (cameraScannerRef.current.isScanning) {
+          await cameraScannerRef.current.stop();
+        }
         cameraScannerRef.current.clear();
       } catch (e) {
         console.debug("Camera cleanup error:", e);
@@ -449,6 +458,7 @@ const ScannerSetup = () => {
       cameraScannerRef.current = null;
     }
     setIsCameraActive(false);
+    setCameraLoading(false);
   }, []);
 
   // Cleanup camera on tab change or unmount
@@ -456,7 +466,10 @@ const ScannerSetup = () => {
     if (activeTab !== 'camera') {
       stopCameraScanner();
     }
-    return () => stopCameraScanner();
+    return () => {
+      // Cleanup on unmount - use void to handle async
+      void stopCameraScanner();
+    };
   }, [activeTab, stopCameraScanner]);
 
   const clearLogs = async () => {
@@ -798,21 +811,71 @@ const ScannerSetup = () => {
                           ? 'ক্যামেরা স্ক্যানার শুরু করতে নিচের বাটনে ক্লিক করুন'
                           : 'Click the button below to start camera scanner'}
                       </p>
-                      <Button onClick={initCameraScanner} className="gap-2">
-                        <Camera className="h-4 w-4" />
-                        {language === 'bn' ? 'ক্যামেরা চালু করুন' : 'Start Camera'}
+                      <Button onClick={initCameraScanner} disabled={cameraLoading} className="gap-2">
+                        {cameraLoading ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Camera className="h-4 w-4" />
+                        )}
+                        {cameraLoading 
+                          ? (language === 'bn' ? 'চালু হচ্ছে...' : 'Starting...')
+                          : (language === 'bn' ? 'ক্যামেরা চালু করুন' : 'Start Camera')
+                        }
                       </Button>
                       
                       {cameraError && (
-                        <p className="text-sm text-red-500 mt-4">{cameraError}</p>
+                        <div className="mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
+                          <p className="text-sm text-red-500 flex items-start gap-2">
+                            <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                            {cameraError}
+                          </p>
+                        </div>
                       )}
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      <div 
-                        id="camera-scanner-container"
-                        className="w-full min-h-[280px] bg-muted rounded-lg overflow-hidden"
-                      />
+                      {/* Live Camera Feed Container */}
+                      <div className="relative">
+                        <div 
+                          id="camera-scanner-container"
+                          ref={videoContainerRef}
+                          className="w-full min-h-[280px] bg-black rounded-lg overflow-hidden"
+                        />
+                        
+                        {/* Scanning overlay */}
+                        <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                          <div className="relative w-[280px] h-[150px] border-2 border-primary rounded-lg">
+                            {/* Scanning line animation */}
+                            <div className="absolute left-0 right-0 h-0.5 bg-red-500 animate-pulse" 
+                                 style={{ 
+                                   animation: 'scan-line 2s ease-in-out infinite',
+                                   top: '50%'
+                                 }} 
+                            />
+                            {/* Corner markers */}
+                            <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-primary rounded-tl" />
+                            <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-primary rounded-tr" />
+                            <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-primary rounded-bl" />
+                            <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-primary rounded-br" />
+                          </div>
+                        </div>
+
+                        {/* Live indicator */}
+                        <div className="absolute top-3 left-3 flex items-center gap-2 bg-black/60 px-2 py-1 rounded text-white text-xs">
+                          <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                          </span>
+                          LIVE
+                        </div>
+                      </div>
+
+                      <div className="text-center text-sm text-muted-foreground">
+                        {language === 'bn' 
+                          ? 'বারকোডটি বক্সের মধ্যে রাখুন'
+                          : 'Position barcode inside the box'}
+                      </div>
+
                       <div className="flex justify-center">
                         <Button variant="outline" onClick={stopCameraScanner} className="gap-2">
                           <XCircle className="h-4 w-4" />
