@@ -112,7 +112,8 @@ export default function SupplierReturnsTab() {
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAddOpen, setIsAddOpen] = useState(false);
-  const [isViewOpen, setIsViewOpen] = useState(false);
+const [isViewOpen, setIsViewOpen] = useState(false);
+const [isPhotoOpen, setIsPhotoOpen] = useState(false);
   const [selectedReturn, setSelectedReturn] = useState<SupplierReturn | null>(null);
   const [uploading, setUploading] = useState(false);
 
@@ -1120,10 +1121,23 @@ export default function SupplierReturnsTab() {
                   <img
                     src={selectedReturn.photo_url}
                     alt="Return photo"
-                    className="mt-2 w-full max-h-64 object-contain rounded-lg border"
+                    className="mt-2 w-full max-h-64 object-contain rounded-lg border cursor-pointer hover:opacity-80 transition-opacity"
+                    onClick={() => setIsPhotoOpen(true)}
+                    title="Click to enlarge"
                   />
                 </div>
               )}
+
+              {/* Photo Full View Dialog */}
+              <Dialog open={isPhotoOpen} onOpenChange={setIsPhotoOpen}>
+                <DialogContent className="max-w-[90vw] max-h-[90vh] p-2">
+                  <img
+                    src={selectedReturn.photo_url}
+                    alt="Return photo"
+                    className="w-full h-full object-contain max-h-[85vh]"
+                  />
+                </DialogContent>
+              </Dialog>
             </div>
           )}
         </DialogContent>
