@@ -536,10 +536,34 @@ class OfflineShopService {
   }
 
   async sendFollowupSms(params: { customerId: string; customerPhone: string; customerName: string; message: string }) {
-    return this.request<{ success: boolean; message: string }>("sms/followup", {
+    // Call the dedicated send-followup-sms edge function directly
+    const token = authService.getToken();
+    if (!token) {
+      throw new Error("Unauthorized");
+    }
+
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/send-followup-sms`, {
       method: "POST",
-      body: JSON.stringify(params),
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        customers: [{
+          customerName: params.customerName,
+          customerPhone: params.customerPhone,
+          message: params.message,
+        }],
+      }),
     });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || data.message || "Failed to send SMS");
+    }
+
+    return data;
   }
 
   // Product History
