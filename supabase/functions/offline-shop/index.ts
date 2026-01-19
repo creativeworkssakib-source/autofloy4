@@ -7503,11 +7503,86 @@ serve(async (req) => {
     }
 
     // ===== LOANS CRUD =====
-    if (resource === "loans" || resource === "loans/payment") {
+    // Handle loans, loans/payment, and loans/{id} routes
+    const isLoansRoute = resource === "loans" || resource === "loans/payment" || resource.startsWith("loans/");
+    if (isLoansRoute) {
       const isPaymentRoute = resource === "loans/payment";
+      // Check if it's a single loan request (loans/{uuid})
+      const loanIdMatch = resource.match(/^loans\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i);
+      const singleLoanId = loanIdMatch ? loanIdMatch[1] : null;
+      
+      // GET single loan with payments
+      if (req.method === "GET" && singleLoanId) {
+        const { data: loan, error: loanError } = await supabase
+          .from("shop_loans")
+          .select("*")
+          .eq("id", singleLoanId)
+          .eq("user_id", userId)
+          .single();
+
+        if (loanError) throw loanError;
+
+        const { data: payments, error: paymentsError } = await supabase
+          .from("shop_loan_payments")
+          .select("*")
+          .eq("loan_id", singleLoanId)
+          .order("payment_date", { ascending: false });
+
+        if (paymentsError) throw paymentsError;
+
+        // Calculate interest breakdown per installment
+        const loanAmount = Number(loan.loan_amount);
+        const interestRate = Number(loan.interest_rate);
+        const totalInstallments = Number(loan.total_installments);
+        const installmentAmount = Number(loan.installment_amount);
+        
+        // Simple interest: total interest = principal * rate * time (in years)
+        const totalInterest = (loanAmount * interestRate * totalInstallments / 12) / 100;
+        const interestPerInstallment = totalInterest / totalInstallments;
+        const principalPerInstallment = installmentAmount - interestPerInstallment;
+        
+        // Generate payment schedule
+        const startDate = new Date(loan.start_date);
+        const paymentDay = loan.payment_day || startDate.getDate();
+        const schedule = [];
+        
+        for (let i = 0; i < totalInstallments; i++) {
+          const scheduleDate = new Date(startDate);
+          scheduleDate.setMonth(scheduleDate.getMonth() + i);
+          scheduleDate.setDate(paymentDay);
+          
+          const isPaid = i < loan.paid_installments;
+          const payment = payments?.find(p => p.installment_number === i + 1);
+          
+          schedule.push({
+            installment_number: i + 1,
+            due_date: scheduleDate.toISOString().split('T')[0],
+            amount: installmentAmount,
+            principal: principalPerInstallment,
+            interest: interestPerInstallment,
+            is_paid: isPaid,
+            payment_date: payment?.payment_date || null,
+            payment_amount: payment?.amount || null,
+          });
+        }
+
+        return new Response(JSON.stringify({ 
+          loan, 
+          payments,
+          interestBreakdown: {
+            totalInterest,
+            interestPerInstallment,
+            principalPerInstallment,
+          },
+          schedule
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       
       // GET - List all loans
-      if (req.method === "GET" && !isPaymentRoute) {
+      if (req.method === "GET" && !isPaymentRoute && !singleLoanId) {
         const status = url.searchParams.get("status");
         
         let query = supabase
