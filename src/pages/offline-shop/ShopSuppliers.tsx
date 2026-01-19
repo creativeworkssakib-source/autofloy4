@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
-import { Plus, Search, MoreHorizontal, Pencil, Trash2, Truck, Phone, Mail, Eye, Building2, MapPin, CreditCard, Calendar, FileText, Package, DollarSign, TrendingUp, Clock, Info, ShoppingCart, Check, X, Banknote, Timer, AlertTriangle, PackagePlus } from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { Plus, Search, MoreHorizontal, Pencil, Trash2, Truck, Phone, Mail, Eye, Building2, MapPin, CreditCard, Calendar, FileText, Package, DollarSign, TrendingUp, Clock, Info, ShoppingCart, Check, X, Banknote, Timer, AlertTriangle, PackagePlus, Upload, FileSpreadsheet, Loader2, History, RotateCcw } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import DateRangeFilter, { DateRangePreset, DateRange, getDateRangeFromPreset } from "@/components/offline-shop/DateRangeFilter";
 import { isWithinInterval, startOfDay, endOfDay } from "date-fns";
@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Progress } from "@/components/ui/progress";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -30,7 +31,6 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { DeleteConfirmDialog } from "@/components/offline-shop/DeleteConfirmDialog";
-
 import {
   Select,
   SelectContent,
@@ -47,11 +47,16 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+import { format } from "date-fns";
 import { toast } from "sonner";
 import ShopLayout from "@/components/offline-shop/ShopLayout";
 import AddToStockModal, { PurchasedProduct } from "@/components/offline-shop/AddToStockModal";
 import { offlineShopService } from "@/services/offlineShopService";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useShop } from "@/contexts/ShopContext";
+import * as XLSX from "xlsx";
 
 interface Supplier {
   id: string;
@@ -75,6 +80,9 @@ interface Supplier {
 
 interface Purchase {
   id: string;
+  supplier_id?: string;
+  supplier_name?: string;
+  supplier_contact?: string;
   purchase_date: string;
   total_amount: number;
   paid_amount: number;
@@ -85,13 +93,22 @@ interface Purchase {
 }
 
 interface PurchaseItem {
-  id: string;
+  id?: string;
+  product_id?: string;
   product_name: string;
   quantity: number;
   unit_price: number;
+  selling_price?: number;
   total: number;
   expiry_date?: string;
-  product_id?: string;
+}
+
+interface PurchasePayment {
+  id: string;
+  amount: number;
+  payment_method: string;
+  payment_date: string;
+  notes?: string;
 }
 
 interface ProductSummary {
@@ -109,6 +126,24 @@ interface FormPurchaseItem {
   selling_price: number;
   total: number;
   location?: string;
+}
+
+interface ImportProgress {
+  total: number;
+  current: number;
+  success: number;
+  failed: number;
+  currentProduct: string;
+  errors: string[];
+}
+
+interface TrashItem {
+  id: string;
+  original_table: string;
+  original_id: string;
+  data: any;
+  deleted_at: string;
+  expires_at: string;
 }
 
 const BUSINESS_TYPES = [
@@ -153,7 +188,15 @@ const ORDER_STATUS = [
 const ShopSuppliers = () => {
   const { t, language } = useLanguage();
   const navigate = useNavigate();
+  const { currentShop } = useShop();
+  const [searchParams] = useSearchParams();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Main view tab - suppliers or purchases list
+  const [mainViewTab, setMainViewTab] = useState<"suppliers" | "purchases">("suppliers");
+
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   
@@ -162,6 +205,10 @@ const ShopSuppliers = () => {
   const [dateRange, setDateRange] = useState<DateRange>(getDateRangeFromPreset('this_year'));
   const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>();
 
+  // Purchase date filters
+  const [purchaseDateFrom, setPurchaseDateFrom] = useState<Date | undefined>(undefined);
+  const [purchaseDateTo, setPurchaseDateTo] = useState<Date | undefined>(undefined);
+
   const handleDateRangeChange = (preset: DateRangePreset, dates: DateRange) => {
     setDateRangePreset(preset);
     setDateRange(dates);
@@ -169,9 +216,11 @@ const ShopSuppliers = () => {
       setCustomDateRange(dates);
     }
   };
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
   const [viewingSupplier, setViewingSupplier] = useState<Supplier | null>(null);
+  const [viewingPurchase, setViewingPurchase] = useState<Purchase | null>(null);
   const [supplierPurchases, setSupplierPurchases] = useState<Purchase[]>([]);
   const [activeTab, setActiveTab] = useState("info");
   const [modalTab, setModalTab] = useState("info");
@@ -185,10 +234,28 @@ const ShopSuppliers = () => {
   const [isPayingDue, setIsPayingDue] = useState(false);
 
   // Bulk selection state
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectedSupplierIds, setSelectedSupplierIds] = useState<string[]>([]);
+  const [selectedPurchaseIds, setSelectedPurchaseIds] = useState<Set<string>>(new Set());
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [purchaseDeleteDialogOpen, setPurchaseDeleteDialogOpen] = useState(false);
 
+  // Import progress
+  const [isImporting, setIsImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState<ImportProgress | null>(null);
+
+  // Purchase payment modal
+  const [paymentPurchase, setPaymentPurchase] = useState<Purchase | null>(null);
+  const [purchasePaymentAmount, setPurchasePaymentAmount] = useState(0);
+  const [purchasePaymentMethod, setPurchasePaymentMethod] = useState("cash");
+  const [purchasePaymentNotes, setPurchasePaymentNotes] = useState("");
+  const [isProcessingPurchasePayment, setIsProcessingPurchasePayment] = useState(false);
+  const [purchasePaymentHistory, setPurchasePaymentHistory] = useState<PurchasePayment[]>([]);
+
+  // Trash bin states
+  const [showTrash, setShowTrash] = useState(false);
+  const [trashItems, setTrashItems] = useState<TrashItem[]>([]);
+  const [isLoadingTrash, setIsLoadingTrash] = useState(false);
 
   // Simplified form data - only essential fields
   const [formData, setFormData] = useState({
@@ -213,11 +280,11 @@ const ShopSuppliers = () => {
   // Purchase items state for the form
   const [purchaseItems, setPurchaseItems] = useState<FormPurchaseItem[]>([]);
   const [paidAmount, setPaidAmount] = useState(0);
-  const [purchaseNotes, setPurchaseNotes] = useState("");
+  const [purchaseNotesField, setPurchaseNotesField] = useState("");
   const [isOrder, setIsOrder] = useState(false);
   const [orderStatus, setOrderStatus] = useState<"pending" | "confirmed" | "received" | "cancelled">("pending");
   const [duePaymentDate, setDuePaymentDate] = useState("");
-  const [purchasePaymentMethod, setPurchasePaymentMethod] = useState("cash");
+  const [formPurchasePaymentMethod, setFormPurchasePaymentMethod] = useState("cash");
 
   // Add to stock modal state
   const [isAddToStockModalOpen, setIsAddToStockModalOpen] = useState(false);
@@ -226,8 +293,12 @@ const ShopSuppliers = () => {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const result = await offlineShopService.getSuppliers();
-      setSuppliers(result.suppliers || []);
+      const [suppliersRes, purchasesRes] = await Promise.all([
+        offlineShopService.getSuppliers(),
+        offlineShopService.getPurchases(),
+      ]);
+      setSuppliers(suppliersRes.suppliers || []);
+      setPurchases(purchasesRes.purchases || []);
     } catch (error) {
       toast.error(t("shop.loadError"));
     } finally {
@@ -237,14 +308,26 @@ const ShopSuppliers = () => {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [currentShop?.id]);
+
+  // Handle supplier query param from other pages
+  useEffect(() => {
+    const supplierParam = searchParams.get("supplier");
+    if (supplierParam && suppliers.length > 0) {
+      const selected = suppliers.find((s) => s.id === supplierParam);
+      if (selected) {
+        handleSelectPreviousSupplier(selected);
+        setModalTab("purchase");
+        setIsModalOpen(true);
+      }
+    }
+  }, [searchParams, suppliers]);
 
   const filteredSuppliers = useMemo(() => {
     return suppliers.filter((s) => {
       const matchesSearch = s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         s.phone?.includes(searchQuery);
       
-      // Filter by date (based on created_at or last_purchase_date)
       const dateToCheck = s.last_purchase_date ? new Date(s.last_purchase_date) : new Date(s.created_at);
       const matchesDate = isWithinInterval(dateToCheck, { start: startOfDay(dateRange.from), end: endOfDay(dateRange.to) });
       
@@ -252,33 +335,98 @@ const ShopSuppliers = () => {
     });
   }, [suppliers, searchQuery, dateRange]);
 
-  // Bulk selection handlers
-  const toggleSelectAll = () => {
-    if (selectedIds.length === filteredSuppliers.length) {
-      setSelectedIds([]);
+  const filteredPurchases = useMemo(() => {
+    return purchases.filter((purchase) => {
+      const searchLower = searchQuery.toLowerCase();
+      const matchesSearch = !searchQuery || 
+        (purchase.supplier_name?.toLowerCase().includes(searchLower)) ||
+        (purchase.items?.some(item => item.product_name?.toLowerCase().includes(searchLower)));
+
+      const purchaseDate = new Date(purchase.purchase_date);
+      const matchesDateFrom = !purchaseDateFrom || purchaseDate >= purchaseDateFrom;
+      const matchesDateTo = !purchaseDateTo || purchaseDate <= new Date(purchaseDateTo.getTime() + 24 * 60 * 60 * 1000 - 1);
+
+      return matchesSearch && matchesDateFrom && matchesDateTo;
+    });
+  }, [purchases, searchQuery, purchaseDateFrom, purchaseDateTo]);
+
+  // Supplier bulk selection handlers
+  const toggleSelectAllSuppliers = () => {
+    if (selectedSupplierIds.length === filteredSuppliers.length) {
+      setSelectedSupplierIds([]);
     } else {
-      setSelectedIds(filteredSuppliers.map((s) => s.id));
+      setSelectedSupplierIds(filteredSuppliers.map((s) => s.id));
     }
   };
 
-  const toggleSelectOne = (id: string) => {
-    setSelectedIds((prev) =>
+  const toggleSelectOneSupplier = (id: string) => {
+    setSelectedSupplierIds((prev) =>
       prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
     );
   };
 
-  const handleBulkDelete = async () => {
-    if (selectedIds.length === 0) return;
+  const handleBulkDeleteSuppliers = async () => {
+    if (selectedSupplierIds.length === 0) return;
     setIsBulkDeleting(true);
     try {
-      const result = await offlineShopService.deleteSuppliers(selectedIds);
+      const result = await offlineShopService.deleteSuppliers(selectedSupplierIds);
       const deletedCount = result.deleted?.length || 0;
       toast.success(
         language === "bn"
           ? `${deletedCount}টি সরবরাহকারী ট্র্যাশে সরানো হয়েছে`
           : `${deletedCount} supplier(s) moved to trash`
       );
-      setSelectedIds([]);
+      setSelectedSupplierIds([]);
+      loadData();
+    } catch (error) {
+      toast.error(t("shop.errorOccurred"));
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
+
+  // Purchase bulk selection handlers
+  const toggleSelectAllPurchases = () => {
+    if (selectedPurchaseIds.size === filteredPurchases.length) {
+      setSelectedPurchaseIds(new Set());
+    } else {
+      setSelectedPurchaseIds(new Set(filteredPurchases.map(p => p.id)));
+    }
+  };
+
+  const toggleSelectOnePurchase = (id: string) => {
+    const newSet = new Set(selectedPurchaseIds);
+    if (newSet.has(id)) {
+      newSet.delete(id);
+    } else {
+      newSet.add(id);
+    }
+    setSelectedPurchaseIds(newSet);
+  };
+
+  const handleBulkDeletePurchases = async () => {
+    if (selectedPurchaseIds.size === 0) return;
+    
+    setIsBulkDeleting(true);
+    try {
+      const ids = Array.from(selectedPurchaseIds);
+      let successCount = 0;
+      for (const id of ids) {
+        try {
+          await offlineShopService.deletePurchase(id);
+          successCount++;
+        } catch (e) {
+          console.error(`Failed to delete purchase ${id}:`, e);
+        }
+      }
+      
+      if (successCount > 0) {
+        toast.success(language === "bn" 
+          ? `${successCount}টি পার্চেজ মুছে ফেলা হয়েছে` 
+          : `${successCount} purchases deleted`);
+      }
+      
+      setSelectedPurchaseIds(new Set());
       loadData();
     } catch (error) {
       toast.error(t("shop.errorOccurred"));
@@ -338,7 +486,6 @@ const ShopSuppliers = () => {
         await offlineShopService.updateSupplier({ id: editingSupplier.id, ...formData });
         toast.success(t("shop.supplierUpdated"));
       } else if (selectedPreviousSupplier) {
-        // Using existing supplier - no need to create, just use their ID for purchase
         supplierId = selectedPreviousSupplier.id;
         toast.success(
           language === "bn"
@@ -368,9 +515,9 @@ const ShopSuppliers = () => {
               total: item.total,
             })),
             paid_amount: paidAmount,
-            payment_method: purchasePaymentMethod,
+            payment_method: formPurchasePaymentMethod,
             due_payment_date: duePaymentDate || null,
-            notes: purchaseNotes + (isOrder ? ` [${language === "bn" ? "অর্ডার স্ট্যাটাস" : "Order Status"}: ${ORDER_STATUS.find(s => s.value === orderStatus)?.[language === "bn" ? "label_bn" : "label_en"]}]` : ""),
+            notes: purchaseNotesField + (isOrder ? ` [${language === "bn" ? "অর্ডার স্ট্যাটাস" : "Order Status"}: ${ORDER_STATUS.find(s => s.value === orderStatus)?.[language === "bn" ? "label_bn" : "label_en"]}]` : ""),
           };
 
           await offlineShopService.createPurchase(purchaseData);
@@ -402,7 +549,7 @@ const ShopSuppliers = () => {
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDeleteSupplier = async (id: string) => {
     try {
       await offlineShopService.deleteSupplier(id);
       toast.success(
@@ -416,7 +563,7 @@ const ShopSuppliers = () => {
     }
   };
 
-  const handleView = async (supplier: Supplier) => {
+  const handleViewSupplier = async (supplier: Supplier) => {
     setViewingSupplier(supplier);
     setActiveTab("info");
     try {
@@ -427,7 +574,7 @@ const ShopSuppliers = () => {
     }
   };
 
-  const handleEdit = (supplier: Supplier) => {
+  const handleEditSupplier = (supplier: Supplier) => {
     setEditingSupplier(supplier);
     setFormData({
       name: supplier.name,
@@ -461,11 +608,11 @@ const ShopSuppliers = () => {
     });
     setPurchaseItems([]);
     setPaidAmount(0);
-    setPurchaseNotes("");
+    setPurchaseNotesField("");
     setIsOrder(false);
     setOrderStatus("pending");
     setDuePaymentDate("");
-    setPurchasePaymentMethod("cash");
+    setFormPurchasePaymentMethod("cash");
     setModalTab("info");
     setSelectedPreviousSupplier(null);
     setSupplierSearchQuery("");
@@ -482,19 +629,6 @@ const ShopSuppliers = () => {
       s.email?.toLowerCase().includes(query)
     );
   });
-
-  // Detect matching supplier based on contact info
-  const detectMatchingSupplier = () => {
-    const { name, phone, email } = formData;
-    if (!name && !phone && !email) return null;
-    
-    return suppliers.find((s) => {
-      const nameMatch = name && s.name.toLowerCase() === name.toLowerCase();
-      const phoneMatch = phone && s.phone === phone;
-      const emailMatch = email && s.email?.toLowerCase() === email.toLowerCase();
-      return nameMatch || phoneMatch || emailMatch;
-    });
-  };
 
   // Handle selecting a previous supplier
   const handleSelectPreviousSupplier = (supplier: Supplier) => {
@@ -532,7 +666,7 @@ const ShopSuppliers = () => {
     });
   };
 
-  // Pay Due Handler
+  // Pay Supplier Due Handler
   const handleOpenPayDue = (supplier: Supplier) => {
     setPayingSupplier(supplier);
     setPaymentAmount(Number(supplier.total_due) || 0);
@@ -569,6 +703,282 @@ const ShopSuppliers = () => {
     }
   };
 
+  // Purchase Payment handlers
+  const loadPurchasePaymentHistory = async (purchaseId: string) => {
+    try {
+      const response = await offlineShopService.getPurchasePayments(purchaseId);
+      const payments = response?.payments || [];
+      setPurchasePaymentHistory(payments.map((p: any) => ({
+        id: p.id,
+        amount: p.amount,
+        payment_method: p.payment_method,
+        payment_date: p.payment_date,
+        notes: p.notes,
+      })));
+    } catch (error) {
+      console.error("Failed to load payment history:", error);
+      setPurchasePaymentHistory([]);
+    }
+  };
+
+  const openPurchasePaymentModal = async (purchase: Purchase) => {
+    setPurchasePaymentHistory([]);
+    setPaymentPurchase(purchase);
+    setPurchasePaymentAmount(Number(purchase.due_amount) || 0);
+    setPurchasePaymentMethod("cash");
+    setPurchasePaymentNotes("");
+    loadPurchasePaymentHistory(purchase.id);
+  };
+
+  const handleAddPurchasePayment = async () => {
+    if (!paymentPurchase || purchasePaymentAmount <= 0) return;
+    
+    setIsProcessingPurchasePayment(true);
+    try {
+      await offlineShopService.addPurchasePayment(
+        paymentPurchase.id,
+        purchasePaymentAmount,
+        purchasePaymentMethod,
+        purchasePaymentNotes
+      );
+      toast.success(language === "bn" ? "পেমেন্ট যোগ হয়েছে" : "Payment added");
+      setPaymentPurchase(null);
+      setPurchasePaymentAmount(0);
+      setPurchasePaymentNotes("");
+      loadData();
+    } catch (error) {
+      toast.error(language === "bn" ? "পেমেন্ট ব্যর্থ হয়েছে" : "Payment failed");
+    } finally {
+      setIsProcessingPurchasePayment(false);
+    }
+  };
+
+  // Trash bin handlers
+  const loadTrash = async () => {
+    setIsLoadingTrash(true);
+    try {
+      const res = await offlineShopService.getTrash();
+      const allTrash = res.trash || res.items || [];
+      const purchaseTrash = allTrash.filter((item: any) => item.original_table === "shop_purchases");
+      setTrashItems(purchaseTrash);
+    } catch (error) {
+      console.error("Failed to load trash:", error);
+    } finally {
+      setIsLoadingTrash(false);
+    }
+  };
+
+  const handleRestoreFromTrash = async (id: string) => {
+    try {
+      await offlineShopService.restoreFromTrash(id, "shop_purchases");
+      toast.success(language === "bn" ? "রিস্টোর হয়েছে" : "Restored successfully");
+      loadTrash();
+      loadData();
+    } catch (error) {
+      toast.error(language === "bn" ? "রিস্টোর ব্যর্থ হয়েছে" : "Restore failed");
+    }
+  };
+
+  const handlePermanentDelete = async (id: string) => {
+    try {
+      await offlineShopService.permanentDelete(id, "shop_purchases");
+      toast.success(language === "bn" ? "স্থায়ীভাবে মুছে ফেলা হয়েছে" : "Permanently deleted");
+      loadTrash();
+    } catch (error) {
+      toast.error(language === "bn" ? "মুছে ফেলা যায়নি" : "Delete failed");
+    }
+  };
+
+  // Excel import handler
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const validTypes = [
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/vnd.ms-excel",
+      "text/csv"
+    ];
+
+    if (!validTypes.includes(file.type) && !file.name.endsWith(".xlsx") && !file.name.endsWith(".xls") && !file.name.endsWith(".csv")) {
+      toast.error(language === "bn" ? "শুধুমাত্র Excel বা CSV ফাইল সাপোর্টেড" : "Only Excel or CSV files are supported");
+      return;
+    }
+
+    setIsImporting(true);
+    setImportProgress({
+      total: 0,
+      current: 0,
+      success: 0,
+      failed: 0,
+      currentProduct: "",
+      errors: [],
+    });
+
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data, { type: "array" });
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
+
+      if (rows.length < 2) {
+        toast.error(language === "bn" ? "ফাইলে কোনো ডাটা নেই" : "No data found in file");
+        setIsImporting(false);
+        setImportProgress(null);
+        return;
+      }
+
+      const headers = rows[0].map(h => String(h).toLowerCase().trim());
+      const findColumn = (names: string[]) => headers.findIndex(h => names.some(n => h.includes(n)));
+
+      const nameCol = findColumn(["name", "product", "নাম", "পণ্য"]);
+      const purchasePriceCol = findColumn(["purchase", "cost", "buy", "কেনা", "ক্রয়"]);
+      const sellingPriceCol = findColumn(["sell", "sale", "price", "বিক্রয়", "দাম"]);
+      const quantityCol = findColumn(["quantity", "qty", "পরিমাণ", "সংখ্যা"]);
+      const supplierCol = findColumn(["supplier", "সাপ্লায়ার"]);
+      const expiryCol = findColumn(["expiry", "expire", "মেয়াদ"]);
+
+      if (nameCol === -1) {
+        toast.error(language === "bn" ? "'Name' কলাম পাওয়া যায়নি" : "Could not find 'Name' column");
+        setIsImporting(false);
+        setImportProgress(null);
+        return;
+      }
+
+      const dataRows = rows.slice(1).filter(row => row[nameCol]);
+      const totalItems = dataRows.length;
+
+      setImportProgress(prev => prev ? { ...prev, total: totalItems } : null);
+
+      const purchasesBySupplier: Record<string, any[]> = {};
+
+      for (let i = 0; i < dataRows.length; i++) {
+        const row = dataRows[i];
+        const name = String(row[nameCol] || "").trim();
+        const supplier = supplierCol !== -1 ? String(row[supplierCol] || "").trim() : "";
+
+        if (!name) continue;
+
+        setImportProgress(prev => prev ? {
+          ...prev,
+          current: i + 1,
+          currentProduct: name,
+        } : null);
+
+        const quantity = quantityCol !== -1 ? parseInt(row[quantityCol]) || 1 : 1;
+        const unitPrice = purchasePriceCol !== -1 ? parseFloat(row[purchasePriceCol]) || 0 : 0;
+        const sellingPrice = sellingPriceCol !== -1 ? parseFloat(row[sellingPriceCol]) || 0 : 0;
+        const expiryDate = expiryCol !== -1 && row[expiryCol] ? String(row[expiryCol]) : undefined;
+
+        const item = {
+          product_name: name,
+          quantity,
+          unit_price: unitPrice,
+          selling_price: sellingPrice,
+          total: quantity * unitPrice,
+          expiry_date: expiryDate,
+        };
+
+        if (!purchasesBySupplier[supplier]) {
+          purchasesBySupplier[supplier] = [];
+        }
+        purchasesBySupplier[supplier].push(item);
+
+        await new Promise(resolve => setTimeout(resolve, 30));
+      }
+
+      const purchasesToImport = Object.entries(purchasesBySupplier).map(([supplierName, items]) => ({
+        supplier_name: supplierName,
+        items,
+      }));
+
+      let successCount = 0;
+      let failedCount = 0;
+      const errors: string[] = [];
+      for (const p of purchasesToImport) {
+        try {
+          await offlineShopService.createPurchase({
+            supplier_name: p.supplier_name,
+            items: p.items,
+          });
+          successCount++;
+        } catch (err: any) {
+          failedCount++;
+          errors.push(err.message || "Unknown error");
+        }
+      }
+
+      setImportProgress({
+        total: totalItems,
+        current: totalItems,
+        success: successCount,
+        failed: failedCount,
+        currentProduct: language === "bn" ? "সম্পন্ন!" : "Complete!",
+        errors,
+      });
+
+      if (successCount > 0) {
+        toast.success(
+          language === "bn"
+            ? `${successCount}টি পার্চেজ সফলভাবে যোগ হয়েছে`
+            : `${successCount} purchases imported successfully`
+        );
+        loadData();
+      }
+
+      if (failedCount > 0) {
+        toast.error(
+          language === "bn"
+            ? `${failedCount}টি পার্চেজ যোগ হয়নি`
+            : `${failedCount} purchases failed to import`
+        );
+      }
+
+      setTimeout(() => {
+        setIsImporting(false);
+        setImportProgress(null);
+      }, 3000);
+
+    } catch (error) {
+      console.error("Import error:", error);
+      toast.error(language === "bn" ? "ইম্পোর্ট ব্যর্থ হয়েছে" : "Import failed");
+      setIsImporting(false);
+      setImportProgress(null);
+    }
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  // Download template
+  const downloadTemplate = () => {
+    const isEnglish = language === "en";
+    
+    const headers = isEnglish
+      ? ["Product Name", "Quantity", "Purchase Price", "Selling Price", "Supplier", "Expiry Date"]
+      : ["পণ্যের নাম", "পরিমাণ", "ক্রয় মূল্য", "বিক্রয় মূল্য", "সাপ্লায়ার", "মেয়াদ"];
+
+    const exampleData = isEnglish
+      ? [
+          ["Rice 5kg", 100, 450, 520, "ABC Supplier", "2025-12-31"],
+          ["Sugar 1kg", 50, 85, 95, "ABC Supplier", "2025-06-30"],
+          ["Oil 1ltr", 30, 180, 210, "XYZ Trading", "2025-09-15"],
+        ]
+      : [
+          ["চাল ৫ কেজি", 100, 450, 520, "এবিসি সাপ্লায়ার", "২০২৫-১২-৩১"],
+          ["চিনি ১ কেজি", 50, 85, 95, "এবিসি সাপ্লায়ার", "২০২৫-০৬-৩০"],
+          ["তেল ১ লিটার", 30, 180, 210, "এক্সওয়াইজেড ট্রেডিং", "২০২৫-০৯-১৫"],
+        ];
+
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...exampleData]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, isEnglish ? "Purchases" : "ক্রয়");
+
+    XLSX.writeFile(wb, isEnglish ? "purchase_import_template.xlsx" : "ক্রয়_ইম্পোর্ট_টেমপ্লেট.xlsx");
+  };
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat(language === "bn" ? "bn-BD" : "en-US", {
       style: "currency",
@@ -585,7 +995,7 @@ const ShopSuppliers = () => {
     });
   };
 
-  // Load all purchased products efficiently using the new endpoint
+  // Load all purchased products for Add to Stock
   const loadAllPurchasedProducts = async () => {
     try {
       const result = await offlineShopService.getPendingStockItems();
@@ -596,7 +1006,6 @@ const ShopSuppliers = () => {
     }
   };
 
-  // Handle opening the Add to Stock modal
   const handleOpenAddToStockModal = async () => {
     setIsAddToStockModalOpen(true);
     await loadAllPurchasedProducts();
@@ -680,207 +1089,466 @@ const ShopSuppliers = () => {
     return acc;
   }, [] as ProductSummary[]);
 
-  const totalUniqueProducts = productSummary.length;
-  const totalItemsPurchased = productSummary.reduce((sum, p) => sum + p.totalQuantity, 0);
-
   return (
     <ShopLayout>
       <div className="space-y-4 sm:space-y-6">
         <div className="flex flex-col gap-3 sm:gap-4">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold">{t("shop.suppliersTitle")}</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold">
+              {language === "bn" ? "সরবরাহকারী ও ক্রয়" : "Suppliers & Purchases"}
+            </h1>
             <p className="text-sm sm:text-base text-muted-foreground">
-              {t("shop.suppliersDesc")} • {suppliers.length} {language === "bn" ? "টি সরবরাহকারী" : "suppliers"}
-              {selectedIds.length > 0 && (
-                <span className="ml-2 text-primary">
-                  ({selectedIds.length} {language === "bn" ? "টি নির্বাচিত" : "selected"})
-                </span>
-              )}
+              {language === "bn" 
+                ? "সরবরাহকারী পরিচালনা এবং পণ্য ক্রয়" 
+                : "Manage suppliers and product purchases"}
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {selectedIds.length > 0 && (
-              <Button variant="destructive" size="sm" disabled={isBulkDeleting} onClick={() => setDeleteDialogOpen(true)}>
-                <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
-                {language === "bn" ? "মুছুন" : "Delete"} ({selectedIds.length})
-              </Button>
-            )}
 
+          {/* Action Buttons */}
+          <div className="flex flex-wrap gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              className="hidden"
+              onChange={handleFileUpload}
+            />
+            <Button variant="outline" size="sm" onClick={downloadTemplate} className="text-xs sm:text-sm">
+              <FileSpreadsheet className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
+              {language === "bn" ? "টেমপ্লেট" : "Template"}
+            </Button>
+            <Button 
+              variant="outline"
+              size="sm"
+              className="text-xs sm:text-sm"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isImporting}
+            >
+              <Upload className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
+              {language === "bn" ? "Excel ইম্পোর্ট" : "Import"}
+            </Button>
             <Button variant="outline" onClick={handleOpenAddToStockModal} size="sm" className="text-xs sm:text-sm">
               <PackagePlus className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
-              <span className="hidden xs:inline">{language === "bn" ? "স্টকে যোগ করুন" : "Add to Stock"}</span>
-              <span className="xs:hidden">{language === "bn" ? "স্টক" : "Stock"}</span>
+              {language === "bn" ? "স্টকে যোগ" : "Add to Stock"}
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="text-xs sm:text-sm"
+              onClick={() => { setShowTrash(true); loadTrash(); }}
+            >
+              <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
+              {language === "bn" ? "ট্র্যাশ" : "Trash"}
             </Button>
             <Button onClick={() => { resetForm(); setIsModalOpen(true); }} size="sm" className="text-xs sm:text-sm">
               <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
-              {t("shop.newSupplier")}
+              {language === "bn" ? "নতুন সরবরাহকারী / ক্রয়" : "New Supplier / Purchase"}
             </Button>
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-            <Input
-              placeholder={t("shop.searchSuppliers")}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-        </div>
+        {/* Import Progress Card */}
+        {isImporting && importProgress && (
+          <Card className="border-primary/50 bg-primary/5">
+            <CardContent className="p-4">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                    <span className="font-medium">
+                      {language === "bn" ? "পণ্য ইম্পোর্ট হচ্ছে..." : "Importing products..."}
+                    </span>
+                  </div>
+                  <span className="text-sm text-muted-foreground">
+                    {importProgress.current}/{importProgress.total}
+                  </span>
+                </div>
+                <Progress value={(importProgress.current / importProgress.total) * 100} className="h-2" />
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground truncate max-w-[200px]">
+                    {importProgress.currentProduct}
+                  </span>
+                  <div className="flex gap-3">
+                    <span className="text-green-600 flex items-center gap-1">
+                      <Check className="h-3 w-3" /> {importProgress.success}
+                    </span>
+                    {importProgress.failed > 0 && (
+                      <span className="text-destructive flex items-center gap-1">
+                        <X className="h-3 w-3" /> {importProgress.failed}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
-        <Card>
-          <CardContent className="p-0 overflow-x-auto">
-            <Table className="min-w-[900px]">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-12">
-                    <Checkbox
-                      checked={selectedIds.length === filteredSuppliers.length && filteredSuppliers.length > 0}
-                      onCheckedChange={toggleSelectAll}
-                    />
-                  </TableHead>
-                  <TableHead>{language === "bn" ? "সরবরাহকারী" : "Supplier"}</TableHead>
-                  <TableHead>{language === "bn" ? "ধরন" : "Type"}</TableHead>
-                  <TableHead>{language === "bn" ? "মোবাইল" : "Mobile"}</TableHead>
-                  <TableHead className="text-right">{language === "bn" ? "মোট ক্রয়" : "Total Purchase"}</TableHead>
-                  <TableHead className="text-right">{language === "bn" ? "পরিশোধিত" : "Paid"}</TableHead>
-                  <TableHead className="text-right">{language === "bn" ? "বাকি" : "Due"}</TableHead>
-                  <TableHead>{language === "bn" ? "সর্বশেষ ক্রয়" : "Last Purchase"}</TableHead>
-                  <TableHead className="text-right">{language === "bn" ? "অ্যাকশন" : "Actions"}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={9} className="text-center py-12">
-                      <div className="flex items-center justify-center gap-2">
-                        <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
-                        {t("common.loading")}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : filteredSuppliers.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={9} className="text-center py-12">
-                      <Truck className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
-                      <p className="text-muted-foreground">{t("shop.noSuppliers")}</p>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredSuppliers.map((supplier) => {
-                    const dueCountdown = getDueCountdown(supplier);
-                    return (
-                      <TableRow key={supplier.id} className={selectedIds.includes(supplier.id) ? "bg-muted/50" : ""}>
-                        <TableCell>
-                          <Checkbox
-                            checked={selectedIds.includes(supplier.id)}
-                            onCheckedChange={() => toggleSelectOne(supplier.id)}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                              <Building2 className="h-5 w-5 text-primary" />
-                            </div>
-                            <div>
-                              <p className="font-medium">{supplier.name}</p>
-                              <p className="text-xs text-muted-foreground">{getBusinessTypeLabel(supplier.business_type || "wholesale")}</p>
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{getCategoryLabel(supplier.category || "local")}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          {supplier.phone && (
-                            <div className="flex items-center gap-1 text-sm">
-                              <Phone className="h-3 w-3 text-muted-foreground" />
-                              {supplier.phone}
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right font-medium">
-                          {formatCurrency(Number(supplier.total_purchases) || 0)}
-                        </TableCell>
-                        <TableCell className="text-right font-medium text-green-600">
-                          {formatCurrency((Number(supplier.total_purchases) || 0) - (Number(supplier.total_due) || 0))}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex flex-col items-end gap-1">
-                            {Number(supplier.total_due) > 0 ? (
-                              <>
-                                <Badge variant="destructive">{formatCurrency(Number(supplier.total_due))}</Badge>
-                                {dueCountdown && (
-                                  <span className={`text-xs flex items-center gap-1 ${dueCountdown.overdue ? 'text-destructive' : 'text-muted-foreground'}`}>
-                                    <Timer className="h-3 w-3" />
-                                    {dueCountdown.text}
-                                  </span>
-                                )}
-                              </>
-                            ) : (
-                              <Badge variant="secondary">{language === "bn" ? "০" : "0"}</Badge>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {supplier.last_purchase_date 
-                            ? formatDate(supplier.last_purchase_date)
-                            : "-"
-                          }
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            {Number(supplier.total_due) > 0 && (
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={() => handleOpenPayDue(supplier)}
-                                className="text-green-600 border-green-600 hover:bg-green-50 dark:hover:bg-green-950"
-                              >
-                                <Banknote className="h-4 w-4 mr-1" />
-                                {language === "bn" ? "পরিশোধ" : "Pay"}
-                              </Button>
-                            )}
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon">
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => navigate(`/offline-shop/suppliers/${supplier.id}`)}>
-                                  <Eye className="mr-2 h-4 w-4" />
-                                  {t("shop.details")}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleEdit(supplier)}>
-                                  <Pencil className="mr-2 h-4 w-4" />
-                                  {t("common.edit")}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleDelete(supplier.id)} className="text-destructive">
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  {t("common.delete")}
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+        {/* Main View Tabs */}
+        <Tabs value={mainViewTab} onValueChange={(v) => setMainViewTab(v as "suppliers" | "purchases")} className="w-full">
+          <TabsList className="grid w-full max-w-md grid-cols-2">
+            <TabsTrigger value="suppliers" className="flex items-center gap-2">
+              <Truck className="h-4 w-4" />
+              {language === "bn" ? "সরবরাহকারী" : "Suppliers"} ({suppliers.length})
+            </TabsTrigger>
+            <TabsTrigger value="purchases" className="flex items-center gap-2">
+              <ShoppingCart className="h-4 w-4" />
+              {language === "bn" ? "ক্রয় তালিকা" : "Purchases"} ({purchases.length})
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Suppliers Tab */}
+          <TabsContent value="suppliers" className="mt-4 space-y-4">
+            <div className="flex items-center gap-4">
+              <div className="relative flex-1 max-w-md">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <Input
+                  placeholder={t("shop.searchSuppliers")}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              {selectedSupplierIds.length > 0 && (
+                <Button variant="destructive" size="sm" disabled={isBulkDeleting} onClick={() => setDeleteDialogOpen(true)}>
+                  <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
+                  {language === "bn" ? "মুছুন" : "Delete"} ({selectedSupplierIds.length})
+                </Button>
+              )}
+            </div>
+
+            <Card>
+              <CardContent className="p-0 overflow-x-auto">
+                <Table className="min-w-[900px]">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12">
+                        <Checkbox
+                          checked={selectedSupplierIds.length === filteredSuppliers.length && filteredSuppliers.length > 0}
+                          onCheckedChange={toggleSelectAllSuppliers}
+                        />
+                      </TableHead>
+                      <TableHead>{language === "bn" ? "সরবরাহকারী" : "Supplier"}</TableHead>
+                      <TableHead>{language === "bn" ? "ধরন" : "Type"}</TableHead>
+                      <TableHead>{language === "bn" ? "মোবাইল" : "Mobile"}</TableHead>
+                      <TableHead className="text-right">{language === "bn" ? "মোট ক্রয়" : "Total Purchase"}</TableHead>
+                      <TableHead className="text-right">{language === "bn" ? "পরিশোধিত" : "Paid"}</TableHead>
+                      <TableHead className="text-right">{language === "bn" ? "বাকি" : "Due"}</TableHead>
+                      <TableHead>{language === "bn" ? "সর্বশেষ ক্রয়" : "Last Purchase"}</TableHead>
+                      <TableHead className="text-right">{language === "bn" ? "অ্যাকশন" : "Actions"}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {isLoading ? (
+                      <TableRow>
+                        <TableCell colSpan={9} className="text-center py-12">
+                          <div className="flex items-center justify-center gap-2">
+                            <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
+                            {t("common.loading")}
                           </div>
                         </TableCell>
                       </TableRow>
-                    );
-                  })
+                    ) : filteredSuppliers.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={9} className="text-center py-12">
+                          <Truck className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
+                          <p className="text-muted-foreground">{t("shop.noSuppliers")}</p>
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredSuppliers.map((supplier) => {
+                        const dueCountdown = getDueCountdown(supplier);
+                        return (
+                          <TableRow key={supplier.id} className={selectedSupplierIds.includes(supplier.id) ? "bg-muted/50" : ""}>
+                            <TableCell>
+                              <Checkbox
+                                checked={selectedSupplierIds.includes(supplier.id)}
+                                onCheckedChange={() => toggleSelectOneSupplier(supplier.id)}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-3">
+                                <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                                  <Building2 className="h-5 w-5 text-primary" />
+                                </div>
+                                <div>
+                                  <p className="font-medium">{supplier.name}</p>
+                                  <p className="text-xs text-muted-foreground">{getBusinessTypeLabel(supplier.business_type || "wholesale")}</p>
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline">{getCategoryLabel(supplier.category || "local")}</Badge>
+                            </TableCell>
+                            <TableCell>
+                              {supplier.phone && (
+                                <div className="flex items-center gap-1 text-sm">
+                                  <Phone className="h-3 w-3 text-muted-foreground" />
+                                  {supplier.phone}
+                                </div>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right font-medium">
+                              {formatCurrency(Number(supplier.total_purchases) || 0)}
+                            </TableCell>
+                            <TableCell className="text-right font-medium text-green-600">
+                              {formatCurrency((Number(supplier.total_purchases) || 0) - (Number(supplier.total_due) || 0))}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex flex-col items-end gap-1">
+                                {Number(supplier.total_due) > 0 ? (
+                                  <>
+                                    <Badge variant="destructive">{formatCurrency(Number(supplier.total_due))}</Badge>
+                                    {dueCountdown && (
+                                      <span className={`text-xs flex items-center gap-1 ${dueCountdown.overdue ? 'text-destructive' : 'text-muted-foreground'}`}>
+                                        <Timer className="h-3 w-3" />
+                                        {dueCountdown.text}
+                                      </span>
+                                    )}
+                                  </>
+                                ) : (
+                                  <Badge variant="secondary">{language === "bn" ? "০" : "0"}</Badge>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {supplier.last_purchase_date 
+                                ? formatDate(supplier.last_purchase_date)
+                                : "-"
+                              }
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex items-center justify-end gap-1">
+                                {Number(supplier.total_due) > 0 && (
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    onClick={() => handleOpenPayDue(supplier)}
+                                    className="text-green-600 border-green-600 hover:bg-green-50 dark:hover:bg-green-950"
+                                  >
+                                    <Banknote className="h-4 w-4 mr-1" />
+                                    {language === "bn" ? "পরিশোধ" : "Pay"}
+                                  </Button>
+                                )}
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon">
+                                      <MoreHorizontal className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={() => navigate(`/offline-shop/suppliers/${supplier.id}`)}>
+                                      <Eye className="mr-2 h-4 w-4" />
+                                      {t("shop.details")}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleEditSupplier(supplier)}>
+                                      <Pencil className="mr-2 h-4 w-4" />
+                                      {t("common.edit")}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleDeleteSupplier(supplier.id)} className="text-destructive">
+                                      <Trash2 className="mr-2 h-4 w-4" />
+                                      {t("common.delete")}
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Purchases Tab */}
+          <TabsContent value="purchases" className="mt-4 space-y-4">
+            {/* Search and Filter */}
+            <Card className="p-4">
+              <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+                <div className="flex flex-col sm:flex-row gap-3 flex-1 w-full md:w-auto">
+                  <div className="relative flex-1 max-w-sm">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder={language === "bn" ? "সার্চ করুন..." : "Search..."}
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-9"
+                    />
+                  </div>
+
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="min-w-[140px] justify-start text-left font-normal">
+                        <Calendar className="mr-2 h-4 w-4" />
+                        {purchaseDateFrom ? format(purchaseDateFrom, "dd/MM/yyyy") : (language === "bn" ? "থেকে" : "From")}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <CalendarComponent
+                        mode="single"
+                        selected={purchaseDateFrom}
+                        onSelect={setPurchaseDateFrom}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="min-w-[140px] justify-start text-left font-normal">
+                        <Calendar className="mr-2 h-4 w-4" />
+                        {purchaseDateTo ? format(purchaseDateTo, "dd/MM/yyyy") : (language === "bn" ? "পর্যন্ত" : "To")}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <CalendarComponent
+                        mode="single"
+                        selected={purchaseDateTo}
+                        onSelect={setPurchaseDateTo}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                {selectedPurchaseIds.size > 0 && (
+                  <Button variant="destructive" size="sm" disabled={isBulkDeleting} onClick={() => setPurchaseDeleteDialogOpen(true)}>
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    {language === "bn" ? "মুছুন" : "Delete"} ({selectedPurchaseIds.size})
+                  </Button>
                 )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+              </div>
+            </Card>
+
+            <p className="text-sm text-muted-foreground">
+              {filteredPurchases.length} {language === "bn" ? "টি ক্রয় পাওয়া গেছে" : "purchases found"}
+            </p>
+
+            <Card>
+              <CardContent className="p-0 overflow-x-auto">
+                <Table className="min-w-[800px]">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12">
+                        <Checkbox
+                          checked={selectedPurchaseIds.size === filteredPurchases.length && filteredPurchases.length > 0}
+                          onCheckedChange={toggleSelectAllPurchases}
+                        />
+                      </TableHead>
+                      <TableHead>{language === "bn" ? "তারিখ" : "Date"}</TableHead>
+                      <TableHead>{language === "bn" ? "সরবরাহকারী" : "Supplier"}</TableHead>
+                      <TableHead className="hidden md:table-cell">{language === "bn" ? "পণ্য" : "Products"}</TableHead>
+                      <TableHead className="text-right">{language === "bn" ? "মোট" : "Total"}</TableHead>
+                      <TableHead className="text-right">{language === "bn" ? "বাকি" : "Due"}</TableHead>
+                      <TableHead>{language === "bn" ? "স্ট্যাটাস" : "Status"}</TableHead>
+                      <TableHead className="text-right">{language === "bn" ? "অ্যাকশন" : "Actions"}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {isLoading ? (
+                      <TableRow>
+                        <TableCell colSpan={8} className="text-center py-8">{t("common.loading")}</TableCell>
+                      </TableRow>
+                    ) : filteredPurchases.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={8} className="text-center py-8">
+                          <PackagePlus className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
+                          <p>{language === "bn" ? "কোনো ক্রয় পাওয়া যায়নি" : "No purchases found"}</p>
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredPurchases.map((purchase) => (
+                        <TableRow key={purchase.id} className={selectedPurchaseIds.has(purchase.id) ? "bg-muted/50" : ""}>
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedPurchaseIds.has(purchase.id)}
+                              onCheckedChange={() => toggleSelectOnePurchase(purchase.id)}
+                            />
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            <div>
+                              <p className="whitespace-nowrap">{new Date(purchase.purchase_date).toLocaleDateString(language === "bn" ? "bn-BD" : "en-US")}</p>
+                              <p className="text-xs text-muted-foreground hidden sm:block">
+                                {new Date(purchase.purchase_date).toLocaleTimeString(language === "bn" ? "bn-BD" : "en-US", { hour: '2-digit', minute: '2-digit' })}
+                              </p>
+                            </div>
+                          </TableCell>
+                          <TableCell className="max-w-[150px]">
+                            <span className="truncate block">{purchase.supplier_name || "-"}</span>
+                          </TableCell>
+                          <TableCell className="hidden md:table-cell">
+                            <div className="max-w-[150px]">
+                              {purchase.items?.slice(0, 2).map((item, i) => (
+                                <span key={i} className="text-xs">
+                                  {item.product_name}{i < Math.min(purchase.items!.length, 2) - 1 ? ", " : ""}
+                                </span>
+                              ))}
+                              {purchase.items && purchase.items.length > 2 && (
+                                <span className="text-xs text-muted-foreground"> +{purchase.items.length - 2}</span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right font-medium whitespace-nowrap">{formatCurrency(Number(purchase.total_amount))}</TableCell>
+                          <TableCell className="text-right">
+                            {Number(purchase.due_amount) > 0 ? (
+                              <span className="text-destructive font-medium whitespace-nowrap">
+                                {formatCurrency(Number(purchase.due_amount))}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={purchase.payment_status === "paid" ? "default" : purchase.payment_status === "partial" ? "secondary" : "destructive"} className="text-xs">
+                              {purchase.payment_status === "paid" 
+                                ? (language === "bn" ? "পরিশোধিত" : "Paid") 
+                                : purchase.payment_status === "partial"
+                                ? (language === "bn" ? "আংশিক" : "Partial")
+                                : (language === "bn" ? "বাকি" : "Due")}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-1">
+                              {Number(purchase.due_amount) > 0 && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() => openPurchasePaymentModal(purchase)}
+                                  title={language === "bn" ? "পেমেন্ট করুন" : "Add Payment"}
+                                >
+                                  <CreditCard className="h-4 w-4 text-primary" />
+                                </Button>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => setViewingPurchase(purchase)}
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
 
-      {/* Add/Edit Modal - Simplified */}
+      {/* Add/Edit Supplier Modal */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader className="flex-shrink-0 pb-4 border-b">
-            <DialogTitle className="text-xl">{editingSupplier ? t("shop.editSupplier") : t("shop.newSupplier")}</DialogTitle>
+            <DialogTitle className="text-xl">{editingSupplier ? t("shop.editSupplier") : (language === "bn" ? "নতুন সরবরাহকারী / ক্রয়" : "New Supplier / Purchase")}</DialogTitle>
             <DialogDescription>
               {language === "bn" 
                 ? "সরবরাহকারীর তথ্য এবং প্রোডাক্ট ক্রয়/অর্ডার একসাথে যোগ করুন"
@@ -904,7 +1572,7 @@ const ShopSuppliers = () => {
             <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden mt-4">
               <div className="flex-1 overflow-y-auto">
                 <TabsContent value="info" className="mt-0 space-y-6">
-                  {/* Previous Supplier Search - Only show when adding new supplier */}
+                  {/* Previous Supplier Search */}
                   {!editingSupplier && (
                     <div className="space-y-3">
                       <h3 className="font-semibold flex items-center gap-2 text-sm text-primary">
@@ -935,12 +1603,7 @@ const ShopSuppliers = () => {
                                 </div>
                               </div>
                             </div>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={clearPreviousSupplier}
-                            >
+                            <Button type="button" variant="ghost" size="sm" onClick={clearPreviousSupplier}>
                               <X className="h-4 w-4" />
                             </Button>
                           </div>
@@ -986,12 +1649,6 @@ const ShopSuppliers = () => {
                             )}
                           </div>
                         )}
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {language === "bn"
-                            ? "আগে থেকে থাকা সরবরাহকারী নির্বাচন করলে তার তথ্য ও বাকি স্বয়ংক্রিয়ভাবে পূরণ হবে"
-                            : "Selecting an existing supplier will auto-fill their info and outstanding due"
-                          }
-                        </p>
                       </div>
                     </div>
                   )}
@@ -1089,14 +1746,13 @@ const ShopSuppliers = () => {
                     </div>
                   </div>
 
-                  {/* Financial Info - Simplified */}
+                  {/* Financial Info */}
                   <div className="space-y-3">
                     <h3 className="font-semibold flex items-center gap-2 text-sm text-primary">
                       <CreditCard className="h-4 w-4" />
                       {language === "bn" ? "আর্থিক তথ্য" : "Financial Info"}
                     </h3>
                     
-                    {/* Show previous supplier due info */}
                     {selectedPreviousSupplier && Number(selectedPreviousSupplier.total_due) > 0 && (
                       <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
                         <div className="flex items-start gap-3">
@@ -1107,22 +1763,10 @@ const ShopSuppliers = () => {
                             </p>
                             <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
                               {language === "bn"
-                                ? `এই সরবরাহকারীর কাছে ${formatCurrency(Number(selectedPreviousSupplier.total_due))} বাকি আছে। এই বাকি পরবর্তী ক্রয়ে যোগ হবে।`
-                                : `This supplier has ${formatCurrency(Number(selectedPreviousSupplier.total_due))} outstanding. This will be added to future purchases.`
+                                ? `এই সরবরাহকারীর কাছে ${formatCurrency(Number(selectedPreviousSupplier.total_due))} বাকি আছে।`
+                                : `This supplier has ${formatCurrency(Number(selectedPreviousSupplier.total_due))} outstanding.`
                               }
                             </p>
-                            <div className="mt-2 flex items-center gap-4 text-xs text-muted-foreground">
-                              <span className="flex items-center gap-1">
-                                <TrendingUp className="h-3 w-3" />
-                                {language === "bn" ? "মোট ক্রয়:" : "Total Purchases:"} {formatCurrency(Number(selectedPreviousSupplier.total_purchases))}
-                              </span>
-                              {selectedPreviousSupplier.last_purchase_date && (
-                                <span className="flex items-center gap-1">
-                                  <Calendar className="h-3 w-3" />
-                                  {language === "bn" ? "সর্বশেষ:" : "Last:"} {formatDate(selectedPreviousSupplier.last_purchase_date)}
-                                </span>
-                              )}
-                            </div>
                           </div>
                         </div>
                       </div>
@@ -1133,7 +1777,7 @@ const ShopSuppliers = () => {
                         <Label htmlFor="opening_balance">
                           {selectedPreviousSupplier 
                             ? (language === "bn" ? "আগের বাকি (স্বয়ংক্রিয়)" : "Previous Due (Auto)")
-                            : (language === "bn" ? "সরবরাহকারী পাওনা (আগের বাকি)" : "Supplier Payable (Previous Due)")
+                            : (language === "bn" ? "সরবরাহকারী পাওনা" : "Supplier Payable")
                           }
                         </Label>
                         <Input
@@ -1142,22 +1786,8 @@ const ShopSuppliers = () => {
                           min="0"
                           value={formData.opening_balance}
                           onChange={(e) => setFormData({ ...formData, opening_balance: Number(e.target.value) })}
-                          placeholder={language === "bn" ? "আগে থেকে বাকি থাকলে লিখুন" : "Any previous due amount"}
                           disabled={!!selectedPreviousSupplier}
-                          className={selectedPreviousSupplier && Number(selectedPreviousSupplier.total_due) > 0 ? "bg-amber-50 dark:bg-amber-950/30 border-amber-300 font-semibold text-amber-700 dark:text-amber-300" : ""}
                         />
-                        <p className="text-xs text-muted-foreground">
-                          {selectedPreviousSupplier
-                            ? (language === "bn" 
-                              ? "এই বাকি আগের সরবরাহকারী থেকে স্বয়ংক্রিয়ভাবে নেওয়া হয়েছে"
-                              : "This due is automatically loaded from the selected supplier"
-                            )
-                            : (language === "bn" 
-                              ? "এই সরবরাহকারীর কাছে আগে থেকে বাকি থাকলে এখানে লিখুন"
-                              : "Enter any previous outstanding amount owed to this supplier"
-                            )
-                          }
-                        </p>
                       </div>
                       <div className="space-y-1.5">
                         <Label>{language === "bn" ? "পেমেন্ট শর্ত" : "Payment Terms"}</Label>
@@ -1196,20 +1826,10 @@ const ShopSuppliers = () => {
                     <div className="flex items-center gap-4">
                       <Label className="text-sm font-medium">{language === "bn" ? "ক্রয়ের ধরন:" : "Purchase Type:"}</Label>
                       <div className="flex items-center gap-2">
-                        <Button
-                          type="button"
-                          variant={!isOrder ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => setIsOrder(false)}
-                        >
+                        <Button type="button" variant={!isOrder ? "default" : "outline"} size="sm" onClick={() => setIsOrder(false)}>
                           {language === "bn" ? "সরাসরি ক্রয়" : "Direct Purchase"}
                         </Button>
-                        <Button
-                          type="button"
-                          variant={isOrder ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => setIsOrder(true)}
-                        >
+                        <Button type="button" variant={isOrder ? "default" : "outline"} size="sm" onClick={() => setIsOrder(true)}>
                           {language === "bn" ? "অর্ডার" : "Order"}
                         </Button>
                       </div>
@@ -1267,7 +1887,6 @@ const ShopSuppliers = () => {
                               <TableHead className="w-[100px] text-right">{language === "bn" ? "পাইকারি দাম" : "Unit Price"}</TableHead>
                               <TableHead className="w-[100px] text-right">{language === "bn" ? "বিক্রয় দাম" : "Sell Price"}</TableHead>
                               <TableHead className="w-[100px] text-right">{language === "bn" ? "মোট" : "Total"}</TableHead>
-                              <TableHead className="w-[150px]">{language === "bn" ? "কোথা থেকে কিনলেন" : "Location"}</TableHead>
                               <TableHead className="w-[50px]"></TableHead>
                             </TableRow>
                           </TableHeader>
@@ -1311,14 +1930,6 @@ const ShopSuppliers = () => {
                                 </TableCell>
                                 <TableCell className="text-right font-medium">
                                   {formatCurrency(item.total)}
-                                </TableCell>
-                                <TableCell>
-                                  <Input
-                                    value={item.location || ""}
-                                    onChange={(e) => updatePurchaseItem(item.id, "location", e.target.value)}
-                                    placeholder={language === "bn" ? "জায়গা/মার্কেট" : "Place/Market"}
-                                    className="h-8"
-                                  />
                                 </TableCell>
                                 <TableCell>
                                   <Button
@@ -1381,13 +1992,6 @@ const ShopSuppliers = () => {
                             disabled
                             className={dueAmount > 0 ? "text-destructive font-medium" : "text-green-600"}
                           />
-                          {includePreviousDue && previousDueAmount > 0 && (
-                            <p className="text-xs text-amber-600 dark:text-amber-400">
-                              {language === "bn" 
-                                ? `এই ক্রয়ে আগের বাকি ${formatCurrency(previousDueAmount)} যোগ হয়েছে` 
-                                : `Previous due of ${formatCurrency(previousDueAmount)} included in this purchase`}
-                            </p>
-                          )}
                         </div>
                       </div>
 
@@ -1403,7 +2007,7 @@ const ShopSuppliers = () => {
                           </div>
                           <div className="space-y-1.5">
                             <Label>{language === "bn" ? "পেমেন্ট মাধ্যম" : "Payment Method"}</Label>
-                            <Select value={purchasePaymentMethod} onValueChange={setPurchasePaymentMethod}>
+                            <Select value={formPurchasePaymentMethod} onValueChange={setFormPurchasePaymentMethod}>
                               <SelectTrigger>
                                 <SelectValue />
                               </SelectTrigger>
@@ -1422,8 +2026,8 @@ const ShopSuppliers = () => {
                       <div className="space-y-1.5">
                         <Label>{language === "bn" ? "নোট/মন্তব্য" : "Notes"}</Label>
                         <Textarea
-                          value={purchaseNotes}
-                          onChange={(e) => setPurchaseNotes(e.target.value)}
+                          value={purchaseNotesField}
+                          onChange={(e) => setPurchaseNotesField(e.target.value)}
                           placeholder={language === "bn" ? "অর্ডার বা ক্রয় সম্পর্কে যেকোন মন্তব্য..." : "Any notes about this order/purchase..."}
                           rows={2}
                         />
@@ -1450,51 +2054,105 @@ const ShopSuppliers = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Pay Due Modal */}
+      {/* View Purchase Details Modal */}
+      <Dialog open={!!viewingPurchase} onOpenChange={() => setViewingPurchase(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{language === "bn" ? "ক্রয়ের বিস্তারিত" : "Purchase Details"}</DialogTitle>
+          </DialogHeader>
+          {viewingPurchase && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">{language === "bn" ? "সরবরাহকারী" : "Supplier"}</p>
+                  <p className="font-medium">{viewingPurchase.supplier_name || "-"}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">{language === "bn" ? "তারিখ" : "Date"}</p>
+                  <p className="font-medium">{formatDate(viewingPurchase.purchase_date)}</p>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">{language === "bn" ? "মোট" : "Total"}</p>
+                  <p className="font-bold text-lg">{formatCurrency(Number(viewingPurchase.total_amount))}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">{language === "bn" ? "পরিশোধিত" : "Paid"}</p>
+                  <p className="font-medium text-primary">{formatCurrency(Number(viewingPurchase.paid_amount))}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">{language === "bn" ? "বাকি" : "Due"}</p>
+                  <p className={`font-medium ${Number(viewingPurchase.due_amount) > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>
+                    {formatCurrency(Number(viewingPurchase.due_amount))}
+                  </p>
+                </div>
+              </div>
+
+              {viewingPurchase.items && viewingPurchase.items.length > 0 && (
+                <div>
+                  <p className="text-sm text-muted-foreground mb-2">{language === "bn" ? "আইটেম" : "Items"}</p>
+                  <div className="border rounded-lg divide-y max-h-40 overflow-y-auto">
+                    {viewingPurchase.items.map((item, i) => (
+                      <div key={i} className="p-2 flex justify-between text-sm">
+                        <span>{item.product_name} x{item.quantity}</span>
+                        <span>{formatCurrency(item.total)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            {viewingPurchase && Number(viewingPurchase.due_amount) > 0 && (
+              <Button variant="default" onClick={() => {
+                setViewingPurchase(null);
+                openPurchasePaymentModal(viewingPurchase);
+              }}>
+                <CreditCard className="h-4 w-4 mr-2" />
+                {language === "bn" ? "পেমেন্ট করুন" : "Add Payment"}
+              </Button>
+            )}
+            <Button variant="outline" onClick={() => setViewingPurchase(null)}>{t("shop.close")}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Pay Supplier Due Modal */}
       <Dialog open={payDueModalOpen} onOpenChange={setPayDueModalOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Banknote className="h-5 w-5 text-green-600" />
-              {language === "bn" ? "বাকি পরিশোধ করুন" : "Pay Due Amount"}
+              {language === "bn" ? "বাকি পরিশোধ করুন" : "Pay Outstanding Due"}
             </DialogTitle>
             <DialogDescription>
-              {payingSupplier?.name} - {language === "bn" ? "মোট বাকি:" : "Total Due:"} {formatCurrency(Number(payingSupplier?.total_due) || 0)}
+              {payingSupplier && (
+                <>
+                  {language === "bn" ? "সরবরাহকারী:" : "Supplier:"} <span className="font-medium">{payingSupplier.name}</span>
+                  <br />
+                  {language === "bn" ? "মোট বাকি:" : "Total Due:"}{" "}
+                  <span className="font-bold text-destructive">{formatCurrency(Number(payingSupplier.total_due))}</span>
+                </>
+              )}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-4">
+          <div className="space-y-4">
             <div className="space-y-2">
-              <Label>{language === "bn" ? "পরিশোধের পরিমাণ" : "Payment Amount"}</Label>
+              <Label>{language === "bn" ? "পরিমাণ" : "Amount"}</Label>
               <Input
                 type="number"
-                min="0"
-                max={Number(payingSupplier?.total_due) || 0}
                 value={paymentAmount}
                 onChange={(e) => setPaymentAmount(Number(e.target.value))}
+                max={payingSupplier ? Number(payingSupplier.total_due) : undefined}
               />
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPaymentAmount(Number(payingSupplier?.total_due) || 0)}
-                >
-                  {language === "bn" ? "সম্পূর্ণ বাকি" : "Full Due"}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPaymentAmount(Math.floor((Number(payingSupplier?.total_due) || 0) / 2))}
-                >
-                  {language === "bn" ? "অর্ধেক" : "Half"}
-                </Button>
-              </div>
             </div>
 
             <div className="space-y-2">
-              <Label>{language === "bn" ? "পেমেন্ট মাধ্যম" : "Payment Method"}</Label>
+              <Label>{language === "bn" ? "পেমেন্ট মেথড" : "Payment Method"}</Label>
               <Select value={paymentMethod} onValueChange={setPaymentMethod}>
                 <SelectTrigger>
                   <SelectValue />
@@ -1510,262 +2168,234 @@ const ShopSuppliers = () => {
             </div>
 
             <div className="space-y-2">
-              <Label>{language === "bn" ? "নোট (ঐচ্ছিক)" : "Notes (Optional)"}</Label>
+              <Label>{language === "bn" ? "নোট" : "Notes"}</Label>
               <Textarea
                 value={paymentNotes}
                 onChange={(e) => setPaymentNotes(e.target.value)}
-                placeholder={language === "bn" ? "পেমেন্ট সম্পর্কে মন্তব্য..." : "Payment notes..."}
-                rows={2}
+                placeholder={language === "bn" ? "ঐচ্ছিক নোট..." : "Optional notes..."}
               />
             </div>
-
-            {paymentAmount > 0 && (
-              <div className="p-3 bg-green-50 dark:bg-green-950/30 rounded-lg border border-green-200 dark:border-green-800">
-                <div className="flex justify-between text-sm">
-                  <span>{language === "bn" ? "পরিশোধ করবেন:" : "You will pay:"}</span>
-                  <span className="font-bold text-green-600">{formatCurrency(paymentAmount)}</span>
-                </div>
-                <div className="flex justify-between text-sm text-muted-foreground mt-1">
-                  <span>{language === "bn" ? "অবশিষ্ট বাকি থাকবে:" : "Remaining due:"}</span>
-                  <span>{formatCurrency(Math.max(0, (Number(payingSupplier?.total_due) || 0) - paymentAmount))}</span>
-                </div>
-              </div>
-            )}
           </div>
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setPayDueModalOpen(false)}>
               {t("common.cancel")}
             </Button>
-            <Button 
-              onClick={handlePayDue} 
-              disabled={paymentAmount <= 0 || isPayingDue}
+            <Button
+              onClick={handlePayDue}
+              disabled={isPayingDue || paymentAmount <= 0}
               className="bg-green-600 hover:bg-green-700"
             >
               {isPayingDue ? (
-                <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               ) : (
-                <>
-                  <Check className="h-4 w-4 mr-2" />
-                  {language === "bn" ? "পরিশোধ করুন" : "Confirm Payment"}
-                </>
+                <Check className="h-4 w-4 mr-2" />
               )}
+              {language === "bn" ? "পরিশোধ করুন" : "Pay Now"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* View Modal */}
-      <Dialog open={!!viewingSupplier} onOpenChange={() => setViewingSupplier(null)}>
-        <DialogContent className="max-w-4xl max-h-[90vh]">
+      {/* Purchase Payment Modal */}
+      <Dialog open={!!paymentPurchase} onOpenChange={() => setPaymentPurchase(null)}>
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <div className="flex items-start justify-between">
-              <div>
-                <DialogTitle className="text-2xl">{viewingSupplier?.name}</DialogTitle>
-                <p className="text-muted-foreground text-sm mt-1">
-                  {getCategoryLabel(viewingSupplier?.category || "local")} • {getBusinessTypeLabel(viewingSupplier?.business_type || "wholesale")}
-                </p>
-              </div>
-              <Badge variant={viewingSupplier?.is_active !== false ? "default" : "secondary"}>
-                {viewingSupplier?.is_active !== false
-                  ? (language === "bn" ? "সক্রিয়" : "Active")
-                  : (language === "bn" ? "নিষ্ক্রিয়" : "Inactive")
-                }
-              </Badge>
-            </div>
+            <DialogTitle>{language === "bn" ? "পেমেন্ট যোগ করুন" : "Add Payment"}</DialogTitle>
+            <DialogDescription>
+              {paymentPurchase && (
+                <>
+                  {language === "bn" ? "বাকি:" : "Due:"} {formatCurrency(Number(paymentPurchase.due_amount))}
+                </>
+              )}
+            </DialogDescription>
           </DialogHeader>
-          
-          {/* Summary Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <Card>
-              <CardContent className="pt-4 pb-3 px-4">
-                <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                  <DollarSign className="h-4 w-4" />
-                  {language === "bn" ? "মোট ক্রয়" : "Total Purchases"}
-                </div>
-                <p className="text-xl font-bold mt-1">{formatCurrency(supplierStats?.totalPurchases || 0)}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-4 pb-3 px-4">
-                <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                  <CreditCard className="h-4 w-4" />
-                  {language === "bn" ? "বকেয়া" : "Due Amount"}
-                </div>
-                <p className="text-xl font-bold mt-1 text-destructive">{formatCurrency(supplierStats?.totalDue || 0)}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-4 pb-3 px-4">
-                <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                  <Package className="h-4 w-4" />
-                  {language === "bn" ? "মোট অর্ডার" : "Total Orders"}
-                </div>
-                <p className="text-xl font-bold mt-1">{supplierStats?.purchaseCount || 0}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-4 pb-3 px-4">
-                <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                  <TrendingUp className="h-4 w-4" />
-                  {language === "bn" ? "মোট আইটেম" : "Total Items"}
-                </div>
-                <p className="text-xl font-bold mt-1">{totalItemsPurchased}</p>
-              </CardContent>
-            </Card>
-          </div>
 
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="info">
-                <Building2 className="h-4 w-4 mr-2" />
-                {language === "bn" ? "তথ্য" : "Info"}
-              </TabsTrigger>
-              <TabsTrigger value="products">
-                <Package className="h-4 w-4 mr-2" />
-                {language === "bn" ? "প্রোডাক্ট" : "Products"}
-              </TabsTrigger>
-              <TabsTrigger value="purchases">
-                <Calendar className="h-4 w-4 mr-2" />
-                {language === "bn" ? "ক্রয়" : "Purchases"}
-              </TabsTrigger>
-              <TabsTrigger value="notes">
-                <FileText className="h-4 w-4 mr-2" />
-                {language === "bn" ? "নোট" : "Notes"}
-              </TabsTrigger>
+          <Tabs defaultValue="payment">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="payment">{language === "bn" ? "পেমেন্ট" : "Payment"}</TabsTrigger>
+              <TabsTrigger value="history">{language === "bn" ? "হিস্ট্রি" : "History"}</TabsTrigger>
             </TabsList>
+            
+            <TabsContent value="payment" className="space-y-4 mt-4">
+              <div className="space-y-2">
+                <Label>{language === "bn" ? "পরিমাণ" : "Amount"}</Label>
+                <Input
+                  type="number"
+                  value={purchasePaymentAmount}
+                  onChange={(e) => setPurchasePaymentAmount(Number(e.target.value))}
+                  max={paymentPurchase ? Number(paymentPurchase.due_amount) : undefined}
+                />
+              </div>
 
-            <ScrollArea className="h-[350px] mt-4">
-              <TabsContent value="info" className="mt-0 space-y-4">
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium">{language === "bn" ? "যোগাযোগের তথ্য" : "Contact Information"}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="grid grid-cols-2 gap-4">
-                      {viewingSupplier?.phone && (
-                        <div className="flex items-center gap-2">
-                          <Phone className="h-4 w-4 text-muted-foreground" />
-                          <span className="text-sm">{viewingSupplier.phone}</span>
-                        </div>
-                      )}
-                      {viewingSupplier?.email && (
-                        <div className="flex items-center gap-2">
-                          <Mail className="h-4 w-4 text-muted-foreground" />
-                          <span className="text-sm">{viewingSupplier.email}</span>
-                        </div>
-                      )}
-                    </div>
-                    {viewingSupplier?.address && (
-                      <div className="flex items-start gap-2">
-                        <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
-                        <span className="text-sm">{viewingSupplier.address}</span>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium">{language === "bn" ? "আর্থিক তথ্য" : "Financial Info"}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">{language === "bn" ? "পেমেন্ট শর্ত" : "Payment Terms"}</span>
-                      <span className="text-sm font-medium">{getPaymentTermsLabel(viewingSupplier?.payment_terms || "immediate")}</span>
-                    </div>
-                    {Number(viewingSupplier?.opening_balance) > 0 && (
-                      <div className="flex justify-between">
-                        <span className="text-sm text-muted-foreground">{language === "bn" ? "প্রারম্ভিক বাকি" : "Opening Balance"}</span>
-                        <span className="text-sm font-medium">{formatCurrency(Number(viewingSupplier?.opening_balance) || 0)}</span>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              <TabsContent value="products" className="mt-0">
-                {productSummary.length === 0 ? (
-                  <div className="text-center py-8">
-                    <Package className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
-                    <p className="text-muted-foreground">{language === "bn" ? "কোন প্রোডাক্ট নেই" : "No products yet"}</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {productSummary.map((product, index) => (
-                      <Card key={index}>
-                        <CardContent className="py-3 px-4">
-                          <div className="flex justify-between items-center">
-                            <div>
-                              <p className="font-medium">{product.name}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {language === "bn" ? "শেষ ক্রয়:" : "Last:"} {formatDate(product.lastPurchaseDate)}
-                              </p>
-                            </div>
-                            <div className="text-right">
-                              <p className="font-medium">{product.totalQuantity} {language === "bn" ? "পিস" : "pcs"}</p>
-                              <p className="text-sm text-muted-foreground">{formatCurrency(product.totalAmount)}</p>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
+              <div className="space-y-2">
+                <Label>{language === "bn" ? "পেমেন্ট মেথড" : "Payment Method"}</Label>
+                <Select value={purchasePaymentMethod} onValueChange={setPurchasePaymentMethod}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PAYMENT_METHODS.map((method) => (
+                      <SelectItem key={method.value} value={method.value}>
+                        {language === "bn" ? method.label_bn : method.label_en}
+                      </SelectItem>
                     ))}
-                  </div>
-                )}
-              </TabsContent>
+                  </SelectContent>
+                </Select>
+              </div>
 
-              <TabsContent value="purchases" className="mt-0">
-                {supplierPurchases.length === 0 ? (
-                  <div className="text-center py-8">
-                    <ShoppingCart className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
-                    <p className="text-muted-foreground">{language === "bn" ? "কোন ক্রয় নেই" : "No purchases yet"}</p>
-                  </div>
+              <div className="space-y-2">
+                <Label>{language === "bn" ? "নোট" : "Notes"}</Label>
+                <Textarea
+                  value={purchasePaymentNotes}
+                  onChange={(e) => setPurchasePaymentNotes(e.target.value)}
+                  placeholder={language === "bn" ? "ঐচ্ছিক নোট..." : "Optional notes..."}
+                />
+              </div>
+
+              <Button 
+                onClick={handleAddPurchasePayment} 
+                className="w-full" 
+                disabled={isProcessingPurchasePayment || purchasePaymentAmount <= 0}
+              >
+                {isProcessingPurchasePayment ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 ) : (
-                  <div className="space-y-2">
-                    {supplierPurchases.map((purchase) => (
-                      <Card key={purchase.id}>
-                        <CardContent className="py-3 px-4">
-                          <div className="flex justify-between items-center">
-                            <div>
-                              <p className="font-medium">{purchase.invoice_number || formatDate(purchase.purchase_date)}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {purchase.items?.length || 0} {language === "bn" ? "টি আইটেম" : "items"}
-                              </p>
-                            </div>
-                            <div className="text-right">
-                              <p className="font-medium">{formatCurrency(Number(purchase.total_amount))}</p>
-                              <Badge variant={purchase.payment_status === "paid" ? "default" : "destructive"} className="text-xs">
-                                {purchase.payment_status === "paid" 
-                                  ? (language === "bn" ? "পরিশোধিত" : "Paid")
-                                  : (language === "bn" ? `বাকি: ${formatCurrency(Number(purchase.due_amount))}` : `Due: ${formatCurrency(Number(purchase.due_amount))}`)
-                                }
-                              </Badge>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
+                  <Check className="h-4 w-4 mr-2" />
                 )}
-              </TabsContent>
+                {language === "bn" ? "পেমেন্ট সংরক্ষণ করুন" : "Save Payment"}
+              </Button>
+            </TabsContent>
 
-              <TabsContent value="notes" className="mt-0">
-                <Card>
-                  <CardContent className="py-4">
-                    {viewingSupplier?.notes ? (
-                      <p className="text-sm whitespace-pre-wrap">{viewingSupplier.notes}</p>
-                    ) : (
-                      <p className="text-sm text-muted-foreground text-center">
-                        {language === "bn" ? "কোন নোট নেই" : "No notes added"}
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
-              </TabsContent>
-            </ScrollArea>
+            <TabsContent value="history" className="mt-4">
+              {purchasePaymentHistory.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <History className="h-8 w-8 mx-auto mb-2" />
+                  <p>{language === "bn" ? "কোনো পেমেন্ট হিস্ট্রি নেই" : "No payment history"}</p>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {purchasePaymentHistory.map((payment) => (
+                    <div key={payment.id} className="border rounded-lg p-3 flex justify-between items-center">
+                      <div>
+                        <p className="font-medium">{formatCurrency(payment.amount)}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatDate(payment.payment_date)} • {payment.payment_method}
+                        </p>
+                      </div>
+                      <Badge variant="outline">{payment.payment_method}</Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
           </Tabs>
         </DialogContent>
       </Dialog>
+
+      {/* Trash Bin Modal */}
+      <Dialog open={showTrash} onOpenChange={setShowTrash}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5" />
+              {language === "bn" ? "ট্র্যাশ বিন" : "Trash Bin"}
+            </DialogTitle>
+            <DialogDescription>
+              {language === "bn" 
+                ? "মুছে ফেলা পার্চেজগুলো ৭ দিন পর স্বয়ংক্রিয়ভাবে মুছে যাবে" 
+                : "Deleted purchases will be permanently removed after 7 days"}
+            </DialogDescription>
+          </DialogHeader>
+
+          {isLoadingTrash ? (
+            <div className="text-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto" />
+            </div>
+          ) : trashItems.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <Trash2 className="h-12 w-12 mx-auto mb-2 opacity-50" />
+              <p>{language === "bn" ? "ট্র্যাশ খালি" : "Trash is empty"}</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {trashItems.map((item) => (
+                <div key={item.id} className="border rounded-lg p-4 flex justify-between items-center">
+                  <div>
+                    <p className="font-medium">
+                      {item.data.purchase?.supplier_name || (language === "bn" ? "সাপ্লায়ার নেই" : "No supplier")}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {language === "bn" ? "মোট:" : "Total:"} {formatCurrency(Number(item.data.purchase?.total_amount || 0))}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {language === "bn" ? "মুছে ফেলা হয়েছে:" : "Deleted:"} {formatDate(item.deleted_at)}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={() => handleRestoreFromTrash(item.id)}>
+                      <RotateCcw className="h-4 w-4 mr-1" />
+                      {language === "bn" ? "রিস্টোর" : "Restore"}
+                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button size="sm" variant="destructive">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>
+                            {language === "bn" ? "স্থায়ীভাবে মুছুন?" : "Permanently Delete?"}
+                          </AlertDialogTitle>
+                          <AlertDialogDescription>
+                            {language === "bn" 
+                              ? "এই অ্যাকশন পূর্বাবস্থায় ফেরানো যাবে না।" 
+                              : "This action cannot be undone."}
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>{language === "bn" ? "বাতিল" : "Cancel"}</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => handlePermanentDelete(item.id)}>
+                            {language === "bn" ? "মুছে ফেলুন" : "Delete"}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirm Dialogs */}
+      <DeleteConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        onConfirm={() => {
+          handleBulkDeleteSuppliers();
+          setDeleteDialogOpen(false);
+        }}
+        title={language === "en" ? "suppliers" : "সরবরাহকারী"}
+        itemCount={selectedSupplierIds.length}
+        isSoftDelete={true}
+        isLoading={isBulkDeleting}
+      />
+
+      <DeleteConfirmDialog
+        open={purchaseDeleteDialogOpen}
+        onOpenChange={setPurchaseDeleteDialogOpen}
+        onConfirm={() => {
+          handleBulkDeletePurchases();
+          setPurchaseDeleteDialogOpen(false);
+        }}
+        title={language === "en" ? "purchases" : "পার্চেজ"}
+        itemCount={selectedPurchaseIds.size}
+        isSoftDelete={true}
+        isLoading={isBulkDeleting}
+      />
 
       {/* Add to Stock Modal */}
       <AddToStockModal
@@ -1774,23 +2404,8 @@ const ShopSuppliers = () => {
         products={productsToAddToStock}
         onSuccess={loadData}
       />
-
-      <DeleteConfirmDialog
-        open={deleteDialogOpen}
-        onOpenChange={setDeleteDialogOpen}
-        onConfirm={() => {
-          handleBulkDelete();
-          setDeleteDialogOpen(false);
-        }}
-        title={language === "en" ? "suppliers" : "সরবরাহকারী"}
-        itemCount={selectedIds.length}
-        isSoftDelete={true}
-        isLoading={isBulkDeleting}
-      />
     </ShopLayout>
   );
-
 };
 
 export default ShopSuppliers;
-

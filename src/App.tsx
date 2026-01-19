@@ -63,7 +63,7 @@ const ShopProducts = lazy(() => import("./pages/offline-shop/ShopProducts"));
 const ShopSales = lazy(() => import("./pages/offline-shop/ShopSales"));
 const ShopExpenses = lazy(() => import("./pages/offline-shop/ShopExpenses"));
 const ShopReports = lazy(() => import("./pages/offline-shop/ShopReports"));
-const ShopPurchases = lazy(() => import("./pages/offline-shop/ShopPurchases"));
+// ShopPurchases merged into ShopSuppliers
 
 const ShopSuppliers = lazy(() => import("./pages/offline-shop/ShopSuppliers"));
 const SupplierProfile = lazy(() => import("./pages/offline-shop/SupplierProfile"));
