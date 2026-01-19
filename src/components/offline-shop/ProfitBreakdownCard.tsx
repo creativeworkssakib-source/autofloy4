@@ -144,7 +144,7 @@ export const ProfitBreakdownCard = ({
           </div>
         </CardHeader>
 
-        <CardContent className="space-y-3 sm:space-y-4 px-3 sm:px-6 relative">
+        <CardContent className="space-y-4 sm:space-y-5 px-3 sm:px-6 pt-2 pb-4 relative">
           {/* Gross Profit Row */}
           <TooltipProvider>
             <Tooltip>
