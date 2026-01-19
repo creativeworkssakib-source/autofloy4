@@ -283,6 +283,7 @@ const ShopSuppliers = () => {
   const [orderStatus, setOrderStatus] = useState<"pending" | "confirmed" | "received" | "cancelled">("pending");
   const [duePaymentDate, setDuePaymentDate] = useState("");
   const [formPurchasePaymentMethod, setFormPurchasePaymentMethod] = useState("cash");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Add to stock modal state
   const [isAddToStockModalOpen, setIsAddToStockModalOpen] = useState(false);
@@ -522,6 +523,7 @@ const ShopSuppliers = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
     try {
       let supplierId = editingSupplier?.id || selectedPreviousSupplier?.id;
 
@@ -589,6 +591,8 @@ const ShopSuppliers = () => {
       loadData();
     } catch (error) {
       toast.error(t("shop.errorOccurred"));
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -2095,14 +2099,21 @@ const ShopSuppliers = () => {
               </div>
 
               <DialogFooter className="flex-shrink-0 border-t pt-4 mt-2">
-                <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>
+                <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)} disabled={isSubmitting}>
                   {t("common.cancel")}
                 </Button>
-                <Button type="submit">
-                  {editingSupplier ? t("shop.update") : (
-                    purchaseItems.length > 0 
-                      ? (language === "bn" ? "সরবরাহকারী ও ক্রয় সেভ করুন" : "Save Supplier & Purchase")
-                      : t("common.add")
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      {language === "bn" ? "প্রক্রিয়াকরণ..." : "Processing..."}
+                    </>
+                  ) : (
+                    editingSupplier ? t("shop.update") : (
+                      purchaseItems.length > 0 
+                        ? (language === "bn" ? "সরবরাহকারী ও ক্রয় সেভ করুন" : "Save Supplier & Purchase")
+                        : t("common.add")
+                    )
                   )}
                 </Button>
               </DialogFooter>
