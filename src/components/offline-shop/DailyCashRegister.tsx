@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { format, subDays } from "date-fns";
+import { format } from "date-fns";
 import {
   Wallet,
   TrendingUp,
@@ -31,11 +31,8 @@ import {
   CircleDollarSign,
   BarChart3,
   Plus,
-  Trash2,
   Coins,
   X,
-  WifiOff,
-  Wifi,
   Package,
   RefreshCcw,
 } from "lucide-react";
@@ -554,7 +551,7 @@ export function DailyCashRegister() {
               {todayRegister.quick_expenses && todayRegister.quick_expenses.length > 0 && (
                 <CardContent className="pt-0 px-4 pb-3">
                   <div className="flex flex-wrap gap-2">
-                    {todayRegister.quick_expenses.map((expense) => (
+                    {todayRegister.quick_expenses.map((expense: QuickExpense) => (
                       <div
                         key={expense.id}
                         className="flex items-center gap-2 px-2 py-1 rounded-full bg-background border text-xs"
