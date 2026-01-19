@@ -2596,20 +2596,24 @@ serve(async (req) => {
             }
           }
 
-          // Record cash transaction if paid from cash
-          await supabase
-            .from("shop_cash_transactions")
-            .insert({
-              user_id: userId,
-              shop_id: shopId,
-              type: "out",
-              source: "purchase_payment",
-              amount: actualPayment,
-              reference_type: "purchase_payment",
-              reference_id: purchaseId,
-              notes: `Purchase payment - ${purchase.invoice_number || purchaseId}`,
-              transaction_date: new Date().toISOString(),
-            });
+          // Record cash transaction only if payment method is cash
+          const actualPaymentMethod = paymentMethod || "cash";
+          if (actualPaymentMethod === "cash") {
+            await supabase
+              .from("shop_cash_transactions")
+              .insert({
+                user_id: userId,
+                shop_id: shopId,
+                type: "out",
+                source: "purchase_payment",
+                amount: actualPayment,
+                reference_type: "purchase_payment",
+                reference_id: purchaseId,
+                notes: `Purchase payment - ${purchase.invoice_number || purchaseId}`,
+                transaction_date: new Date().toISOString(),
+              });
+            console.log(`Cash transaction recorded: ${actualPayment} out for purchase payment`);
+          }
 
           console.log(`Payment recorded: new_paid=${newPaidAmount}, new_due=${newDueAmount}`);
 
