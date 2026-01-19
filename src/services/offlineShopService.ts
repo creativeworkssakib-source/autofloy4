@@ -336,6 +336,14 @@ class OfflineShopService {
     });
   }
 
+  async getPurchasePayments(purchaseId: string) {
+    return this.request<{ payments: Array<{ id: string; amount: number; payment_method: string; payment_date: string; notes?: string }> }>(
+      "purchase-payments",
+      {},
+      { purchaseId }
+    );
+  }
+
   // Expenses
   async getExpenses(params?: { startDate?: string; endDate?: string; category?: string }) {
     const queryParams: Record<string, string> = {};
