@@ -419,8 +419,16 @@ const ShopAdjustments = () => {
                   id="quantity"
                   type="number"
                   min={1}
-                  value={formData.quantity}
-                  onChange={(e) => { const val = e.target.value; setFormData({ ...formData, quantity: val === "" ? 1 : parseInt(val) || 1 }); }}
+                  value={formData.quantity === 0 ? "" : formData.quantity}
+                  onChange={(e) => { 
+                    const val = e.target.value;
+                    setFormData({ ...formData, quantity: val === "" ? 0 : parseInt(val) || 0 }); 
+                  }}
+                  onBlur={(e) => {
+                    if (!e.target.value || parseInt(e.target.value) < 1) {
+                      setFormData({ ...formData, quantity: 1 });
+                    }
+                  }}
                   required
                 />
               </div>
