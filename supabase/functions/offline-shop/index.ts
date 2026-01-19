@@ -2605,11 +2605,11 @@ serve(async (req) => {
               user_id: userId,
               shop_id: shopId,
               type: "out",
-              source: "purchase_payment",
+              source: "supplier_payment",
               amount: actualPayment,
-              reference_type: "purchase_payment",
+              reference_type: "purchase",
               reference_id: purchaseId,
-              notes: `Purchase payment - ${purchase.invoice_number || purchaseId}`,
+              notes: `Supplier payment - ${purchase.invoice_number || purchase.supplier_name || purchaseId}`,
               transaction_date: new Date().toISOString(),
             };
             console.log(`Creating cash transaction:`, JSON.stringify(cashTxData));
