@@ -21,6 +21,7 @@ import {
   ArrowDownRight,
   Wallet,
   ShoppingCart,
+  PackageX,
 } from "lucide-react";
 import { offlineShopService } from "@/services/offlineShopService";
 import { useShop } from "@/contexts/ShopContext";
@@ -51,6 +52,16 @@ interface ProductProfit {
   avg_margin: number;
 }
 
+interface StockAdjustment {
+  id: string;
+  product_name: string;
+  type: string;
+  quantity: number;
+  cost_impact: number;
+  adjustment_date: string;
+  reason?: string;
+}
+
 interface ProfitDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -58,6 +69,7 @@ interface ProfitDetailsModalProps {
   formatCurrency: (amount: number) => string;
   grossProfit: number;
   totalExpenses: number;
+  adjustmentLoss: number;
   netProfit: number;
 }
 
@@ -68,6 +80,7 @@ export const ProfitDetailsModal = ({
   formatCurrency,
   grossProfit,
   totalExpenses,
+  adjustmentLoss,
   netProfit,
 }: ProfitDetailsModalProps) => {
   const { currentShop } = useShop();
@@ -75,6 +88,7 @@ export const ProfitDetailsModal = ({
   const [sales, setSales] = useState<SaleWithProfit[]>([]);
   const [productProfits, setProductProfits] = useState<ProductProfit[]>([]);
   const [expenses, setExpenses] = useState<Array<{ id: string; title: string; amount: number; expense_date: string }>>([]);
+  const [adjustments, setAdjustments] = useState<StockAdjustment[]>([]);
 
   useEffect(() => {
     if (isOpen) {
@@ -99,6 +113,17 @@ export const ProfitDetailsModal = ({
       const expensesResult = await offlineShopService.getExpenses({ startDate: startOfMonth, endDate: endOfMonth });
       const expensesData = expensesResult?.expenses || [];
       setExpenses(expensesData);
+
+      // Fetch adjustments for this month (damages, expired, etc.)
+      const adjustmentsResult = await offlineShopService.getStockAdjustments({ 
+        startDate: startOfMonth, 
+        endDate: endOfMonth 
+      });
+      const adjustmentsData = adjustmentsResult?.adjustments || [];
+      // Filter only loss types
+      const lossTypes = ['damaged', 'damage', 'expired', 'theft', 'lost'];
+      const lossAdjustments = adjustmentsData.filter((a: any) => lossTypes.includes(a.type));
+      setAdjustments(lossAdjustments);
 
       // Aggregate product profits
       const productMap = new Map<string, ProductProfit>();
@@ -147,6 +172,17 @@ export const ProfitDetailsModal = ({
   const profitableProducts = productProfits.filter(p => p.total_profit > 0);
   const lossProducts = productProfits.filter(p => p.total_profit < 0);
   const totalLoss = lossProducts.reduce((sum, p) => sum + Math.abs(p.total_profit), 0);
+  
+  const getAdjustmentTypeLabel = (type: string) => {
+    const labels: Record<string, { en: string; bn: string }> = {
+      damaged: { en: "Damaged", bn: "নষ্ট" },
+      damage: { en: "Damaged", bn: "নষ্ট" },
+      expired: { en: "Expired", bn: "মেয়াদ উত্তীর্ণ" },
+      theft: { en: "Theft", bn: "চুরি" },
+      lost: { en: "Lost", bn: "হারানো" },
+    };
+    return labels[type]?.[language as "en" | "bn"] || type;
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -161,20 +197,38 @@ export const ProfitDetailsModal = ({
         <ScrollArea className="max-h-[calc(85vh-80px)]">
           <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
             {/* Summary Cards */}
-            <div className="grid grid-cols-3 gap-2 sm:gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 }}
               >
                 <Card className="border-0 bg-gradient-to-br from-emerald-500/10 to-teal-500/5">
-                  <CardContent className="p-3 sm:p-4 text-center">
-                    <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-500 mx-auto mb-1" />
-                    <p className="text-[10px] sm:text-xs text-muted-foreground">
+                  <CardContent className="p-2 sm:p-3 text-center">
+                    <TrendingUp className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-500 mx-auto mb-0.5" />
+                    <p className="text-[9px] sm:text-[10px] text-muted-foreground">
                       {language === "bn" ? "মোট বিক্রয় লাভ" : "Gross Profit"}
                     </p>
-                    <p className="text-sm sm:text-lg font-bold text-emerald-600">
+                    <p className="text-xs sm:text-sm font-bold text-emerald-600">
                       {formatCurrency(grossProfit)}
+                    </p>
+                  </CardContent>
+                </Card>
+              </motion.div>
+
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.15 }}
+              >
+                <Card className="border-0 bg-gradient-to-br from-amber-500/10 to-orange-500/5">
+                  <CardContent className="p-2 sm:p-3 text-center">
+                    <Wallet className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-500 mx-auto mb-0.5" />
+                    <p className="text-[9px] sm:text-[10px] text-muted-foreground">
+                      {language === "bn" ? "মোট খরচ" : "Expenses"}
+                    </p>
+                    <p className="text-xs sm:text-sm font-bold text-amber-600">
+                      - {formatCurrency(totalExpenses)}
                     </p>
                   </CardContent>
                 </Card>
@@ -185,14 +239,14 @@ export const ProfitDetailsModal = ({
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
               >
-                <Card className="border-0 bg-gradient-to-br from-rose-500/10 to-orange-500/5">
-                  <CardContent className="p-3 sm:p-4 text-center">
-                    <Wallet className="h-4 w-4 sm:h-5 sm:w-5 text-rose-500 mx-auto mb-1" />
-                    <p className="text-[10px] sm:text-xs text-muted-foreground">
-                      {language === "bn" ? "মোট খরচ" : "Expenses"}
+                <Card className="border-0 bg-gradient-to-br from-rose-500/10 to-red-500/5">
+                  <CardContent className="p-2 sm:p-3 text-center">
+                    <PackageX className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-rose-500 mx-auto mb-0.5" />
+                    <p className="text-[9px] sm:text-[10px] text-muted-foreground">
+                      {language === "bn" ? "স্টক ক্ষতি" : "Stock Loss"}
                     </p>
-                    <p className="text-sm sm:text-lg font-bold text-rose-600">
-                      - {formatCurrency(totalExpenses)}
+                    <p className="text-xs sm:text-sm font-bold text-rose-600">
+                      - {formatCurrency(adjustmentLoss)}
                     </p>
                   </CardContent>
                 </Card>
@@ -201,19 +255,19 @@ export const ProfitDetailsModal = ({
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
+                transition={{ delay: 0.25 }}
               >
                 <Card className={`border-0 bg-gradient-to-br ${netProfit >= 0 ? 'from-green-500/10 to-emerald-500/5' : 'from-red-500/10 to-rose-500/5'}`}>
-                  <CardContent className="p-3 sm:p-4 text-center">
+                  <CardContent className="p-2 sm:p-3 text-center">
                     {netProfit >= 0 ? (
-                      <ArrowUpRight className="h-4 w-4 sm:h-5 sm:w-5 text-green-500 mx-auto mb-1" />
+                      <ArrowUpRight className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-green-500 mx-auto mb-0.5" />
                     ) : (
-                      <ArrowDownRight className="h-4 w-4 sm:h-5 sm:w-5 text-red-500 mx-auto mb-1" />
+                      <ArrowDownRight className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-red-500 mx-auto mb-0.5" />
                     )}
-                    <p className="text-[10px] sm:text-xs text-muted-foreground">
+                    <p className="text-[9px] sm:text-[10px] text-muted-foreground">
                       {language === "bn" ? "নিট মুনাফা" : "Net Profit"}
                     </p>
-                    <p className={`text-sm sm:text-lg font-bold ${netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    <p className={`text-xs sm:text-sm font-bold ${netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                       {formatCurrency(netProfit)}
                     </p>
                   </CardContent>
@@ -372,7 +426,64 @@ export const ProfitDetailsModal = ({
               </div>
             )}
 
-            {/* Recent Sales with Profit */}
+            {/* Stock Loss Breakdown */}
+            {adjustments.length > 0 && (
+              <div>
+                <h3 className="text-sm sm:text-base font-semibold mb-2 sm:mb-3 flex items-center gap-2">
+                  <PackageX className="h-4 w-4 text-rose-500" />
+                  {language === "bn" ? "স্টক ক্ষতির বিবরণ" : "Stock Loss Breakdown"}
+                </h3>
+                
+                <div className="space-y-2">
+                  {loading ? (
+                    <div className="space-y-2">
+                      {[1, 2, 3].map((i) => (
+                        <Skeleton key={i} className="h-10 w-full rounded-lg" />
+                      ))}
+                    </div>
+                  ) : (
+                    <AnimatePresence>
+                      {adjustments.slice(0, 10).map((adj, index) => (
+                        <motion.div
+                          key={adj.id}
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: index * 0.05 }}
+                        >
+                          <Card className="border border-rose-500/20 bg-rose-500/5">
+                            <CardContent className="p-2 sm:p-3">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <p className="text-xs sm:text-sm font-medium truncate">
+                                      {adj.product_name}
+                                    </p>
+                                    <Badge variant="outline" className="text-[8px] px-1.5 py-0 border-rose-500/30 text-rose-600">
+                                      {getAdjustmentTypeLabel(adj.type)}
+                                    </Badge>
+                                  </div>
+                                  <div className="flex items-center gap-2 mt-0.5 text-[10px] sm:text-xs text-muted-foreground">
+                                    <span>{language === "bn" ? "পরিমাণ" : "Qty"}: {adj.quantity}</span>
+                                    <span>•</span>
+                                    <span>
+                                      {new Date(adj.adjustment_date).toLocaleDateString(language === "bn" ? "bn-BD" : "en-US")}
+                                    </span>
+                                  </div>
+                                </div>
+                                <p className="text-xs sm:text-sm font-bold text-rose-600 shrink-0">
+                                  - {formatCurrency(Math.abs(adj.cost_impact))}
+                                </p>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </motion.div>
+                      ))}
+                    </AnimatePresence>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div>
               <h3 className="text-sm sm:text-base font-semibold mb-2 sm:mb-3 flex items-center gap-2">
                 <Receipt className="h-4 w-4 text-blue-500" />
