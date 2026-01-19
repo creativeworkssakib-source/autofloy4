@@ -237,7 +237,7 @@ serve(async (req) => {
   // Get shop_id from query params or header
   const shopId = url.searchParams.get("shop_id") || req.headers.get("X-Shop-Id");
   
-  console.log(`[offline-shop] ${req.method} path=${url.pathname} resource=${resource} shop_id=${shopId} parts=${JSON.stringify(pathParts)}`);
+  console.log(`[offline-shop] ${req.method} path=${url.pathname} resource=${resource} shop_id=${shopId} resourceParts=${JSON.stringify(resourceParts)}`);
 
   try {
     // ===== SHOPS CRUD (Multi-shop support) =====
