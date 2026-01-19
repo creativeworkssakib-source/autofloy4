@@ -378,7 +378,7 @@ class OfflineShopService {
   async getStockAdjustments(filterType?: string) {
     const params: Record<string, string> = {};
     if (filterType && filterType !== "all") params.type = filterType;
-    return this.request<{ adjustments: any[] }>("stock-adjustments", {}, params);
+    return this.request<{ adjustments: any[] }>("adjustments", {}, params);
   }
 
   async createStockAdjustment(data: {
@@ -388,7 +388,7 @@ class OfflineShopService {
     reason?: string;
     notes?: string;
   }) {
-    return this.request<{ adjustment: any }>("stock-adjustments", {
+    return this.request<{ adjustment: any }>("adjustments", {
       method: "POST",
       body: JSON.stringify(data),
     });
@@ -396,7 +396,7 @@ class OfflineShopService {
 
   async deleteStockAdjustments(ids: string[]) {
     return this.request<{ message: string; deleted?: string[]; failed?: Array<{ id: string; error: string }> }>(
-      "stock-adjustments",
+      "adjustments",
       {
         method: "DELETE",
         body: JSON.stringify({ ids }),
