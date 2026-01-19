@@ -7048,6 +7048,22 @@ serve(async (req) => {
                 }
               }
             }
+            
+            // If no reference_id, try to parse customer name from notes field
+            // Format: "Due collection for INV-XXXXXX - CustomerName"
+            if (!customerName && dc.notes) {
+              const notesMatch = dc.notes.match(/Due collection for (INV-\d+)\s*-\s*(.+)$/i);
+              if (notesMatch) {
+                invoiceNumber = notesMatch[1] || '';
+                customerName = notesMatch[2]?.trim() || '';
+              } else {
+                // Try simpler format: "Due collection - CustomerName"
+                const simpleMatch = dc.notes.match(/Due collection\s*-\s*(.+)$/i);
+                if (simpleMatch) {
+                  customerName = simpleMatch[1]?.trim() || '';
+                }
+              }
+            }
 
             return {
               ...dc,
