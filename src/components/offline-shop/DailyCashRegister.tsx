@@ -1240,6 +1240,131 @@ export function DailyCashRegister() {
         </DialogContent>
       </Dialog>
 
+      {/* History Modal */}
+      <Dialog open={showHistoryModal} onOpenChange={setShowHistoryModal}>
+        <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="h-5 w-5 text-primary" />
+              {t.history}
+            </DialogTitle>
+            <DialogDescription>
+              {language === "bn" 
+                ? "আপনার গত ৭ দিনের ক্যাশ রেজিস্টার দেখুন।"
+                : "View your cash register history for the last 7 days."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto">
+            {registers && registers.length > 0 ? (
+              <div className="space-y-3">
+                {registers.map((register: CashRegister) => (
+                  <Card 
+                    key={register.id} 
+                    className={`border ${register.status === 'open' ? 'border-success/30 bg-success/5' : 'border-border'}`}
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-4 w-4 text-muted-foreground" />
+                          <span className="font-medium">
+                            {format(new Date(register.register_date), "dd MMM yyyy")}
+                          </span>
+                          {register.status === 'open' ? (
+                            <Badge variant="default" className="bg-success/90 text-success-foreground text-xs">
+                              {language === "bn" ? "চলমান" : "Open"}
+                            </Badge>
+                          ) : (
+                            <Badge variant="secondary" className="text-xs">
+                              {language === "bn" ? "বন্ধ" : "Closed"}
+                            </Badge>
+                          )}
+                        </div>
+                        {register.cash_difference !== null && register.status === 'closed' && (
+                          <Badge 
+                            variant={register.cash_difference === 0 ? "default" : register.cash_difference > 0 ? "secondary" : "destructive"}
+                            className="text-xs"
+                          >
+                            {register.cash_difference === 0 
+                              ? (language === "bn" ? "মিল" : "Match") 
+                              : register.cash_difference > 0 
+                                ? `+${formatCurrency(register.cash_difference)}` 
+                                : formatCurrency(register.cash_difference)}
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                        <div className="bg-muted/50 rounded-lg p-2">
+                          <div className="text-xs text-muted-foreground">{t.openingCash}</div>
+                          <div className="font-semibold">{formatCurrency(Number(register.opening_cash))}</div>
+                          {register.opening_time && (
+                            <div className="text-xs text-muted-foreground">
+                              {format(new Date(register.opening_time), "hh:mm a")}
+                            </div>
+                          )}
+                        </div>
+                        <div className="bg-success/10 rounded-lg p-2">
+                          <div className="text-xs text-muted-foreground flex items-center gap-1">
+                            <ArrowDownRight className="h-3 w-3" />
+                            {t.cashIn}
+                          </div>
+                          <div className="font-semibold text-success">
+                            {formatCurrency(
+                              Number(register.total_cash_sales || 0) + 
+                              Number(register.total_due_collected || 0) + 
+                              Number(register.total_deposits || 0)
+                            )}
+                          </div>
+                        </div>
+                        <div className="bg-destructive/10 rounded-lg p-2">
+                          <div className="text-xs text-muted-foreground flex items-center gap-1">
+                            <ArrowUpRight className="h-3 w-3" />
+                            {t.cashOut}
+                          </div>
+                          <div className="font-semibold text-destructive">
+                            {formatCurrency(
+                              Number(register.total_expenses || 0) + 
+                              Number(register.total_withdrawals || 0)
+                            )}
+                          </div>
+                        </div>
+                        <div className="bg-primary/10 rounded-lg p-2">
+                          <div className="text-xs text-muted-foreground">{t.closingCash}</div>
+                          <div className="font-semibold">
+                            {register.closing_cash !== null 
+                              ? formatCurrency(Number(register.closing_cash))
+                              : (language === "bn" ? "চলমান" : "Open")}
+                          </div>
+                          {register.closing_time && (
+                            <div className="text-xs text-muted-foreground">
+                              {format(new Date(register.closing_time), "hh:mm a")}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      {register.notes && (
+                        <div className="mt-2 text-xs text-muted-foreground bg-muted/30 p-2 rounded">
+                          {register.notes}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <History className="h-12 w-12 mx-auto mb-3 text-muted-foreground opacity-30" />
+                <p className="text-muted-foreground">{t.noHistory}</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {language === "bn" 
+                    ? "শপ খুললে এখানে ইতিহাস দেখা যাবে।"
+                    : "Open the shop to start recording history."}
+                </p>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Expenses Details Modal */}
       <Dialog open={showExpensesModal} onOpenChange={setShowExpensesModal}>
         <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-hidden flex flex-col">
