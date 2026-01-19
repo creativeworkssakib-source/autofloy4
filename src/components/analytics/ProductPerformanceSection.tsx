@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
+import { Link } from "react-router-dom";
 import {
   TrendingUp,
   TrendingDown,
@@ -11,6 +12,7 @@ import {
   ThumbsDown,
   BarChart3,
   RefreshCw,
+  Trash2,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -34,6 +36,8 @@ interface ProductPerformance {
   netProfit: number;
   profitMargin: number;
   returnRate: number;
+  adjustmentLoss: number;
+  adjustmentQuantity: number;
 }
 
 interface PerformanceData {
@@ -44,11 +48,13 @@ interface PerformanceData {
     totalProfit: number;
     totalReturns: number;
     totalLoss: number;
+    totalAdjustmentLoss: number;
   };
   topSellers: ProductPerformance[];
   lowPerformers: ProductPerformance[];
   highReturns: ProductPerformance[];
   highLoss: ProductPerformance[];
+  damages: ProductPerformance[];
 }
 
 interface ProductPerformanceSectionProps {
@@ -124,7 +130,7 @@ export const ProductPerformanceSection = ({ type, shopId, syncEnabled, title }: 
   const ProductRow = ({ product, rank, showMetric }: { 
     product: ProductPerformance; 
     rank: number; 
-    showMetric: "sales" | "profit" | "returns" | "loss" 
+    showMetric: "sales" | "profit" | "returns" | "loss" | "damages"
   }) => {
     const maxValue = data?.topSellers[0]?.totalQuantitySold || 1;
     const percentage = showMetric === "sales" 
@@ -133,6 +139,8 @@ export const ProductPerformanceSection = ({ type, shopId, syncEnabled, title }: 
       ? Math.abs(product.netProfit) > 0 ? 50 + (product.netProfit / Math.abs(product.netProfit) * 25) : 50
       : showMetric === "returns"
       ? Math.min(product.returnRate, 100)
+      : showMetric === "damages"
+      ? product.adjustmentLoss > 0 ? 75 : 25
       : product.lossAmount > 0 ? 75 : 25;
 
     return (
@@ -172,13 +180,19 @@ export const ProductPerformanceSection = ({ type, shopId, syncEnabled, title }: 
                   {product.returnCount} {language === "bn" ? "রিটার্ন" : "returns"}
                 </span>
               )}
+              {product.adjustmentLoss > 0 && (
+                <span className="flex items-center gap-1 text-rose-600">
+                  <AlertTriangle className="w-3 h-3" />
+                  {formatCurrency(product.adjustmentLoss)} {language === "bn" ? "ক্ষতি" : "loss"}
+                </span>
+              )}
             </div>
             
             <Progress 
               value={percentage} 
               className={`h-1.5 ${
                 showMetric === "sales" ? "[&>div]:bg-primary" :
-                showMetric === "returns" || showMetric === "loss" ? "[&>div]:bg-red-500" :
+                showMetric === "returns" || showMetric === "loss" || showMetric === "damages" ? "[&>div]:bg-red-500" :
                 product.netProfit >= 0 ? "[&>div]:bg-green-500" : "[&>div]:bg-red-500"
               }`}
             />
@@ -211,6 +225,7 @@ export const ProductPerformanceSection = ({ type, shopId, syncEnabled, title }: 
     totalProfit: 0,
     totalReturns: 0,
     totalLoss: 0,
+    totalAdjustmentLoss: 0,
   };
 
   const getTitle = () => {
@@ -274,7 +289,7 @@ export const ProductPerformanceSection = ({ type, shopId, syncEnabled, title }: 
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-4 h-auto">
+          <TabsList className="grid w-full grid-cols-5 h-auto">
             <TabsTrigger value="top-sellers" className="text-xs sm:text-sm py-2 px-1 sm:px-3 flex flex-col sm:flex-row items-center gap-0.5 sm:gap-1">
               <Flame className="h-3.5 w-3.5 text-orange-500" />
               <span className="hidden sm:inline">{language === "bn" ? "বেস্ট সেলার" : "Top Sellers"}</span>
@@ -289,6 +304,11 @@ export const ProductPerformanceSection = ({ type, shopId, syncEnabled, title }: 
               <RotateCcw className="h-3.5 w-3.5 text-amber-500" />
               <span className="hidden sm:inline">{language === "bn" ? "রিটার্ন" : "Returns"}</span>
               <span className="sm:hidden">{language === "bn" ? "রিটার্ন" : "Returns"}</span>
+            </TabsTrigger>
+            <TabsTrigger value="damages" className="text-xs sm:text-sm py-2 px-1 sm:px-3 flex flex-col sm:flex-row items-center gap-0.5 sm:gap-1">
+              <Trash2 className="h-3.5 w-3.5 text-rose-500" />
+              <span className="hidden sm:inline">{language === "bn" ? "নষ্ট" : "Damages"}</span>
+              <span className="sm:hidden">{language === "bn" ? "নষ্ট" : "Dmg"}</span>
             </TabsTrigger>
             <TabsTrigger value="high-loss" className="text-xs sm:text-sm py-2 px-1 sm:px-3 flex flex-col sm:flex-row items-center gap-0.5 sm:gap-1">
               <AlertTriangle className="h-3.5 w-3.5 text-red-500" />
@@ -332,6 +352,30 @@ export const ProductPerformanceSection = ({ type, shopId, syncEnabled, title }: 
               <div className="text-center py-8 text-muted-foreground">
                 <RotateCcw className="mx-auto h-8 w-8 mb-2 opacity-50" />
                 <p>{language === "bn" ? "কোন রিটার্ন নেই" : "No returns recorded"}</p>
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="damages" className="mt-4 space-y-2">
+            {data?.damages && data.damages.length > 0 ? (
+              <>
+                {data.damages.map((product, index) => (
+                  <ProductRow key={product.productId} product={product} rank={index + 1} showMetric="damages" />
+                ))}
+                <Link to="/offline-shop/adjustments" className="block">
+                  <div className="flex items-center justify-center gap-2 p-3 mt-3 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-600 dark:text-rose-400 transition-colors cursor-pointer">
+                    <Trash2 className="h-4 w-4" />
+                    <span className="text-sm font-medium">
+                      {language === "bn" ? "সব নষ্ট দেখুন" : "View All Damages"}
+                    </span>
+                    <ChevronRight className="h-4 w-4" />
+                  </div>
+                </Link>
+              </>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <TrendingUp className="mx-auto h-8 w-8 mb-2 opacity-50 text-green-500" />
+                <p>{language === "bn" ? "কোন নষ্ট নেই - দারুণ!" : "No damages - Great job!"}</p>
               </div>
             )}
           </TabsContent>

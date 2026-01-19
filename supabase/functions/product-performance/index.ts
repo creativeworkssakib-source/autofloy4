@@ -45,6 +45,8 @@ interface ProductPerformance {
   netProfit: number;
   profitMargin: number;
   returnRate: number;
+  adjustmentLoss: number;
+  adjustmentQuantity: number;
 }
 
 serve(async (req) => {
@@ -95,6 +97,8 @@ serve(async (req) => {
           netProfit: 0,
           profitMargin: 0,
           returnRate: 0,
+          adjustmentLoss: 0,
+          adjustmentQuantity: 0,
         };
         performanceMap.set(key, perf);
       }
@@ -136,12 +140,12 @@ serve(async (req) => {
         .eq("user_id", userId)
         .eq("shop_id", targetShopId);
       
-      // Get damages
-      const { data: damages } = await supabase
-        .from("shop_damages")
-        .select("product_id, product_name, quantity, loss_amount")
+      // Get stock adjustments (damages, expired, theft, lost)
+      const { data: adjustments } = await supabase
+        .from("shop_stock_adjustments")
+        .select("product_id, product_name, quantity, cost_impact, adjustment_type")
         .eq("user_id", userId)
-        .eq("shop_id", targetShopId);
+        .or(`shop_id.eq.${targetShopId},shop_id.is.null`);
       
       // Initialize with products
       (products || []).forEach(p => {
@@ -178,16 +182,19 @@ serve(async (req) => {
         }
       });
       
-      // Aggregate damages
-      (damages || []).forEach(dmg => {
-        const baseKey = dmg.product_id || dmg.product_name;
-        const product = (products || []).find(p => p.id === dmg.product_id);
+      // Aggregate adjustments (damages, expired, theft)
+      const lossTypes = ['damaged', 'expired', 'theft', 'lost'];
+      (adjustments || []).forEach(adj => {
+        if (!lossTypes.includes(adj.adjustment_type)) return;
+        
+        const baseKey = adj.product_id || adj.product_name;
+        const product = (products || []).find(p => p.id === adj.product_id);
         const key = type === "combined" && product?.online_sku ? product.online_sku : baseKey;
         
-        const perf = performanceMap.get(key);
-        if (perf) {
-          perf.lossAmount += Number(dmg.loss_amount) || 0;
-        }
+        const perf = performanceMap.get(key) || getOrCreate(key, adj.product_name);
+        perf.adjustmentLoss += Math.abs(Number(adj.cost_impact) || 0);
+        perf.adjustmentQuantity += Math.abs(Number(adj.quantity) || 0);
+        perf.lossAmount += Math.abs(Number(adj.cost_impact) || 0);
       });
     };
 
@@ -290,6 +297,7 @@ serve(async (req) => {
       totalProfit: allProducts.reduce((sum, p) => sum + p.netProfit, 0),
       totalReturns: allProducts.reduce((sum, p) => sum + p.returnQuantity, 0),
       totalLoss: allProducts.reduce((sum, p) => sum + p.lossAmount, 0),
+      totalAdjustmentLoss: allProducts.reduce((sum, p) => sum + p.adjustmentLoss, 0),
     };
     
     // Sort for different categories
@@ -313,6 +321,12 @@ serve(async (req) => {
       .filter(p => p.lossAmount > 0 || p.netProfit < 0)
       .sort((a, b) => b.lossAmount - a.lossAmount)
       .slice(0, limit);
+    
+    // Products with adjustment losses (damages, expired, theft)
+    const damages = [...allProducts]
+      .filter(p => p.adjustmentLoss > 0)
+      .sort((a, b) => b.adjustmentLoss - a.adjustmentLoss)
+      .slice(0, limit);
 
     console.log(`[product-performance] type=${type} user=${userId} shop=${shopId} products=${allProducts.length} topSellers=${topSellers.length}`);
 
@@ -322,6 +336,7 @@ serve(async (req) => {
       lowPerformers,
       highReturns,
       highLoss,
+      damages,
     }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
