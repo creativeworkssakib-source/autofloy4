@@ -26,7 +26,7 @@ interface GrowthInsightData {
   lastMonthSales: number;
   salesGrowthPercent: number;
   dailyAverage: number;
-  topCustomers: Array<{ name: string; totalPurchases: number; purchaseCount: number; percentage: number }>;
+  topCustomers: Array<{ name: string; totalPurchases: number; percentage: number }>;
   monthlyTrend: Array<{ month: string; sales: number }>;
   insights: string[];
   bestMonth: { month: string; sales: number } | null;
@@ -45,8 +45,7 @@ export const BusinessGrowthInsight = () => {
     monthlySales: language === "bn" ? "এই মাসে বিক্রি" : "This Month Sales",
     dailyAverage: language === "bn" ? "দৈনিক গড়" : "Daily Average",
     topCustomers: language === "bn" ? "টপ কাস্টমার" : "Top Customers",
-    topCustomersContribution: language === "bn" ? "বেশি বার কেনাকাটা করেছে" : "Most frequent buyers",
-    purchases: language === "bn" ? "বার" : "times",
+    topCustomersContribution: language === "bn" ? "মোট বিক্রির অবদান" : "Contribution to total sales",
     monthlyTrend: language === "bn" ? "মাসিক ট্রেন্ড" : "Monthly Trend",
     smartInsights: language === "bn" ? "স্মার্ট ইনসাইট" : "Smart Insights",
     vsLastMonth: language === "bn" ? "গত মাসের তুলনায়" : "vs last month",
@@ -217,9 +216,9 @@ export const BusinessGrowthInsight = () => {
                     <div className="flex-1">
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-sm font-medium">{customer.name}</span>
-                        <Badge variant="secondary" className="text-xs">
-                          {customer.purchaseCount || 0} {t.purchases}
-                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {formatCurrency(customer.totalPurchases)} ({customer.percentage.toFixed(1)}%)
+                        </span>
                       </div>
                       <Progress value={customer.percentage} className="h-1.5" />
                     </div>

@@ -47,7 +47,7 @@ interface GrowthInsightData {
   lastMonthSales: number;
   salesGrowthPercent: number;
   dailyAverage: number;
-  topCustomers: Array<{ name: string; totalPurchases: number; purchaseCount: number; percentage: number }>;
+  topCustomers: Array<{ name: string; totalPurchases: number; percentage: number }>;
   monthlyTrend: Array<{ month: string; sales: number }>;
   insights: string[];
   bestMonth: { month: string; sales: number } | null;
@@ -61,7 +61,6 @@ export const FullBusinessGrowthInsight = () => {
   const { currentShop } = useShop();
   const [data, setData] = useState<GrowthInsightData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [showAllCustomers, setShowAllCustomers] = useState(false);
 
   const t = {
     title: language === "bn" ? "ব্যবসা বৃদ্ধি বিশ্লেষণ" : "Business Growth Analysis",
@@ -80,11 +79,8 @@ export const FullBusinessGrowthInsight = () => {
     monthlyTrendDesc: language === "bn" ? "গত ৬ মাসের বিক্রির প্রবণতা" : "Sales trend over the last 6 months",
     
     topCustomers: language === "bn" ? "টপ কাস্টমার" : "Top Customers",
-    topCustomersDesc: language === "bn" ? "সবচেয়ে বেশি বার কেনাকাটা করা কাস্টমার" : "Customers who purchase most frequently",
-    contribution: language === "bn" ? "মোট কেনাকাটার অবদান" : "Contribution to total purchases",
-    purchases: language === "bn" ? "বার কিনেছে" : "purchases",
-    showMore: language === "bn" ? "আরও দেখুন (৫০ জন পর্যন্ত)" : "Show More (up to 50)",
-    showLess: language === "bn" ? "কম দেখুন" : "Show Less",
+    topCustomersDesc: language === "bn" ? "সবচেয়ে বেশি কেনাকাটা করা কাস্টমার" : "Customers with highest purchases",
+    contribution: language === "bn" ? "মোট বিক্রির অবদান" : "Contribution to total sales",
     
     smartInsights: language === "bn" ? "স্মার্ট ইনসাইট" : "Smart Insights",
     smartInsightsDesc: language === "bn" ? "আপনার ব্যবসার জন্য AI বিশ্লেষণ" : "AI analysis for your business",
@@ -426,7 +422,7 @@ export const FullBusinessGrowthInsight = () => {
               <CardContent>
                 {data.topCustomers && data.topCustomers.length > 0 ? (
                   <div className="space-y-4">
-                    {(showAllCustomers ? data.topCustomers : data.topCustomers.slice(0, 5)).map((customer, index) => (
+                    {data.topCustomers.map((customer, index) => (
                       <div key={index} className="flex items-center gap-3">
                         <div 
                           className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm"
@@ -437,9 +433,9 @@ export const FullBusinessGrowthInsight = () => {
                         <div className="flex-1">
                           <div className="flex items-center justify-between mb-1">
                             <span className="font-medium">{customer.name}</span>
-                            <Badge variant="secondary" className="font-semibold">
-                              {customer.purchaseCount || 0} {t.purchases}
-                            </Badge>
+                            <span className="text-sm font-semibold">
+                              {formatCurrency(customer.totalPurchases)}
+                            </span>
                           </div>
                           <div className="flex items-center gap-2">
                             <Progress 
@@ -453,16 +449,6 @@ export const FullBusinessGrowthInsight = () => {
                         </div>
                       </div>
                     ))}
-                    
-                    {/* Show More/Less Button */}
-                    {data.topCustomers.length > 5 && (
-                      <button
-                        onClick={() => setShowAllCustomers(!showAllCustomers)}
-                        className="w-full mt-4 py-2 px-4 text-sm font-medium text-primary hover:bg-primary/10 rounded-lg transition-colors border border-primary/20"
-                      >
-                        {showAllCustomers ? t.showLess : t.showMore}
-                      </button>
-                    )}
                   </div>
                 ) : (
                   <p className="text-center py-8 text-muted-foreground">{t.noData}</p>
