@@ -134,14 +134,14 @@ interface CustomerSale {
   items: SaleItem[];
 }
 
-const RETURN_REASONS = [
-  "Defective/Damaged",
-  "Wrong Item",
-  "Size/Fit Issue",
-  "Quality Issue",
-  "Customer Changed Mind",
-  "Expired Product",
-  "Other",
+const getReturnReasons = (language: string) => [
+  { value: "Defective/Damaged", en: "Defective/Damaged", bn: "ত্রুটিপূর্ণ/ক্ষতিগ্রস্ত" },
+  { value: "Wrong Item", en: "Wrong Item", bn: "ভুল পণ্য" },
+  { value: "Size/Fit Issue", en: "Size/Fit Issue", bn: "সাইজ/ফিটিং সমস্যা" },
+  { value: "Quality Issue", en: "Quality Issue", bn: "মান সমস্যা" },
+  { value: "Customer Changed Mind", en: "Customer Changed Mind", bn: "গ্রাহক মত পরিবর্তন" },
+  { value: "Expired Product", en: "Expired Product", bn: "মেয়াদোত্তীর্ণ পণ্য" },
+  { value: "Other", en: "Other", bn: "অন্যান্য" },
 ];
 
 // API URL for online-only operations (photo upload)
@@ -149,6 +149,78 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 
 export default function ShopReturns() {
   const { t, language } = useLanguage();
+  
+  // Translations object
+  const tr = {
+    title: language === "bn" ? "পণ্য রিটার্ন" : "Product Returns",
+    subtitle: language === "bn" ? "গ্রাহক ও সরবরাহকারী থেকে রিটার্ন ব্যবস্থাপনা" : "Manage returns from customers & to suppliers",
+    customerReturns: language === "bn" ? "গ্রাহক রিটার্ন" : "Customer Returns",
+    supplierReturns: language === "bn" ? "সরবরাহকারী রিটার্ন" : "Supplier Returns",
+    hideReport: language === "bn" ? "রিপোর্ট লুকান" : "Hide Report",
+    showReport: language === "bn" ? "রিপোর্ট দেখুন" : "Show Report",
+    addReturn: language === "bn" ? "রিটার্ন যোগ করুন" : "Add Return",
+    addProductReturn: language === "bn" ? "পণ্য রিটার্ন যোগ করুন" : "Add Product Return",
+    recordReturn: language === "bn" ? "গ্রাহক থেকে পণ্য রিটার্ন রেকর্ড করুন" : "Record a product return from a customer",
+    searchCustomer: language === "bn" ? "গ্রাহক খুঁজুন (নাম বা ফোন)" : "Search Customer (Name or Phone)",
+    searchPlaceholder: language === "bn" ? "গ্রাহকের নাম বা ফোন লিখুন..." : "Type customer name or phone to find purchase history...",
+    viewPurchases: language === "bn" ? "ক্রয় দেখুন" : "View Purchases",
+    walkIn: language === "bn" ? "ওয়াক-ইন" : "Walk-in",
+    noPhone: language === "bn" ? "ফোন নেই" : "No phone",
+    searching: language === "bn" ? "খোঁজা হচ্ছে..." : "Searching...",
+    selectProduct: language === "bn" ? "পণ্য নির্বাচন করুন" : "Select Product from History",
+    selectProductDesc: language === "bn" ? "গ্রাহকের পূর্বের কেনাকাটা থেকে পণ্য নির্বাচন করুন" : "Select a product from customer's purchase history",
+    invoice: language === "bn" ? "ইনভয়েস" : "Invoice",
+    noPurchases: language === "bn" ? "কোন ক্রয় ইতিহাস নেই" : "No purchase history found",
+    returnDetails: language === "bn" ? "রিটার্ন বিবরণ" : "Return Details",
+    product: language === "bn" ? "পণ্য" : "Product",
+    quantity: language === "bn" ? "পরিমাণ" : "Quantity",
+    unitPrice: language === "bn" ? "ইউনিট দাম" : "Unit Price",
+    refundAmount: language === "bn" ? "রিফান্ড পরিমাণ" : "Refund Amount",
+    returnReason: language === "bn" ? "রিটার্নের কারণ *" : "Return Reason *",
+    selectReason: language === "bn" ? "কারণ নির্বাচন করুন" : "Select reason",
+    productCondition: language === "bn" ? "পণ্যের অবস্থা" : "Product Condition",
+    resellable: language === "bn" ? "পুনরায় বিক্রয়যোগ্য" : "Resellable",
+    resellableDesc: language === "bn" ? "পণ্য স্টকে ফিরে যাবে" : "Product will be added back to inventory",
+    damaged: language === "bn" ? "ক্ষতিগ্রস্ত / বিক্রয়যোগ্য নয়" : "Damaged / Not Resellable",
+    damagedDesc: language === "bn" ? "পণ্য সম্পূর্ণ ক্ষতিগ্রস্ত বা হারিয়ে গেছে" : "Product is completely damaged or lost",
+    lossAmount: language === "bn" ? "লস পরিমাণ (৳)" : "Loss Amount (৳)",
+    lossPlaceholder: language === "bn" ? "লাভ থেকে কাটার জন্য লস পরিমাণ লিখুন..." : "Enter loss amount to deduct from profit...",
+    lossNote: language === "bn" ? "এই পরিমাণ মূল বিক্রয়ের লাভ থেকে কেটে নেওয়া হবে" : "This amount will be deducted from the original sale's profit",
+    notes: language === "bn" ? "নোট" : "Notes",
+    notesPlaceholder: language === "bn" ? "অতিরিক্ত নোট..." : "Additional notes...",
+    photo: language === "bn" ? "ছবি" : "Photo",
+    uploading: language === "bn" ? "আপলোড হচ্ছে..." : "Uploading...",
+    uploadPhoto: language === "bn" ? "ছবি আপলোড" : "Upload Photo",
+    cancel: language === "bn" ? "বাতিল" : "Cancel",
+    processing: language === "bn" ? "প্রক্রিয়াকরণ..." : "Processing...",
+    monthlyReport: language === "bn" ? "মাসিক রিটার্ন রিপোর্ট" : "Monthly Returns Report",
+    totalReturns: language === "bn" ? "মোট রিটার্ন" : "Total Returns",
+    totalRefund: language === "bn" ? "মোট রিফান্ড" : "Total Refund",
+    totalLoss: language === "bn" ? "মোট লস" : "Total Loss",
+    resellableCount: language === "bn" ? "পুনরায় বিক্রয়যোগ্য" : "Resellable",
+    damagedCount: language === "bn" ? "ক্ষতিগ্রস্ত" : "Damaged",
+    topReturned: language === "bn" ? "সবচেয়ে বেশি রিটার্ন" : "Top Returned Products",
+    returnsByReason: language === "bn" ? "কারণ অনুযায়ী রিটার্ন" : "Returns by Reason",
+    noReturns: language === "bn" ? "কোন রিটার্ন নেই" : "No returns",
+    viewDetails: language === "bn" ? "বিস্তারিত দেখুন" : "View Details",
+    returnDate: language === "bn" ? "রিটার্ন তারিখ" : "Return Date",
+    status: language === "bn" ? "স্ট্যাটাস" : "Status",
+    actions: language === "bn" ? "অ্যাকশন" : "Actions",
+    pending: language === "bn" ? "অপেক্ষমাণ" : "Pending",
+    processed: language === "bn" ? "প্রসেসড" : "Processed",
+    approved: language === "bn" ? "অনুমোদিত" : "Approved",
+    rejected: language === "bn" ? "প্রত্যাখ্যাত" : "Rejected",
+    delete: language === "bn" ? "মুছুন" : "Delete",
+    confirmDelete: language === "bn" ? "আপনি কি নিশ্চিত?" : "Are you sure?",
+    deleteDesc: language === "bn" ? "এই রিটার্ন মুছে ফেলা হবে" : "This return will be deleted",
+    items: language === "bn" ? "টি আইটেম" : "items",
+    customer: language === "bn" ? "গ্রাহক" : "Customer",
+    loadingHistory: language === "bn" ? "ইতিহাস লোড হচ্ছে..." : "Loading history...",
+    selectFromList: language === "bn" ? "নিচের তালিকা থেকে পণ্য নির্বাচন করুন" : "Select a product from the list below",
+  };
+
+  const RETURN_REASONS = getReturnReasons(language);
+  
   const [activeTab, setActiveTab] = useState("customer");
   const [returns, setReturns] = useState<ShopReturn[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -810,8 +882,8 @@ export default function ShopReturns() {
       <div className="space-y-4 sm:space-y-6">
         <div className="flex flex-col gap-3 sm:gap-4">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold">Product Returns</h1>
-            <p className="text-sm sm:text-base text-muted-foreground">Manage returns from customers & to suppliers</p>
+            <h1 className="text-2xl sm:text-3xl font-bold">{tr.title}</h1>
+            <p className="text-sm sm:text-base text-muted-foreground">{tr.subtitle}</p>
           </div>
         </div>
 
@@ -820,11 +892,11 @@ export default function ShopReturns() {
           <TabsList className="grid w-full max-w-md grid-cols-2">
             <TabsTrigger value="customer" className="gap-2">
               <Users className="h-4 w-4" />
-              Customer Returns
+              {tr.customerReturns}
             </TabsTrigger>
             <TabsTrigger value="supplier" className="gap-2">
               <Truck className="h-4 w-4" />
-              Supplier Returns
+              {tr.supplierReturns}
             </TabsTrigger>
           </TabsList>
 
@@ -836,19 +908,19 @@ export default function ShopReturns() {
                 onClick={() => setShowReportSection(!showReportSection)}
               >
                 <BarChart3 className="mr-2 h-4 w-4" />
-                {showReportSection ? "Hide Report" : "Show Report"}
+                {showReportSection ? tr.hideReport : tr.showReport}
               </Button>
               <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
                 <DialogTrigger asChild>
                   <Button>
                     <Plus className="mr-2 h-4 w-4" />
-                    Add Return
+                    {tr.addReturn}
                   </Button>
                 </DialogTrigger>
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Add Product Return</DialogTitle>
-                <DialogDescription>Record a product return from a customer</DialogDescription>
+                <DialogTitle>{tr.addProductReturn}</DialogTitle>
+                <DialogDescription>{tr.recordReturn}</DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
                 
@@ -858,7 +930,7 @@ export default function ShopReturns() {
                     <div className="flex items-center gap-2 mb-3">
                       <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs font-bold">1</div>
                       <User className="h-4 w-4 text-primary" />
-                      <span className="font-medium">Search Customer (Name or Phone)</span>
+                      <span className="font-medium">{tr.searchCustomer}</span>
                     </div>
                     <div className="flex gap-2">
                       <div className="flex-1 relative">
@@ -869,7 +941,7 @@ export default function ShopReturns() {
                             setCustomerSearchQuery(e.target.value);
                             searchCustomersForReturn(e.target.value);
                           }}
-                          placeholder="Type customer name or phone to find purchase history..."
+                          placeholder={tr.searchPlaceholder}
                           className="pl-9"
                         />
                       </div>
@@ -888,10 +960,10 @@ export default function ShopReturns() {
                                 <p className="font-medium flex items-center gap-2">
                                   {customer.name}
                                   {customer.is_walk_in && (
-                                    <Badge variant="outline" className="text-xs">Walk-in</Badge>
+                                    <Badge variant="outline" className="text-xs">{tr.walkIn}</Badge>
                                   )}
                                 </p>
-                                <p className="text-sm text-muted-foreground">{customer.phone || "No phone"}</p>
+                                <p className="text-sm text-muted-foreground">{customer.phone || tr.noPhone}</p>
                               </div>
                               <div className="flex gap-2">
                                 <Button 
@@ -910,7 +982,7 @@ export default function ShopReturns() {
                                   }}
                                 >
                                   <History className="h-4 w-4" />
-                                  View Purchases
+                                  {tr.viewPurchases}
                                 </Button>
                                 <Button 
                                   size="sm" 
@@ -918,7 +990,7 @@ export default function ShopReturns() {
                                   onClick={() => quickAddReturnForCustomer(customer)}
                                 >
                                   <Plus className="h-4 w-4" />
-                                  Add Return
+                                  {tr.addReturn}
                                 </Button>
                               </div>
                             </div>
@@ -928,7 +1000,7 @@ export default function ShopReturns() {
                     )}
                     
                     {isSearchingCustomers && (
-                      <p className="text-sm text-muted-foreground mt-2">Searching...</p>
+                      <p className="text-sm text-muted-foreground mt-2">{tr.searching}</p>
                     )}
 
                     {/* Selected Customer Badge with Remove Option */}
@@ -968,7 +1040,7 @@ export default function ShopReturns() {
                             }}
                           >
                             <History className="h-4 w-4 mr-1" />
-                            View Purchase History
+                            {tr.viewPurchases}
                           </Button>
                         )}
                       </div>
@@ -984,7 +1056,7 @@ export default function ShopReturns() {
                         <div className="flex items-center gap-2">
                           <div className="flex items-center justify-center w-6 h-6 rounded-full bg-green-600 text-white text-xs font-bold">2</div>
                           <ShoppingBag className="h-4 w-4 text-green-600" />
-                          <span className="font-medium text-green-700">Selected Product from Purchase</span>
+                          <span className="font-medium text-green-700">{language === "bn" ? "নির্বাচিত পণ্য" : "Selected Product from Purchase"}</span>
                         </div>
                         <Button 
                           size="sm" 
@@ -1009,24 +1081,24 @@ export default function ShopReturns() {
                           }}
                         >
                           <X className="h-4 w-4 mr-1" />
-                          Change
+                          {language === "bn" ? "পরিবর্তন" : "Change"}
                         </Button>
                       </div>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                         <div>
-                          <p className="text-muted-foreground">Invoice</p>
+                          <p className="text-muted-foreground">{tr.invoice}</p>
                           <p className="font-medium">{selectedSale.invoice_number}</p>
                         </div>
                         <div>
-                          <p className="text-muted-foreground">Sale Date</p>
+                          <p className="text-muted-foreground">{language === "bn" ? "বিক্রয় তারিখ" : "Sale Date"}</p>
                           <p className="font-medium">{safeFormatDate(selectedSale.sale_date)}</p>
                         </div>
                         <div>
-                          <p className="text-muted-foreground">Product</p>
+                          <p className="text-muted-foreground">{tr.product}</p>
                           <p className="font-medium">{selectedSaleItem.product_name}</p>
                         </div>
                         <div>
-                          <p className="text-muted-foreground">Sold Qty × Price</p>
+                          <p className="text-muted-foreground">{language === "bn" ? "বিক্রীত পরিমাণ × মূল্য" : "Sold Qty × Price"}</p>
                           <p className="font-medium">{selectedSaleItem.quantity} × ৳{selectedSaleItem.unit_price}</p>
                         </div>
                       </div>
@@ -1040,7 +1112,7 @@ export default function ShopReturns() {
                         <div className="flex items-center gap-2">
                           <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs font-bold">2</div>
                           <ShoppingBag className="h-4 w-4 text-primary" />
-                          <span className="font-medium text-primary">Select Product from Purchase History</span>
+                          <span className="font-medium text-primary">{tr.selectProduct}</span>
                         </div>
                         <Button 
                           size="sm" 
@@ -1051,7 +1123,7 @@ export default function ShopReturns() {
                           }}
                         >
                           <X className="h-4 w-4 mr-1" />
-                          Cancel
+                          {tr.cancel}
                         </Button>
                       </div>
                       
@@ -1089,7 +1161,7 @@ export default function ShopReturns() {
                                   </div>
                                   <Button size="sm" variant="default" className="h-7">
                                     <Plus className="h-3 w-3 mr-1" />
-                                    Select
+                                    {language === "bn" ? "নির্বাচন" : "Select"}
                                   </Button>
                                 </div>
                               ))}
@@ -1103,7 +1175,7 @@ export default function ShopReturns() {
                   <Card className="border border-dashed">
                     <CardContent className="pt-4 text-center py-8">
                       <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full mx-auto mb-2" />
-                      <p className="text-sm text-muted-foreground">Loading purchase history...</p>
+                      <p className="text-sm text-muted-foreground">{tr.loadingHistory}</p>
                     </CardContent>
                   </Card>
                 ) : (
@@ -1113,10 +1185,10 @@ export default function ShopReturns() {
                       <div className="flex items-center gap-2 mb-3">
                         <div className="flex items-center justify-center w-6 h-6 rounded-full bg-muted text-muted-foreground text-xs font-bold">2</div>
                         <Package className="h-4 w-4 text-muted-foreground" />
-                        <span className="font-medium text-muted-foreground">Or Enter Product Manually (if no purchase history)</span>
+                        <span className="font-medium text-muted-foreground">{language === "bn" ? "অথবা ম্যানুয়ালি পণ্য যোগ করুন (যদি ক্রয় ইতিহাস না থাকে)" : "Or Enter Product Manually (if no purchase history)"}</span>
                       </div>
                       <div className="space-y-2">
-                        <Label>Select or Type Product Name</Label>
+                        <Label>{language === "bn" ? "পণ্যের নাম নির্বাচন বা লিখুন" : "Select or Type Product Name"}</Label>
                         <div className="relative">
                           <Input
                             value={formData.product_name}
@@ -1127,7 +1199,7 @@ export default function ShopReturns() {
                                 product_id: "",
                               });
                             }}
-                            placeholder="Type product name or select from list..."
+                            placeholder={language === "bn" ? "পণ্যের নাম লিখুন বা তালিকা থেকে নির্বাচন করুন..." : "Type product name or select from list..."}
                             list="product-options"
                           />
                           <datalist id="product-options">
@@ -1158,7 +1230,7 @@ export default function ShopReturns() {
                       </div>
                       {formData.product_id && (
                         <p className="text-sm text-muted-foreground mt-2">
-                          Selected: <span className="font-medium text-foreground">{formData.product_name}</span>
+                          {language === "bn" ? "নির্বাচিত:" : "Selected:"} <span className="font-medium text-foreground">{formData.product_name}</span>
                         </p>
                       )}
                     </CardContent>
@@ -1170,8 +1242,8 @@ export default function ShopReturns() {
                   <CardContent className="pt-4">
                     <div className="flex items-center gap-2 mb-4">
                       <div className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold">✓</div>
-                      <span className="font-medium">Return Details</span>
-                      {selectedSaleItem && <Badge variant="secondary" className="text-xs">Auto-filled</Badge>}
+                      <span className="font-medium">{tr.returnDetails}</span>
+                      {selectedSaleItem && <Badge variant="secondary" className="text-xs">{language === "bn" ? "স্বয়ংক্রিয়" : "Auto-filled"}</Badge>}
                     </div>
                     
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
@@ -1268,7 +1340,7 @@ export default function ShopReturns() {
                 </Card>
 
                 <div className="space-y-2">
-                  <Label>Return Reason *</Label>
+                  <Label>{tr.returnReason}</Label>
                   <Select
                     value={formData.return_reason}
                     onValueChange={(val) =>
@@ -1276,12 +1348,12 @@ export default function ShopReturns() {
                     }
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select reason" />
+                      <SelectValue placeholder={tr.selectReason} />
                     </SelectTrigger>
                     <SelectContent>
                       {RETURN_REASONS.map((reason) => (
-                        <SelectItem key={reason} value={reason}>
-                          {reason}
+                        <SelectItem key={reason.value} value={reason.value}>
+                          {language === "bn" ? reason.bn : reason.en}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -1294,7 +1366,7 @@ export default function ShopReturns() {
                     <div className="flex items-center gap-2 mb-3">
                       <div className="flex items-center justify-center w-6 h-6 rounded-full bg-muted text-muted-foreground text-xs font-bold">3</div>
                       <Package className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium">Product Condition</span>
+                      <span className="font-medium">{tr.productCondition}</span>
                     </div>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1313,8 +1385,8 @@ export default function ShopReturns() {
                             {formData.is_resellable && <div className="w-2 h-2 bg-white rounded-full" />}
                           </div>
                           <div>
-                            <p className="font-medium text-green-700">Resellable</p>
-                            <p className="text-xs text-muted-foreground">Product will be added back to inventory</p>
+                            <p className="font-medium text-green-700">{tr.resellable}</p>
+                            <p className="text-xs text-muted-foreground">{tr.resellableDesc}</p>
                           </div>
                         </div>
                       </div>
@@ -1334,8 +1406,8 @@ export default function ShopReturns() {
                             {!formData.is_resellable && <div className="w-2 h-2 bg-white rounded-full" />}
                           </div>
                           <div>
-                            <p className="font-medium text-destructive">Damaged / Not Resellable</p>
-                            <p className="text-xs text-muted-foreground">Product is completely damaged or lost</p>
+                            <p className="font-medium text-destructive">{tr.damaged}</p>
+                            <p className="text-xs text-muted-foreground">{tr.damagedDesc}</p>
                           </div>
                         </div>
                       </div>
@@ -1343,7 +1415,7 @@ export default function ShopReturns() {
 
                     {!formData.is_resellable && (
                       <div className="mt-4 space-y-2">
-                        <Label>Loss Amount (৳)</Label>
+                        <Label>{tr.lossAmount}</Label>
                         <Input
                           type="number"
                           min={0}
@@ -1356,10 +1428,10 @@ export default function ShopReturns() {
                               loss_amount: val === "" ? 0 : parseFloat(val) || 0,
                             });
                           }}
-                          placeholder="Enter loss amount to deduct from profit..."
+                          placeholder={tr.lossPlaceholder}
                         />
                         <p className="text-xs text-muted-foreground">
-                          This amount will be deducted from the original sale's profit
+                          {tr.lossNote}
                         </p>
                       </div>
                     )}
@@ -1408,19 +1480,19 @@ export default function ShopReturns() {
                 </Card>
 
                 <div className="space-y-2">
-                  <Label>Notes</Label>
+                  <Label>{tr.notes}</Label>
                   <Textarea
                     value={formData.notes}
                     onChange={(e) =>
                       setFormData({ ...formData, notes: e.target.value })
                     }
-                    placeholder="Additional notes..."
+                    placeholder={tr.notesPlaceholder}
                     rows={3}
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Photo</Label>
+                  <Label>{tr.photo}</Label>
                   {formData.photo_url ? (
                     <div className="relative inline-block">
                       <img
@@ -1452,7 +1524,7 @@ export default function ShopReturns() {
                         className="flex items-center gap-2 px-4 py-2 border rounded-lg cursor-pointer hover:bg-muted transition-colors"
                       >
                         <Upload className="h-4 w-4" />
-                        {uploading ? "Uploading..." : "Upload Photo"}
+                        {uploading ? tr.uploading : tr.uploadPhoto}
                       </Label>
                     </div>
                   )}
@@ -1460,16 +1532,16 @@ export default function ShopReturns() {
 
                 <div className="flex justify-end gap-2 pt-4">
                   <Button variant="outline" onClick={() => setIsAddOpen(false)} disabled={isSubmitting}>
-                    Cancel
+                    {tr.cancel}
                   </Button>
                   <Button onClick={handleSubmit} disabled={isSubmitting}>
                     {isSubmitting ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        {language === "bn" ? "প্রক্রিয়াকরণ..." : "Processing..."}
+                        {tr.processing}
                       </>
                     ) : (
-                      "Add Return"
+                      tr.addReturn
                     )}
                   </Button>
                 </div>
