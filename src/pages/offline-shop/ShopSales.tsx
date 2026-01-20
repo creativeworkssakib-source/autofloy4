@@ -874,44 +874,79 @@ const ShopSales = () => {
               {cart.length === 0 ? (
                 <p className="text-muted-foreground text-center py-8">{t("shop.cartEmpty")}</p>
               ) : (
-                <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                  {cart.map((item) => (
-                    <div
-                      key={item.product_id}
-                      className="flex items-center justify-between p-2 bg-muted rounded"
-                    >
-                      <div className="flex-1">
-                        <p className="font-medium text-sm">{item.product_name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {formatCurrency(item.unit_price)} x {item.quantity}
-                        </p>
-                        <p className="text-[10px] text-muted-foreground/70">
-                          {language === "bn" ? "ক্রয়" : "Cost"}: {formatCurrency(item.purchase_price || 0)}
-                        </p>
+                <div className="space-y-2 max-h-[250px] overflow-y-auto">
+                  {cart.map((item) => {
+                    const isLoss = item.unit_price < (item.purchase_price || 0);
+                    return (
+                      <div
+                        key={item.product_id}
+                        className={`p-3 rounded-lg border ${isLoss ? "bg-destructive/10 border-destructive/30" : "bg-muted border-transparent"}`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm truncate">{item.product_name}</p>
+                            <p className="text-[10px] text-muted-foreground">
+                              {language === "bn" ? "ক্রয় মূল্য" : "Purchase Price"}: {formatCurrency(item.purchase_price || 0)}
+                            </p>
+                            {isLoss && (
+                              <p className="text-[10px] text-destructive font-medium mt-0.5">
+                                {language === "bn" ? "⚠️ লসে বিক্রি হচ্ছে" : "⚠️ Selling at loss"}
+                              </p>
+                            )}
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 shrink-0"
+                            onClick={() => removeFromCart(item.product_id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <div className="flex items-center gap-2 mt-2">
+                          <div className="flex-1">
+                            <Label className="text-[10px] text-muted-foreground mb-1 block">
+                              {language === "bn" ? "বিক্রয় মূল্য" : "Sell Price"}
+                            </Label>
+                            <Input
+                              type="number"
+                              value={item.unit_price}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                updateCartItem(item.product_id, "unit_price", val === "" ? 0 : parseFloat(val) || 0);
+                              }}
+                              className={`h-8 ${isLoss ? "border-destructive text-destructive" : ""}`}
+                              min={0}
+                              step="0.01"
+                            />
+                          </div>
+                          <div className="w-16">
+                            <Label className="text-[10px] text-muted-foreground mb-1 block">
+                              {language === "bn" ? "সংখ্যা" : "Qty"}
+                            </Label>
+                            <Input
+                              type="number"
+                              value={item.quantity}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                updateCartItem(item.product_id, "quantity", val === "" ? 1 : parseInt(val) || 1);
+                              }}
+                              className="h-8"
+                              min={1}
+                            />
+                          </div>
+                          <div className="text-right shrink-0">
+                            <Label className="text-[10px] text-muted-foreground mb-1 block">
+                              {language === "bn" ? "মোট" : "Total"}
+                            </Label>
+                            <p className={`font-semibold text-sm ${isLoss ? "text-destructive" : ""}`}>
+                              {formatCurrency(item.total)}
+                            </p>
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          type="number"
-                          value={item.quantity}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            updateCartItem(item.product_id, "quantity", val === "" ? 1 : parseInt(val) || 1);
-                          }}
-                          className="w-16 h-8"
-                          min={1}
-                        />
-                        <p className="font-medium w-20 text-right">{formatCurrency(item.total)}</p>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => removeFromCart(item.product_id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 
