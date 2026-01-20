@@ -132,7 +132,7 @@ const ShopDueCustomers = () => {
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat(language === "bn" ? "bn-BD" : "en-BD", {
+    return new Intl.NumberFormat(language === "bn" ? "bn-BD" : "en-US", {
       style: "currency",
       currency: currency,
       minimumFractionDigits: 0,
@@ -294,7 +294,7 @@ const ShopDueCustomers = () => {
         
         // Create detailed purchase summary with dates
         const purchaseDetailsList = customer.sales.map(s => {
-          const formattedAmount = new Intl.NumberFormat(language === "bn" ? "bn-BD" : "en-BD", {
+          const formattedAmount = new Intl.NumberFormat(language === "bn" ? "bn-BD" : "en-US", {
             style: "currency",
             currency: "BDT",
             minimumFractionDigits: 0,

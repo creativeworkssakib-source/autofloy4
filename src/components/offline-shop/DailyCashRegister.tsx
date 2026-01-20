@@ -178,7 +178,7 @@ export function DailyCashRegister() {
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat(language === "bn" ? "bn-BD" : "en-BD", {
+    return new Intl.NumberFormat(language === "bn" ? "bn-BD" : "en-US", {
       style: "currency",
       currency: "BDT",
       minimumFractionDigits: 0,
