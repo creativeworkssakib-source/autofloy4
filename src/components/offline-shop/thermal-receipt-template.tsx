@@ -656,8 +656,8 @@ export const ThermalReceiptPreview: React.FC<ThermalReceiptPreviewProps> = ({
         )}
         {showTax && Number(sale.tax) > 0 && (
           <div className="flex justify-between">
-            <span>Tax</span>
-            <span>+{formatAmount(Number(sale.tax), currency)}</span>
+            <span>Tax (Deducted)</span>
+            <span>-{formatAmount(Number(sale.tax), currency)}</span>
           </div>
         )}
         <div className="border-t border-dashed border-black my-0.5" />
