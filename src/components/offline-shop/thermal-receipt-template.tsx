@@ -11,6 +11,8 @@ export interface ThermalReceiptData {
       unit_price: number;
       total: number;
       discount?: number;
+      tax_percent?: number;
+      tax_amount?: number;
     }>;
     subtotal: number;
     discount: number;
@@ -334,8 +336,8 @@ export const generateThermalReceiptHTML = (data: ThermalReceiptData): string => 
             ` : ''}
             ${showTax && Number(sale.tax) > 0 ? `
               <div class="total-row">
-                <span>Tax</span>
-                <span>+${formatAmount(Number(sale.tax), currency)}</span>
+                <span>Tax (Deducted)</span>
+                <span>-${formatAmount(Number(sale.tax), currency)}</span>
               </div>
             ` : ''}
             <div class="divider"></div>
@@ -514,8 +516,8 @@ const generateA4InvoiceHTML = (data: ThermalReceiptData): string => {
             ` : ''}
             ${Number(sale.tax) > 0 ? `
               <div class="total-row">
-                <span>Tax</span>
-                <span>+${formatAmount(Number(sale.tax), currency)}</span>
+                <span>Tax (Deducted)</span>
+                <span>-${formatAmount(Number(sale.tax), currency)}</span>
               </div>
             ` : ''}
             <div class="total-row grand">

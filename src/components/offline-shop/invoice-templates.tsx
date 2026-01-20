@@ -10,6 +10,8 @@ export interface InvoiceData {
       unit_price: number;
       total: number;
       discount?: number;
+      tax_percent?: number;
+      tax_amount?: number;
     }>;
     subtotal: number;
     discount: number;
@@ -279,8 +281,8 @@ export const generateSimplePrintHTML = (data: InvoiceData): string => {
             ` : ""}
             ${Number(sale.tax) > 0 ? `
               <div class="total-row">
-                <span class="total-label">Tax</span>
-                <span class="total-label">+${currency} ${formatAmount(Number(sale.tax))}</span>
+                <span class="total-label">Tax (Deducted)</span>
+                <span class="total-label">-${currency} ${formatAmount(Number(sale.tax))}</span>
               </div>
             ` : ""}
             <div class="total-row">
@@ -609,6 +611,12 @@ export const generateBetterPrintHTML = (data: InvoiceData): string => {
               <p style="margin-top:10px;"><strong>Thank you for your business!</strong></p>
             </div>
             <div class="totals-box">
+              ${Number(sale.tax) > 0 ? `
+                <div class="row">
+                  <span class="label">Tax (Deducted)</span>
+                  <span class="value">-$ ${formatAmount(Number(sale.tax))}</span>
+                </div>
+              ` : ''}
               ${Number(sale.paid_amount) > 0 ? `
                 <div class="row">
                   <span class="label">Credit</span>
@@ -713,8 +721,8 @@ export const SimpleInvoiceModal = ({ sale, shopSettings, customerInfo, t }: Invo
           )}
           {Number(sale.tax) > 0 && (
             <div className="flex justify-between py-2">
-              <span className="text-gray-600">Tax</span>
-              <span className="text-gray-600">+{currency} {formatAmount(Number(sale.tax))}</span>
+              <span className="text-gray-600">Tax (Deducted)</span>
+              <span className="text-gray-600">-{currency} {formatAmount(Number(sale.tax))}</span>
             </div>
           )}
           <div className="flex justify-between py-2 border-t border-gray-300">
