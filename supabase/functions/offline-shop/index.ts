@@ -2123,7 +2123,7 @@ serve(async (req) => {
         const invoiceNumber = `${prefix}-${String((count || 0) + 1).padStart(6, "0")}`;
         const subtotal = items.reduce((sum: number, item: any) => sum + item.total, 0);
         const totalCost = items.reduce((sum: number, item: any) => sum + (item.purchase_price || 0) * item.quantity, 0);
-        const total = subtotal - (discount || 0) + (tax || 0);
+        const total = subtotal - (discount || 0) - (tax || 0);
         const totalProfit = total - totalCost;
         const actualPaidAmount = paid_amount !== undefined && paid_amount !== null ? paid_amount : total;
         const dueAmount = total - actualPaidAmount;
