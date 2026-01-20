@@ -100,6 +100,7 @@ interface Product {
   category?: { id: string; name: string };
   is_active: boolean;
   average_cost?: number;
+  tax_percent?: number;
   created_at?: string;
   updated_at?: string;
 }
@@ -187,6 +188,7 @@ const ShopProducts = () => {
     supplier_name: "",
     category_id: "",
     custom_category: "",
+    tax_percent: "",
   });
 
   const [showCustomCategory, setShowCustomCategory] = useState(false);
@@ -271,6 +273,7 @@ const ShopProducts = () => {
         selling_price: parseFloat(formData.selling_price) || 0,
         stock_quantity: parseInt(formData.stock_quantity) || 0,
         min_stock_alert: parseInt(formData.min_stock_alert) || 5,
+        tax_percent: parseFloat(formData.tax_percent) || 0,
         category_id: categoryId || null,
         expiry_date: formData.expiry_date || null,
       };
@@ -325,6 +328,7 @@ const ShopProducts = () => {
       supplier_name: product.supplier_name || "",
       category_id: product.category_id || "",
       custom_category: "",
+      tax_percent: product.tax_percent?.toString() || "",
     });
     setIsModalOpen(true);
   };
@@ -347,6 +351,7 @@ const ShopProducts = () => {
       supplier_name: "",
       category_id: "",
       custom_category: "",
+      tax_percent: "",
     });
   };
 
@@ -459,6 +464,7 @@ const ShopProducts = () => {
         "Unit": "pcs",
         "Purchase Price (BDT) *": 500,
         "Selling Price (BDT) *": 700,
+        "Tax (%)": 5,
         "Current Stock *": 100,
         "Min Stock Alert": 10,
         "Supplier Name": "ABC Supplier",
@@ -477,6 +483,7 @@ const ShopProducts = () => {
         "Unit": "pcs",
         "Purchase Price (BDT) *": 200,
         "Selling Price (BDT) *": 350,
+        "Tax (%)": 0,
         "Current Stock *": 50,
         "Min Stock Alert": 5,
         "Supplier Name": "XYZ Trading",
@@ -496,6 +503,7 @@ const ShopProducts = () => {
         "ইউনিট": "pcs",
         "ক্রয় মূল্য (টাকা) *": 500,
         "বিক্রয় মূল্য (টাকা) *": 700,
+        "ট্যাক্স (%)": 5,
         "বর্তমান স্টক *": 100,
         "মিনিমাম স্টক": 10,
         "সাপ্লায়ার নাম": "ABC সাপ্লায়ার",
@@ -514,6 +522,7 @@ const ShopProducts = () => {
         "ইউনিট": "pcs",
         "ক্রয় মূল্য (টাকা) *": 200,
         "বিক্রয় মূল্য (টাকা) *": 350,
+        "ট্যাক্স (%)": 0,
         "বর্তমান স্টক *": 50,
         "মিনিমাম স্টক": 5,
         "সাপ্লায়ার নাম": "XYZ ট্রেডিং",
@@ -537,6 +546,7 @@ const ShopProducts = () => {
       { wch: 8 },  // Unit
       { wch: 20 }, // Purchase Price
       { wch: 20 }, // Selling Price
+      { wch: 10 }, // Tax (%)
       { wch: 15 }, // Current Stock
       { wch: 15 }, // Min Stock Alert
       { wch: 20 }, // Supplier Name
@@ -569,6 +579,7 @@ const ShopProducts = () => {
       { "Instructions": "Unit: pcs, kg, ltr, box, pack, dozen" },
       { "Instructions": "Purchase Price (BDT) *: Cost price per unit (REQUIRED)" },
       { "Instructions": "Selling Price (BDT) *: Selling price per unit (REQUIRED)" },
+      { "Instructions": "Tax (%): Tax percentage to deduct during sale (e.g., 5 for 5%)" },
       { "Instructions": "Current Stock *: Available quantity (REQUIRED)" },
       { "Instructions": "Min Stock Alert: Low stock warning threshold" },
       { "Instructions": "Supplier Name: Name of supplier (optional)" },
@@ -596,6 +607,7 @@ const ShopProducts = () => {
       { "নির্দেশনা": "ইউনিট: pcs, kg, ltr, box, pack, dozen" },
       { "নির্দেশনা": "ক্রয় মূল্য (টাকা) *: প্রতি ইউনিট কেনার দাম (আবশ্যক)" },
       { "নির্দেশনা": "বিক্রয় মূল্য (টাকা) *: প্রতি ইউনিট বিক্রয় দাম (আবশ্যক)" },
+      { "নির্দেশনা": "ট্যাক্স (%): বিক্রয়ে কাটার জন্য ট্যাক্স শতাংশ (যেমন 5 মানে ৫%)" },
       { "নির্দেশনা": "বর্তমান স্টক *: বর্তমান পরিমাণ (আবশ্যক)" },
       { "নির্দেশনা": "মিনিমাম স্টক: স্টক কম হলে সতর্কতা" },
       { "নির্দেশনা": "সাপ্লায়ার নাম: সাপ্লায়ারের নাম (ঐচ্ছিক)" },
@@ -749,6 +761,7 @@ const ShopProducts = () => {
         category: row["Category"] || row["ক্যাটাগরি"] || row["category"],
         purchase_price: parseFloat(row["Purchase Price (BDT)"] || row["ক্রয় মূল্য (টাকা)"] || row["Purchase Price (BDT) *"] || row["ক্রয় মূল্য (টাকা) *"] || row["purchase_price"] || 0),
         selling_price: parseFloat(row["Selling Price (BDT)"] || row["বিক্রয় মূল্য (টাকা)"] || row["Selling Price (BDT) *"] || row["বিক্রয় মূল্য (টাকা) *"] || row["selling_price"] || 0),
+        tax_percent: parseFloat(row["Tax (%)"] || row["ট্যাক্স (%)"] || row["tax_percent"] || 0),
         stock_quantity: parseInt(row["Current Stock"] || row["বর্তমান স্টক"] || row["Current Stock *"] || row["বর্তমান স্টক *"] || row["stock_quantity"] || 0),
         min_stock_alert: parseInt(row["Min Stock Alert"] || row["মিনিমাম স্টক"] || row["min_stock_alert"] || 5),
         unit: row["Unit"] || row["ইউনিট"] || row["unit"] || "pcs",
@@ -1121,6 +1134,23 @@ const ShopProducts = () => {
                   onChange={(e) => setFormData({ ...formData, selling_price: e.target.value })}
                   required
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="tax_percent">{language === "bn" ? "ট্যাক্স (%)" : "Tax (%)"}</Label>
+                <Input
+                  id="tax_percent"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  placeholder="0"
+                  value={formData.tax_percent}
+                  onChange={(e) => setFormData({ ...formData, tax_percent: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {language === "bn" ? "বিক্রয়ের সময় এই % ট্যাক্স কাটা হবে" : "This % tax will be deducted during sale"}
+                </p>
               </div>
 
               <div className="space-y-2">
