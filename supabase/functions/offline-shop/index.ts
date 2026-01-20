@@ -1020,10 +1020,11 @@ serve(async (req) => {
         worstMonth = { month: sorted[sorted.length - 1].month, monthBn: sorted[sorted.length - 1].monthBn, sales: sorted[sorted.length - 1].sales };
       }
 
-      // Top customers calculation - use customer_name and customer_phone directly
+      // Top customers calculation - rank by purchase COUNT (frequency), not total amount
       // Match by: 1) customer_id if exists, 2) name+phone combo, 3) name only
-      const customerMap: Record<string, { name: string; phone: string | null; total: number }> = {};
+      const customerMap: Record<string, { name: string; phone: string | null; total: number; purchaseCount: number }> = {};
       let totalAllSales = 0;
+      let totalPurchaseCount = 0;
       
       (customerSales || []).forEach((sale: any) => {
         const customerName = sale.customer_name;
@@ -1043,26 +1044,30 @@ serve(async (req) => {
           }
           
           if (!customerMap[key]) {
-            customerMap[key] = { name: customerName, phone: customerPhone || null, total: 0 };
+            customerMap[key] = { name: customerName, phone: customerPhone || null, total: 0, purchaseCount: 0 };
           }
           customerMap[key].total += Number(sale.total);
+          customerMap[key].purchaseCount += 1;
           totalAllSales += Number(sale.total);
+          totalPurchaseCount += 1;
         }
       });
       
-      console.log("Customer map entries:", Object.keys(customerMap).length, "Total sales:", totalAllSales);
+      console.log("Customer map entries:", Object.keys(customerMap).length, "Total sales:", totalAllSales, "Total purchases:", totalPurchaseCount);
 
+      // Sort by purchase count (frequency) instead of total amount, return top 50
       const topCustomers = Object.values(customerMap)
-        .sort((a, b) => b.total - a.total)
-        .slice(0, 5)
+        .sort((a, b) => b.purchaseCount - a.purchaseCount)
+        .slice(0, 50)
         .map(c => ({
           name: c.name,
           phone: c.phone,
           totalPurchases: c.total,
-          percentage: totalAllSales > 0 ? (c.total / totalAllSales) * 100 : 0
+          purchaseCount: c.purchaseCount,
+          percentage: totalPurchaseCount > 0 ? (c.purchaseCount / totalPurchaseCount) * 100 : 0
         }));
       
-      console.log("Top customers result:", topCustomers);
+      console.log("Top customers result:", topCustomers.length);
 
       // Generate smart insights
       const insights: string[] = [];
