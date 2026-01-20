@@ -38,6 +38,8 @@ interface ProductPerformance {
   returnRate: number;
   adjustmentLoss: number;
   adjustmentQuantity: number;
+  sellingLoss: number;
+  sellingLossQuantity: number;
 }
 
 interface PerformanceData {
@@ -49,6 +51,7 @@ interface PerformanceData {
     totalReturns: number;
     totalLoss: number;
     totalAdjustmentLoss: number;
+    totalSellingLoss: number;
   };
   topSellers: ProductPerformance[];
   lowPerformers: ProductPerformance[];
@@ -186,6 +189,12 @@ export const ProductPerformanceSection = ({ type, shopId, syncEnabled, title }: 
                   {formatCurrency(product.adjustmentLoss)} {language === "bn" ? "ক্ষতি" : "loss"}
                 </span>
               )}
+              {product.sellingLoss > 0 && (
+                <span className="flex items-center gap-1 text-red-600 font-medium">
+                  <TrendingDown className="w-3 h-3" />
+                  -{formatCurrency(product.sellingLoss)} {language === "bn" ? "(কম দামে বিক্রি)" : "(sold below cost)"}
+                </span>
+              )}
             </div>
             
             <Progress 
@@ -226,6 +235,7 @@ export const ProductPerformanceSection = ({ type, shopId, syncEnabled, title }: 
     totalReturns: 0,
     totalLoss: 0,
     totalAdjustmentLoss: 0,
+    totalSellingLoss: 0,
   };
 
   const getTitle = () => {

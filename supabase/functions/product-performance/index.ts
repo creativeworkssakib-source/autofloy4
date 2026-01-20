@@ -47,6 +47,8 @@ interface ProductPerformance {
   returnRate: number;
   adjustmentLoss: number;
   adjustmentQuantity: number;
+  sellingLoss: number; // Loss from selling below purchase price
+  sellingLossQuantity: number; // Quantity sold at loss
 }
 
 serve(async (req) => {
@@ -99,6 +101,8 @@ serve(async (req) => {
           returnRate: 0,
           adjustmentLoss: 0,
           adjustmentQuantity: 0,
+          sellingLoss: 0,
+          sellingLossQuantity: 0,
         };
         performanceMap.set(key, perf);
       }
@@ -162,10 +166,21 @@ serve(async (req) => {
         const key = type === "combined" && product?.online_sku ? product.online_sku : baseKey;
         
         const perf = getOrCreate(key, item.product_name);
-        perf.totalQuantitySold += item.quantity || 0;
+        const qty = item.quantity || 0;
+        const unitPrice = Number(item.unit_price) || 0;
+        const purchasePrice = Number(item.purchase_price) || 0;
+        
+        perf.totalQuantitySold += qty;
         perf.totalRevenue += Number(item.total) || 0;
         perf.totalProfit += Number(item.profit) || 0;
-        perf.totalCost += (Number(item.purchase_price) || 0) * (item.quantity || 0);
+        perf.totalCost += purchasePrice * qty;
+        
+        // Track selling loss - when sold below purchase price
+        if (purchasePrice > 0 && unitPrice < purchasePrice) {
+          const lossPerUnit = purchasePrice - unitPrice;
+          perf.sellingLoss += lossPerUnit * qty;
+          perf.sellingLossQuantity += qty;
+        }
       });
       
       // Aggregate returns
@@ -296,8 +311,9 @@ serve(async (req) => {
       totalRevenue: allProducts.reduce((sum, p) => sum + p.totalRevenue, 0),
       totalProfit: allProducts.reduce((sum, p) => sum + p.netProfit, 0),
       totalReturns: allProducts.reduce((sum, p) => sum + p.returnQuantity, 0),
-      totalLoss: allProducts.reduce((sum, p) => sum + p.lossAmount, 0),
+      totalLoss: allProducts.reduce((sum, p) => sum + p.lossAmount + p.sellingLoss, 0),
       totalAdjustmentLoss: allProducts.reduce((sum, p) => sum + p.adjustmentLoss, 0),
+      totalSellingLoss: allProducts.reduce((sum, p) => sum + p.sellingLoss, 0),
     };
     
     // Sort for different categories
@@ -317,9 +333,10 @@ serve(async (req) => {
       .sort((a, b) => b.returnRate - a.returnRate)
       .slice(0, limit);
     
+    // Products with selling loss (sold below purchase price) - this is the "High Loss" tab
     const highLoss = [...allProducts]
-      .filter(p => p.lossAmount > 0 || p.netProfit < 0)
-      .sort((a, b) => b.lossAmount - a.lossAmount)
+      .filter(p => p.sellingLoss > 0)
+      .sort((a, b) => b.sellingLoss - a.sellingLoss)
       .slice(0, limit);
     
     // Products with adjustment losses (damages, expired, theft)
