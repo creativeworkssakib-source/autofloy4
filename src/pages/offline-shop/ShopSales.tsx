@@ -78,6 +78,7 @@ interface Product {
   stock_quantity: number;
   unit: string;
   barcode?: string;
+  tax_percent?: number;
 }
 
 interface CartItem {
@@ -88,6 +89,8 @@ interface CartItem {
   purchase_price: number;
   discount: number;
   total: number;
+  tax_percent: number;
+  tax_amount: number;
 }
 
 interface ShopSettings {
@@ -138,6 +141,8 @@ interface Sale {
     unit_price: number;
     discount: number;
     total: number;
+    tax_percent?: number;
+    tax_amount?: number;
   }>;
 }
 
@@ -272,6 +277,7 @@ const ShopSales = () => {
   };
 
   const addToCart = (product: Product) => {
+    const taxPercent = product.tax_percent || 0;
     const existingItem = cart.find((item) => item.product_id === product.id);
     if (existingItem) {
       if (existingItem.quantity >= product.stock_quantity) {
@@ -279,17 +285,24 @@ const ShopSales = () => {
         return;
       }
       setCart(
-        cart.map((item) =>
-          item.product_id === product.id
-            ? {
-                ...item,
-                quantity: item.quantity + 1,
-                total: (item.quantity + 1) * item.unit_price - item.discount,
-              }
-            : item
-        )
+        cart.map((item) => {
+          if (item.product_id === product.id) {
+            const newQty = item.quantity + 1;
+            const lineTotal = newQty * item.unit_price - item.discount;
+            const taxAmt = (lineTotal * item.tax_percent) / 100;
+            return {
+              ...item,
+              quantity: newQty,
+              total: lineTotal,
+              tax_amount: taxAmt,
+            };
+          }
+          return item;
+        })
       );
     } else {
+      const lineTotal = product.selling_price;
+      const taxAmt = (lineTotal * taxPercent) / 100;
       setCart([
         ...cart,
         {
@@ -299,7 +312,9 @@ const ShopSales = () => {
           unit_price: product.selling_price,
           purchase_price: product.purchase_price,
           discount: 0,
-          total: product.selling_price,
+          total: lineTotal,
+          tax_percent: taxPercent,
+          tax_amount: taxAmt,
         },
       ]);
     }
@@ -326,6 +341,7 @@ const ShopSales = () => {
         if (item.product_id === productId) {
           const updated = { ...item, [field]: value };
           updated.total = updated.quantity * updated.unit_price - updated.discount;
+          updated.tax_amount = (updated.total * updated.tax_percent) / 100;
           return updated;
         }
         return item;
@@ -338,10 +354,12 @@ const ShopSales = () => {
   };
 
   const subtotal = cart.reduce((sum, item) => sum + item.total, 0);
-  const taxAmount = shopSettings?.tax_rate ? (subtotal * shopSettings.tax_rate) / 100 : 0;
+  // Product-level tax: sum of individual item taxes (deducted from selling price)
+  const taxAmount = cart.reduce((sum, item) => sum + item.tax_amount, 0);
   const discountValue = discount === "" ? 0 : discount;
   const discountAmount = discountType === "percent" ? (subtotal * discountValue) / 100 : discountValue;
-  const total = subtotal + taxAmount - discountAmount;
+  // Tax is deducted from subtotal, not added
+  const total = subtotal - taxAmount - discountAmount;
   const paidValue = paidAmount === "" ? total : paidAmount;
   const dueAmount = total - paidValue;
   const changeAmount = paidValue > total ? paidValue - total : 0;
@@ -406,7 +424,9 @@ const ShopSales = () => {
           quantity: item.quantity,
           unit_price: item.unit_price,
           discount: item.discount,
-          total: item.total
+          total: item.total,
+          tax_percent: item.tax_percent,
+          tax_amount: item.tax_amount,
         }))
       };
 
@@ -981,10 +1001,10 @@ const ShopSales = () => {
                   <span>{t("shop.subtotal")}:</span>
                   <span>{formatCurrency(subtotal)}</span>
                 </div>
-                {shopSettings?.tax_rate ? (
+                {taxAmount > 0 ? (
                   <div className="flex justify-between">
-                    <span>{t("shop.tax")} ({shopSettings.tax_rate}%):</span>
-                    <span>+{formatCurrency(taxAmount)}</span>
+                    <span>{t("shop.tax")} ({language === "bn" ? "বাদ" : "Deducted"}):</span>
+                    <span>-{formatCurrency(taxAmount)}</span>
                   </div>
                 ) : null}
                 <div className="flex justify-between">
