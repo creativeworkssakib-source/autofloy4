@@ -2337,6 +2337,7 @@ export type Database = {
           stock_quantity: number | null
           supplier_contact: string | null
           supplier_name: string | null
+          tax_percent: number | null
           unit: string | null
           updated_at: string | null
           user_id: string
@@ -2364,6 +2365,7 @@ export type Database = {
           stock_quantity?: number | null
           supplier_contact?: string | null
           supplier_name?: string | null
+          tax_percent?: number | null
           unit?: string | null
           updated_at?: string | null
           user_id: string
@@ -2391,6 +2393,7 @@ export type Database = {
           stock_quantity?: number | null
           supplier_contact?: string | null
           supplier_name?: string | null
+          tax_percent?: number | null
           unit?: string | null
           updated_at?: string | null
           user_id?: string
