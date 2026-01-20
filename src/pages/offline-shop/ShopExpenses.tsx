@@ -229,7 +229,9 @@ const ShopExpenses = () => {
                         </div>
                       </TableCell>
                       <TableCell className="p-2 sm:p-4">
-                        <Badge variant="outline" className="text-[10px] sm:text-xs">{expense.category}</Badge>
+                        <Badge variant="outline" className="text-[10px] sm:text-xs">
+                          {expenseCategories.find(c => c.value === expense.category)?.label || expense.category}
+                        </Badge>
                       </TableCell>
                       <TableCell className="p-2 sm:p-4 hidden sm:table-cell text-xs sm:text-sm max-w-[150px] truncate">{expense.description || "-"}</TableCell>
                       <TableCell className="p-2 sm:p-4 font-medium text-xs sm:text-sm whitespace-nowrap">{formatCurrency(Number(expense.amount))}</TableCell>
