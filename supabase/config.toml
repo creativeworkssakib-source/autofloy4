@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.me]
 verify_jwt = false
+
+[functions.automations]
+verify_jwt = false
