@@ -57,28 +57,14 @@ const ConnectPageModal = ({
       }
 
       if (result.url) {
-        // Store the URL for manual opening
+        // Store the URL - let user click the link directly
         setOauthUrl(result.url);
+        setIsConnecting(false);
         
-        // Try to open in new window - works outside iframe
-        const newWindow = window.open(result.url, '_blank', 'noopener,noreferrer,width=600,height=700');
-        
-        if (newWindow) {
-          toast({
-            title: "Facebook window opened",
-            description: "Complete the authorization in the new tab, then return here.",
-          });
-          setIsConnecting(false);
-          onClose();
-        } else {
-          // Popup was blocked - show manual URL
-          toast({
-            title: "Popup blocked",
-            description: "Click the link below to open Facebook authorization.",
-            variant: "default",
-          });
-          setIsConnecting(false);
-        }
+        toast({
+          title: "Authorization link ready",
+          description: "Click 'Open Facebook Login' to authorize your page.",
+        });
       } else {
         throw new Error("No OAuth URL returned");
       }
@@ -176,22 +162,30 @@ const ConnectPageModal = ({
                 </div>
               )}
 
-              {/* Show URL options if popup was blocked */}
+              {/* Show URL options - use anchor tag for direct link */}
               {oauthUrl && !oauthError && (
                 <div className="mb-4 p-4 bg-primary/5 border border-primary/20 rounded-lg space-y-3">
                   <p className="text-sm text-muted-foreground">
-                    Popup blocked? Use one of these options:
+                    Click the button below to authorize with Facebook:
                   </p>
                   <div className="flex flex-col gap-2">
-                    <Button
-                      variant="default"
-                      size="sm"
-                      onClick={handleOpenDirectly}
-                      className="gap-2 bg-[#1877F2] hover:bg-[#1877F2]/90"
+                    {/* Use anchor tag to bypass iframe restrictions */}
+                    <a
+                      href={oauthUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-md text-white font-medium bg-[#1877F2] hover:bg-[#1877F2]/90 transition-colors"
+                      onClick={() => {
+                        toast({
+                          title: "Facebook opened",
+                          description: "Complete authorization and return here.",
+                        });
+                        setTimeout(() => onClose(), 500);
+                      }}
                     >
                       <ExternalLink className="h-4 w-4" />
                       Open Facebook Login
-                    </Button>
+                    </a>
                     <Button
                       variant="outline"
                       size="sm"
@@ -201,7 +195,7 @@ const ConnectPageModal = ({
                       {copied ? (
                         <>
                           <Check className="h-4 w-4 text-green-500" />
-                          Copied!
+                          Copied! Paste in new tab
                         </>
                       ) : (
                         <>
@@ -211,6 +205,9 @@ const ConnectPageModal = ({
                       )}
                     </Button>
                   </div>
+                  <p className="text-xs text-muted-foreground">
+                    💡 Tip: If blocked, copy link and paste in a new browser tab
+                  </p>
                 </div>
               )}
 
