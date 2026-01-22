@@ -53,15 +53,17 @@ const ConnectPageModal = ({
       }
 
       if (result.url) {
-        // Redirect the FULL browser window to Facebook OAuth (not inside iframe)
-        // This prevents "refused to connect" errors from X-Frame-Options
-        if (window.top && window.top !== window.self) {
-          // We're in an iframe (like Lovable preview), open in new tab
-          window.open(result.url, '_blank');
-        } else {
-          // Normal context, redirect the current window
-          window.location.href = result.url;
-        }
+        // Always open in new tab/window for OAuth
+        // This prevents X-Frame-Options blocking in any context
+        window.open(result.url, '_blank', 'noopener,noreferrer');
+        
+        toast({
+          title: "Facebook window opened",
+          description: "Complete the authorization in the new tab, then return here.",
+        });
+        
+        setIsConnecting(false);
+        onClose();
       } else {
         throw new Error("No OAuth URL returned");
       }
