@@ -57,6 +57,7 @@ const ConnectFacebook = () => {
   const [removingPages, setRemovingPages] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [pageToRemove, setPageToRemove] = useState<ConnectedAccount | null>(null);
+  const [reauthUrl, setReauthUrl] = useState<string | null>(null);
 
   // Handle OAuth callback results
   useEffect(() => {
@@ -64,6 +65,7 @@ const ConnectFacebook = () => {
     const errorParam = searchParams.get("error");
     const message = searchParams.get("message");
     const pagesCount = searchParams.get("pages");
+    const reauthUrlParam = searchParams.get("reauth_url");
 
     if (success === "true") {
       toast({
@@ -71,11 +73,18 @@ const ConnectFacebook = () => {
         description: `${pagesCount || ""} page(s) imported. Enable automation for pages you want to use.`,
       });
       setSearchParams({});
+      setReauthUrl(null);
       loadPages();
     } else if (errorParam) {
       setError(message ? decodeURIComponent(message) : "Failed to connect Facebook.");
+      
+      // If there's a reauth URL for missing permissions
+      if (reauthUrlParam) {
+        setReauthUrl(decodeURIComponent(reauthUrlParam));
+      }
+      
       toast({
-        title: "Connection Failed",
+        title: errorParam === "missing_permissions" ? "Permissions Required" : "Connection Failed",
         description: message ? decodeURIComponent(message) : "Failed to connect.",
         variant: "destructive",
       });
@@ -345,7 +354,7 @@ const ConnectFacebook = () => {
           </Card>
         )}
 
-        {/* Error display */}
+        {/* Error display with Re-authorize option */}
         {error && (
           <Card className="mb-6 border-destructive/50 bg-destructive/5">
             <CardContent className="p-4">
@@ -353,8 +362,27 @@ const ConnectFacebook = () => {
                 <AlertCircle className="w-5 h-5 text-destructive mt-0.5" />
                 <div className="flex-1">
                   <p className="text-sm text-destructive">{error}</p>
+                  {reauthUrl && (
+                    <Button
+                      variant="default"
+                      size="sm"
+                      className="mt-3"
+                      onClick={() => {
+                        setError(null);
+                        setReauthUrl(null);
+                        if (window.top && window.top !== window.self) {
+                          window.open(reauthUrl, '_blank');
+                        } else {
+                          window.location.href = reauthUrl;
+                        }
+                      }}
+                    >
+                      <Facebook className="w-4 h-4 mr-2" />
+                      Grant All Permissions
+                    </Button>
+                  )}
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => setError(null)}>
+                <Button variant="ghost" size="sm" onClick={() => { setError(null); setReauthUrl(null); }}>
                   <XCircle className="w-4 h-4" />
                 </Button>
               </div>
