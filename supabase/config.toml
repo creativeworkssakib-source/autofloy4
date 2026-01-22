@@ -1,5 +1,8 @@
 project_id = "klkrzfwvrmffqkmkyqrh"
 
+[functions.connected-accounts]
+verify_jwt = false
+
 [functions.toggle-page-automation]
 verify_jwt = false
 
