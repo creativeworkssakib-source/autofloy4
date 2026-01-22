@@ -144,10 +144,32 @@ const ConnectPageModal = ({
             <p className="text-muted-foreground text-sm">
               Connect your Facebook Page securely using OAuth
             </p>
+
+            {/* Warning for iframe/preview users */}
+            <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+              <div className="flex items-start gap-2 text-amber-700 dark:text-amber-400">
+                <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                <div className="text-xs">
+                  <p className="font-medium">Getting "blocked" error?</p>
+                  <p className="mt-1">
+                    Open the <strong>Published App</strong> directly in your browser at{" "}
+                    <a 
+                      href="https://autofloy4.lovable.app/dashboard/automations"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline font-medium"
+                    >
+                      autofloy4.lovable.app
+                    </a>{" "}
+                    and connect from there. Facebook blocks connections from preview/iframe.
+                  </p>
+                </div>
+              </div>
+            </div>
             
-            <div className="text-center py-6">
-              <div className="mx-auto w-20 h-20 rounded-full bg-[#1877F2]/10 flex items-center justify-center mb-4">
-                <Facebook className="h-10 w-10 text-[#1877F2]" />
+            <div className="text-center py-4">
+              <div className="mx-auto w-16 h-16 rounded-full bg-[#1877F2]/10 flex items-center justify-center mb-3">
+                <Facebook className="h-8 w-8 text-[#1877F2]" />
               </div>
               <h3 className="font-semibold text-lg mb-2">Connect with Facebook</h3>
               <p className="text-muted-foreground text-sm mb-4">
