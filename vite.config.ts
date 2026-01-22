@@ -76,6 +76,10 @@ export default defineConfig(({ mode }) => ({
         navigateFallback: 'index.html',
         navigateFallbackDenylist: [/^\/api/, /^\/functions/],
         
+        // Skip waiting - immediately activate new service worker
+        skipWaiting: true,
+        clientsClaim: true,
+        
         // Runtime caching strategies
         runtimeCaching: [
           // Cache Google Fonts
@@ -95,31 +99,15 @@ export default defineConfig(({ mode }) => ({
               expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
             },
           },
-          // API calls - Network First with cache fallback
+          // API calls - Network Only (no caching for fresh data)
           {
             urlPattern: /^https:\/\/.*\.supabase\.co\/functions\/.*/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'api-cache',
-              expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 }, // 24 hours
-              networkTimeoutSeconds: 10,
-              cacheableResponse: {
-                statuses: [0, 200],
-              },
-            },
+            handler: 'NetworkOnly',
           },
-          // REST API calls
+          // REST API calls - Network Only
           {
             urlPattern: /^https:\/\/.*\.supabase\.co\/rest\/.*/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'rest-api-cache',
-              expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 },
-              networkTimeoutSeconds: 10,
-              cacheableResponse: {
-                statuses: [0, 200],
-              },
-            },
+            handler: 'NetworkOnly',
           },
           // Image caching
           {
