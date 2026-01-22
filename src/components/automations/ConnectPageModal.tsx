@@ -8,13 +8,14 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import {
   Facebook,
   Shield,
   AlertCircle,
   Loader2,
   ExternalLink,
+  Copy,
+  Check,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getFacebookOAuthUrl } from "@/services/apiService";
@@ -33,10 +34,13 @@ const ConnectPageModal = ({
   const { toast } = useToast();
   const [isConnecting, setIsConnecting] = useState(false);
   const [oauthError, setOauthError] = useState<string | null>(null);
+  const [oauthUrl, setOauthUrl] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const handleOAuth = async () => {
     setIsConnecting(true);
     setOauthError(null);
+    setOauthUrl(null);
 
     try {
       const result = await getFacebookOAuthUrl();
@@ -53,17 +57,28 @@ const ConnectPageModal = ({
       }
 
       if (result.url) {
-        // Always open in new tab/window for OAuth
-        // This prevents X-Frame-Options blocking in any context
-        window.open(result.url, '_blank', 'noopener,noreferrer');
+        // Store the URL for manual opening
+        setOauthUrl(result.url);
         
-        toast({
-          title: "Facebook window opened",
-          description: "Complete the authorization in the new tab, then return here.",
-        });
+        // Try to open in new window - works outside iframe
+        const newWindow = window.open(result.url, '_blank', 'noopener,noreferrer,width=600,height=700');
         
-        setIsConnecting(false);
-        onClose();
+        if (newWindow) {
+          toast({
+            title: "Facebook window opened",
+            description: "Complete the authorization in the new tab, then return here.",
+          });
+          setIsConnecting(false);
+          onClose();
+        } else {
+          // Popup was blocked - show manual URL
+          toast({
+            title: "Popup blocked",
+            description: "Click the link below to open Facebook authorization.",
+            variant: "default",
+          });
+          setIsConnecting(false);
+        }
       } else {
         throw new Error("No OAuth URL returned");
       }
@@ -79,9 +94,46 @@ const ConnectPageModal = ({
     }
   };
 
+  const handleCopyUrl = async () => {
+    if (oauthUrl) {
+      try {
+        await navigator.clipboard.writeText(oauthUrl);
+        setCopied(true);
+        toast({
+          title: "Link copied!",
+          description: "Paste this link in a new browser tab to authorize.",
+        });
+        setTimeout(() => setCopied(false), 2000);
+      } catch {
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = oauthUrl;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }
+    }
+  };
+
+  const handleOpenDirectly = () => {
+    if (oauthUrl) {
+      // Force open in top-level window (escapes iframe)
+      if (window.top) {
+        window.top.location.href = oauthUrl;
+      } else {
+        window.location.href = oauthUrl;
+      }
+    }
+  };
+
   const handleClose = () => {
     setIsConnecting(false);
     setOauthError(null);
+    setOauthUrl(null);
+    setCopied(false);
     onClose();
   };
 
@@ -124,26 +176,66 @@ const ConnectPageModal = ({
                 </div>
               )}
 
-              <Button
-                variant="default"
-                size="lg"
-                onClick={handleOAuth}
-                disabled={isConnecting}
-                className="gap-2 bg-[#1877F2] hover:bg-[#1877F2]/90 w-full"
-              >
-                {isConnecting ? (
-                  <>
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                    Connecting...
-                  </>
-                ) : (
-                  <>
-                    <Facebook className="h-5 w-5" />
-                    Continue with Facebook
-                    <ExternalLink className="h-4 w-4" />
-                  </>
-                )}
-              </Button>
+              {/* Show URL options if popup was blocked */}
+              {oauthUrl && !oauthError && (
+                <div className="mb-4 p-4 bg-primary/5 border border-primary/20 rounded-lg space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    Popup blocked? Use one of these options:
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={handleOpenDirectly}
+                      className="gap-2 bg-[#1877F2] hover:bg-[#1877F2]/90"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      Open Facebook Login
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleCopyUrl}
+                      className="gap-2"
+                    >
+                      {copied ? (
+                        <>
+                          <Check className="h-4 w-4 text-green-500" />
+                          Copied!
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="h-4 w-4" />
+                          Copy Link to Clipboard
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {!oauthUrl && (
+                <Button
+                  variant="default"
+                  size="lg"
+                  onClick={handleOAuth}
+                  disabled={isConnecting}
+                  className="gap-2 bg-[#1877F2] hover:bg-[#1877F2]/90 w-full"
+                >
+                  {isConnecting ? (
+                    <>
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                      Connecting...
+                    </>
+                  ) : (
+                    <>
+                      <Facebook className="h-5 w-5" />
+                      Continue with Facebook
+                      <ExternalLink className="h-4 w-4" />
+                    </>
+                  )}
+                </Button>
+              )}
             </div>
 
             <div className="flex items-center gap-2 text-xs text-muted-foreground justify-center">
