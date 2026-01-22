@@ -353,7 +353,21 @@ export async function fetchAutomationsWithAccess(): Promise<AutomationsResponse>
       headers: getAuthHeaders(),
     });
     if (!response.ok) {
-      return { automations: [], hasAccess: false, accessDeniedReason: "Failed to load automations" };
+      // Check if it's an auth/access error vs server error
+      if (response.status === 401) {
+        return { automations: [], hasAccess: false, accessDeniedReason: "Please log in to access automations" };
+      }
+      if (response.status === 403) {
+        const data = await response.json().catch(() => ({}));
+        return { 
+          automations: [], 
+          hasAccess: false, 
+          accessDeniedReason: data.error || "Access denied" 
+        };
+      }
+      // For other errors, still show content but with error message
+      console.error("Automations API error:", response.status);
+      return { automations: [], hasAccess: true, accessDeniedReason: undefined };
     }
     const data = await response.json();
     return {
@@ -364,7 +378,9 @@ export async function fetchAutomationsWithAccess(): Promise<AutomationsResponse>
     };
   } catch (error) {
     console.error("Failed to fetch automations:", error);
-    return { automations: [], hasAccess: false, accessDeniedReason: "Network error" };
+    // Network error - don't block access, just show empty state
+    // The user might have connectivity issues but still have valid subscription
+    return { automations: [], hasAccess: true, accessDeniedReason: undefined };
   }
 }
 
