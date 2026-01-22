@@ -349,8 +349,14 @@ export async function fetchAutomations(): Promise<Automation[]> {
 
 export async function fetchAutomationsWithAccess(): Promise<AutomationsResponse> {
   try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/automations`, {
-      headers: getAuthHeaders(),
+    // Add cache-busting timestamp to prevent stale cached responses
+    const cacheBuster = `_t=${Date.now()}`;
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/automations?${cacheBuster}`, {
+      headers: {
+        ...getAuthHeaders(),
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+      },
     });
     if (!response.ok) {
       // Check if it's an auth/access error vs server error
