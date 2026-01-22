@@ -11,3 +11,12 @@ verify_jwt = false
 
 [functions.notifications]
 verify_jwt = false
+
+[functions.dashboard-stats]
+verify_jwt = false
+
+[functions.execution-logs]
+verify_jwt = false
+
+[functions.me]
+verify_jwt = false
