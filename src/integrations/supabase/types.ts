@@ -367,6 +367,7 @@ export type Database = {
           id: string
           is_connected: boolean | null
           name: string | null
+          picture_url: string | null
           platform: Database["public"]["Enums"]["platform_type"]
           refresh_token: string | null
           refresh_token_encrypted: string | null
@@ -383,6 +384,7 @@ export type Database = {
           id?: string
           is_connected?: boolean | null
           name?: string | null
+          picture_url?: string | null
           platform: Database["public"]["Enums"]["platform_type"]
           refresh_token?: string | null
           refresh_token_encrypted?: string | null
@@ -399,6 +401,7 @@ export type Database = {
           id?: string
           is_connected?: boolean | null
           name?: string | null
+          picture_url?: string | null
           platform?: Database["public"]["Enums"]["platform_type"]
           refresh_token?: string | null
           refresh_token_encrypted?: string | null

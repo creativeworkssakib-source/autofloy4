@@ -369,12 +369,23 @@ const ConnectFacebook = () => {
               <Card key={page.id} className={page.is_connected ? "border-primary/50" : ""}>
                 <CardContent className="p-4">
                   <div className="flex items-center gap-4">
-                    {/* Page Icon */}
+                    {/* Page Photo */}
+                    {page.picture_url ? (
+                      <img 
+                        src={page.picture_url} 
+                        alt={page.name || "Page"} 
+                        className={`w-12 h-12 rounded-full object-cover border-2 ${
+                          page.is_connected ? "border-primary" : "border-muted"
+                        }`}
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                          e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                        }}
+                      />
+                    ) : null}
                     <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                      page.is_connected 
-                        ? "bg-[#1877F2]" 
-                        : "bg-muted"
-                    }`}>
+                      page.picture_url ? "hidden" : ""
+                    } ${page.is_connected ? "bg-[#1877F2]" : "bg-muted"}`}>
                       <Facebook className={`w-6 h-6 ${
                         page.is_connected ? "text-white" : "text-muted-foreground"
                       }`} />

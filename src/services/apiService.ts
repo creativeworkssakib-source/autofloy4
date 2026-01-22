@@ -30,6 +30,7 @@ export interface ConnectedAccount {
   category: string | null;
   is_connected: boolean | null;
   created_at: string | null;
+  picture_url: string | null;
 }
 
 export interface Automation {

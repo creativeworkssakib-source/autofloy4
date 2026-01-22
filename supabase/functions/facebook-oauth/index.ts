@@ -323,7 +323,7 @@ serve(async (req) => {
       // Get user's Facebook pages with page access tokens
       const pagesUrl = new URL(`https://graph.facebook.com/${FB_API_VERSION}/me/accounts`);
       pagesUrl.searchParams.set("access_token", userAccessToken);
-      pagesUrl.searchParams.set("fields", "id,name,category,fan_count,access_token,tasks");
+      pagesUrl.searchParams.set("fields", "id,name,category,fan_count,access_token,tasks,picture{url}");
 
       const pagesResponse = await fetch(pagesUrl.toString());
       const pagesData = await pagesResponse.json();
@@ -355,6 +355,9 @@ serve(async (req) => {
           const encryptedToken = await encryptToken(page.access_token);
           
           // Store the page with is_connected = FALSE (automation disabled by default)
+          // Extract picture URL from Facebook response
+          const pictureUrl = page.picture?.data?.url || null;
+
           const { data: accountData, error: upsertError } = await supabase.from("connected_accounts").upsert({
             user_id: userId,
             platform: "facebook",
@@ -365,6 +368,7 @@ serve(async (req) => {
             access_token_encrypted: encryptedToken,
             is_connected: false, // User must manually enable automation
             encryption_version: 2,
+            picture_url: pictureUrl, // Store page profile picture
           }, {
             onConflict: "user_id,platform,external_id",
           }).select("id").single();
