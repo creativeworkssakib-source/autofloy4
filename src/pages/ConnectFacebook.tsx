@@ -15,6 +15,9 @@ import {
   CheckCircle2,
   XCircle,
   Building,
+  Trash2,
+  Crown,
+  Info,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -23,21 +26,37 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { 
   getFacebookOAuthUrl, 
-  fetchConnectedAccounts, 
+  fetchConnectedAccountsWithLimits, 
   togglePageAutomation,
-  ConnectedAccount 
+  removeAccount,
+  ConnectedAccount,
+  PlanLimitsData
 } from "@/services/apiService";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Progress } from "@/components/ui/progress";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const ConnectFacebook = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const [pages, setPages] = useState<ConnectedAccount[]>([]);
+  const [planLimits, setPlanLimits] = useState<PlanLimitsData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isConnecting, setIsConnecting] = useState(false);
   const [togglingPages, setTogglingPages] = useState<Set<string>>(new Set());
+  const [removingPages, setRemovingPages] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
+  const [pageToRemove, setPageToRemove] = useState<ConnectedAccount | null>(null);
 
   // Handle OAuth callback results
   useEffect(() => {
@@ -69,8 +88,9 @@ const ConnectFacebook = () => {
     setIsLoading(true);
     setError(null);
     try {
-      const accounts = await fetchConnectedAccounts("facebook");
-      setPages(accounts);
+      const result = await fetchConnectedAccountsWithLimits("facebook");
+      setPages(result.accounts);
+      setPlanLimits(result.planLimits);
     } catch (err) {
       console.error("Failed to load pages:", err);
       setError("Failed to load pages. Please refresh.");
@@ -116,6 +136,18 @@ const ConnectFacebook = () => {
 
   // Toggle page automation
   const handleToggle = async (pageId: string, enabled: boolean) => {
+    // Check plan limits before enabling
+    if (enabled && planLimits) {
+      if (planLimits.connectedFacebookPages >= planLimits.maxFacebookPages) {
+        toast({
+          title: "Limit Reached",
+          description: `Your ${planLimits.planName} plan allows only ${planLimits.maxFacebookPages} page(s). Disable another page first or upgrade.`,
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
     setTogglingPages(prev => new Set(prev).add(pageId));
     
     try {
@@ -125,6 +157,15 @@ const ConnectFacebook = () => {
         setPages(prev => prev.map(p => 
           p.id === pageId ? { ...p, is_connected: enabled } : p
         ));
+        // Update plan limits count
+        if (planLimits) {
+          setPlanLimits({
+            ...planLimits,
+            connectedFacebookPages: enabled 
+              ? planLimits.connectedFacebookPages + 1 
+              : planLimits.connectedFacebookPages - 1,
+          });
+        }
         toast({
           title: enabled ? "Automation Enabled" : "Automation Disabled",
           description: result.message,
@@ -159,6 +200,49 @@ const ConnectFacebook = () => {
     }
   };
 
+  // Remove page completely
+  const handleRemovePage = async (page: ConnectedAccount) => {
+    setRemovingPages(prev => new Set(prev).add(page.id));
+    setPageToRemove(null);
+    
+    try {
+      const result = await removeAccount(page.id);
+      
+      if (result.success) {
+        setPages(prev => prev.filter(p => p.id !== page.id));
+        // Update plan limits
+        if (planLimits && page.is_connected) {
+          setPlanLimits({
+            ...planLimits,
+            connectedFacebookPages: planLimits.connectedFacebookPages - 1,
+          });
+        }
+        toast({
+          title: "Page Removed",
+          description: result.message || `${page.name} has been removed.`,
+        });
+      } else {
+        toast({
+          title: "Failed",
+          description: result.message || "Could not remove page.",
+          variant: "destructive",
+        });
+      }
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: "Network error. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setRemovingPages(prev => {
+        const next = new Set(prev);
+        next.delete(page.id);
+        return next;
+      });
+    }
+  };
+
   const handleContinue = () => {
     const enabledPages = pages.filter(p => p.is_connected);
     if (enabledPages.length === 0) {
@@ -174,6 +258,7 @@ const ConnectFacebook = () => {
 
   const enabledCount = pages.filter(p => p.is_connected).length;
   const hasPages = pages.length > 0;
+  const usagePercent = planLimits ? (planLimits.connectedFacebookPages / planLimits.maxFacebookPages) * 100 : 0;
 
   // Loading state
   if (isLoading) {
@@ -227,7 +312,7 @@ const ConnectFacebook = () => {
         </div>
 
         {/* Title */}
-        <div className="text-center mb-8">
+        <div className="text-center mb-6">
           <h1 className="text-2xl font-bold mb-2">Connect Facebook Pages</h1>
           <p className="text-muted-foreground">
             {hasPages 
@@ -235,6 +320,30 @@ const ConnectFacebook = () => {
               : "Connect your Facebook account to get started"}
           </p>
         </div>
+
+        {/* Plan Limits Card */}
+        {planLimits && hasPages && (
+          <Card className="mb-6 border-primary/20 bg-primary/5">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Crown className="w-4 h-4 text-primary" />
+                  <span className="font-medium text-sm">{planLimits.planName} Plan</span>
+                </div>
+                <Badge variant="outline" className="text-xs">
+                  {planLimits.connectedFacebookPages} / {planLimits.maxFacebookPages} pages
+                </Badge>
+              </div>
+              <Progress value={Math.min(usagePercent, 100)} className="h-2" />
+              {planLimits.connectedFacebookPages >= planLimits.maxFacebookPages && (
+                <div className="flex items-center gap-2 mt-2 text-sm text-amber-600">
+                  <Info className="w-4 h-4" />
+                  <span>Limit reached. <Button variant="link" className="p-0 h-auto text-primary" onClick={() => navigate("/pricing")}>Upgrade</Button> for more pages.</span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Error display */}
         {error && (
@@ -292,15 +401,31 @@ const ConnectFacebook = () => {
                       </Badge>
                     )}
 
-                    {/* Toggle Switch */}
+                    {/* Actions */}
                     <div className="flex items-center gap-2">
+                      {/* Toggle Switch */}
                       {togglingPages.has(page.id) ? (
                         <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
                       ) : (
                         <Switch
                           checked={page.is_connected || false}
                           onCheckedChange={(checked) => handleToggle(page.id, checked)}
+                          disabled={!page.is_connected && planLimits && planLimits.connectedFacebookPages >= planLimits.maxFacebookPages}
                         />
+                      )}
+
+                      {/* Remove Button */}
+                      {removingPages.has(page.id) ? (
+                        <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          onClick={() => setPageToRemove(page)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
                       )}
                     </div>
                   </div>
@@ -413,6 +538,27 @@ const ConnectFacebook = () => {
           </Button>
         </div>
       </div>
+
+      {/* Remove Page Confirmation Dialog */}
+      <AlertDialog open={!!pageToRemove} onOpenChange={() => setPageToRemove(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove Page?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to remove <strong>{pageToRemove?.name}</strong>? This will delete all automation settings and history for this page.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive hover:bg-destructive/90"
+              onClick={() => pageToRemove && handleRemovePage(pageToRemove)}
+            >
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
