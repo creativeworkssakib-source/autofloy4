@@ -1,1 +1,4 @@
 project_id = "klkrzfwvrmffqkmkyqrh"
+
+[functions.toggle-page-automation]
+verify_jwt = false
