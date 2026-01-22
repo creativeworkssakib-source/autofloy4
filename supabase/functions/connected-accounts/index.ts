@@ -188,7 +188,7 @@ serve(async (req) => {
 
       let query = supabase
         .from("connected_accounts")
-        .select("id, external_id, name, platform, category, is_connected, created_at")
+        .select("id, external_id, name, platform, category, is_connected, created_at, picture_url")
         .eq("user_id", userId);
 
       if (platform) {
