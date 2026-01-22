@@ -113,11 +113,14 @@ async function verifyToken(authHeader: string | null): Promise<string | null> {
 }
 
 function getAppBaseUrl(): string {
-  if (facebookRedirectUri) {
-    const url = new URL(facebookRedirectUri);
-    return `${url.protocol}//${url.host}`;
+  // Always redirect to the published app URL
+  // The FACEBOOK_REDIRECT_URI is the edge function URL, not the app URL
+  const appUrl = Deno.env.get("APP_BASE_URL");
+  if (appUrl) {
+    return appUrl.replace(/\/$/, ""); // Remove trailing slash if any
   }
-  return "";
+  // Fallback to hardcoded production URL
+  return "https://autofloy4.lovable.app";
 }
 
 // Parse Facebook error for user-friendly messages
