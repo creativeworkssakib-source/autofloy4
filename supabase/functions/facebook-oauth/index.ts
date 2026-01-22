@@ -288,73 +288,9 @@ serve(async (req) => {
 
       const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-      // Check user's plan limits BEFORE connecting pages
-      const { data: user, error: userError } = await supabase
-        .from("users")
-        .select("subscription_plan, is_trial_active, trial_end_date, subscription_ends_at")
-        .eq("id", userId)
-        .single();
-
-      if (userError || !user) {
-        throw new Error("User not found. Please log in again.");
-      }
-
-      // Plan capabilities for Facebook pages
-      const PLAN_FB_LIMITS: Record<string, number> = {
-        none: 0,
-        trial: 10,
-        starter: 1,
-        professional: 2,
-        business: 5,
-        lifetime: 10,
-      };
-
-      // Determine effective plan
-      let effectivePlan = "none";
-      const now = new Date();
-      const plan = user.subscription_plan?.toLowerCase() || "none";
-
-      if (plan === "trial" && user.is_trial_active && user.trial_end_date) {
-        const trialEnd = new Date(user.trial_end_date);
-        if (trialEnd > now) effectivePlan = "trial";
-      } else if (["starter", "professional", "business", "lifetime"].includes(plan)) {
-        if (plan === "lifetime") {
-          effectivePlan = "lifetime";
-        } else if (user.subscription_ends_at && new Date(user.subscription_ends_at) > now) {
-          effectivePlan = plan;
-        }
-      }
-
-      const maxPages = PLAN_FB_LIMITS[effectivePlan] || 0;
-
-      if (maxPages === 0) {
-        return new Response(null, {
-          status: 302,
-          headers: { 
-            Location: `${appBaseUrl}/connect-facebook?error=no_access&message=${encodeURIComponent("Your subscription has expired or you don't have an active plan. Please upgrade to connect Facebook pages.")}` 
-          },
-        });
-      }
-
-      // Count existing connected pages
-      const { count: existingPages } = await supabase
-        .from("connected_accounts")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", userId)
-        .eq("platform", "facebook")
-        .eq("is_connected", true);
-
-      const currentPageCount = existingPages || 0;
-      const planName = effectivePlan.charAt(0).toUpperCase() + effectivePlan.slice(1);
-
-      if (currentPageCount >= maxPages) {
-        return new Response(null, {
-          status: 302,
-          headers: { 
-            Location: `${appBaseUrl}/connect-facebook?error=limit_reached&message=${encodeURIComponent(`Your ${planName} plan allows connecting only ${maxPages} Facebook Page(s). You already have ${currentPageCount} connected. Please upgrade to connect more.`)}` 
-          },
-        });
-      }
+      // Variables for page tracking
+      let connectedCount = 0;
+      const connectedPageNames: string[] = [];
 
       // Exchange code for user access token
       const tokenUrl = new URL(`https://graph.facebook.com/${FB_API_VERSION}/oauth/access_token`);
@@ -402,33 +338,23 @@ serve(async (req) => {
         });
       }
 
-      // Calculate how many more pages we can connect
-      const availableSlots = maxPages - currentPageCount;
+      // Store ALL pages with automation disabled - user will enable manually
 
-      // Store each page with encrypted access token (respecting limit)
-      let connectedCount = 0;
-      const connectedPageNames: string[] = [];
-      const pagesToConnect = pages.slice(0, availableSlots);
-
-      if (pagesToConnect.length < pages.length) {
-        console.log(`[Facebook OAuth] User has ${pages.length} pages but only ${availableSlots} slots available. Connecting first ${pagesToConnect.length}.`);
-      }
-
-      const WEBHOOK_URL = "https://server3.automationlearners.pro/webhook-test/facebookautomation";
-
-      for (const page of pagesToConnect) {
+      // Store ALL pages with is_connected = false (user must enable manually)
+      for (const page of pages) {
         try {
           const encryptedToken = await encryptToken(page.access_token);
           
-          // First, upsert the connected account
+          // Store the page with is_connected = FALSE (automation disabled by default)
           const { data: accountData, error: upsertError } = await supabase.from("connected_accounts").upsert({
             user_id: userId,
             platform: "facebook",
             external_id: page.id,
             name: page.name,
-            access_token: "encrypted", // Placeholder for non-encrypted column
+            category: page.category || null,
+            access_token: "encrypted",
             access_token_encrypted: encryptedToken,
-            is_connected: true,
+            is_connected: false, // User must manually enable automation
             encryption_version: 2,
           }, {
             onConflict: "user_id,platform,external_id",
@@ -439,46 +365,9 @@ serve(async (req) => {
             continue;
           }
 
-          // Create page memory for AI context
-          await supabase.from("page_memory").upsert({
-            user_id: userId,
-            account_id: accountData.id,
-            page_id: page.id,
-            page_name: page.name,
-            business_category: page.category || null,
-            detected_language: "auto",
-            preferred_tone: "friendly",
-            webhook_subscribed: true,
-            webhook_subscribed_at: new Date().toISOString(),
-            automation_settings: {},
-          }, {
-            onConflict: "user_id,page_id",
-          });
-
-          console.log(`[Facebook OAuth] Created page memory for: ${page.name} (${page.id})`);
-
-          // Notify webhook about new page connection
-          try {
-            await fetch(WEBHOOK_URL, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                event_type: "page_connected",
-                user_id: userId,
-                page_id: page.id,
-                page_name: page.name,
-                page_category: page.category,
-                fan_count: page.fan_count,
-                timestamp: new Date().toISOString(),
-              }),
-            });
-          } catch (webhookError) {
-            console.error(`[Facebook OAuth] Failed to notify webhook for page ${page.id}:`, webhookError);
-          }
-
           connectedCount++;
           connectedPageNames.push(page.name);
-          console.log(`[Facebook OAuth] Connected page: ${page.name} (${page.id})`);
+          console.log(`[Facebook OAuth] Stored page (disabled): ${page.name} (${page.id})`);
         } catch (pageError) {
           console.error(`[Facebook OAuth] Error processing page ${page.id}:`, pageError);
         }
@@ -488,13 +377,13 @@ serve(async (req) => {
         throw new Error("Failed to store any Facebook pages. Please try again.");
       }
 
-      console.log(`[Facebook OAuth] Successfully connected ${connectedCount}/${pages.length} pages for user ${userId.substring(0, 8)}...`);
+      console.log(`[Facebook OAuth] Stored ${connectedCount}/${pages.length} pages (disabled) for user ${userId.substring(0, 8)}...`);
 
-      // Redirect to automations with success
+      // Redirect to connect-facebook page with success - user will enable pages there
       return new Response(null, {
         status: 302,
         headers: { 
-          Location: `${appBaseUrl}/dashboard/automations?fb_connected=true&pages=${connectedCount}` 
+          Location: `${appBaseUrl}/connect-facebook?success=true&pages=${connectedCount}` 
         },
       });
 

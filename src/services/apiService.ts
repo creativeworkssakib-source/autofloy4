@@ -27,6 +27,7 @@ export interface ConnectedAccount {
   external_id: string;
   name: string | null;
   platform: "facebook" | "whatsapp" | "email";
+  category: string | null;
   is_connected: boolean | null;
   created_at: string | null;
 }
@@ -202,6 +203,29 @@ export async function getFacebookOAuthUrl(): Promise<{ url?: string; configured:
   } catch (error) {
     console.error("Failed to get Facebook OAuth URL:", error);
     return { configured: false, error: "Failed to connect" };
+  }
+}
+
+// Toggle page automation (enable/disable)
+export interface TogglePageResult {
+  success: boolean;
+  message?: string;
+  error?: string;
+  upgrade_required?: boolean;
+  is_connected?: boolean;
+}
+
+export async function togglePageAutomation(pageId: string, enabled: boolean): Promise<TogglePageResult> {
+  try {
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/toggle-page-automation`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ page_id: pageId, enabled }),
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("Failed to toggle page automation:", error);
+    return { success: false, error: "Network error" };
   }
 }
 
