@@ -320,7 +320,63 @@ serve(async (req) => {
       const userAccessToken = tokenData.access_token;
       console.log("[Facebook OAuth] Successfully exchanged code for user access token");
 
-      // Get user's Facebook pages with page access tokens
+      // ========== CHECK GRANTED PERMISSIONS ==========
+      // Verify that user granted all required permissions
+      const permissionsUrl = new URL(`https://graph.facebook.com/${FB_API_VERSION}/me/permissions`);
+      permissionsUrl.searchParams.set("access_token", userAccessToken);
+
+      const permissionsResponse = await fetch(permissionsUrl.toString());
+      const permissionsData = await permissionsResponse.json();
+
+      if (permissionsData.error) {
+        console.error("[Facebook OAuth] Permissions check error:", permissionsData.error);
+        throw new Error("Failed to verify permissions. Please try again.");
+      }
+
+      const grantedPermissions = (permissionsData.data || [])
+        .filter((p: { status: string }) => p.status === "granted")
+        .map((p: { permission: string }) => p.permission);
+
+      console.log(`[Facebook OAuth] Granted permissions: ${grantedPermissions.join(", ")}`);
+
+      // Check which required permissions are missing
+      const missingPermissions = FACEBOOK_SCOPES.filter(scope => !grantedPermissions.includes(scope));
+
+      if (missingPermissions.length > 0) {
+        console.warn(`[Facebook OAuth] Missing permissions: ${missingPermissions.join(", ")}`);
+        
+        // Redirect to OAuth with auth_type=rerequest to ask for missing permissions
+        const scopeString = FACEBOOK_SCOPES.join(",");
+        const reRequestState = btoa(JSON.stringify({ 
+          userId, 
+          timestamp: Date.now(),
+          nonce: crypto.randomUUID(),
+          rerequest: true,
+        }));
+        
+        const reAuthUrl = new URL(`https://www.facebook.com/${FB_API_VERSION}/dialog/oauth`);
+        reAuthUrl.searchParams.set("client_id", facebookAppId!);
+        reAuthUrl.searchParams.set("redirect_uri", facebookRedirectUri!);
+        reAuthUrl.searchParams.set("scope", scopeString);
+        reAuthUrl.searchParams.set("state", reRequestState);
+        reAuthUrl.searchParams.set("response_type", "code");
+        reAuthUrl.searchParams.set("auth_type", "rerequest"); // Force re-request declined permissions
+
+        // Show error and redirect to re-authorize
+        const missingList = missingPermissions.map(p => p.replace(/_/g, " ")).join(", ");
+        console.log(`[Facebook OAuth] Redirecting to re-request permissions: ${missingList}`);
+        
+        return new Response(null, {
+          status: 302,
+          headers: { 
+            Location: `${appBaseUrl}/connect-facebook?error=missing_permissions&message=${encodeURIComponent(`Required permissions not granted: ${missingList}. Please reconnect and grant ALL permissions to use automation features.`)}&reauth_url=${encodeURIComponent(reAuthUrl.toString())}` 
+          },
+        });
+      }
+
+      console.log("[Facebook OAuth] All required permissions granted ✓");
+
+      // ========== FETCH PAGES ==========
       const pagesUrl = new URL(`https://graph.facebook.com/${FB_API_VERSION}/me/accounts`);
       pagesUrl.searchParams.set("access_token", userAccessToken);
       pagesUrl.searchParams.set("fields", "id,name,category,fan_count,access_token,tasks,picture{url}");
