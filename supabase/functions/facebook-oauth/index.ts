@@ -166,7 +166,13 @@ serve(async (req) => {
   }
 
   const url = new URL(req.url);
-  const action = url.searchParams.get("action");
+  let action = url.searchParams.get("action");
+  
+  // Auto-detect callback if 'code' parameter exists (Facebook redirect)
+  if (!action && url.searchParams.has("code")) {
+    action = "callback";
+    console.log("[Facebook OAuth] Auto-detected callback from Facebook redirect");
+  }
 
   console.log(`[Facebook OAuth] action=${action}`);
 
@@ -408,6 +414,18 @@ serve(async (req) => {
       note: "These permissions require App Review for production use. In development mode, only test users can grant them.",
     }), {
       status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  // Handle case when action is missing but no code either
+  if (!action) {
+    return new Response(JSON.stringify({ 
+      error: "Missing action parameter",
+      hint: "Use action=start to begin OAuth, or this endpoint will auto-detect callback when Facebook redirects with 'code' parameter",
+      available_actions: ["start", "callback", "scopes"]
+    }), {
+      status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
