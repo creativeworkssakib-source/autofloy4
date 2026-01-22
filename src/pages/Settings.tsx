@@ -355,7 +355,7 @@ const Settings = () => {
       const disconnectPromises = accounts.map((account) => disconnectAccount(account.id));
       const results = await Promise.all(disconnectPromises);
       
-      const allSuccessful = results.every((result) => result === true);
+      const allSuccessful = results.every((result) => result.success === true);
       
       if (allSuccessful) {
         // Update local state

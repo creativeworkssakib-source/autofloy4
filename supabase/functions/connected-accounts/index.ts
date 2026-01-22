@@ -12,126 +12,15 @@ const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const jwtSecret = Deno.env.get("JWT_SECRET")!;
 
-// Plan capabilities - must match frontend planCapabilities.ts
-const PLAN_CAPABILITIES: Record<string, {
-  maxFacebookPages: number;
-  maxWhatsappAccounts: number;
-  maxAutomationsPerMonth: number | null;
-  features: {
-    messageAutoReply: boolean;
-    commentAutoReply: boolean;
-    imageAutoReply: boolean;
-    voiceAutoReply: boolean;
-    deleteNegativeComments: boolean;
-    whatsappEnabled: boolean;
-    instagramAutomation: boolean;
-    tiktokAutomation: boolean;
-    orderManagementSystem: boolean;
-    invoiceSystem: boolean;
-  };
-}> = {
-  none: {
-    maxFacebookPages: 0,
-    maxWhatsappAccounts: 0,
-    maxAutomationsPerMonth: 0,
-    features: { 
-      messageAutoReply: false, 
-      commentAutoReply: false, 
-      imageAutoReply: false, 
-      voiceAutoReply: false, 
-      deleteNegativeComments: false,
-      whatsappEnabled: false,
-      instagramAutomation: false,
-      tiktokAutomation: false,
-      orderManagementSystem: false,
-      invoiceSystem: false,
-    },
-  },
-  trial: {
-    maxFacebookPages: 10,
-    maxWhatsappAccounts: 5,
-    maxAutomationsPerMonth: null,
-    features: { 
-      messageAutoReply: true, 
-      commentAutoReply: true, 
-      imageAutoReply: true, 
-      voiceAutoReply: true, 
-      deleteNegativeComments: true,
-      whatsappEnabled: true,
-      instagramAutomation: true,
-      tiktokAutomation: true,
-      orderManagementSystem: true,
-      invoiceSystem: true,
-    },
-  },
-  starter: {
-    maxFacebookPages: 1,
-    maxWhatsappAccounts: 0,
-    maxAutomationsPerMonth: null,
-    features: { 
-      messageAutoReply: true, 
-      commentAutoReply: true, 
-      imageAutoReply: false, 
-      voiceAutoReply: false, 
-      deleteNegativeComments: true,
-      whatsappEnabled: false,
-      instagramAutomation: false,
-      tiktokAutomation: false,
-      orderManagementSystem: false,
-      invoiceSystem: false,
-    },
-  },
-  professional: {
-    maxFacebookPages: 2,
-    maxWhatsappAccounts: 1,
-    maxAutomationsPerMonth: null,
-    features: { 
-      messageAutoReply: true, 
-      commentAutoReply: true, 
-      imageAutoReply: true, 
-      voiceAutoReply: true, 
-      deleteNegativeComments: true,
-      whatsappEnabled: true,
-      instagramAutomation: false,
-      tiktokAutomation: false,
-      orderManagementSystem: false,
-      invoiceSystem: false,
-    },
-  },
-  business: {
-    maxFacebookPages: 2,
-    maxWhatsappAccounts: 1,
-    maxAutomationsPerMonth: null,
-    features: { 
-      messageAutoReply: true, 
-      commentAutoReply: true, 
-      imageAutoReply: true, 
-      voiceAutoReply: true, 
-      deleteNegativeComments: true,
-      whatsappEnabled: true,
-      instagramAutomation: true,
-      tiktokAutomation: true,
-      orderManagementSystem: true,
-      invoiceSystem: true,
-    },
-  },
-  lifetime: {
-    maxFacebookPages: 10,
-    maxWhatsappAccounts: 5,
-    maxAutomationsPerMonth: null,
-    features: { 
-      messageAutoReply: true, 
-      commentAutoReply: true, 
-      imageAutoReply: true, 
-      voiceAutoReply: true, 
-      deleteNegativeComments: true,
-      whatsappEnabled: true,
-      instagramAutomation: true,
-      tiktokAutomation: true,
-      orderManagementSystem: true,
-      invoiceSystem: true,
-    },
-  },
+// Fallback limits if database doesn't have the plan
+const FALLBACK_LIMITS: Record<string, { maxFacebookPages: number; maxWhatsappAccounts: number }> = {
+  none: { maxFacebookPages: 0, maxWhatsappAccounts: 0 },
+  "free-trial": { maxFacebookPages: 10, maxWhatsappAccounts: 5 },
+  trial: { maxFacebookPages: 10, maxWhatsappAccounts: 5 },
+  starter: { maxFacebookPages: 1, maxWhatsappAccounts: 0 },
+  professional: { maxFacebookPages: 2, maxWhatsappAccounts: 1 },
+  business: { maxFacebookPages: 5, maxWhatsappAccounts: 2 },
+  lifetime: { maxFacebookPages: 999, maxWhatsappAccounts: 99 },
 };
 
 async function verifyToken(authHeader: string | null): Promise<string | null> {
@@ -156,12 +45,36 @@ async function verifyToken(authHeader: string | null): Promise<string | null> {
   }
 }
 
+// Get plan limits from database
+async function getPlanLimits(supabase: any, planId: string): Promise<{ maxFacebookPages: number; maxWhatsappAccounts: number }> {
+  const normalizedPlan = planId.toLowerCase();
+  const dbPlanId = normalizedPlan === "trial" ? "free-trial" : normalizedPlan;
+
+  const { data, error } = await supabase
+    .from("pricing_plans")
+    .select("max_facebook_pages")
+    .eq("id", dbPlanId)
+    .single();
+
+  if (error || !data) {
+    console.log(`[getPlanLimits] Plan ${dbPlanId} not found, using fallback`);
+    return FALLBACK_LIMITS[normalizedPlan] || FALLBACK_LIMITS.none;
+  }
+
+  return {
+    maxFacebookPages: data.max_facebook_pages || FALLBACK_LIMITS[normalizedPlan]?.maxFacebookPages || 0,
+    maxWhatsappAccounts: FALLBACK_LIMITS[normalizedPlan]?.maxWhatsappAccounts || 0,
+  };
+}
+
 // Get user's effective plan and check if active
 async function getUserPlan(supabase: any, userId: string): Promise<{ 
   plan: string; 
+  planName: string;
   isActive: boolean; 
   reason?: string;
-  capabilities: typeof PLAN_CAPABILITIES["none"];
+  maxFacebookPages: number;
+  maxWhatsappAccounts: number;
 }> {
   const { data: user, error } = await supabase
     .from("users")
@@ -170,53 +83,85 @@ async function getUserPlan(supabase: any, userId: string): Promise<{
     .single();
 
   if (error || !user) {
-    return { plan: "none", isActive: false, reason: "User not found", capabilities: PLAN_CAPABILITIES.none };
+    return { 
+      plan: "none", 
+      planName: "No Plan",
+      isActive: false, 
+      reason: "User not found", 
+      maxFacebookPages: 0,
+      maxWhatsappAccounts: 0 
+    };
   }
 
   const now = new Date();
   const plan = user.subscription_plan?.toLowerCase() || "none";
   
   // Check trial
-  if (plan === "trial") {
+  if (plan === "trial" || plan === "free-trial") {
     if (user.is_trial_active && user.trial_end_date) {
       const trialEnd = new Date(user.trial_end_date);
       if (trialEnd > now) {
-        return { plan: "trial", isActive: true, capabilities: PLAN_CAPABILITIES.trial };
+        const limits = await getPlanLimits(supabase, "free-trial");
+        return { 
+          plan: "trial", 
+          planName: "Trial",
+          isActive: true, 
+          ...limits 
+        };
       }
     }
-    return { plan: "none", isActive: false, reason: "Your 24-hour free trial has ended.", capabilities: PLAN_CAPABILITIES.none };
+    return { 
+      plan: "none", 
+      planName: "Expired",
+      isActive: false, 
+      reason: "Your 24-hour free trial has ended.", 
+      maxFacebookPages: 0,
+      maxWhatsappAccounts: 0 
+    };
   }
 
   // Check paid plans
   if (["starter", "professional", "business", "lifetime"].includes(plan)) {
     if (plan === "lifetime") {
-      return { plan: "lifetime", isActive: true, capabilities: PLAN_CAPABILITIES.lifetime };
+      const limits = await getPlanLimits(supabase, "lifetime");
+      return { 
+        plan: "lifetime", 
+        planName: "Lifetime",
+        isActive: true, 
+        ...limits 
+      };
     }
     if (user.subscription_ends_at) {
       const subEnd = new Date(user.subscription_ends_at);
       if (subEnd > now) {
-        return { plan, isActive: true, capabilities: PLAN_CAPABILITIES[plan] || PLAN_CAPABILITIES.none };
+        const limits = await getPlanLimits(supabase, plan);
+        const planName = plan.charAt(0).toUpperCase() + plan.slice(1);
+        return { 
+          plan, 
+          planName,
+          isActive: true, 
+          ...limits 
+        };
       }
     }
-    return { plan: "none", isActive: false, reason: "Your subscription has expired.", capabilities: PLAN_CAPABILITIES.none };
+    return { 
+      plan: "none", 
+      planName: "Expired",
+      isActive: false, 
+      reason: "Your subscription has expired.", 
+      maxFacebookPages: 0,
+      maxWhatsappAccounts: 0 
+    };
   }
 
-  return { plan: "none", isActive: false, reason: "No active subscription.", capabilities: PLAN_CAPABILITIES.none };
-}
-
-// Get monthly automation run count
-async function getMonthlyAutomationRuns(supabase: any, userId: string): Promise<number> {
-  const startOfMonth = new Date();
-  startOfMonth.setDate(1);
-  startOfMonth.setHours(0, 0, 0, 0);
-
-  const { count, error } = await supabase
-    .from("execution_logs")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .gte("created_at", startOfMonth.toISOString());
-
-  return error ? 0 : (count || 0);
+  return { 
+    plan: "none", 
+    planName: "No Plan",
+    isActive: false, 
+    reason: "No active subscription.", 
+    maxFacebookPages: 0,
+    maxWhatsappAccounts: 0 
+  };
 }
 
 serve(async (req) => {
@@ -271,13 +216,13 @@ serve(async (req) => {
         accounts,
         planLimits: {
           plan: userPlan.plan,
+          planName: userPlan.planName,
           isActive: userPlan.isActive,
-          maxFacebookPages: userPlan.capabilities.maxFacebookPages,
-          maxWhatsappAccounts: userPlan.capabilities.maxWhatsappAccounts,
+          maxFacebookPages: userPlan.maxFacebookPages,
+          maxWhatsappAccounts: userPlan.maxWhatsappAccounts,
           connectedFacebookPages,
           connectedWhatsapp,
-          canConnectMoreFacebook: connectedFacebookPages < userPlan.capabilities.maxFacebookPages,
-          canConnectWhatsapp: userPlan.capabilities.features.whatsappEnabled && connectedWhatsapp < userPlan.capabilities.maxWhatsappAccounts,
+          canConnectMoreFacebook: connectedFacebookPages < userPlan.maxFacebookPages,
         }
       }), {
         status: 200,
@@ -292,11 +237,12 @@ serve(async (req) => {
     }
   }
 
-  // DELETE - Disconnect account
+  // DELETE - Completely remove account (not just disconnect)
   if (req.method === "DELETE") {
     try {
       const url = new URL(req.url);
       const id = url.searchParams.get("id");
+      const action = url.searchParams.get("action"); // "disconnect" or "remove"
 
       if (!id) {
         return new Response(JSON.stringify({ error: "id is required" }), {
@@ -305,24 +251,85 @@ serve(async (req) => {
         });
       }
 
-      const { error } = await supabase
+      // Get the account first
+      const { data: account, error: fetchError } = await supabase
         .from("connected_accounts")
-        .update({ is_connected: false })
+        .select("id, name, external_id")
         .eq("id", id)
-        .eq("user_id", userId);
+        .eq("user_id", userId)
+        .single();
 
-      if (error) {
-        console.error("Disconnect account error:", error);
-        return new Response(JSON.stringify({ error: "Failed to disconnect account" }), {
-          status: 500,
+      if (fetchError || !account) {
+        return new Response(JSON.stringify({ error: "Account not found" }), {
+          status: 404,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      return new Response(JSON.stringify({ message: "Account disconnected" }), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      if (action === "remove") {
+        // Completely remove the account and related data
+        // First, delete page_memory
+        await supabase
+          .from("page_memory")
+          .delete()
+          .eq("account_id", id)
+          .eq("user_id", userId);
+
+        // Delete automations linked to this account
+        await supabase
+          .from("automations")
+          .delete()
+          .eq("account_id", id)
+          .eq("user_id", userId);
+
+        // Finally, delete the connected account
+        const { error: deleteError } = await supabase
+          .from("connected_accounts")
+          .delete()
+          .eq("id", id)
+          .eq("user_id", userId);
+
+        if (deleteError) {
+          console.error("Remove account error:", deleteError);
+          return new Response(JSON.stringify({ error: "Failed to remove account" }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        console.log(`[connected-accounts] Removed account: ${account.name} (${id})`);
+        return new Response(JSON.stringify({ 
+          success: true,
+          message: `${account.name || "Account"} removed successfully` 
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } else {
+        // Just disconnect (set is_connected to false)
+        const { error } = await supabase
+          .from("connected_accounts")
+          .update({ is_connected: false })
+          .eq("id", id)
+          .eq("user_id", userId);
+
+        if (error) {
+          console.error("Disconnect account error:", error);
+          return new Response(JSON.stringify({ error: "Failed to disconnect account" }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        console.log(`[connected-accounts] Disconnected account: ${account.name} (${id})`);
+        return new Response(JSON.stringify({ 
+          success: true,
+          message: `${account.name || "Account"} disconnected` 
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     } catch (error) {
       console.error("DELETE connected-accounts error:", error);
       return new Response(JSON.stringify({ error: "Internal server error" }), {

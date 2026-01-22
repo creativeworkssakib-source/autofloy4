@@ -162,6 +162,23 @@ export async function fetchUserProfile(): Promise<UserProfile | null> {
   }
 }
 
+// Plan limits info returned with connected accounts
+export interface PlanLimitsData {
+  plan: string;
+  planName: string;
+  isActive: boolean;
+  maxFacebookPages: number;
+  maxWhatsappAccounts: number;
+  connectedFacebookPages: number;
+  connectedWhatsapp: number;
+  canConnectMoreFacebook: boolean;
+}
+
+export interface ConnectedAccountsResponse {
+  accounts: ConnectedAccount[];
+  planLimits: PlanLimitsData;
+}
+
 // Connected Accounts
 export async function fetchConnectedAccounts(platform?: string): Promise<ConnectedAccount[]> {
   try {
@@ -180,16 +197,72 @@ export async function fetchConnectedAccounts(platform?: string): Promise<Connect
   }
 }
 
-export async function disconnectAccount(id: string): Promise<boolean> {
+// Fetch connected accounts with plan limits
+export async function fetchConnectedAccountsWithLimits(platform?: string): Promise<ConnectedAccountsResponse> {
   try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/connected-accounts?id=${id}`, {
+    const url = new URL(`${SUPABASE_URL}/functions/v1/connected-accounts`);
+    if (platform) url.searchParams.set("platform", platform);
+    
+    const response = await fetch(url.toString(), {
+      headers: getAuthHeaders(),
+    });
+    if (!response.ok) {
+      return { 
+        accounts: [], 
+        planLimits: {
+          plan: "none",
+          planName: "No Plan",
+          isActive: false,
+          maxFacebookPages: 0,
+          maxWhatsappAccounts: 0,
+          connectedFacebookPages: 0,
+          connectedWhatsapp: 0,
+          canConnectMoreFacebook: false,
+        }
+      };
+    }
+    return await response.json();
+  } catch (error) {
+    console.error("Failed to fetch connected accounts with limits:", error);
+    return { 
+      accounts: [], 
+      planLimits: {
+        plan: "none",
+        planName: "No Plan",
+        isActive: false,
+        maxFacebookPages: 0,
+        maxWhatsappAccounts: 0,
+        connectedFacebookPages: 0,
+        connectedWhatsapp: 0,
+        canConnectMoreFacebook: false,
+      }
+    };
+  }
+}
+
+export async function disconnectAccount(id: string): Promise<{ success: boolean; message?: string }> {
+  try {
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/connected-accounts?id=${id}&action=disconnect`, {
       method: "DELETE",
       headers: getAuthHeaders(),
     });
-    return response.ok;
+    return await response.json();
   } catch (error) {
     console.error("Failed to disconnect account:", error);
-    return false;
+    return { success: false, message: "Network error" };
+  }
+}
+
+export async function removeAccount(id: string): Promise<{ success: boolean; message?: string }> {
+  try {
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/connected-accounts?id=${id}&action=remove`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("Failed to remove account:", error);
+    return { success: false, message: "Network error" };
   }
 }
 

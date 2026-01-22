@@ -1449,6 +1449,7 @@ export type Database = {
           id: string
           is_active: boolean | null
           is_popular: boolean | null
+          max_facebook_pages: number | null
           max_shops: number | null
           name: string
           name_bn: string | null
@@ -1472,6 +1473,7 @@ export type Database = {
           id: string
           is_active?: boolean | null
           is_popular?: boolean | null
+          max_facebook_pages?: number | null
           max_shops?: number | null
           name: string
           name_bn?: string | null
@@ -1495,6 +1497,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           is_popular?: boolean | null
+          max_facebook_pages?: number | null
           max_shops?: number | null
           name?: string
           name_bn?: string | null

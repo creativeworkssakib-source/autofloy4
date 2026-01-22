@@ -12,14 +12,15 @@ const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const jwtSecret = Deno.env.get("JWT_SECRET")!;
 
-// Plan limits for Facebook pages
-const PLAN_FB_LIMITS: Record<string, number> = {
+// Fallback plan limits (used if database doesn't have the plan)
+const FALLBACK_LIMITS: Record<string, number> = {
   none: 0,
+  "free-trial": 10,
   trial: 10,
   starter: 1,
   professional: 2,
   business: 5,
-  lifetime: 10,
+  lifetime: 999,
 };
 
 async function verifyToken(authHeader: string | null): Promise<string | null> {
@@ -44,6 +45,26 @@ async function verifyToken(authHeader: string | null): Promise<string | null> {
   }
 }
 
+// Get max pages for a plan from database
+async function getPlanMaxPages(supabase: any, planId: string): Promise<number> {
+  // Normalize plan ID
+  const normalizedPlan = planId.toLowerCase();
+  const dbPlanId = normalizedPlan === "trial" ? "free-trial" : normalizedPlan;
+  
+  const { data, error } = await supabase
+    .from("pricing_plans")
+    .select("max_facebook_pages")
+    .eq("id", dbPlanId)
+    .single();
+
+  if (error || !data) {
+    console.log(`[getPlanMaxPages] Plan ${dbPlanId} not found, using fallback`);
+    return FALLBACK_LIMITS[normalizedPlan] || 0;
+  }
+
+  return data.max_facebook_pages || FALLBACK_LIMITS[normalizedPlan] || 0;
+}
+
 // Get user's effective plan
 async function getUserPlan(supabase: any, userId: string): Promise<{ 
   plan: string; 
@@ -64,11 +85,12 @@ async function getUserPlan(supabase: any, userId: string): Promise<{
   const plan = user.subscription_plan?.toLowerCase() || "none";
   
   // Check trial
-  if (plan === "trial") {
+  if (plan === "trial" || plan === "free-trial") {
     if (user.is_trial_active && user.trial_end_date) {
       const trialEnd = new Date(user.trial_end_date);
       if (trialEnd > now) {
-        return { plan: "trial", maxPages: PLAN_FB_LIMITS.trial, planName: "Trial" };
+        const maxPages = await getPlanMaxPages(supabase, "free-trial");
+        return { plan: "trial", maxPages, planName: "Trial" };
       }
     }
     return { plan: "none", maxPages: 0, planName: "Expired" };
@@ -77,13 +99,15 @@ async function getUserPlan(supabase: any, userId: string): Promise<{
   // Check paid plans
   if (["starter", "professional", "business", "lifetime"].includes(plan)) {
     if (plan === "lifetime") {
-      return { plan: "lifetime", maxPages: PLAN_FB_LIMITS.lifetime, planName: "Lifetime" };
+      const maxPages = await getPlanMaxPages(supabase, "lifetime");
+      return { plan: "lifetime", maxPages, planName: "Lifetime" };
     }
     if (user.subscription_ends_at) {
       const subEnd = new Date(user.subscription_ends_at);
       if (subEnd > now) {
+        const maxPages = await getPlanMaxPages(supabase, plan);
         const planName = plan.charAt(0).toUpperCase() + plan.slice(1);
-        return { plan, maxPages: PLAN_FB_LIMITS[plan] || 0, planName };
+        return { plan, maxPages, planName };
       }
     }
     return { plan: "none", maxPages: 0, planName: "Expired" };
