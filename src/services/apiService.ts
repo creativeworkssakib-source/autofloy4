@@ -4,6 +4,9 @@ function getAuthHeaders(): HeadersInit {
   const token = localStorage.getItem("autofloy_token");
   return {
     "Content-Type": "application/json",
+    // Prevent caching for all API calls
+    "Cache-Control": "no-cache, no-store, must-revalidate",
+    "Pragma": "no-cache",
     ...(token && { Authorization: `Bearer ${token}` }),
   };
 }
@@ -185,9 +188,12 @@ export async function fetchConnectedAccounts(platform?: string): Promise<Connect
   try {
     const url = new URL(`${SUPABASE_URL}/functions/v1/connected-accounts`);
     if (platform) url.searchParams.set("platform", platform);
+    // Add cache busting timestamp
+    url.searchParams.set("_t", Date.now().toString());
     
     const response = await fetch(url.toString(), {
       headers: getAuthHeaders(),
+      cache: "no-store",
     });
     if (!response.ok) return [];
     const data = await response.json();
@@ -203,9 +209,12 @@ export async function fetchConnectedAccountsWithLimits(platform?: string): Promi
   try {
     const url = new URL(`${SUPABASE_URL}/functions/v1/connected-accounts`);
     if (platform) url.searchParams.set("platform", platform);
+    // Add cache busting timestamp
+    url.searchParams.set("_t", Date.now().toString());
     
     const response = await fetch(url.toString(), {
       headers: getAuthHeaders(),
+      cache: "no-store",
     });
     if (!response.ok) {
       return { 
