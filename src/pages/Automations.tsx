@@ -186,7 +186,7 @@ const Automations = () => {
         {hasAccess && (
           <PlatformAutomationsGrid
             connectedFacebookPages={connectedPages}
-            onConnectFacebook={() => setIsConnectModalOpen(true)}
+            onConnectFacebook={() => navigate("/connect-facebook")}
           />
         )}
       </div>
