@@ -49,6 +49,8 @@ const FACEBOOK_SCOPES = [
   "pages_read_user_content",
   // Manage comments (reply, delete, hide)
   "pages_manage_engagement",
+  // Business management for accessing all pages
+  "business_management",
 ];
 
 // Secure AES-GCM encryption with PBKDF2 key derivation (v2 format)
@@ -376,13 +378,18 @@ serve(async (req) => {
 
       console.log("[Facebook OAuth] All required permissions granted ✓");
 
-      // ========== FETCH PAGES ==========
+      // ========== FETCH PAGES WITH PAGINATION ==========
+      const allPages: any[] = [];
+      let nextUrl: string | null = null;
+      
+      // First request
       const pagesUrl = new URL(`https://graph.facebook.com/${FB_API_VERSION}/me/accounts`);
       pagesUrl.searchParams.set("access_token", userAccessToken);
       pagesUrl.searchParams.set("fields", "id,name,category,fan_count,access_token,tasks,picture{url}");
+      pagesUrl.searchParams.set("limit", "100"); // Get maximum pages per request
 
-      const pagesResponse = await fetch(pagesUrl.toString());
-      const pagesData = await pagesResponse.json();
+      let pagesResponse = await fetch(pagesUrl.toString());
+      let pagesData = await pagesResponse.json();
 
       if (pagesData.error) {
         console.error("[Facebook OAuth] Pages fetch error:", pagesData.error);
@@ -390,8 +397,30 @@ serve(async (req) => {
         throw new Error(parsed.message);
       }
 
-      const pages = pagesData.data || [];
-      console.log(`[Facebook OAuth] Found ${pages.length} pages for user`);
+      // Add first batch
+      if (pagesData.data) {
+        allPages.push(...pagesData.data);
+      }
+
+      // Handle pagination - fetch all pages
+      while (pagesData.paging?.next) {
+        console.log(`[Facebook OAuth] Fetching next page of results... (current: ${allPages.length} pages)`);
+        const paginationUrl = pagesData.paging.next as string;
+        pagesResponse = await fetch(paginationUrl);
+        pagesData = await pagesResponse.json();
+        
+        if (pagesData.error) {
+          console.error("[Facebook OAuth] Pagination fetch error:", pagesData.error);
+          break; // Don't fail entirely, just stop pagination
+        }
+        
+        if (pagesData.data) {
+          allPages.push(...pagesData.data);
+        }
+      }
+
+      const pages = allPages;
+      console.log(`[Facebook OAuth] Found ${pages.length} total pages for user (with pagination)`);
 
       if (pages.length === 0) {
         console.warn("[Facebook OAuth] No pages found for user");
