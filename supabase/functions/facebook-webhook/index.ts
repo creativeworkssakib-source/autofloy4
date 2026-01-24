@@ -396,30 +396,55 @@ function isNegativeComment(text: string): boolean {
 }
 
 // *** HIDE COMMENT FROM PAGE (not delete, just hide) ***
-async function hideComment(pageAccessToken: string, commentId: string): Promise<boolean> {
+// DELETE abusive comment completely (not just hide)
+async function deleteComment(pageAccessToken: string, commentId: string): Promise<boolean> {
   try {
-    const response = await fetch(`${GRAPH_API_URL}/${commentId}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        access_token: pageAccessToken,
-        is_hidden: true,
-      }),
+    // First try DELETE to completely remove the comment
+    const deleteResponse = await fetch(`${GRAPH_API_URL}/${commentId}?access_token=${pageAccessToken}`, {
+      method: "DELETE",
     });
 
-    const result = await response.json();
-    if (result.error) {
-      console.error("[Facebook] Hide comment error:", result.error);
-      return false;
+    const deleteResult = await deleteResponse.json();
+    
+    if (deleteResult.success === true) {
+      console.log("[Facebook] ✅ Comment DELETED successfully:", commentId);
+      return true;
     }
-    console.log("[Facebook] Comment hidden successfully:", commentId);
-    return true;
+    
+    // If DELETE fails, fallback to hiding
+    if (deleteResult.error) {
+      console.log("[Facebook] DELETE failed, trying HIDE fallback. Error:", deleteResult.error.message);
+      
+      const hideResponse = await fetch(`${GRAPH_API_URL}/${commentId}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          access_token: pageAccessToken,
+          is_hidden: true,
+        }),
+      });
+
+      const hideResult = await hideResponse.json();
+      if (hideResult.error) {
+        console.error("[Facebook] Hide comment also failed:", hideResult.error);
+        return false;
+      }
+      console.log("[Facebook] Comment HIDDEN as fallback:", commentId);
+      return true;
+    }
+    
+    return false;
   } catch (error) {
-    console.error("[Facebook] Failed to hide comment:", error);
+    console.error("[Facebook] Failed to delete/hide comment:", error);
     return false;
   }
+}
+
+// Legacy alias for backward compatibility
+async function hideComment(pageAccessToken: string, commentId: string): Promise<boolean> {
+  return deleteComment(pageAccessToken, commentId);
 }
 
 serve(async (req) => {
