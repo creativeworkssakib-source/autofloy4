@@ -144,42 +144,36 @@ const ConnectFacebook = () => {
   };
 
   // Toggle page automation
-  // Toggle page automation
   const handleToggle = async (pageId: string, enabled: boolean) => {
     // Get current enabled count from pages state for accurate check
     const currentEnabledCount = pages.filter(p => p.is_connected).length;
     
-    // Check plan limits before enabling
-    if (enabled && planLimits) {
-      if (currentEnabledCount >= planLimits.maxFacebookPages) {
-        toast({
-          title: "Limit Reached",
-          description: `Your ${planLimits.planName} plan allows only ${planLimits.maxFacebookPages} page(s). Disable another page first or upgrade.`,
-          variant: "destructive",
-        });
-        return;
-      }
+    // Check plan limits before enabling (only when turning ON)
+    if (enabled && planLimits && currentEnabledCount >= planLimits.maxFacebookPages) {
+      toast({
+        title: "Limit Reached",
+        description: `Your ${planLimits.planName} plan allows only ${planLimits.maxFacebookPages} page(s). Disable another page first or upgrade.`,
+        variant: "destructive",
+      });
+      return;
     }
 
     setTogglingPages(prev => new Set(prev).add(pageId));
+    
+    // Optimistically update UI immediately
+    setPages(prev => prev.map(p => 
+      p.id === pageId ? { ...p, is_connected: enabled } : p
+    ));
     
     try {
       const result = await togglePageAutomation(pageId, enabled);
       
       if (result.success) {
-        setPages(prev => prev.map(p => 
-          p.id === pageId ? { ...p, is_connected: enabled } : p
-        ));
-        // Update plan limits count from server response (more reliable)
-        if (planLimits) {
-          const newCount = typeof result.connectedFacebookPages === 'number' 
-            ? result.connectedFacebookPages 
-            : (enabled 
-              ? planLimits.connectedFacebookPages + 1 
-              : Math.max(0, planLimits.connectedFacebookPages - 1));
+        // Update plan limits count from server response
+        if (planLimits && typeof result.connectedFacebookPages === 'number') {
           setPlanLimits({
             ...planLimits,
-            connectedFacebookPages: newCount,
+            connectedFacebookPages: result.connectedFacebookPages,
           });
         }
         toast({
@@ -187,6 +181,10 @@ const ConnectFacebook = () => {
           description: result.message,
         });
       } else {
+        // Revert optimistic update on failure
+        setPages(prev => prev.map(p => 
+          p.id === pageId ? { ...p, is_connected: !enabled } : p
+        ));
         toast({
           title: "Failed",
           description: result.error || "Could not update page.",
@@ -202,6 +200,10 @@ const ConnectFacebook = () => {
         }
       }
     } catch (err) {
+      // Revert optimistic update on error
+      setPages(prev => prev.map(p => 
+        p.id === pageId ? { ...p, is_connected: !enabled } : p
+      ));
       toast({
         title: "Error",
         description: "Network error. Please try again.",
