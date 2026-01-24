@@ -136,16 +136,36 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
-    const { pageId, accountId, userId } = await req.json();
+    const { pageId, accountId } = await req.json();
 
-    if (!pageId || !userId) {
-      return new Response(JSON.stringify({ error: "Missing pageId or userId" }), {
+    if (!pageId) {
+      return new Response(JSON.stringify({ error: "Missing pageId" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    console.log(`[Sync Posts] Starting sync for page ${pageId}`);
+    // Extract user from JWT token
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: "No authorization header" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    
+    if (authError || !user) {
+      return new Response(JSON.stringify({ error: "Invalid or expired token" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const userId = user.id;
+    console.log(`[Sync Posts] Starting sync for page ${pageId}, user ${userId}`);
 
     // Get the connected account
     const { data: account, error: accountError } = await supabase
