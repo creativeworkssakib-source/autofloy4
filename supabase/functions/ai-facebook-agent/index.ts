@@ -119,34 +119,49 @@ function detectIntent(text: string): string {
   return "general";
 }
 
-// Detect sentiment for reactions
+// Detect sentiment for reactions - Enhanced for better detection
 function detectSentiment(text: string): "positive" | "neutral" | "negative" {
   const lowerText = text.toLowerCase();
   
-  const positivePatterns = /thanks|ধন্যবাদ|great|awesome|good|ভালো|সুন্দর|love|excellent|best|amazing|wonderful|❤|👍|🔥|💯|nice|good job|মাশাল্লাহ|অসাম/;
-  const negativePatterns = /bad|খারাপ|worst|terrible|hate|বাজে|poor|fraud|fake|scam|😡|👎|😤/;
+  // Enhanced positive patterns - includes emoji and common expressions
+  const positivePatterns = /thanks|thank you|ধন্যবাদ|great|awesome|good|ভালো|সুন্দর|love|excellent|best|amazing|wonderful|nice|beautiful|perfect|super|fantastic|❤️|❤|👍|🔥|💯|💕|😍|🥰|😊|👏|💪|🙌|good job|well done|keep it up|মাশাল্লাহ|অসাম|দারুণ|বাহ|চমৎকার|অসাধারণ|খুব ভালো|অনেক ভালো|wow|woow|বেস্ট|নাইস|লাভ/i;
+  const negativePatterns = /bad|খারাপ|worst|terrible|hate|বাজে|poor|fraud|fake|scam|😡|👎|😤|💔|বোকা|চোর|প্রতারক|ফেক/i;
   
   if (positivePatterns.test(lowerText)) return "positive";
   if (negativePatterns.test(lowerText)) return "negative";
   return "neutral";
 }
 
-// Analyze comment to generate appropriate response
+// Analyze comment to generate appropriate response - Enhanced version
 function analyzeCommentForResponse(text: string, intent: string, sentiment: string): {
   isPositiveFeedback: boolean;
   isQuestion: boolean;
   isPriceInquiry: boolean;
   isOrderIntent: boolean;
   responseType: string;
+  feedbackType: string;
+  originalComment: string;
 } {
   const lowerText = text.toLowerCase();
+  const originalComment = text.trim();
   
-  // Check for positive feedback/appreciation
-  const positiveFeedbackPatterns = /great|good|nice|awesome|excellent|love|thanks|ধন্যবাদ|ভালো|সুন্দর|মাশাল্লাহ|অসাম|বাহ|wow|👍|❤|🔥|💯|👏|good job|well done|keep it up/i;
-  const isPositiveFeedback = positiveFeedbackPatterns.test(lowerText) && sentiment === "positive";
+  // Enhanced positive feedback patterns with specific types
+  const praisePatterns = /great|good|nice|awesome|excellent|best|amazing|wonderful|perfect|super|fantastic|দারুণ|চমৎকার|অসাধারণ|সুন্দর|মাশাল্লাহ|অসাম|বাহ|খুব ভালো|অনেক ভালো|বেস্ট|নাইস|wow|woow|good job|well done|keep it up|keep going|love it|loved|ভালোবাসি/i;
+  const thankPatterns = /thanks|thank you|ধন্যবাদ|ty|thx/i;
+  const emojiOnlyPatterns = /^[\s]*[👍❤️🔥💯💕😍🥰😊👏💪🙌❤]+[\s]*$/;
+  const lovePatterns = /love|❤️|❤|💕|😍|🥰|ভালোবাসি|লাভ/i;
+  
+  // Determine feedback type
+  let feedbackType = "general";
+  if (praisePatterns.test(lowerText)) feedbackType = "praise";
+  else if (thankPatterns.test(lowerText)) feedbackType = "thanks";
+  else if (emojiOnlyPatterns.test(text)) feedbackType = "emoji_reaction";
+  else if (lovePatterns.test(lowerText)) feedbackType = "love";
+  
+  const isPositiveFeedback = sentiment === "positive" || praisePatterns.test(lowerText) || thankPatterns.test(lowerText) || emojiOnlyPatterns.test(text) || lovePatterns.test(lowerText);
   
   // Check if it's a question
-  const questionPatterns = /\?|কি|কী|কত|কোথায়|কেন|কিভাবে|কবে|আছে|what|how|where|when|why|which|available|stock/i;
+  const questionPatterns = /\?|কি|কী|কত|কোথায়|কেন|কিভাবে|কবে|আছে|what|how|where|when|why|which|available|stock|দাম|price|size|সাইজ|color|রঙ/i;
   const isQuestion = questionPatterns.test(lowerText);
   
   // Check for price inquiry
@@ -166,7 +181,9 @@ function analyzeCommentForResponse(text: string, intent: string, sentiment: stri
     isQuestion,
     isPriceInquiry,
     isOrderIntent,
-    responseType
+    responseType,
+    feedbackType,
+    originalComment
   };
 }
 
@@ -841,25 +858,65 @@ serve(async (req) => {
       sentiment,
       conversationState: nextState,
       shouldReact: isComment,
-      reactionType: sentiment === "positive" ? "LOVE" : "LIKE",
+      // Enhanced reaction logic based on actual sentiment
+      reactionType: sentiment === "positive" ? "LOVE" : sentiment === "negative" ? "NONE" : "LIKE",
       fakeOrderScore: fakeScore,
       productContext: productContext ? { name: productContext.name, price: productContext.price } : null,
     };
 
-    // *** For comments: ALWAYS thank in comment + send details to inbox ***
+    // *** For comments: SMART contextual reply based on what user actually said ***
     if (isComment) {
       // Analyze the original comment to respond appropriately
       const commentAnalysis = analyzeCommentForResponse(messageText, intent, sentiment);
       
-      // Build smart comment reply based on context
-      if (productContext) {
+      console.log(`[AI Agent] Comment Analysis: feedbackType=${commentAnalysis.feedbackType}, responseType=${commentAnalysis.responseType}, isPositive=${commentAnalysis.isPositiveFeedback}`);
+      console.log(`[AI Agent] Original comment: "${messageText}"`);
+      
+      // *** SMART COMMENT REPLY - Based on what user actually said ***
+      if (commentAnalysis.isPositiveFeedback) {
+        // Generate contextual appreciation reply based on feedback type
+        switch (commentAnalysis.feedbackType) {
+          case "praise":
+            // User said something like "Great job", "Awesome", "Nice", etc.
+            response.commentReply = `অনেক ধন্যবাদ! 🥰 আপনার সুন্দর কথা আমাদের অনুপ্রাণিত করে। আমাদের সাথে থাকার জন্য কৃতজ্ঞ! 💕`;
+            break;
+          case "thanks":
+            // User said "Thanks", "ধন্যবাদ", etc.
+            response.commentReply = `আপনাকেও ধন্যবাদ! 🙏 আমাদের সাথে থাকার জন্য কৃতজ্ঞ। যেকোনো প্রয়োজনে জানাবেন! 😊`;
+            break;
+          case "emoji_reaction":
+            // User just reacted with emoji like 👍 or ❤️
+            response.commentReply = `ধন্যবাদ! 🥰💕`;
+            break;
+          case "love":
+            // User expressed love
+            response.commentReply = `অনেক অনেক ধন্যবাদ! 💕🥰 আপনার ভালোবাসা আমাদের অনুপ্রেরণা! 💖`;
+            break;
+          default:
+            response.commentReply = `আপনার সুন্দর কমেন্টের জন্য অনেক ধন্যবাদ! 🥰 আমাদের সাথে থাকার জন্য কৃতজ্ঞ। 💕`;
+        }
+        // For positive feedback, reaction should always be LOVE
+        response.reactionType = "LOVE";
+      } else if (productContext) {
+        // Comment is about a product
         response.commentReply = `ধন্যবাদ কমেন্ট করার জন্য! 🙏 "${productContext.name}" এর বিস্তারিত তথ্য আপনার ইনবক্সে পাঠিয়ে দিয়েছি। চেক করুন 📩`;
-      } else if (commentAnalysis.isPositiveFeedback) {
-        response.commentReply = `আপনার সুন্দর কমেন্টের জন্য অনেক ধন্যবাদ! 🥰 আমাদের সাথে থাকার জন্য কৃতজ্ঞ। 💕`;
+        response.reactionType = "LIKE";
+      } else if (commentAnalysis.isPriceInquiry) {
+        // Price inquiry
+        response.commentReply = `ধন্যবাদ! 🙏 দামসহ বিস্তারিত তথ্য আপনার ইনবক্সে পাঠিয়ে দিয়েছি। অনুগ্রহ করে চেক করুন 📩`;
+        response.reactionType = "LIKE";
       } else if (commentAnalysis.isQuestion) {
+        // General question
         response.commentReply = `ধন্যবাদ! 🙏 আপনার প্রশ্নের উত্তর ইনবক্সে পাঠিয়ে দিয়েছি। অনুগ্রহ করে চেক করুন 📩`;
+        response.reactionType = "LIKE";
+      } else if (commentAnalysis.isOrderIntent) {
+        // Order intent
+        response.commentReply = `ধন্যবাদ! 🛒 অর্ডারের জন্য আপনার ইনবক্সে মেসেজ করেছি। অনুগ্রহ করে চেক করুন 📩`;
+        response.reactionType = "LIKE";
       } else {
+        // General comment - still acknowledge what they said
         response.commentReply = `ধন্যবাদ কমেন্ট করার জন্য! 🙏 বিস্তারিত তথ্য আপনার ইনবক্সে পাঠিয়ে দিয়েছি। অনুগ্রহ করে চেক করুন 📩`;
+        response.reactionType = "LIKE";
       }
       
       // Build detailed inbox message based on ACTUAL comment content
@@ -877,10 +934,11 @@ serve(async (req) => {
         inboxMessage += `📱 পোস্ট: "${postContext.post_text.substring(0, 80)}${postContext.post_text.length > 80 ? '...' : ''}"\n\n`;
       }
       
-      // Respond based on comment type
+      // Respond based on comment type - CONTEXTUAL response
       if (commentAnalysis.isPositiveFeedback) {
-        inboxMessage += `আপনার সুন্দর কথার জন্য অনেক ধন্যবাদ! 🥰\n\n`;
-        inboxMessage += `আমাদের আরও প্রোডাক্ট দেখতে চাইলে বা কোনো প্রশ্ন থাকলে নির্দ্বিধায় জানাবেন। আমরা সবসময় আপনাকে সাহায্য করতে প্রস্তুত! 😊`;
+        // For positive feedback, send a warm thank you without pushing for sales
+        inboxMessage += `আপনার "${messageText}" কমেন্টের জন্য অনেক ধন্যবাদ! 🥰\n\n`;
+        inboxMessage += `আপনার এই সুন্দর কথা আমাদের অনুপ্রাণিত করে। আমাদের আরও প্রোডাক্ট দেখতে চাইলে বা কোনো প্রশ্ন থাকলে নির্দ্বিধায় জানাবেন। আমরা সবসময় আপনাকে সাহায্য করতে প্রস্তুত! 😊`;
       } else if (productContext) {
         inboxMessage += `📦 প্রোডাক্ট: ${productContext.name}\n`;
         inboxMessage += `💰 দাম: ৳${productContext.price}\n`;
