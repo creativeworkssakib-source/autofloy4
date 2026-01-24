@@ -144,10 +144,14 @@ const ConnectFacebook = () => {
   };
 
   // Toggle page automation
+  // Toggle page automation
   const handleToggle = async (pageId: string, enabled: boolean) => {
+    // Get current enabled count from pages state for accurate check
+    const currentEnabledCount = pages.filter(p => p.is_connected).length;
+    
     // Check plan limits before enabling
     if (enabled && planLimits) {
-      if (planLimits.connectedFacebookPages >= planLimits.maxFacebookPages) {
+      if (currentEnabledCount >= planLimits.maxFacebookPages) {
         toast({
           title: "Limit Reached",
           description: `Your ${planLimits.planName} plan allows only ${planLimits.maxFacebookPages} page(s). Disable another page first or upgrade.`,
@@ -461,7 +465,7 @@ const ConnectFacebook = () => {
                         <Switch
                           checked={page.is_connected || false}
                           onCheckedChange={(checked) => handleToggle(page.id, checked)}
-                          disabled={!page.is_connected && planLimits && planLimits.connectedFacebookPages >= planLimits.maxFacebookPages}
+                          disabled={!page.is_connected && planLimits && enabledCount >= planLimits.maxFacebookPages}
                         />
                       )}
 
