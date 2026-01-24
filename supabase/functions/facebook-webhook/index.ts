@@ -12,9 +12,41 @@ const VERIFY_TOKEN = "autofloy_fb_verify_2024";
 // Create Supabase client
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const encryptionKey = Deno.env.get("TOKEN_ENCRYPTION_KEY")!;
 
 // Facebook Graph API
 const GRAPH_API_URL = "https://graph.facebook.com/v18.0";
+
+// Decrypt access token
+async function decryptToken(encryptedData: string): Promise<string> {
+  try {
+    const [ivHex, encryptedHex] = encryptedData.split(":");
+    const iv = new Uint8Array(ivHex.match(/.{2}/g)!.map(byte => parseInt(byte, 16)));
+    const encrypted = new Uint8Array(encryptedHex.match(/.{2}/g)!.map(byte => parseInt(byte, 16)));
+    
+    const encoder = new TextEncoder();
+    const keyData = encoder.encode(encryptionKey.padEnd(32, "0").slice(0, 32));
+    
+    const cryptoKey = await crypto.subtle.importKey(
+      "raw",
+      keyData,
+      { name: "AES-GCM" },
+      false,
+      ["decrypt"]
+    );
+    
+    const decrypted = await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv },
+      cryptoKey,
+      encrypted
+    );
+    
+    return new TextDecoder().decode(decrypted);
+  } catch (error) {
+    console.error("[Decrypt] Failed to decrypt token:", error);
+    throw error;
+  }
+}
 
 // Send message via Facebook API
 async function sendFacebookMessage(pageAccessToken: string, recipientId: string, message: string) {
@@ -244,7 +276,7 @@ async function processMessagingEvent(supabase: any, pageId: string, event: any) 
   // Get the connected account for this page
   const { data: account, error: accountError } = await supabase
     .from("connected_accounts")
-    .select("id, user_id, is_connected, name, access_token")
+    .select("id, user_id, is_connected, name, access_token_encrypted, encryption_version")
     .eq("external_id", pageId)
     .eq("platform", "facebook")
     .eq("is_connected", true)
@@ -253,6 +285,16 @@ async function processMessagingEvent(supabase: any, pageId: string, event: any) 
   if (accountError || !account) {
     console.log("[Webhook] No active account found for page:", pageId);
     return;
+  }
+
+  // Decrypt access token
+  let decryptedToken: string | null = null;
+  if (account.access_token_encrypted && account.encryption_version === 2) {
+    try {
+      decryptedToken = await decryptToken(account.access_token_encrypted);
+    } catch (e) {
+      console.error("[Webhook] Failed to decrypt token:", e);
+    }
   }
 
   const startTime = Date.now();
@@ -293,8 +335,8 @@ async function processMessagingEvent(supabase: any, pageId: string, event: any) 
 
     // Get sender profile
     let senderName: string | undefined = undefined;
-    if (account.access_token) {
-      const profile = await getUserProfile(account.access_token, senderId);
+    if (decryptedToken) {
+      const profile = await getUserProfile(decryptedToken, senderId);
       senderName = profile?.name || undefined;
     }
 
@@ -331,8 +373,8 @@ async function processMessagingEvent(supabase: any, pageId: string, event: any) 
     });
 
     // Send AI response if available
-    if (aiResponse?.reply && account.access_token) {
-      await sendFacebookMessage(account.access_token, senderId, aiResponse.reply);
+    if (aiResponse?.reply && decryptedToken) {
+      await sendFacebookMessage(decryptedToken, senderId, aiResponse.reply);
       console.log("[Webhook] AI reply sent to:", senderId);
     }
   }
@@ -373,7 +415,7 @@ async function processFeedChange(supabase: any, pageId: string, change: any) {
   // Get the connected account
   const { data: account, error } = await supabase
     .from("connected_accounts")
-    .select("id, user_id, is_connected, name, access_token")
+    .select("id, user_id, is_connected, name, access_token_encrypted, encryption_version")
     .eq("external_id", pageId)
     .eq("platform", "facebook")
     .eq("is_connected", true)
@@ -382,6 +424,16 @@ async function processFeedChange(supabase: any, pageId: string, change: any) {
   if (error || !account) {
     console.log("[Webhook] No active account for page:", pageId);
     return;
+  }
+
+  // Decrypt access token
+  let decryptedToken: string | null = null;
+  if (account.access_token_encrypted && account.encryption_version === 2) {
+    try {
+      decryptedToken = await decryptToken(account.access_token_encrypted);
+    } catch (e) {
+      console.error("[Webhook] Failed to decrypt token for comments:", e);
+    }
   }
 
   const startTime = Date.now();
@@ -442,20 +494,20 @@ async function processFeedChange(supabase: any, pageId: string, change: any) {
       processing_time_ms: Date.now() - startTime,
     });
 
-    if (aiResponse && account.access_token) {
+    if (aiResponse && decryptedToken) {
       // Reply to comment with short message
       if (aiResponse.commentReply) {
-        await replyToComment(account.access_token, value.comment_id, aiResponse.commentReply);
+        await replyToComment(decryptedToken, value.comment_id, aiResponse.commentReply);
       }
 
       // Add reaction if enabled
       if (aiResponse.shouldReact && pageMemory?.automation_settings?.reactionOnComments) {
-        await addReaction(account.access_token, value.comment_id, aiResponse.reactionType || "LIKE");
+        await addReaction(decryptedToken, value.comment_id, aiResponse.reactionType || "LIKE");
       }
 
       // Send detailed message to inbox
       if (aiResponse.shouldSendInbox && aiResponse.inboxMessage && value.from?.id) {
-        await sendFacebookMessage(account.access_token, value.from.id, aiResponse.inboxMessage);
+        await sendFacebookMessage(decryptedToken, value.from.id, aiResponse.inboxMessage);
         console.log("[Webhook] Inbox message sent to commenter:", value.from.name);
       }
     }
