@@ -614,26 +614,62 @@ function smartAnalyzeComment(
   };
 }
 
-// Detect message intent
-function detectIntent(text: string): string {
+// Detect message intent - with state-aware detection
+function detectIntent(text: string, currentState?: string): string {
   const lowerText = text.toLowerCase();
   
+  // *** STATE-AWARE INTENT DETECTION ***
+  // If we're collecting info, be smarter about what user is providing
+  if (currentState === "collecting_name") {
+    // User is likely providing their name - don't misinterpret
+    if (text.length > 2 && text.length < 60 && !/cancel|বাদ|থাক|পরে দিব/.test(lowerText)) {
+      return "providing_info";
+    }
+  }
+  
+  if (currentState === "collecting_phone") {
+    // Check if providing phone number
+    if (/01[3-9]\d{8}/.test(text.replace(/\s|-/g, ""))) {
+      return "providing_info";
+    }
+  }
+  
+  if (currentState === "collecting_address") {
+    // If text is long enough, they're providing address
+    if (text.length > 10 && !/cancel|বাদ|থাক|পরে দিব/.test(lowerText)) {
+      return "providing_info";
+    }
+  }
+  
+  // Price inquiry
   if (/দাম|price|কত|টাকা|cost|rate|কততে|কতো/.test(lowerText)) {
     return "price_inquiry";
   }
+  
+  // Order intent
   if (/order|অর্ডার|নিব|কিনব|কিনতে|চাই|দিন|দাও|নেব|লাগবে|buy|purchase/.test(lowerText)) {
     return "order_intent";
   }
-  if (/details|বিস্তারিত|info|জানতে|কি|কী|available|আছে|stock/.test(lowerText)) {
+  
+  // Info request
+  if (/details|বিস্তারিত|info|জানতে|কি\?|কী\?|available|আছে\?|stock/.test(lowerText)) {
     return "info_request";
   }
-  if (/hi|hello|হাই|হ্যালো|আসসালাম|সালাম|ভাই|sis|bhai|apu/.test(lowerText)) {
+  
+  // Greeting
+  if (/^(hi|hello|হাই|হ্যালো|আসসালাম|সালাম)[\s!]*$/i.test(text) || 
+      /^(ভাই|sis|bhai|apu)[\s!,]*$/i.test(text)) {
     return "greeting";
   }
-  if (/yes|হ্যাঁ|হা|ok|okay|ঠিক|আছে|confirmed|done|হবে/.test(lowerText)) {
+  
+  // Confirmation - be more specific
+  if (/^(yes|হ্যাঁ|হা|ok|okay|ঠিক আছে|confirmed|done|হবে|জি)[\s!.]*$/i.test(text)) {
     return "confirmation";
   }
-  if (/no|না|cancel|বাদ|থাক|later|পরে/.test(lowerText)) {
+  
+  // Cancellation - be more specific, exclude "আমার নাম" type phrases
+  if (/^(no|না|cancel|বাদ দাও|থাক|later|পরে)[\s!.]*$/i.test(text) ||
+      /cancel|বাতিল|অর্ডার বাদ|order cancel|don't want|চাই না/.test(lowerText)) {
     return "cancellation";
   }
   
@@ -1026,7 +1062,7 @@ ${analysis.importantPoints.map(p => `- ${p}`).join("\n")}
   return context;
 }
 
-// Build system prompt - now uses smart memory fields
+// Build system prompt - now uses smart memory fields + product catalog
 function buildSystemPrompt(
   pageMemory: PageMemory, 
   conversationState: ConversationState & { 
@@ -1037,7 +1073,8 @@ function buildSystemPrompt(
   },
   productContext?: ProductContext,
   postContext?: PostContext,
-  senderName?: string
+  senderName?: string,
+  allProducts?: ProductContext[]
 ): string {
   const tone = pageMemory.preferred_tone === "professional" ? "পেশাদার" : "বন্ধুত্বপূর্ণ";
   const language = pageMemory.detected_language === "english" ? "English" : 
@@ -1053,94 +1090,121 @@ function buildSystemPrompt(
     conversationState.has_ordered_before
   );
   
-  let prompt = `You are an AI sales agent for a business. You must behave like a polite, trained human sales representative who REMEMBERS all previous conversations.
+  // Build product catalog
+  const productCatalog = allProducts && allProducts.length > 0 
+    ? buildProductCatalog(allProducts) 
+    : "";
+  
+  let prompt = `You are an AI sales agent for "${pageMemory.business_description || "a business"}". You must behave like a polite, trained human sales representative who KNOWS ALL PRODUCTS and REMEMBERS all previous conversations.
 
-## 🧠 CRITICAL: MEMORY & CONTEXT AWARENESS
-- You MUST remember what the customer said before
-- Reference their previous messages when relevant
-- If they asked about a product before, remember it
-- If they expressed concerns, address them
-- Use their name if known: ${senderName || "Not provided"}
-- Be consistent with what you said before
-- If customer returns after some time, welcome them back warmly
+## 🧠 CRITICAL RULES:
+1. **NEVER HALLUCINATE PRICES** - Only use prices from the product catalog below
+2. **REMEMBER CONVERSATIONS** - Reference what customer said before
+3. **KNOW YOUR PRODUCTS** - You have the full product list - use it!
+4. **BE SPECIFIC** - Give exact prices, not ranges
+5. **USE CUSTOMER NAME** - If known: ${senderName || "Unknown"}
 
 ${conversationContext}
 
-## Business Context
-${pageMemory.business_description || "General e-commerce business"}
+## 🏪 Business Information
+**ব্যবসার বর্ণনা:** ${pageMemory.business_description || "General e-commerce business"}
+**প্রোডাক্ট সারাংশ:** ${pageMemory.products_summary || "Various products"}
 
-## Products/Services Overview
-${pageMemory.products_summary || "Various products available"}`;
+${productCatalog}`;
 
   if (productContext) {
     prompt += `
 
-## 🎯 CURRENT PRODUCT BEING DISCUSSED
-- Product Name: ${productContext.name}
-- Price: ৳${productContext.price}
-- Category: ${productContext.category || "N/A"}
-- Description: ${productContext.description || "N/A"}
-- Status: ${productContext.is_active ? "In Stock" : "Out of Stock"}`;
+## 🎯 বর্তমানে যে প্রোডাক্ট নিয়ে কথা হচ্ছে:
+- **প্রোডাক্টের নাম:** ${productContext.name}
+- **দাম:** ৳${productContext.price}
+- **ক্যাটাগরি:** ${productContext.category || "N/A"}
+- **বিবরণ:** ${productContext.description || "N/A"}
+- **স্টক:** ${productContext.is_active ? "আছে ✅" : "নেই ❌"}`;
   }
 
-  if (postContext) {
+  if (postContext?.post_text) {
     prompt += `
 
-## 📱 POST CONTEXT
-- Post Content: ${postContext.post_text || "N/A"}
-- Media Type: ${postContext.media_type || "N/A"}`;
+## 📱 পোস্টের কনটেক্সট:
+- **পোস্ট:** ${postContext.post_text.substring(0, 200)}
+- **মিডিয়া:** ${postContext.media_type || "N/A"}`;
   }
 
   prompt += `
 
-## Communication Style
-- Tone: ${tone}
-- Language: ${language}
-- Be patient and helpful
-- Reference previous conversations naturally
+## 💬 Communication Style
+- **টোন:** ${tone}
+- **ভাষা:** ${language}
+- ধৈর্য্য ধরে সাহায্য করুন
+- পূর্বের কথোপকথন মনে রাখুন
 
-## 🎯 SMART RESPONSE RULES`;
+## 🛒 ORDER COLLECTION FLOW (Very Important!)
+When customer wants to order, follow this EXACT sequence:
+1. **collecting_name:** "অর্ডার করতে আপনার নাম বলুন"
+2. **collecting_phone:** "আপনার ফোন নম্বর দিন (01XXXXXXXXX)"  
+3. **collecting_address:** "পূর্ণ ঠিকানা দিন (এলাকা, রোড, বাড়ি নম্বর)"
+4. **order_confirmation:** Confirm the order with product name, price, and collected info
 
-  if (pageMemory.ai_behavior_rules?.neverHallucinate) {
-    prompt += `
-- NEVER guess product information. Say "আমি নিশ্চিত না, একটু চেক করে জানাচ্ছি" if unsure.`;
-  }
-  
-  if (pageMemory.ai_behavior_rules?.askClarificationIfUnsure) {
-    prompt += `
-- Ask clarifying questions if request is unclear.`;
-  }
-
-  prompt += `
-
-## Current Conversation State: ${conversationState.conversation_state}`;
+## 📍 Current Conversation State: ${conversationState.conversation_state}`;
   
   if (conversationState.current_product_name) {
     prompt += `
-- Active Product Discussion: ${conversationState.current_product_name} (৳${conversationState.current_product_price})`;
+- **সক্রিয় প্রোডাক্ট:** ${conversationState.current_product_name} (৳${conversationState.current_product_price})`;
   }
   
   if (conversationState.collected_name) {
     prompt += `
-- Customer Name Collected: ${conversationState.collected_name}`;
+- **কাস্টমারের নাম:** ${conversationState.collected_name}`;
   }
   
   if (conversationState.collected_phone) {
     prompt += `
-- Customer Phone Collected: ${conversationState.collected_phone}`;
+- **ফোন নম্বর:** ${conversationState.collected_phone}`;
+  }
+  
+  if (conversationState.collected_address) {
+    prompt += `
+- **ঠিকানা:** ${conversationState.collected_address}`;
+  }
+
+  // Add state-specific instructions
+  if (conversationState.conversation_state === "collecting_name") {
+    prompt += `
+
+🔴 **NOW ASK FOR CUSTOMER'S NAME** - Say something like "অর্ডার কনফার্ম করতে আপনার সম্পূর্ণ নাম বলুন।"`;
+  } else if (conversationState.conversation_state === "collecting_phone") {
+    prompt += `
+
+🔴 **NOW ASK FOR PHONE NUMBER** - Say something like "ধন্যবাদ ${conversationState.collected_name || ''}! এখন আপনার ফোন নম্বর দিন (01XXXXXXXXX)।"`;
+  } else if (conversationState.conversation_state === "collecting_address") {
+    prompt += `
+
+🔴 **NOW ASK FOR FULL ADDRESS** - Say something like "এখন পূর্ণ ঠিকানা দিন - এলাকা, রোড নম্বর, বাড়ি নম্বর সব বলুন।"`;
+  } else if (conversationState.conversation_state === "order_confirmation") {
+    prompt += `
+
+🔴 **CONFIRM THE ORDER** - Summarize: প্রোডাক্ট, দাম, নাম, ফোন, ঠিকানা। Ask "সব ঠিক আছে? অর্ডার কনফার্ম করব?"`;
   }
 
   prompt += `
 
-## Response Guidelines
-- Keep responses concise but personalized (2-4 sentences)
-- Use customer's name when known
-- Reference what they said before if relevant
-- Use appropriate emojis sparingly
-- Be specific about prices when known
-- Show that you remember their preferences
-- Never be pushy
-- If they're returning after a while, acknowledge it warmly`;
+## ⚠️ গুরুত্বপূর্ণ নিয়ম:
+- কাস্টমার যদি দাম জিজ্ঞেস করে, উপরের তালিকা থেকে EXACT দাম বলুন
+- প্রোডাক্ট না থাকলে বলুন "এই প্রোডাক্টটি এখন স্টকে নেই"
+- অর্ডার নেওয়ার সময় একটা একটা করে তথ্য নিন, সব একসাথে জিজ্ঞেস করবেন না
+- সংক্ষেপে উত্তর দিন (২-৪ বাক্য)
+- প্রয়োজনে ইমোজি ব্যবহার করুন 😊`;
+
+  if (pageMemory.payment_rules?.codAvailable) {
+    prompt += `
+- **পেমেন্ট:** ক্যাশ অন ডেলিভারি আছে ✅`;
+  }
+  
+  if (pageMemory.payment_rules?.advanceRequiredAbove) {
+    prompt += `
+- **অগ্রিম:** ৳${pageMemory.payment_rules.advanceRequiredAbove} এর উপরে অর্ডারে ${pageMemory.payment_rules.advancePercentage}% অগ্রিম লাগবে`;
+  }
 
   return prompt;
 }
@@ -1252,7 +1316,7 @@ async function findProductByName(
 ): Promise<ProductContext | null> {
   const { data: products } = await supabase
     .from("products")
-    .select("id, name, price, description, category, sku, is_active")
+    .select("id, name, price, description, category, sku, is_active, stock_quantity")
     .eq("user_id", userId)
     .eq("is_active", true);
 
@@ -1268,6 +1332,37 @@ async function findProductByName(
   }
 
   return null;
+}
+
+// *** FETCH ALL PRODUCTS FOR AI KNOWLEDGE ***
+async function getAllProducts(supabase: any, userId: string): Promise<ProductContext[]> {
+  const { data: products } = await supabase
+    .from("products")
+    .select("id, name, price, description, category, sku, is_active, stock_quantity")
+    .eq("user_id", userId)
+    .eq("is_active", true)
+    .limit(50); // Limit to 50 products to avoid token overflow
+
+  return (products || []) as ProductContext[];
+}
+
+// *** BUILD PRODUCT CATALOG FOR AI ***
+function buildProductCatalog(products: ProductContext[]): string {
+  if (!products || products.length === 0) {
+    return "কোনো প্রোডাক্ট পাওয়া যায়নি।";
+  }
+  
+  let catalog = `## 📦 উপলব্ধ প্রোডাক্ট তালিকা (${products.length}টি):\n`;
+  catalog += "| # | প্রোডাক্ট | দাম | ক্যাটাগরি | স্টক |\n";
+  catalog += "|---|----------|-----|----------|------|\n";
+  
+  products.forEach((p, i) => {
+    const stock = (p as any).stock_quantity;
+    const stockStatus = stock > 10 ? "✅ আছে" : stock > 0 ? `⚠️ ${stock}টি` : "❌ নেই";
+    catalog += `| ${i + 1} | ${p.name} | ৳${p.price} | ${p.category || "-"} | ${stockStatus} |\n`;
+  });
+  
+  return catalog;
 }
 
 serve(async (req) => {
@@ -1361,6 +1456,10 @@ serve(async (req) => {
       }
     }
 
+    // *** FETCH ALL PRODUCTS FOR AI KNOWLEDGE ***
+    const allProducts = await getAllProducts(supabase, userId);
+    console.log(`[AI Agent] 📦 Loaded ${allProducts.length} products for AI knowledge`);
+
     // Get or create conversation
     let { data: conversation } = await supabase
       .from("ai_conversations")
@@ -1400,11 +1499,12 @@ serve(async (req) => {
       conversation.current_product_price = productContext.price;
     }
 
-    const intent = detectIntent(messageText);
+    // *** STATE-AWARE INTENT DETECTION ***
+    const intent = detectIntent(messageText, conversation.conversation_state);
     const sentiment = detectSentiment(messageText);
     const fakeScore = calculateFakeOrderScore(conversation, messageText);
 
-    console.log(`[AI Agent] Intent: ${intent}, Sentiment: ${sentiment}`);
+    console.log(`[AI Agent] Intent: ${intent}, Sentiment: ${sentiment}, State: ${conversation.conversation_state}`);
 
     // *** DETECT CUSTOMER RESPONSE INTENT for smarter replies ***
     const customerResponseIntent = detectCustomerResponseIntent(messageText, conversation.message_history || []);
@@ -1499,7 +1599,8 @@ serve(async (req) => {
       updatedConversation, 
       productContext || undefined, 
       postContext || undefined,
-      senderName || conversation.sender_name // Pass sender name
+      senderName || conversation.sender_name,
+      allProducts // Pass all products for AI knowledge
     );
     
     // Build rich AI messages with context
