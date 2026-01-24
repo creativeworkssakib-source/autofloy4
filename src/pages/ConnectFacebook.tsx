@@ -277,7 +277,8 @@ const ConnectFacebook = () => {
 
   const enabledCount = pages.filter(p => p.is_connected).length;
   const hasPages = pages.length > 0;
-  const usagePercent = planLimits ? (planLimits.connectedFacebookPages / planLimits.maxFacebookPages) * 100 : 0;
+  // Use enabledCount for live UI updates instead of planLimits.connectedFacebookPages
+  const usagePercent = planLimits ? (enabledCount / planLimits.maxFacebookPages) * 100 : 0;
 
   // Loading state
   if (isLoading) {
