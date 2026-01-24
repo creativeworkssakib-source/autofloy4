@@ -12,28 +12,64 @@ const encryptionKey = Deno.env.get("TOKEN_ENCRYPTION_KEY")!;
 
 const GRAPH_API_URL = "https://graph.facebook.com/v18.0";
 
-// Decrypt access token
+// Base64 decode helper
+function base64Decode(str: string): ArrayBuffer {
+  const binaryStr = atob(str);
+  const bytes = new Uint8Array(binaryStr.length);
+  for (let i = 0; i < binaryStr.length; i++) {
+    bytes[i] = binaryStr.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
+// Decrypt access token (v2 format: v2:salt:iv:data)
 async function decryptToken(encryptedData: string): Promise<string> {
   try {
-    const [ivHex, encryptedHex] = encryptedData.split(":");
-    const iv = new Uint8Array(ivHex.match(/.{2}/g)!.map(byte => parseInt(byte, 16)));
-    const encrypted = new Uint8Array(encryptedHex.match(/.{2}/g)!.map(byte => parseInt(byte, 16)));
+    if (!encryptedData.startsWith("v2:")) {
+      throw new Error("Invalid encryption format - expected v2");
+    }
+    
+    const parts = encryptedData.split(":");
+    if (parts.length !== 4) {
+      throw new Error("Invalid encryption format - expected 4 parts");
+    }
+    
+    const [, saltBase64, ivBase64, dataBase64] = parts;
+    
+    const salt = new Uint8Array(base64Decode(saltBase64));
+    const iv = new Uint8Array(base64Decode(ivBase64));
+    const encryptedBytes = new Uint8Array(base64Decode(dataBase64));
     
     const encoder = new TextEncoder();
-    const keyData = encoder.encode(encryptionKey.padEnd(32, "0").slice(0, 32));
     
-    const cryptoKey = await crypto.subtle.importKey(
+    // Import key for PBKDF2
+    const keyMaterial = await crypto.subtle.importKey(
       "raw",
-      keyData,
-      { name: "AES-GCM" },
+      encoder.encode(encryptionKey),
+      { name: "PBKDF2" },
+      false,
+      ["deriveKey"]
+    );
+    
+    // Derive key using PBKDF2 (same params as encryption)
+    const key = await crypto.subtle.deriveKey(
+      {
+        name: "PBKDF2",
+        salt: salt,
+        iterations: 100000,
+        hash: "SHA-256"
+      },
+      keyMaterial,
+      { name: "AES-GCM", length: 256 },
       false,
       ["decrypt"]
     );
     
+    // Decrypt with AES-GCM
     const decrypted = await crypto.subtle.decrypt(
-      { name: "AES-GCM", iv },
-      cryptoKey,
-      encrypted
+      { name: "AES-GCM", iv: iv },
+      key,
+      encryptedBytes.buffer
     );
     
     return new TextDecoder().decode(decrypted);
