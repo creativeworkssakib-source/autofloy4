@@ -172,7 +172,7 @@ const Automations = () => {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => setIsConnectModalOpen(true)}
+                    onClick={() => navigate("/connect-facebook")}
                   >
                     Manage
                   </Button>
