@@ -222,34 +222,47 @@ async function getUserProfile(pageAccessToken: string, userId: string): Promise<
 async function fetchPostContent(pageAccessToken: string, postId: string): Promise<{ text: string; mediaType?: string } | null> {
   try {
     console.log(`[Facebook] Fetching post content for: ${postId}`);
-    // Use simpler fields to avoid deprecated API errors
-    const response = await fetch(
-      `${GRAPH_API_URL}/${postId}?fields=message,story,type&access_token=${pageAccessToken}`
-    );
-    const result = await response.json();
     
-    if (result.error) {
-      console.error("[Facebook] Get post error:", result.error);
-      // Try alternative approach for reels/videos
-      if (result.error.code === 12 || result.error.code === 100) {
-        console.log("[Facebook] Trying alternative API for video/reel content");
-        const altResponse = await fetch(
-          `${GRAPH_API_URL}/${postId}?fields=description,title&access_token=${pageAccessToken}`
+    // Try different field combinations to handle various permission levels
+    const fieldOptions = [
+      "message,story,type",           // Standard fields
+      "message,type",                  // Without story  
+      "description,title,type",        // For reels/videos
+    ];
+    
+    for (const fields of fieldOptions) {
+      try {
+        const response = await fetch(
+          `${GRAPH_API_URL}/${postId}?fields=${fields}&access_token=${pageAccessToken}`
         );
-        const altResult = await altResponse.json();
-        if (!altResult.error) {
-          const text = altResult.description || altResult.title || "";
-          return { text, mediaType: "video" };
+        const result = await response.json();
+        
+        if (!result.error) {
+          const text = result.message || result.story || result.description || result.title || "";
+          const mediaType = result.type || "unknown";
+          
+          if (text) {
+            console.log(`[Facebook] Post content fetched with fields [${fields}]: "${text.substring(0, 100)}..."`);
+            return { text, mediaType };
+          }
+        } else {
+          // Log error but continue trying other field combinations
+          console.log(`[Facebook] Fields [${fields}] failed:`, result.error.code, result.error.message?.substring(0, 100));
+          
+          // Permission error - skip remaining attempts
+          if (result.error.code === 10 || result.error.code === 190) {
+            console.log("[Facebook] Permission error - will proceed without post content");
+            break;
+          }
         }
+      } catch (innerError) {
+        console.log(`[Facebook] Error with fields [${fields}]:`, innerError);
       }
-      return null;
     }
     
-    const text = result.message || result.story || "";
-    const mediaType = result.type || "unknown";
-    
-    console.log(`[Facebook] Post content fetched: "${text.substring(0, 100)}..."`);
-    return { text, mediaType };
+    // If all attempts fail, return null but don't error out
+    console.log("[Facebook] Could not fetch post content, proceeding without it");
+    return null;
   } catch (error) {
     console.error("[Facebook] Failed to fetch post:", error);
     return null;
@@ -659,8 +672,13 @@ async function processFeedChange(supabase: any, pageId: string, change: any) {
     });
 
     if (aiResponse && decryptedToken) {
+      // Get sender name for personalized message
+      const senderName = value.from?.name || "ভাই/আপু";
+      const shortName = senderName.split(" ")[0]; // First name only
+      
       // *** STEP 1: Reply to comment with initial thanks message ***
-      const initialCommentReply = aiResponse.commentReply || `ধন্যবাদ কমেন্ট করার জন্য! 🙏 বিস্তারিত তথ্য আপনার ইনবক্সে পাঠিয়ে দিয়েছি। অনুগ্রহ করে চেক করুন 📩`;
+      const initialCommentReply = aiResponse.commentReply || 
+        `ধন্যবাদ ${shortName}! 🙏 বিস্তারিত তথ্য আপনার ইনবক্সে পাঠিয়ে দিয়েছি। অনুগ্রহ করে চেক করুন 📩`;
       const replyResult = await replyToComment(decryptedToken, value.comment_id, initialCommentReply);
       console.log("[Webhook] Initial comment reply sent");
 
@@ -672,7 +690,7 @@ async function processFeedChange(supabase: any, pageId: string, change: any) {
       // *** STEP 2: Try to send inbox message ***
       if (value.from?.id) {
         const inboxMessage = aiResponse.inboxMessage || aiResponse.reply || 
-          `আসসালামু আলাইকুম! 👋\n\nআপনার কমেন্টের জন্য ধন্যবাদ।\n\n${postContent ? `আপনি "${postContent.substring(0, 100)}${postContent.length > 100 ? '...' : ''}" পোস্টে কমেন্ট করেছেন।\n\n` : ''}আপনি কী জানতে চাইছেন বিস্তারিত বলুন, আমি সাহায্য করতে পারব। 🙂`;
+          `আসসালামু আলাইকুম ${shortName}! 👋\n\nআপনার কমেন্টের জন্য ধন্যবাদ।\n\n${postContent ? `আপনি "${postContent.substring(0, 100)}${postContent.length > 100 ? '...' : ''}" পোস্টে কমেন্ট করেছেন।\n\n` : ''}আপনি কী জানতে চাইছেন বিস্তারিত বলুন, আমি সাহায্য করতে পারব। 🙂`;
         
         const inboxResult = await sendFacebookMessage(decryptedToken, value.from.id, inboxMessage);
         
@@ -689,16 +707,16 @@ async function processFeedChange(supabase: any, pageId: string, change: any) {
                                         inboxResult.errorCode === 2018278;
           
           if (isMessagingRestricted && replyResult.replyId) {
-            // Prepare fallback message - ask user to message first
-            const fallbackReply = `ধন্যবাদ কমেন্ট করার জন্য! 🙏\n\n` +
-              `আপনাকে বিস্তারিত জানাতে চাইছিলাম, কিন্তু আপনার ইনবক্সে মেসেজ পাঠাতে পারছি না 😔\n\n` +
+            // Prepare fallback message - THANKS + INBOX REQUEST both
+            const fallbackReply = `ধন্যবাদ ${shortName}! কমেন্ট করার জন্য অনেক ধন্যবাদ! 🙏❤️\n\n` +
+              `আপনাকে বিস্তারিত তথ্য দিতে চাচ্ছিলাম, কিন্তু আপনার ইনবক্সে মেসেজ পাঠাতে পারছি না 😔\n\n` +
               `অনুগ্রহ করে আমাদের পেজে প্রথমে একটি মেসেজ দিন, তাহলে আমরা আপনাকে সব তথ্য শেয়ার করতে পারব! 📩\n\n` +
-              `(অথবা এই পোস্টের নিচে আপনার প্রশ্ন লিখুন, আমরা এখানেই উত্তর দেব ✨)`;
+              `অথবা এখানেই আপনার প্রশ্ন লিখুন - আমরা কমেন্টে উত্তর দেব! ✨`;
             
             const editSuccess = await editComment(decryptedToken, replyResult.replyId, fallbackReply);
             
             if (editSuccess) {
-              console.log("[Webhook] Smart fallback: Comment reply updated with inbox fallback message");
+              console.log("[Webhook] Smart fallback: Comment reply updated with thanks + inbox fallback message");
               
               // Update log with fallback info
               await supabase.from("execution_logs").insert({
@@ -717,7 +735,8 @@ async function processFeedChange(supabase: any, pageId: string, change: any) {
                 response_payload: { 
                   fallback_used: true,
                   original_inbox_error: inboxResult.error,
-                  comment_edited: true 
+                  comment_edited: true,
+                  fallback_message: fallbackReply
                 },
                 processing_time_ms: Date.now() - startTime,
               });
