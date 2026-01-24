@@ -1,14 +1,15 @@
 /**
- * Simplified Data Hook
+ * Simplified Data Hook with Real-time Sync
  * 
  * Provides basic data access using offlineShopService
- * Direct Supabase calls - no local caching
+ * Direct Supabase calls with automatic real-time updates
  */
 
 import { useState, useEffect, useCallback } from 'react';
 import { offlineShopService } from '@/services/offlineShopService';
 import { useShop } from '@/contexts/ShopContext';
 import { useIsOnline } from './useOnlineStatus';
+import { useRealtimeSync } from './useRealtimeSync';
 
 // =============== PRODUCTS ===============
 
@@ -35,28 +36,32 @@ export function useOfflineProducts() {
     refetch();
   }, [refetch]);
 
+  // Real-time sync - auto update when products change anywhere
+  useRealtimeSync({
+    table: 'shop_products',
+    onChange: refetch,
+    enabled: isOnline,
+  });
+
   const createProduct = useCallback(async (data: any) => {
     const result = await offlineShopService.createProduct(data);
-    await refetch();
+    // No need to refetch - realtime will handle it
     return { product: result.product };
-  }, [refetch]);
+  }, []);
 
   const updateProduct = useCallback(async (data: any) => {
     const result = await offlineShopService.updateProduct(data);
-    await refetch();
     return { product: result.product };
-  }, [refetch]);
+  }, []);
 
   const deleteProduct = useCallback(async (id: string) => {
     await offlineShopService.deleteProduct(id);
-    await refetch();
-  }, [refetch]);
+  }, []);
 
   const deleteProducts = useCallback(async (ids: string[]) => {
     const result = await offlineShopService.deleteProducts(ids);
-    await refetch();
     return result;
-  }, [refetch]);
+  }, []);
 
   return {
     products,
@@ -120,6 +125,7 @@ export function useOfflineCustomers() {
   const [customers, setCustomers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { currentShop } = useShop();
+  const isOnline = useIsOnline();
 
   const refetch = useCallback(async () => {
     setLoading(true);
@@ -138,28 +144,31 @@ export function useOfflineCustomers() {
     refetch();
   }, [refetch]);
 
+  // Real-time sync
+  useRealtimeSync({
+    table: 'shop_customers',
+    onChange: refetch,
+    enabled: isOnline,
+  });
+
   const createCustomer = useCallback(async (data: any) => {
     const result = await offlineShopService.createCustomer(data);
-    await refetch();
     return { customer: result.customer };
-  }, [refetch]);
+  }, []);
 
   const updateCustomer = useCallback(async (data: any) => {
     const result = await offlineShopService.updateCustomer(data);
-    await refetch();
     return { customer: result.customer };
-  }, [refetch]);
+  }, []);
 
   const deleteCustomer = useCallback(async (id: string) => {
     await offlineShopService.deleteCustomer(id);
-    await refetch();
-  }, [refetch]);
+  }, []);
 
   const deleteCustomers = useCallback(async (ids: string[]) => {
     const result = await offlineShopService.deleteCustomers(ids);
-    await refetch();
     return result;
-  }, [refetch]);
+  }, []);
 
   return {
     customers,
@@ -178,6 +187,7 @@ export function useOfflineSuppliers() {
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { currentShop } = useShop();
+  const isOnline = useIsOnline();
 
   const refetch = useCallback(async () => {
     setLoading(true);
@@ -196,22 +206,26 @@ export function useOfflineSuppliers() {
     refetch();
   }, [refetch]);
 
+  // Real-time sync
+  useRealtimeSync({
+    table: 'shop_suppliers',
+    onChange: refetch,
+    enabled: isOnline,
+  });
+
   const createSupplier = useCallback(async (data: any) => {
     const result = await offlineShopService.createSupplier(data);
-    await refetch();
     return { supplier: result.supplier };
-  }, [refetch]);
+  }, []);
 
   const updateSupplier = useCallback(async (data: any) => {
     const result = await offlineShopService.updateSupplier(data);
-    await refetch();
     return { supplier: result.supplier };
-  }, [refetch]);
+  }, []);
 
   const deleteSupplier = useCallback(async (id: string) => {
     await offlineShopService.deleteSupplier(id);
-    await refetch();
-  }, [refetch]);
+  }, []);
 
   return {
     suppliers,
@@ -229,6 +243,7 @@ export function useOfflineSales(startDate?: string, endDate?: string) {
   const [sales, setSales] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { currentShop } = useShop();
+  const isOnline = useIsOnline();
 
   const refetch = useCallback(async () => {
     setLoading(true);
@@ -247,28 +262,31 @@ export function useOfflineSales(startDate?: string, endDate?: string) {
     refetch();
   }, [refetch]);
 
+  // Real-time sync - auto update when sales change anywhere
+  useRealtimeSync({
+    table: 'shop_sales',
+    onChange: refetch,
+    enabled: isOnline,
+  });
+
   const createSale = useCallback(async (data: any) => {
     const result = await offlineShopService.createSale(data);
-    await refetch();
     return { sale: result.sale, invoice_number: result.invoice_number };
-  }, [refetch]);
+  }, []);
 
   const updateSale = useCallback(async (id: string, updates: any) => {
     const result = await offlineShopService.updateSale(id, updates);
-    await refetch();
     return { sale: result.sale };
-  }, [refetch]);
+  }, []);
 
   const deleteSale = useCallback(async (id: string) => {
     await offlineShopService.deleteSale(id);
-    await refetch();
-  }, [refetch]);
+  }, []);
 
   const deleteSales = useCallback(async (ids: string[]) => {
     const result = await offlineShopService.deleteSales(ids);
-    await refetch();
     return result;
-  }, [refetch]);
+  }, []);
 
   return {
     sales,
@@ -287,6 +305,7 @@ export function useOfflineExpenses(params?: { startDate?: string; endDate?: stri
   const [expenses, setExpenses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { currentShop } = useShop();
+  const isOnline = useIsOnline();
 
   const refetch = useCallback(async () => {
     setLoading(true);
@@ -307,16 +326,21 @@ export function useOfflineExpenses(params?: { startDate?: string; endDate?: stri
     }
   }, [currentShop?.id]);
 
+  // Real-time sync
+  useRealtimeSync({
+    table: 'shop_expenses',
+    onChange: refetch,
+    enabled: isOnline,
+  });
+
   const createExpense = useCallback(async (data: any) => {
     const result = await offlineShopService.createExpense(data);
-    await refetch();
     return { expense: result.expense };
-  }, [refetch]);
+  }, []);
 
   const deleteExpense = useCallback(async (id: string) => {
     await offlineShopService.deleteExpense(id);
-    await refetch();
-  }, [refetch]);
+  }, []);
 
   return {
     expenses,

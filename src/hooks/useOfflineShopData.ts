@@ -1,13 +1,16 @@
 /**
- * Shop Data Hooks
+ * Shop Data Hooks with Real-time Sync
  * All hooks needed for shop functionality
  * 
  * Uses offlineShopService for direct Supabase API calls
+ * Includes automatic real-time updates across all devices
  */
 
 import { useState, useEffect, useCallback } from 'react';
 import { offlineShopService } from '@/services/offlineShopService';
 import { useShop } from '@/contexts/ShopContext';
+import { useRealtimeSync, useMultiTableRealtimeSync } from './useRealtimeSync';
+import { useIsOnline } from './useOnlineStatus';
 
 // =============== PURCHASES ===============
 
@@ -15,6 +18,7 @@ export function useOfflinePurchases(startDate?: string, endDate?: string) {
   const [purchases, setPurchases] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { currentShop } = useShop();
+  const isOnline = useIsOnline();
 
   const refetch = useCallback(async () => {
     setLoading(true);
@@ -33,16 +37,21 @@ export function useOfflinePurchases(startDate?: string, endDate?: string) {
     refetch();
   }, [refetch]);
 
+  // Real-time sync
+  useRealtimeSync({
+    table: 'shop_purchases',
+    onChange: refetch,
+    enabled: isOnline,
+  });
+
   const createPurchase = useCallback(async (data: any) => {
     const result = await offlineShopService.createPurchase(data);
-    await refetch();
     return { purchase: result.purchase };
-  }, [refetch]);
+  }, []);
 
   const deletePurchase = useCallback(async (id: string) => {
     await offlineShopService.deletePurchase(id);
-    await refetch();
-  }, [refetch]);
+  }, []);
 
   return {
     purchases,
@@ -500,6 +509,7 @@ export function useOfflineDashboard(range: 'today' | 'week' | 'month' = 'today')
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const { currentShop } = useShop();
+  const isOnline = useIsOnline();
 
   const refetch = useCallback(async () => {
     setLoading(true);
@@ -517,6 +527,13 @@ export function useOfflineDashboard(range: 'today' | 'week' | 'month' = 'today')
   useEffect(() => {
     refetch();
   }, [refetch]);
+
+  // Real-time sync - listen to multiple tables that affect dashboard
+  useMultiTableRealtimeSync(
+    ['shop_sales', 'shop_products', 'shop_expenses', 'shop_purchases'],
+    refetch,
+    isOnline
+  );
 
   return {
     data,
