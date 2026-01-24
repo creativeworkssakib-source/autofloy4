@@ -16,13 +16,13 @@ interface MessageContext {
   senderId: string;
   senderName?: string;
   messageText: string;
-  messageType: "text" | "image" | "audio" | "sticker" | "emoji";
+  messageType: "text" | "image" | "audio" | "sticker" | "emoji" | "video" | "file";
   attachments?: any[];
   isComment?: boolean;
   commentId?: string;
   postId?: string;
-  parentCommentId?: string;      // NEW: For detecting comment replies
-  isReplyToPageComment?: boolean; // NEW: Is this a reply to the page's own comment
+  parentCommentId?: string;
+  isReplyToPageComment?: boolean;
 }
 
 interface PageMemory {
@@ -84,47 +84,438 @@ interface PostContext {
   product?: ProductContext;
 }
 
-// *** NEW: Detect if customer is responding to AI's previous message ***
-function detectCustomerResponseIntent(text: string): {
-  isAcknowledgment: boolean;
-  isGoingToInbox: boolean;
-  isAskingQuestion: boolean;
-  isProvingInfo: boolean;
+// *** SMART COMMENT ANALYSIS - Determines if inbox message is needed ***
+interface SmartCommentAnalysis {
+  needsInboxMessage: boolean;
+  commentReply: string;
+  reactionType: "LOVE" | "LIKE" | "HAHA" | "WOW" | "NONE";
+  reason: string;
+  commentType: string;
+  sentiment: "positive" | "neutral" | "negative";
+  isQuestion: boolean;
+  isOrderIntent: boolean;
+  isPriceInquiry: boolean;
+  isJustReaction: boolean;
+  isThankYou: boolean;
+  isSticker: boolean;
+  isPhoto: boolean;
+}
+
+// *** SMART: Analyze sticker/emoji to understand meaning ***
+function analyzeSticker(stickerType?: string, messageText?: string): {
+  meaning: string;
+  sentiment: "positive" | "neutral" | "negative";
+  reaction: "LOVE" | "LIKE" | "HAHA" | "WOW" | "NONE";
+} {
+  const text = messageText?.toLowerCase() || "";
+  
+  // Common positive stickers/emoji patterns
+  if (/👍|💪|👏|🙌|✌️|🤝|💯/.test(text)) {
+    return { meaning: "approval/support", sentiment: "positive", reaction: "LIKE" };
+  }
+  if (/❤️|❤|💕|💖|💗|💓|💞|💝|🥰|😍|😘/.test(text)) {
+    return { meaning: "love/affection", sentiment: "positive", reaction: "LOVE" };
+  }
+  if (/😂|🤣|😆|😄|😁|😀|😃|😅/.test(text)) {
+    return { meaning: "happiness/laughter", sentiment: "positive", reaction: "HAHA" };
+  }
+  if (/😮|😲|🤯|😱|🔥|⚡|💥/.test(text)) {
+    return { meaning: "surprise/amazement", sentiment: "positive", reaction: "WOW" };
+  }
+  if (/😢|😭|😔|😞|😟|🙁/.test(text)) {
+    return { meaning: "sadness", sentiment: "negative", reaction: "NONE" };
+  }
+  if (/😡|😤|👎|🖕|💔/.test(text)) {
+    return { meaning: "anger/dislike", sentiment: "negative", reaction: "NONE" };
+  }
+  if (/🤔|🤷|❓|⁉️/.test(text)) {
+    return { meaning: "question/confusion", sentiment: "neutral", reaction: "LIKE" };
+  }
+  
+  // Default for unknown stickers
+  return { meaning: "general_reaction", sentiment: "neutral", reaction: "LIKE" };
+}
+
+// *** SMART: Analyze photo to understand intent ***
+function analyzePhotoIntent(attachments?: any[], messageText?: string): {
+  photoType: string;
+  needsResponse: boolean;
   responseType: string;
 } {
-  const lowerText = text.toLowerCase();
+  const text = messageText?.toLowerCase() || "";
   
-  // Customer saying they will/are messaging inbox
-  const inboxPatterns = /sms|message|inbox|মেসেজ|ইনবক্স|msg|dm|দিচ্ছি|করছি|দিব|করব|পাঠাচ্ছি|দিয়েছি|দিলাম|করলাম|পাঠালাম/i;
-  const goingPatterns = /করতেছি|kortec|করতেছ|যাচ্ছি|করি|করছি|দিচ্ছি|দেই|দিই|দিতেছি|পাঠাচ্ছি|পাঠাই/i;
+  // Check for screenshot (usually means order proof, payment proof)
+  if (/screenshot|স্ক্রিনশট|ss|payment|পেমেন্ট|transaction|ট্রানজেকশন|slip|স্লিপ/.test(text)) {
+    return { photoType: "payment_proof", needsResponse: true, responseType: "verify_payment" };
+  }
   
-  // Acknowledgment patterns (ok, understood, etc.)
-  const ackPatterns = /^(ok|okay|ওকে|ঠিক আছে|বুঝলাম|বুঝেছি|আচ্ছা|হ্যাঁ|হা|yes|yep|yeah|ji|জি|hmm|হুম)[\s!.]*$/i;
+  // Check for product inquiry
+  if (/এটা|এই|এইটা|this|এইটার|এটার|দাম|price|কত|available/.test(text)) {
+    return { photoType: "product_inquiry", needsResponse: true, responseType: "identify_product" };
+  }
   
-  // Question patterns
-  const questionPatterns = /\?|কি|কী|কত|কোথায়|কেন|কিভাবে|কবে|আছে|what|how|where|when|why|which|available|stock|দাম|price/i;
+  // Just a photo without context
+  if (!text || text.trim().length < 3) {
+    return { photoType: "unknown_photo", needsResponse: true, responseType: "ask_context" };
+  }
   
-  // Providing information (name, phone, address)
-  const infoPatterns = /^[a-zA-Z\u0980-\u09FF\s]{2,50}$|01[3-9]\d{8}|আমার নাম|আমি |my name|i am/i;
+  return { photoType: "general", needsResponse: true, responseType: "general" };
+}
+
+// *** MASTER SMART ANALYSIS: Deeply analyze comment and decide response ***
+function smartAnalyzeComment(
+  messageText: string,
+  messageType: string,
+  attachments?: any[],
+  postContext?: PostContext,
+  productContext?: ProductContext,
+  isReplyToPageComment?: boolean,
+  parentCommentId?: string,
+  senderName?: string
+): SmartCommentAnalysis {
+  const text = messageText?.toLowerCase().trim() || "";
+  const originalText = messageText?.trim() || "";
+  const shortName = senderName?.split(" ")[0] || "";
   
-  const isGoingToInbox = (inboxPatterns.test(lowerText) && goingPatterns.test(lowerText)) || 
-                         /sms.*kort|msg.*kort|message.*দি|inbox.*দি|মেসেজ.*দি|ইনবক্স.*দি/i.test(lowerText);
-  const isAcknowledgment = ackPatterns.test(text.trim());
-  const isAskingQuestion = questionPatterns.test(lowerText) && !isGoingToInbox;
-  const isProvingInfo = infoPatterns.test(text.trim()) && text.length > 3 && text.length < 100;
+  // *** STICKER HANDLING ***
+  if (messageType === "sticker" || /^\s*[^\w\s\u0980-\u09FF]{1,5}\s*$/.test(originalText)) {
+    const stickerAnalysis = analyzeSticker(undefined, originalText);
+    
+    return {
+      needsInboxMessage: false, // Stickers don't need inbox
+      commentReply: stickerAnalysis.sentiment === "positive" 
+        ? `${stickerAnalysis.reaction === "LOVE" ? "💕" : "😊"}`
+        : stickerAnalysis.sentiment === "negative"
+          ? "" // Don't reply to negative stickers
+          : "😊",
+      reactionType: stickerAnalysis.reaction,
+      reason: `Sticker detected: ${stickerAnalysis.meaning}`,
+      commentType: "sticker",
+      sentiment: stickerAnalysis.sentiment,
+      isQuestion: false,
+      isOrderIntent: false,
+      isPriceInquiry: false,
+      isJustReaction: true,
+      isThankYou: false,
+      isSticker: true,
+      isPhoto: false,
+    };
+  }
   
-  let responseType = "general";
-  if (isGoingToInbox) responseType = "going_to_inbox";
-  else if (isAcknowledgment) responseType = "acknowledgment";
-  else if (isAskingQuestion) responseType = "question";
-  else if (isProvingInfo) responseType = "providing_info";
+  // *** PHOTO/IMAGE HANDLING ***
+  if (messageType === "image" || (attachments && attachments.some(a => a.type === "image"))) {
+    const photoAnalysis = analyzePhotoIntent(attachments, messageText);
+    
+    let commentReply = "";
+    let needsInbox = true;
+    
+    if (photoAnalysis.responseType === "ask_context") {
+      // Photo without context - ask what they want to know
+      commentReply = `ধন্যবাদ ছবিটা পাঠানোর জন্য! 📷 এই ছবি সম্পর্কে কী জানতে চাইছেন বলুন? 🙂`;
+      needsInbox = false; // Wait for their response first
+    } else if (photoAnalysis.responseType === "verify_payment") {
+      commentReply = `পেমেন্ট স্ক্রিনশট পেয়েছি! ✅ ভেরিফাই করে আপডেট দেব। ইনবক্স চেক করুন 📩`;
+      needsInbox = true;
+    } else if (photoAnalysis.responseType === "identify_product") {
+      commentReply = `ছবিটা দেখলাম! 👀 এই প্রোডাক্টের বিস্তারিত ইনবক্সে পাঠিয়ে দিচ্ছি 📩`;
+      needsInbox = true;
+    } else {
+      commentReply = `ছবিটা পেয়েছি! 📷 আপনার জন্য কী করতে পারি বলুন 🙂`;
+      needsInbox = false;
+    }
+    
+    return {
+      needsInboxMessage: needsInbox,
+      commentReply,
+      reactionType: "LIKE",
+      reason: `Photo detected: ${photoAnalysis.photoType}`,
+      commentType: "photo",
+      sentiment: "neutral",
+      isQuestion: photoAnalysis.responseType === "identify_product",
+      isOrderIntent: false,
+      isPriceInquiry: photoAnalysis.responseType === "identify_product",
+      isJustReaction: false,
+      isThankYou: false,
+      isSticker: false,
+      isPhoto: true,
+    };
+  }
   
+  // *** POSITIVE FEEDBACK - Just appreciation, NO inbox needed ***
+  const positivePraise = /great|good|nice|awesome|excellent|best|amazing|wonderful|perfect|super|fantastic|দারুণ|চমৎকার|অসাধারণ|সুন্দর|মাশাল্লাহ|অসাম|বাহ|খুব ভালো|অনেক ভালো|বেস্ট|নাইস|wow|woow|good job|well done|keep it up|keep going|love it|loved|ভালোবাসি|❤️|❤|💕|👍|🔥|💯|💕|😍|🥰|😊|👏|💪|🙌/i;
+  const thankPatterns = /thanks|thank you|ধন্যবাদ|ty|thx|অনেক ধন্যবাদ/i;
+  const justEmojiOrShort = /^[\s]*[👍❤️🔥💯💕😍🥰😊👏💪🙌❤]+[\s]*$|^.{1,4}$/;
+  
+  // Pure positive feedback - just thank them, NO inbox
+  if ((positivePraise.test(text) || thankPatterns.test(text) || justEmojiOrShort.test(originalText)) &&
+      !text.includes("?") && 
+      !/কত|দাম|price|অর্ডার|order|কিনব|নিব|চাই|লাগবে|available|আছে|stock|সাইজ|size/.test(text)) {
+    
+    let reply = "";
+    let reaction: "LOVE" | "LIKE" = "LOVE";
+    
+    if (thankPatterns.test(text)) {
+      reply = `আপনাকেও ধন্যবাদ ${shortName}! 🙏 আমাদের সাথে থাকার জন্য কৃতজ্ঞ। 😊`;
+    } else if (justEmojiOrShort.test(originalText)) {
+      reply = `💕🥰`;
+    } else if (/love|ভালোবাসি|💕|❤/.test(text)) {
+      reply = `অনেক অনেক ধন্যবাদ ${shortName}! 💕 আপনার ভালোবাসা আমাদের অনুপ্রেরণা! 💖`;
+    } else {
+      reply = `অনেক ধন্যবাদ ${shortName}! 🥰 আপনার সুন্দর কথা আমাদের অনুপ্রাণিত করে। 💕`;
+    }
+    
+    return {
+      needsInboxMessage: false, // NO inbox for pure positive feedback
+      commentReply: reply,
+      reactionType: reaction,
+      reason: "Pure positive feedback - no inquiry detected",
+      commentType: "positive_feedback",
+      sentiment: "positive",
+      isQuestion: false,
+      isOrderIntent: false,
+      isPriceInquiry: false,
+      isJustReaction: true,
+      isThankYou: thankPatterns.test(text),
+      isSticker: false,
+      isPhoto: false,
+    };
+  }
+  
+  // *** REPLY TO PAGE'S COMMENT - Smart context-aware response ***
+  if (isReplyToPageComment || parentCommentId) {
+    // Customer says they're going to inbox
+    if (/sms|message|inbox|মেসেজ|ইনবক্স|msg|dm|দিচ্ছি|করছি|দিব|করব|পাঠাচ্ছি|দিয়েছি|দিলাম|করলাম|পাঠালাম|করতেছি|kortec/i.test(text)) {
+      return {
+        needsInboxMessage: false, // They're coming to inbox, don't spam them
+        commentReply: `ধন্যবাদ! 🙏 ইনবক্সে আপনার মেসেজের অপেক্ষায় আছি! 📩😊`,
+        reactionType: "LIKE",
+        reason: "Customer indicated they're messaging inbox",
+        commentType: "going_to_inbox",
+        sentiment: "neutral",
+        isQuestion: false,
+        isOrderIntent: false,
+        isPriceInquiry: false,
+        isJustReaction: false,
+        isThankYou: false,
+        isSticker: false,
+        isPhoto: false,
+      };
+    }
+    
+    // Simple acknowledgment (ok, understood, etc.)
+    if (/^(ok|okay|ওকে|ঠিক আছে|বুঝলাম|বুঝেছি|আচ্ছা|হ্যাঁ|হা|yes|yep|yeah|ji|জি|hmm|হুম|হবে|করব)[\s!.]*$/i.test(originalText)) {
+      return {
+        needsInboxMessage: false,
+        commentReply: `ধন্যবাদ! 🙏 যেকোনো প্রয়োজনে জানাবেন! 😊`,
+        reactionType: "LIKE",
+        reason: "Simple acknowledgment",
+        commentType: "acknowledgment",
+        sentiment: "neutral",
+        isQuestion: false,
+        isOrderIntent: false,
+        isPriceInquiry: false,
+        isJustReaction: true,
+        isThankYou: false,
+        isSticker: false,
+        isPhoto: false,
+      };
+    }
+    
+    // Follow-up question
+    if (/\?|কি|কী|কত|কোথায়|কেন|কিভাবে|কবে|আছে|what|how|where|when|why|which|available|stock|দাম|price|size|সাইজ|color|রঙ/.test(text)) {
+      return {
+        needsInboxMessage: true, // Send detailed answer to inbox
+        commentReply: `ভালো প্রশ্ন ${shortName}! 👍 বিস্তারিত উত্তর ইনবক্সে পাঠিয়ে দিলাম। চেক করুন 📩`,
+        reactionType: "LIKE",
+        reason: "Follow-up question in comment reply",
+        commentType: "follow_up_question",
+        sentiment: "neutral",
+        isQuestion: true,
+        isOrderIntent: false,
+        isPriceInquiry: /কত|দাম|price/.test(text),
+        isJustReaction: false,
+        isThankYou: false,
+        isSticker: false,
+        isPhoto: false,
+      };
+    }
+    
+    // Providing info (name, phone, address)
+    if (/^[a-zA-Z\u0980-\u09FF\s]{2,50}$|01[3-9]\d{8}|আমার নাম|আমি |my name|i am/i.test(originalText)) {
+      return {
+        needsInboxMessage: true,
+        commentReply: `ধন্যবাদ! 🙏 আপনার তথ্য পেয়েছি। বিস্তারিত ইনবক্সে জানাচ্ছি 📩`,
+        reactionType: "LIKE",
+        reason: "Customer providing info in reply",
+        commentType: "providing_info",
+        sentiment: "neutral",
+        isQuestion: false,
+        isOrderIntent: true,
+        isPriceInquiry: false,
+        isJustReaction: false,
+        isThankYou: false,
+        isSticker: false,
+        isPhoto: false,
+      };
+    }
+    
+    // General reply - acknowledge but may not need inbox
+    return {
+      needsInboxMessage: text.length > 20, // Only inbox if they wrote something substantial
+      commentReply: `ধন্যবাদ ${shortName}! 🙏 ${text.length > 20 ? "বিস্তারিত ইনবক্সে জানাচ্ছি 📩" : "আরো কিছু জানতে চাইলে বলুন! 😊"}`,
+      reactionType: "LIKE",
+      reason: "General reply to page's comment",
+      commentType: "general_reply",
+      sentiment: "neutral",
+      isQuestion: false,
+      isOrderIntent: false,
+      isPriceInquiry: false,
+      isJustReaction: text.length <= 10,
+      isThankYou: false,
+      isSticker: false,
+      isPhoto: false,
+    };
+  }
+  
+  // *** ORIGINAL COMMENT (not a reply) ***
+  
+  // Price inquiry - needs inbox
+  if (/দাম|price|কত|টাকা|cost|rate|কততে|কতো/.test(text)) {
+    return {
+      needsInboxMessage: true,
+      commentReply: productContext 
+        ? `ধন্যবাদ ${shortName}! 🙏 "${productContext.name}" এর দাম ৳${productContext.price}। বিস্তারিত ইনবক্সে পাঠালাম 📩`
+        : `ধন্যবাদ ${shortName}! 🙏 দামসহ বিস্তারিত তথ্য ইনবক্সে পাঠিয়ে দিলাম। চেক করুন 📩`,
+      reactionType: "LIKE",
+      reason: "Price inquiry detected",
+      commentType: "price_inquiry",
+      sentiment: "neutral",
+      isQuestion: true,
+      isOrderIntent: false,
+      isPriceInquiry: true,
+      isJustReaction: false,
+      isThankYou: false,
+      isSticker: false,
+      isPhoto: false,
+    };
+  }
+  
+  // Order intent - needs inbox
+  if (/order|অর্ডার|নিব|কিনব|কিনতে|চাই|দিন|দাও|নেব|লাগবে|buy|purchase/.test(text)) {
+    return {
+      needsInboxMessage: true,
+      commentReply: `ধন্যবাদ ${shortName}! 🛒 অর্ডার করতে ইনবক্সে মেসেজ করেছি। অনুগ্রহ করে চেক করুন 📩`,
+      reactionType: "LIKE",
+      reason: "Order intent detected",
+      commentType: "order_intent",
+      sentiment: "neutral",
+      isQuestion: false,
+      isOrderIntent: true,
+      isPriceInquiry: false,
+      isJustReaction: false,
+      isThankYou: false,
+      isSticker: false,
+      isPhoto: false,
+    };
+  }
+  
+  // Question (not price) - needs inbox
+  if (/\?|কি আছে|কী আছে|available|stock|সাইজ|size|color|রঙ|কোন|which|কিভাবে|how|details|বিস্তারিত/.test(text)) {
+    return {
+      needsInboxMessage: true,
+      commentReply: `ধন্যবাদ ${shortName}! 🙏 আপনার প্রশ্নের উত্তর ইনবক্সে পাঠিয়ে দিলাম। চেক করুন 📩`,
+      reactionType: "LIKE",
+      reason: "Question detected",
+      commentType: "question",
+      sentiment: "neutral",
+      isQuestion: true,
+      isOrderIntent: false,
+      isPriceInquiry: false,
+      isJustReaction: false,
+      isThankYou: false,
+      isSticker: false,
+      isPhoto: false,
+    };
+  }
+  
+  // Greeting - short reply, no inbox
+  if (/^(hi|hello|হাই|হ্যালো|আসসালাম|সালাম|ভাই|sis|bhai|apu)[\s!.]*$/i.test(originalText)) {
+    return {
+      needsInboxMessage: false,
+      commentReply: `হাই ${shortName}! 👋 কিভাবে সাহায্য করতে পারি বলুন! 😊`,
+      reactionType: "LIKE",
+      reason: "Simple greeting",
+      commentType: "greeting",
+      sentiment: "neutral",
+      isQuestion: false,
+      isOrderIntent: false,
+      isPriceInquiry: false,
+      isJustReaction: true,
+      isThankYou: false,
+      isSticker: false,
+      isPhoto: false,
+    };
+  }
+  
+  // *** ANALYZE POST CONTEXT to understand why they commented ***
+  if (postContext?.post_text) {
+    const postText = postContext.post_text.toLowerCase();
+    
+    // If post is about a product and they just comment something simple
+    if (productContext || /product|price|offer|sale|প্রোডাক্ট|দাম|অফার/.test(postText)) {
+      // They're probably interested in the product
+      return {
+        needsInboxMessage: true,
+        commentReply: `ধন্যবাদ ${shortName}! 🙏 ${productContext ? `"${productContext.name}" এর বিস্তারিত` : "প্রোডাক্টের তথ্য"} ইনবক্সে পাঠিয়ে দিলাম। চেক করুন 📩`,
+        reactionType: "LIKE",
+        reason: "Comment on product post - likely interested",
+        commentType: "product_interest",
+        sentiment: "neutral",
+        isQuestion: false,
+        isOrderIntent: false,
+        isPriceInquiry: false,
+        isJustReaction: false,
+        isThankYou: false,
+        isSticker: false,
+        isPhoto: false,
+      };
+    }
+  }
+  
+  // *** DEFAULT: Short/unclear comment - ask what they want ***
+  if (text.length < 15 && !/\?|দাম|কত|order|অর্ডার/.test(text)) {
+    return {
+      needsInboxMessage: false, // Don't spam inbox for unclear comments
+      commentReply: `ধন্যবাদ ${shortName}! 🙏 কিভাবে সাহায্য করতে পারি বলুন! 😊`,
+      reactionType: "LIKE",
+      reason: "Short/unclear comment - asking for clarification",
+      commentType: "unclear",
+      sentiment: "neutral",
+      isQuestion: false,
+      isOrderIntent: false,
+      isPriceInquiry: false,
+      isJustReaction: true,
+      isThankYou: false,
+      isSticker: false,
+      isPhoto: false,
+    };
+  }
+  
+  // Default: Longer comment that might be inquiry - send to inbox
   return {
-    isAcknowledgment,
-    isGoingToInbox,
-    isAskingQuestion,
-    isProvingInfo,
-    responseType
+    needsInboxMessage: true,
+    commentReply: `ধন্যবাদ কমেন্ট করার জন্য ${shortName}! 🙏 বিস্তারিত তথ্য ইনবক্সে পাঠিয়ে দিলাম। চেক করুন 📩`,
+    reactionType: "LIKE",
+    reason: "General comment - sending details to inbox",
+    commentType: "general",
+    sentiment: "neutral",
+    isQuestion: false,
+    isOrderIntent: false,
+    isPriceInquiry: false,
+    isJustReaction: false,
+    isThankYou: false,
+    isSticker: false,
+    isPhoto: false,
   };
 }
 
@@ -132,32 +523,21 @@ function detectCustomerResponseIntent(text: string): {
 function detectIntent(text: string): string {
   const lowerText = text.toLowerCase();
   
-  // Price inquiry patterns
   if (/দাম|price|কত|টাকা|cost|rate|কততে|কতো/.test(lowerText)) {
     return "price_inquiry";
   }
-  
-  // Order patterns
   if (/order|অর্ডার|নিব|কিনব|কিনতে|চাই|দিন|দাও|নেব|লাগবে|buy|purchase/.test(lowerText)) {
     return "order_intent";
   }
-  
-  // Info request
   if (/details|বিস্তারিত|info|জানতে|কি|কী|available|আছে|stock/.test(lowerText)) {
     return "info_request";
   }
-  
-  // Greeting
   if (/hi|hello|হাই|হ্যালো|আসসালাম|সালাম|ভাই|sis|bhai|apu/.test(lowerText)) {
     return "greeting";
   }
-  
-  // Confirmation
   if (/yes|হ্যাঁ|হা|ok|okay|ঠিক|আছে|confirmed|done|হবে/.test(lowerText)) {
     return "confirmation";
   }
-  
-  // Cancellation
   if (/no|না|cancel|বাদ|থাক|later|পরে/.test(lowerText)) {
     return "cancellation";
   }
@@ -165,11 +545,10 @@ function detectIntent(text: string): string {
   return "general";
 }
 
-// Detect sentiment for reactions - Enhanced for better detection
+// Detect sentiment
 function detectSentiment(text: string): "positive" | "neutral" | "negative" {
   const lowerText = text.toLowerCase();
   
-  // Enhanced positive patterns - includes emoji and common expressions
   const positivePatterns = /thanks|thank you|ধন্যবাদ|great|awesome|good|ভালো|সুন্দর|love|excellent|best|amazing|wonderful|nice|beautiful|perfect|super|fantastic|❤️|❤|👍|🔥|💯|💕|😍|🥰|😊|👏|💪|🙌|good job|well done|keep it up|মাশাল্লাহ|অসাম|দারুণ|বাহ|চমৎকার|অসাধারণ|খুব ভালো|অনেক ভালো|wow|woow|বেস্ট|নাইস|লাভ/i;
   const negativePatterns = /bad|খারাপ|worst|terrible|hate|বাজে|poor|fraud|fake|scam|😡|👎|😤|💔|বোকা|চোর|প্রতারক|ফেক/i;
   
@@ -178,78 +557,19 @@ function detectSentiment(text: string): "positive" | "neutral" | "negative" {
   return "neutral";
 }
 
-// Analyze comment to generate appropriate response - Enhanced version
-function analyzeCommentForResponse(text: string, intent: string, sentiment: string): {
-  isPositiveFeedback: boolean;
-  isQuestion: boolean;
-  isPriceInquiry: boolean;
-  isOrderIntent: boolean;
-  responseType: string;
-  feedbackType: string;
-  originalComment: string;
-} {
-  const lowerText = text.toLowerCase();
-  const originalComment = text.trim();
-  
-  // Enhanced positive feedback patterns with specific types
-  const praisePatterns = /great|good|nice|awesome|excellent|best|amazing|wonderful|perfect|super|fantastic|দারুণ|চমৎকার|অসাধারণ|সুন্দর|মাশাল্লাহ|অসাম|বাহ|খুব ভালো|অনেক ভালো|বেস্ট|নাইস|wow|woow|good job|well done|keep it up|keep going|love it|loved|ভালোবাসি/i;
-  const thankPatterns = /thanks|thank you|ধন্যবাদ|ty|thx/i;
-  const emojiOnlyPatterns = /^[\s]*[👍❤️🔥💯💕😍🥰😊👏💪🙌❤]+[\s]*$/;
-  const lovePatterns = /love|❤️|❤|💕|😍|🥰|ভালোবাসি|লাভ/i;
-  
-  // Determine feedback type
-  let feedbackType = "general";
-  if (praisePatterns.test(lowerText)) feedbackType = "praise";
-  else if (thankPatterns.test(lowerText)) feedbackType = "thanks";
-  else if (emojiOnlyPatterns.test(text)) feedbackType = "emoji_reaction";
-  else if (lovePatterns.test(lowerText)) feedbackType = "love";
-  
-  const isPositiveFeedback = sentiment === "positive" || praisePatterns.test(lowerText) || thankPatterns.test(lowerText) || emojiOnlyPatterns.test(text) || lovePatterns.test(lowerText);
-  
-  // Check if it's a question
-  const questionPatterns = /\?|কি|কী|কত|কোথায়|কেন|কিভাবে|কবে|আছে|what|how|where|when|why|which|available|stock|দাম|price|size|সাইজ|color|রঙ/i;
-  const isQuestion = questionPatterns.test(lowerText);
-  
-  // Check for price inquiry
-  const isPriceInquiry = intent === "price_inquiry";
-  
-  // Check for order intent
-  const isOrderIntent = intent === "order_intent";
-  
-  let responseType = "general";
-  if (isPositiveFeedback) responseType = "appreciation";
-  else if (isPriceInquiry) responseType = "price";
-  else if (isOrderIntent) responseType = "order";
-  else if (isQuestion) responseType = "question";
-  
-  return {
-    isPositiveFeedback,
-    isQuestion,
-    isPriceInquiry,
-    isOrderIntent,
-    responseType,
-    feedbackType,
-    originalComment
-  };
-}
-
-// Detect fake order patterns
+// Calculate fake order score
 function calculateFakeOrderScore(conversation: ConversationState, newMessage: string): number {
   let score = conversation.fake_order_score || 0;
-  
   const lowerText = newMessage.toLowerCase();
   
-  // Suspicious patterns
   if (/test|পরীক্ষা|checking|চেক/.test(lowerText)) score += 20;
   if (/random|যেকোনো|anything/.test(lowerText)) score += 15;
   if (conversation.message_history.length < 2 && conversation.conversation_state === "collecting_address") score += 25;
   
-  // Very short responses during collection
   if (newMessage.length < 3 && ["collecting_name", "collecting_phone", "collecting_address"].includes(conversation.conversation_state)) {
     score += 10;
   }
   
-  // Invalid phone pattern
   if (conversation.conversation_state === "collecting_phone") {
     const phonePattern = /^(?:\+?88)?01[3-9]\d{8}$/;
     if (!phonePattern.test(newMessage.replace(/\s|-/g, ""))) {
@@ -260,7 +580,7 @@ function calculateFakeOrderScore(conversation: ConversationState, newMessage: st
   return Math.min(score, 100);
 }
 
-// Build system prompt based on page memory, rules, and product context
+// Build system prompt
 function buildSystemPrompt(
   pageMemory: PageMemory, 
   conversationState: ConversationState,
@@ -279,33 +599,23 @@ ${pageMemory.business_description || "General e-commerce business"}
 ## Products/Services Overview
 ${pageMemory.products_summary || "Various products available"}`;
 
-  // Add specific product context if available
   if (productContext) {
     prompt += `
 
-## 🎯 CURRENT PRODUCT BEING DISCUSSED (from customer's comment/inquiry)
+## 🎯 CURRENT PRODUCT BEING DISCUSSED
 - Product Name: ${productContext.name}
 - Price: ৳${productContext.price}
 - Category: ${productContext.category || "N/A"}
-- SKU: ${productContext.sku || "N/A"}
 - Description: ${productContext.description || "N/A"}
-- Status: ${productContext.is_active ? "In Stock" : "Out of Stock"}
-
-IMPORTANT: When the customer asks about price or details, use THIS product's information.`;
+- Status: ${productContext.is_active ? "In Stock" : "Out of Stock"}`;
   }
 
-  // Add post context if this is a comment
   if (postContext) {
     prompt += `
 
-## 📱 POST CONTEXT (Comment was made on this post)
+## 📱 POST CONTEXT
 - Post Content: ${postContext.post_text || "N/A"}
 - Media Type: ${postContext.media_type || "N/A"}`;
-    
-    if (postContext.product_detected_name && !productContext) {
-      prompt += `
-- Detected Product: ${postContext.product_detected_name} (Note: exact product not found in database)`;
-    }
   }
 
   prompt += `
@@ -313,127 +623,36 @@ IMPORTANT: When the customer asks about price or details, use THIS product's inf
 ## Communication Style
 - Tone: ${tone}
 - Language: ${language}
-- Never rush the customer
-- Always prioritize clarity over speed
 - Be patient and helpful
 
-## CRITICAL RULES (MUST FOLLOW)`;
+## CRITICAL RULES`;
 
-  // AI Behavior Rules
   if (pageMemory.ai_behavior_rules?.neverHallucinate) {
     prompt += `
-- NEVER make up or guess product information, prices, or availability
-- If you don't know something, say "আমি নিশ্চিত না, একটু চেক করে জানাচ্ছি"`;
+- NEVER guess product information. Say "আমি নিশ্চিত না, একটু চেক করে জানাচ্ছি" if unsure.`;
   }
   
   if (pageMemory.ai_behavior_rules?.askClarificationIfUnsure) {
     prompt += `
-- If customer's request is unclear, ask clarifying questions
-- Example: "কোন সাইজ/রঙ চাচ্ছেন জানাবেন?"`;
-  }
-  
-  if (pageMemory.ai_behavior_rules?.askForClearerPhotoIfNeeded) {
-    prompt += `
-- If customer sends unclear product image, politely ask for clearer photo
-- Example: "ছবিটা একটু ক্লিয়ার না, আরেকটু ভালো ছবি দিতে পারবেন?"`;
-  }
-  
-  if (pageMemory.ai_behavior_rules?.confirmBeforeOrder) {
-    prompt += `
-- ALWAYS confirm full order details before finalizing
-- Summarize: product name, quantity, price, delivery address, total amount`;
+- Ask clarifying questions if request is unclear.`;
   }
 
-  // Selling Rules
-  prompt += `
-
-## Selling Rules`;
-  
-  if (pageMemory.selling_rules?.usePriceFromProduct) {
-    prompt += `
-- ONLY quote prices from the product catalog - NEVER guess prices`;
-  }
-  
-  if (pageMemory.selling_rules?.allowDiscount) {
-    prompt += `
-- You CAN offer discounts up to ${pageMemory.selling_rules.maxDiscountPercent}% maximum
-- Only offer discount if customer asks or insists`;
-  } else {
-    prompt += `
-- Do NOT offer any discounts - prices are fixed`;
-  }
-  
-  if (pageMemory.selling_rules?.allowLowProfitSale) {
-    prompt += `
-- If customer strongly insists, you may agree to minimal profit margin`;
-  }
-
-  // Payment Rules
-  prompt += `
-
-## Payment Rules`;
-  
-  if (pageMemory.payment_rules?.codAvailable) {
-    prompt += `
-- Cash on Delivery (COD) is available`;
-  } else {
-    prompt += `
-- Cash on Delivery NOT available - advance payment required`;
-  }
-  
-  if (pageMemory.payment_rules?.advanceRequiredAbove) {
-    prompt += `
-- Orders above ৳${pageMemory.payment_rules.advanceRequiredAbove} require ${pageMemory.payment_rules.advancePercentage}% advance payment`;
-  }
-
-  // Current conversation state
   prompt += `
 
 ## Current Conversation State: ${conversationState.conversation_state}`;
   
   if (conversationState.current_product_name) {
     prompt += `
-- Product being discussed: ${conversationState.current_product_name}
-- Price: ৳${conversationState.current_product_price}`;
-  }
-  
-  if (conversationState.collected_name) {
-    prompt += `
-- Customer name: ${conversationState.collected_name}`;
-  }
-  
-  if (conversationState.collected_phone) {
-    prompt += `
-- Phone: ${conversationState.collected_phone}`;
-  }
-
-  // State-specific instructions
-  if (conversationState.conversation_state === "collecting_name") {
-    prompt += `
-
-You are collecting the customer's NAME. Ask politely for their full name.`;
-  } else if (conversationState.conversation_state === "collecting_phone") {
-    prompt += `
-
-You are collecting the customer's PHONE NUMBER. Ask for their mobile number.`;
-  } else if (conversationState.conversation_state === "collecting_address") {
-    prompt += `
-
-You are collecting the customer's DELIVERY ADDRESS. Ask for complete address with area name.`;
-  } else if (conversationState.conversation_state === "order_confirmation") {
-    prompt += `
-
-Summarize the complete order and ask for final confirmation before placing.`;
+- Product: ${conversationState.current_product_name} (৳${conversationState.current_product_price})`;
   }
 
   prompt += `
 
 ## Response Guidelines
-- Keep responses concise but helpful (2-4 sentences max)
+- Keep responses concise (2-4 sentences)
 - Use appropriate emojis sparingly
-- If discussing price/order, be specific and clear
-- If customer shows positive sentiment, be appreciative
-- Never be pushy or aggressive`;
+- Be specific about prices when known
+- Never be pushy`;
 
   return prompt;
 }
@@ -472,7 +691,7 @@ async function callAI(systemPrompt: string, messages: any[]): Promise<string> {
   }
 }
 
-// Determine next conversation state based on current state and intent
+// Get next state
 function getNextState(currentState: string, intent: string, hasAllOrderInfo: boolean): string {
   if (intent === "cancellation") return "idle";
   
@@ -481,41 +700,32 @@ function getNextState(currentState: string, intent: string, hasAllOrderInfo: boo
       if (intent === "order_intent") return "collecting_name";
       if (intent === "price_inquiry" || intent === "info_request") return "product_inquiry";
       return "greeting";
-    
     case "greeting":
     case "product_inquiry":
       if (intent === "order_intent") return "collecting_name";
       return currentState;
-    
     case "collecting_name":
       return "collecting_phone";
-    
     case "collecting_phone":
       return "collecting_address";
-    
     case "collecting_address":
       return "order_confirmation";
-    
     case "order_confirmation":
       if (intent === "confirmation") return "completed";
       return currentState;
-    
     default:
       return currentState;
   }
 }
 
-// Get product context from post
+// Get product from post
 async function getProductFromPost(
   supabase: any, 
   pageId: string, 
   postId: string, 
   userId: string
 ): Promise<{ postContext: PostContext | null; productContext: ProductContext | null }> {
-  console.log(`[AI Agent] Looking up post context for post_id: ${postId}`);
-  
-  // First, check if we have this post synced
-  const { data: fbPost, error: postError } = await supabase
+  const { data: fbPost } = await supabase
     .from("facebook_posts")
     .select(`
       post_id,
@@ -524,13 +734,7 @@ async function getProductFromPost(
       linked_product_id,
       product_detected_name,
       products:linked_product_id (
-        id,
-        name,
-        price,
-        description,
-        category,
-        sku,
-        is_active
+        id, name, price, description, category, sku, is_active
       )
     `)
     .eq("page_id", pageId)
@@ -545,45 +749,32 @@ async function getProductFromPost(
       linked_product_id: fbPost.linked_product_id,
       product_detected_name: fbPost.product_detected_name,
     };
-
-    let productContext: ProductContext | null = null;
-    if (fbPost.products) {
-      productContext = fbPost.products as ProductContext;
-    }
-
-    console.log(`[AI Agent] Found post context with product: ${productContext?.name || 'none'}`);
+    const productContext = fbPost.products as ProductContext | null;
     return { postContext, productContext };
   }
 
-  console.log(`[AI Agent] Post not found in database, will try to fetch from Facebook`);
   return { postContext: null, productContext: null };
 }
 
-// Try to match product by name from message text
+// Find product by name
 async function findProductByName(
   supabase: any, 
   userId: string, 
   messageText: string
 ): Promise<ProductContext | null> {
-  // Get all user's products
-  const { data: products, error } = await supabase
+  const { data: products } = await supabase
     .from("products")
     .select("id, name, price, description, category, sku, is_active")
     .eq("user_id", userId)
     .eq("is_active", true);
 
-  if (error || !products || products.length === 0) {
-    return null;
-  }
+  if (!products || products.length === 0) return null;
 
-  // Simple fuzzy match - check if any product name appears in the message
   const lowerMessage = messageText.toLowerCase();
   for (const product of products) {
     const productNameLower = product.name.toLowerCase();
-    // Check for partial match
     if (lowerMessage.includes(productNameLower) || 
         productNameLower.split(" ").some((word: string) => word.length > 3 && lowerMessage.includes(word))) {
-      console.log(`[AI Agent] Matched product by name: ${product.name}`);
       return product as ProductContext;
     }
   }
@@ -610,10 +801,10 @@ serve(async (req) => {
       isComment = false,
       commentId,
       postId,
-      postContent,      // Auto-fetched post content
-      postMediaType,    // Post media type
-      parentCommentId,  // *** NEW: Parent comment ID for reply detection ***
-      isReplyToPageComment, // *** NEW: Is this a reply to page's comment ***
+      postContent,
+      postMediaType,
+      parentCommentId,
+      isReplyToPageComment,
       userId 
     } = body as MessageContext & { 
       userId: string; 
@@ -624,11 +815,10 @@ serve(async (req) => {
     };
 
     console.log(`[AI Agent] Processing ${isComment ? "comment" : "message"} for page ${pageId}`);
-    console.log(`[AI Agent] Post ID: ${postId}, Post Content: ${postContent?.substring(0, 100)}`);
-    console.log(`[AI Agent] Comment/Message: ${messageText?.substring(0, 50)}`);
-    console.log(`[AI Agent] Is reply to page comment: ${isReplyToPageComment}, Parent: ${parentCommentId}`);
+    console.log(`[AI Agent] Message type: ${messageType}, Text: "${messageText?.substring(0, 50)}"`);
+    console.log(`[AI Agent] Is reply to page: ${isReplyToPageComment}, Parent: ${parentCommentId}`);
 
-    // Get page memory for context
+    // Get page memory
     const { data: pageMemory } = await supabase
       .from("page_memory")
       .select("*")
@@ -636,7 +826,6 @@ serve(async (req) => {
       .single();
 
     if (!pageMemory) {
-      console.error("[AI Agent] No page memory found for page:", pageId);
       return new Response(JSON.stringify({ 
         error: "Page not configured",
         reply: "দুঃখিত, এই পেজের জন্য AI সেটআপ করা হয়নি।" 
@@ -646,59 +835,45 @@ serve(async (req) => {
       });
     }
 
-    // Check if automation is enabled
+    // Check automation settings
     const settings = pageMemory.automation_settings || {};
     if (isComment && !settings.autoCommentReply) {
-      return new Response(JSON.stringify({ 
-        skip: true, 
-        reason: "Comment auto-reply disabled" 
-      }), {
+      return new Response(JSON.stringify({ skip: true, reason: "Comment auto-reply disabled" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
     if (!isComment && !settings.autoInboxReply) {
-      return new Response(JSON.stringify({ 
-        skip: true, 
-        reason: "Inbox auto-reply disabled" 
-      }), {
+      return new Response(JSON.stringify({ skip: true, reason: "Inbox auto-reply disabled" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Get product context - try from linked post first, then from post content analysis
+    // Get product context
     let productContext: ProductContext | null = null;
     let postContext: PostContext | null = null;
 
     if (isComment && postId) {
-      // Check if we have this post in database
       const postResult = await getProductFromPost(supabase, pageId, postId, userId);
       postContext = postResult.postContext;
       productContext = postResult.productContext;
     }
 
-    // Use auto-fetched post content for AI context
     if (isComment && postContent && !postContext) {
-      // Create a virtual post context from the auto-fetched content
       postContext = {
         post_id: postId || "",
         post_text: postContent,
         media_type: postMediaType,
       };
-      console.log(`[AI Agent] Using auto-fetched post content for context`);
     }
 
-    // Try to find matching product from message text or post content
     if (!productContext) {
-      // First try from comment text
       productContext = await findProductByName(supabase, userId, messageText);
-      
-      // If not found, try from post content
       if (!productContext && postContent) {
         productContext = await findProductByName(supabase, userId, postContent);
       }
     }
 
-    // Get or create conversation state
+    // Get or create conversation
     let { data: conversation } = await supabase
       .from("ai_conversations")
       .select("*")
@@ -707,7 +882,7 @@ serve(async (req) => {
       .single();
 
     if (!conversation) {
-      const { data: newConv, error } = await supabase
+      const { data: newConv } = await supabase
         .from("ai_conversations")
         .insert({
           user_id: userId,
@@ -719,15 +894,9 @@ serve(async (req) => {
         })
         .select()
         .single();
-      
-      if (error) {
-        console.error("[AI Agent] Failed to create conversation:", error);
-        throw error;
-      }
       conversation = newConv;
     }
 
-    // If we found a product, update the conversation with it
     if (productContext && !conversation.current_product_id) {
       await supabase
         .from("ai_conversations")
@@ -743,53 +912,27 @@ serve(async (req) => {
       conversation.current_product_price = productContext.price;
     }
 
-    // Detect intent and sentiment
     const intent = detectIntent(messageText);
     const sentiment = detectSentiment(messageText);
-    
-    // *** NEW: Detect customer response intent (for comment replies) ***
-    const customerResponseIntent = detectCustomerResponseIntent(messageText);
-    
-    console.log(`[AI Agent] Intent: ${intent}, Sentiment: ${sentiment}, State: ${conversation.conversation_state}`);
-    console.log(`[AI Agent] Customer Response Intent: ${customerResponseIntent.responseType}`);
-    console.log(`[AI Agent] Product context: ${productContext?.name || 'none'}`);
-    console.log(`[AI Agent] Post context available: ${!!postContext}`);
-
-    // Handle image messages
-    let processedMessage = messageText;
-    if (messageType === "image" && attachments && attachments.length > 0) {
-      if (pageMemory.ai_behavior_rules?.askForClearerPhotoIfNeeded) {
-        processedMessage = "[Customer sent an image - analyze if it's a product inquiry]";
-      }
-    }
-
-    // Handle voice messages
-    if (messageType === "audio") {
-      processedMessage = "[Customer sent a voice message - ask them to type their message]";
-    }
-
-    // Calculate fake order score
     const fakeScore = calculateFakeOrderScore(conversation, messageText);
+
+    console.log(`[AI Agent] Intent: ${intent}, Sentiment: ${sentiment}`);
 
     // Update message history
     const messageHistory = conversation.message_history || [];
     messageHistory.push({
       role: "user",
-      content: processedMessage,
+      content: messageText,
       timestamp: new Date().toISOString(),
       intent,
       sentiment,
-      customerResponseIntent: customerResponseIntent.responseType,
-      isReplyToPageComment,
-      productContext: productContext ? { name: productContext.name, price: productContext.price } : null,
-      postContext: postContext ? { text: postContext.post_text } : null,
+      messageType,
     });
 
     // Determine next state
     let nextState = conversation.conversation_state;
     let collectedData: any = {};
 
-    // Extract info based on current state
     if (conversation.conversation_state === "collecting_name" && intent !== "cancellation") {
       collectedData.collected_name = messageText.trim();
       nextState = "collecting_phone";
@@ -808,8 +951,8 @@ serve(async (req) => {
       nextState = getNextState(conversation.conversation_state, intent, false);
     }
 
-    // Update conversation state
-    const { error: updateError } = await supabase
+    // Update conversation
+    await supabase
       .from("ai_conversations")
       .update({
         conversation_state: nextState,
@@ -820,15 +963,10 @@ serve(async (req) => {
       })
       .eq("id", conversation.id);
 
-    if (updateError) {
-      console.error("[AI Agent] Failed to update conversation:", updateError);
-    }
-
-    // Build AI prompt and get response with product and post context
+    // Build AI prompt and get response
     const updatedConversation = { ...conversation, conversation_state: nextState, ...collectedData };
     const systemPrompt = buildSystemPrompt(pageMemory, updatedConversation, productContext || undefined, postContext || undefined);
     
-    // Format message history for AI
     const aiMessages = messageHistory.slice(-10).map((msg: any) => ({
       role: msg.role,
       content: msg.content,
@@ -848,12 +986,11 @@ serve(async (req) => {
       .update({ message_history: messageHistory })
       .eq("id", conversation.id);
 
-    // If order is completed, create the order
+    // Handle order completion
     let orderId = null;
     let invoiceNumber = null;
     
     if (nextState === "completed" && updatedConversation.collected_name && updatedConversation.collected_phone && updatedConversation.collected_address) {
-      // Generate invoice number
       const { data: invoiceData } = await supabase.rpc("generate_invoice_number");
       invoiceNumber = invoiceData;
 
@@ -862,7 +999,7 @@ serve(async (req) => {
         price: updatedConversation.current_product_price,
       };
 
-      const { data: order, error: orderError } = await supabase
+      const { data: order } = await supabase
         .from("ai_orders")
         .insert({
           user_id: userId,
@@ -888,12 +1025,8 @@ serve(async (req) => {
         .select()
         .single();
 
-      if (order) {
-        orderId = order.id;
-        console.log(`[AI Agent] Order created: ${invoiceNumber}`);
-      }
+      if (order) orderId = order.id;
       
-      // Reset conversation for next order
       await supabase
         .from("ai_conversations")
         .update({
@@ -908,133 +1041,47 @@ serve(async (req) => {
         .eq("id", conversation.id);
     }
 
-    // Prepare response
+    // *** PREPARE RESPONSE ***
     const response: any = {
       reply: aiReply,
       intent,
       sentiment,
       conversationState: nextState,
-      shouldReact: isComment,
-      // Enhanced reaction logic based on actual sentiment
-      reactionType: sentiment === "positive" ? "LOVE" : sentiment === "negative" ? "NONE" : "LIKE",
-      fakeOrderScore: fakeScore,
-      productContext: productContext ? { name: productContext.name, price: productContext.price } : null,
-      customerResponseIntent: customerResponseIntent.responseType,
-      isReplyToPageComment,
     };
 
-    // *** For comments: SMART contextual reply based on what user actually said ***
+    // *** FOR COMMENTS: Use SMART analysis ***
     if (isComment) {
-      // Analyze the original comment to respond appropriately
-      const commentAnalysis = analyzeCommentForResponse(messageText, intent, sentiment);
+      const smartAnalysis = smartAnalyzeComment(
+        messageText,
+        messageType,
+        attachments,
+        postContext || undefined,
+        productContext || undefined,
+        isReplyToPageComment,
+        parentCommentId,
+        senderName
+      );
       
-      console.log(`[AI Agent] Comment Analysis: feedbackType=${commentAnalysis.feedbackType}, responseType=${commentAnalysis.responseType}, isPositive=${commentAnalysis.isPositiveFeedback}`);
-      console.log(`[AI Agent] Original comment: "${messageText}"`);
-      console.log(`[AI Agent] Is reply to page: ${isReplyToPageComment}, Customer response type: ${customerResponseIntent.responseType}`);
+      console.log(`[AI Agent] SMART ANALYSIS: needsInbox=${smartAnalysis.needsInboxMessage}, type=${smartAnalysis.commentType}, reason="${smartAnalysis.reason}"`);
       
-      // *** NEW: SMART REPLY FOR COMMENT REPLIES (when customer replies to AI's comment) ***
-      if (isReplyToPageComment || parentCommentId) {
-        console.log(`[AI Agent] Detected reply to page's previous comment - generating contextual response`);
-        
-        // Customer is replying to the page's comment - understand what they're saying
-        if (customerResponseIntent.isGoingToInbox) {
-          // Customer says they're going to message in inbox
-          response.commentReply = `ধন্যবাদ! 🙏 আপনার মেসেজের অপেক্ষায় আছি ইনবক্সে। সেখানে বিস্তারিত আলাপ করব! 📩😊`;
-          response.skipInboxMessage = true; // Don't send inbox message, they're coming to inbox
-          response.reactionType = "LIKE";
-        } else if (customerResponseIntent.isAcknowledgment) {
-          // Customer said ok/understood/etc.
-          response.commentReply = `ধন্যবাদ! 🙏 যেকোনো প্রয়োজনে জানাবেন। আমরা সবসময় আছি! 😊`;
-          response.skipInboxMessage = true;
-          response.reactionType = "LIKE";
-        } else if (customerResponseIntent.isAskingQuestion) {
-          // Customer is asking a follow-up question
-          response.commentReply = `ভালো প্রশ্ন! 👍 উত্তর আপনার ইনবক্সে পাঠিয়ে দিলাম। অনুগ্রহ করে চেক করুন 📩`;
-          // Let the inbox message contain the actual answer
-          response.reactionType = "LIKE";
-        } else if (customerResponseIntent.isProvingInfo) {
-          // Customer is providing some info (name, phone, etc.)
-          response.commentReply = `ধন্যবাদ! 🙏 আপনার তথ্য পেয়েছি। বিস্তারিত ইনবক্সে জানাচ্ছি 📩`;
-          response.reactionType = "LIKE";
-        } else {
-          // General reply to page's comment - acknowledge and continue
-          response.commentReply = `ধন্যবাদ ${senderName?.split(" ")[0] || ''}! 🙏 আপনার কথা বুঝেছি। আরো কোনো প্রশ্ন থাকলে জানাবেন! 😊`;
-          response.reactionType = "LIKE";
-        }
-        
-        // Build inbox message for reply context
-        let inboxMessage = `আসসালামু আলাইকুম ${senderName || ''} 👋\n\n`;
-        inboxMessage += `আপনি আমাদের কমেন্টের রিপ্লাইতে বলেছেন: "${messageText}"\n\n`;
-        
-        if (customerResponseIntent.isGoingToInbox) {
-          inboxMessage += `আপনি ইনবক্সে মেসেজ করছেন জেনে খুশি হলাম! এখানে আমরা বিস্তারিত আলোচনা করতে পারব। কী জানতে চান বলুন 🙂`;
-        } else if (!customerResponseIntent.isAcknowledgment) {
-          inboxMessage += aiReply;
-        }
-        
-        response.inboxMessage = inboxMessage;
-        
-      } else {
-        // *** ORIGINAL COMMENT (not a reply to page's comment) ***
-        
-        // *** SMART COMMENT REPLY - Based on what user actually said ***
-        if (commentAnalysis.isPositiveFeedback) {
-          // Generate contextual appreciation reply based on feedback type
-          switch (commentAnalysis.feedbackType) {
-            case "praise":
-              // User said something like "Great job", "Awesome", "Nice", etc.
-              response.commentReply = `অনেক ধন্যবাদ! 🥰 আপনার সুন্দর কথা আমাদের অনুপ্রাণিত করে। আমাদের সাথে থাকার জন্য কৃতজ্ঞ! 💕`;
-              break;
-            case "thanks":
-              // User said "Thanks", "ধন্যবাদ", etc.
-              response.commentReply = `আপনাকেও ধন্যবাদ! 🙏 আমাদের সাথে থাকার জন্য কৃতজ্ঞ। যেকোনো প্রয়োজনে জানাবেন! 😊`;
-              break;
-            case "emoji_reaction":
-              // User just reacted with emoji like 👍 or ❤️
-              response.commentReply = `ধন্যবাদ! 🥰💕`;
-              break;
-            case "love":
-              // User expressed love
-              response.commentReply = `অনেক অনেক ধন্যবাদ! 💕🥰 আপনার ভালোবাসা আমাদের অনুপ্রেরণা! 💖`;
-              break;
-            default:
-              response.commentReply = `আপনার সুন্দর কমেন্টের জন্য অনেক ধন্যবাদ! 🥰 আমাদের সাথে থাকার জন্য কৃতজ্ঞ। 💕`;
-          }
-          // For positive feedback, reaction should always be LOVE
-          response.reactionType = "LOVE";
-        } else if (productContext) {
-          // Comment is about a product
-          response.commentReply = `ধন্যবাদ কমেন্ট করার জন্য! 🙏 "${productContext.name}" এর বিস্তারিত তথ্য আপনার ইনবক্সে পাঠিয়ে দিয়েছি। চেক করুন 📩`;
-          response.reactionType = "LIKE";
-        } else if (commentAnalysis.isPriceInquiry) {
-          // Price inquiry
-          response.commentReply = `ধন্যবাদ! 🙏 দামসহ বিস্তারিত তথ্য আপনার ইনবক্সে পাঠিয়ে দিয়েছি। অনুগ্রহ করে চেক করুন 📩`;
-          response.reactionType = "LIKE";
-        } else if (commentAnalysis.isQuestion) {
-          // General question
-          response.commentReply = `ধন্যবাদ! 🙏 আপনার প্রশ্নের উত্তর ইনবক্সে পাঠিয়ে দিয়েছি। অনুগ্রহ করে চেক করুন 📩`;
-          response.reactionType = "LIKE";
-        } else if (commentAnalysis.isOrderIntent) {
-          // Order intent
-          response.commentReply = `ধন্যবাদ! 🛒 অর্ডারের জন্য আপনার ইনবক্সে মেসেজ করেছি। অনুগ্রহ করে চেক করুন 📩`;
-          response.reactionType = "LIKE";
-        } else {
-          // General comment - still acknowledge what they said
-          response.commentReply = `ধন্যবাদ কমেন্ট করার জন্য! 🙏 বিস্তারিত তথ্য আপনার ইনবক্সে পাঠিয়ে দিয়েছি। অনুগ্রহ করে চেক করুন 📩`;
-          response.reactionType = "LIKE";
-        }
-        
-        // Build detailed inbox message based on ACTUAL comment content
+      response.commentReply = smartAnalysis.commentReply;
+      response.reactionType = smartAnalysis.reactionType;
+      response.shouldReact = true;
+      response.skipInboxMessage = !smartAnalysis.needsInboxMessage;
+      response.smartAnalysis = {
+        type: smartAnalysis.commentType,
+        reason: smartAnalysis.reason,
+        sentiment: smartAnalysis.sentiment,
+      };
+      
+      // Build inbox message only if needed
+      if (smartAnalysis.needsInboxMessage) {
         let inboxMessage = `আসসালামু আলাইকুম ${senderName || ''} 👋\n\n`;
         
-        // Reference what the customer actually said
         if (messageText && messageText.trim().length > 0) {
           inboxMessage += `আপনি কমেন্ট করেছেন: "${messageText}"\n\n`;
-        } else {
-          inboxMessage += `আপনার কমেন্টের জন্য ধন্যবাদ!\n\n`;
         }
         
-        // Add post context if available
         if (postContext?.post_text) {
           const shortPostText = postContext.post_text.length > 80 
             ? postContext.post_text.substring(0, 80) + "..." 
@@ -1042,16 +1089,17 @@ serve(async (req) => {
           inboxMessage += `📱 পোস্ট: "${shortPostText}"\n\n`;
         }
         
-        // Add AI-generated response
         inboxMessage += aiReply;
         
-        // Add product context if available
         if (productContext) {
           inboxMessage += `\n\n📦 প্রোডাক্ট: ${productContext.name}\n💰 দাম: ৳${productContext.price}`;
         }
         
         response.inboxMessage = inboxMessage;
       }
+    } else {
+      // Inbox message (not comment)
+      response.reactionType = sentiment === "positive" ? "LOVE" : "LIKE";
     }
 
     if (orderId) {
@@ -1059,7 +1107,7 @@ serve(async (req) => {
       response.invoiceNumber = invoiceNumber;
     }
 
-    console.log(`[AI Agent] Response prepared for ${senderId}, state: ${nextState}, product: ${productContext?.name || 'none'}`);
+    console.log(`[AI Agent] Response: skipInbox=${response.skipInboxMessage}, reaction=${response.reactionType}`);
 
     return new Response(JSON.stringify(response), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
