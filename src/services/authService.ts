@@ -191,6 +191,24 @@ class AuthService {
   isAuthenticated(): boolean {
     return !!this.token;
   }
+
+  // Google OAuth methods
+  async getGoogleAuthUrl(redirectUri: string): Promise<{ auth_url: string; state: string }> {
+    return this.request("auth-google", {
+      method: "POST",
+      body: JSON.stringify({ action: "get_auth_url", redirect_uri: redirectUri }),
+    });
+  }
+
+  async handleGoogleCallback(code: string, redirectUri: string): Promise<AuthResponse & { is_new_user: boolean }> {
+    const data = await this.request<AuthResponse & { is_new_user: boolean }>("auth-google", {
+      method: "POST",
+      body: JSON.stringify({ action: "callback", code, redirect_uri: redirectUri }),
+    });
+
+    this.setToken(data.token);
+    return data;
+  }
 }
 
 export const authService = new AuthService();
