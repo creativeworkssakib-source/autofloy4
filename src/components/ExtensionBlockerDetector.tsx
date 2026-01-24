@@ -15,36 +15,42 @@ export const ExtensionBlockerDetector = () => {
       return;
     }
 
-    // Wait a bit for initial API calls to complete, then check if there were issues
+    // Test multiple endpoints that are commonly blocked
     const checkTimer = setTimeout(async () => {
-      try {
-        // Do a simple test fetch to our API
-        const testUrl = `https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1/site-settings`;
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
-        
-        const response = await fetch(testUrl, {
-          method: 'GET',
-          signal: controller.signal,
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        clearTimeout(timeoutId);
-        
-        // If we get here, fetch worked - no blocking
-        // (Response status doesn't matter, just that the request wasn't blocked)
-      } catch (error) {
-        // Check if it's a network error (extension blocking) vs timeout/abort
-        if (error instanceof TypeError && error.message === 'Failed to fetch') {
-          // This is likely extension blocking
-          if (!isDismissed()) {
-            setShowWarning(true);
+      const testUrls = [
+        'https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1/dashboard-stats',
+        'https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1/execution-logs',
+        'https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1/automations'
+      ];
+      
+      let blockedCount = 0;
+      
+      for (const testUrl of testUrls) {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 3000);
+          
+          await fetch(testUrl, {
+            method: 'GET',
+            signal: controller.signal,
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          clearTimeout(timeoutId);
+        } catch (error) {
+          if (error instanceof TypeError && error.message === 'Failed to fetch') {
+            blockedCount++;
           }
         }
       }
-    }, 3000); // Wait 3 seconds before checking
+      
+      // Show warning if 2 or more endpoints are blocked
+      if (blockedCount >= 2 && !isDismissed()) {
+        setShowWarning(true);
+      }
+    }, 2000); // Wait 2 seconds before checking
 
     return () => clearTimeout(checkTimer);
   }, []);
