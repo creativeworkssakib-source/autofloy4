@@ -2438,6 +2438,94 @@ Deno.serve(async (req) => {
       );
     }
 
+    // GET /admin/api-integrations - List all API integrations
+    if (req.method === "GET" && path === "api-integrations") {
+      const { data, error } = await supabase
+        .from("api_integrations")
+        .select("*")
+        .order("provider", { ascending: true });
+
+      if (error) {
+        console.error("[Admin] Failed to fetch API integrations:", error);
+        return new Response(
+          JSON.stringify({ error: "Failed to fetch API integrations: " + error.message }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Mask API keys for security
+      const maskedIntegrations = (data || []).map(int => ({
+        ...int,
+        api_key: int.api_key ? maskSecret(int.api_key) : null,
+        api_secret: int.api_secret ? maskSecret(int.api_secret) : null,
+      }));
+
+      console.log(`[Admin Audit] User ${authResult.userId} fetched API integrations`);
+
+      return new Response(
+        JSON.stringify({ integrations: maskedIntegrations }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // PUT /admin/api-integrations - Update an API integration
+    if (req.method === "PUT" && path === "api-integrations") {
+      const body = await req.json().catch(() => ({}));
+      const { provider, api_key, api_secret, is_enabled } = body;
+
+      if (!provider) {
+        return new Response(
+          JSON.stringify({ error: "Provider is required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Build update object - only include fields that are actually changing
+      const updates: Record<string, unknown> = {
+        is_enabled: is_enabled ?? false,
+        updated_at: new Date().toISOString(),
+      };
+
+      // Only update API key if provided and not masked
+      if (api_key !== null && api_key !== undefined && !api_key.includes("••••")) {
+        updates.api_key = api_key || null;
+      }
+
+      // Only update API secret if provided and not masked
+      if (api_secret !== null && api_secret !== undefined && !api_secret.includes("••••")) {
+        updates.api_secret = api_secret || null;
+      }
+
+      const { data, error } = await supabase
+        .from("api_integrations")
+        .update(updates)
+        .eq("provider", provider)
+        .select()
+        .single();
+
+      if (error) {
+        console.error("[Admin] Failed to update API integration:", error);
+        return new Response(
+          JSON.stringify({ error: "Failed to update API integration: " + error.message }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      console.log(`[Admin Audit] User ${authResult.userId} updated API integration: ${provider}`);
+
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          integration: {
+            ...data,
+            api_key: data.api_key ? maskSecret(data.api_key) : null,
+            api_secret: data.api_secret ? maskSecret(data.api_secret) : null,
+          }
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     return new Response(
       JSON.stringify({ error: "Not found" }),
       { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
