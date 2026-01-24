@@ -279,7 +279,7 @@ export async function removeAccount(id: string): Promise<{ success: boolean; mes
 // Facebook OAuth
 export async function getFacebookOAuthUrl(): Promise<{ url?: string; configured: boolean; error?: string }> {
   try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/facebook-oauth?action=start`, {
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/fb-oauth?action=start`, {
       headers: getAuthHeaders(),
     });
     return await response.json();
