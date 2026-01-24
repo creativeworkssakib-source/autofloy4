@@ -343,11 +343,11 @@ const ConnectFacebook = () => {
                   <span className="font-medium text-sm">{planLimits.planName} Plan</span>
                 </div>
                 <Badge variant="outline" className="text-xs">
-                  {planLimits.connectedFacebookPages} / {planLimits.maxFacebookPages} pages
+                  {enabledCount} / {planLimits.maxFacebookPages} pages
                 </Badge>
               </div>
-              <Progress value={Math.min(usagePercent, 100)} className="h-2" />
-              {planLimits.connectedFacebookPages >= planLimits.maxFacebookPages && (
+              <Progress value={Math.min((enabledCount / planLimits.maxFacebookPages) * 100, 100)} className="h-2" />
+              {enabledCount >= planLimits.maxFacebookPages && (
                 <div className="flex items-center gap-2 mt-2 text-sm text-amber-600">
                   <Info className="w-4 h-4" />
                   <span>Limit reached. <Button variant="link" className="p-0 h-auto text-primary" onClick={() => navigate("/pricing")}>Upgrade</Button> for more pages.</span>
