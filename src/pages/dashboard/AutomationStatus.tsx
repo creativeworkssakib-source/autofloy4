@@ -70,13 +70,13 @@ const AutomationStatus = () => {
 
       console.log("[AutomationStatus] Loading page memory for:", pageId, "attempt:", retryCount + 1);
       
-      // Use Supabase SDK for more reliable calls
+      // Use POST method with body - GET cannot have body
       const { data, error } = await supabase.functions.invoke("page-memory", {
-        method: "GET",
+        method: "POST",
         headers: {
           "Cache-Control": "no-cache",
         },
-        body: { page_id: pageId },
+        body: { page_id: pageId, action: "fetch" },
       });
       
       if (error) {
