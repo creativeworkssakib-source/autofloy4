@@ -81,6 +81,7 @@ export function useOfflineCategories() {
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { currentShop } = useShop();
+  const isOnline = useIsOnline();
 
   const refetch = useCallback(async () => {
     setLoading(true);
@@ -99,16 +100,21 @@ export function useOfflineCategories() {
     refetch();
   }, [refetch]);
 
+  // Real-time sync
+  useRealtimeSync({
+    table: 'shop_categories',
+    onChange: refetch,
+    enabled: isOnline,
+  });
+
   const createCategory = useCallback(async (data: { name: string; description?: string }) => {
     const result = await offlineShopService.createCategory(data);
-    await refetch();
     return { category: result.category };
-  }, [refetch]);
+  }, []);
 
   const deleteCategory = useCallback(async (id: string) => {
     await offlineShopService.deleteCategory(id);
-    await refetch();
-  }, [refetch]);
+  }, []);
 
   return {
     categories,
@@ -357,6 +363,7 @@ export function useOfflineCashTransactions() {
   const [transactions, setTransactions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { currentShop } = useShop();
+  const isOnline = useIsOnline();
 
   const refetch = useCallback(async () => {
     setLoading(true);
@@ -375,11 +382,17 @@ export function useOfflineCashTransactions() {
     refetch();
   }, [refetch]);
 
+  // Real-time sync
+  useRealtimeSync({
+    table: 'shop_cash_transactions',
+    onChange: refetch,
+    enabled: isOnline,
+  });
+
   const createTransaction = useCallback(async (data: any) => {
     const result = await offlineShopService.createCashTransaction(data);
-    await refetch();
     return { transaction: result.transaction };
-  }, [refetch]);
+  }, []);
 
   return {
     transactions,

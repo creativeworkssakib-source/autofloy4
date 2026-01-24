@@ -68,6 +68,7 @@ export function useOfflineSuppliersExt() {
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { currentShop } = useShop();
+  const isOnline = useIsOnline();
 
   const refetch = useCallback(async () => {
     setLoading(true);
@@ -86,27 +87,30 @@ export function useOfflineSuppliersExt() {
     refetch();
   }, [refetch]);
 
+  // Real-time sync
+  useRealtimeSync({
+    table: 'shop_suppliers',
+    onChange: refetch,
+    enabled: isOnline,
+  });
+
   const createSupplier = useCallback(async (data: any) => {
     const result = await offlineShopService.createSupplier(data);
-    await refetch();
     return { supplier: result.supplier };
-  }, [refetch]);
+  }, []);
 
   const updateSupplier = useCallback(async (id: string, data: any) => {
     await offlineShopService.updateSupplier({ id, ...data });
-    await refetch();
-  }, [refetch]);
+  }, []);
 
   const deleteSupplier = useCallback(async (id: string) => {
     await offlineShopService.deleteSupplier(id);
-    await refetch();
-  }, [refetch]);
+  }, []);
 
   const deleteSuppliers = useCallback(async (ids: string[]) => {
     const result = await offlineShopService.deleteSuppliers(ids);
-    await refetch();
     return result;
-  }, [refetch]);
+  }, []);
 
   return {
     suppliers,
@@ -125,6 +129,7 @@ export function useOfflineAdjustments(filterType?: string) {
   const [adjustments, setAdjustments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { currentShop } = useShop();
+  const isOnline = useIsOnline();
 
   const refetch = useCallback(async () => {
     setLoading(true);
@@ -142,6 +147,13 @@ export function useOfflineAdjustments(filterType?: string) {
   useEffect(() => {
     refetch();
   }, [refetch]);
+
+  // Real-time sync
+  useRealtimeSync({
+    table: 'shop_stock_adjustments',
+    onChange: refetch,
+    enabled: isOnline,
+  });
 
   const createAdjustment = useCallback(async (data: any) => {
     const result = await offlineShopService.createStockAdjustment(data);
@@ -170,6 +182,7 @@ export function useOfflineReturns(returnType?: 'sale' | 'purchase') {
   const [returns, setReturns] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { currentShop } = useShop();
+  const isOnline = useIsOnline();
 
   const refetch = useCallback(async () => {
     setLoading(true);
@@ -187,6 +200,13 @@ export function useOfflineReturns(returnType?: 'sale' | 'purchase') {
   useEffect(() => {
     refetch();
   }, [refetch]);
+
+  // Real-time sync
+  useRealtimeSync({
+    table: 'shop_returns',
+    onChange: refetch,
+    enabled: isOnline,
+  });
 
   const createReturn = useCallback(async (data: any) => {
     const result = await offlineShopService.processReturn(data);
@@ -211,6 +231,7 @@ export function useOfflineLoans(statusFilter?: string) {
   const [overdueLoans, setOverdueLoans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { currentShop } = useShop();
+  const isOnline = useIsOnline();
 
   const refetch = useCallback(async () => {
     setLoading(true);
@@ -232,6 +253,13 @@ export function useOfflineLoans(statusFilter?: string) {
   useEffect(() => {
     refetch();
   }, [refetch]);
+
+  // Real-time sync
+  useMultiTableRealtimeSync(
+    ['shop_loans', 'shop_loan_payments'],
+    refetch,
+    isOnline
+  );
 
   const createLoan = useCallback(async (data: any) => {
     const result = await offlineShopService.createLoan(data);
@@ -285,6 +313,7 @@ export function useOfflineCashSummary() {
   });
   const [loading, setLoading] = useState(true);
   const { currentShop } = useShop();
+  const isOnline = useIsOnline();
 
   const refetch = useCallback(async () => {
     setLoading(true);
@@ -319,6 +348,13 @@ export function useOfflineCashSummary() {
     refetch();
   }, [refetch]);
 
+  // Real-time sync - listen to all related tables
+  useMultiTableRealtimeSync(
+    ['shop_sales', 'shop_purchases', 'shop_expenses', 'shop_customers', 'shop_suppliers', 'shop_products', 'shop_stock_adjustments'],
+    refetch,
+    isOnline
+  );
+
   return {
     data,
     loading,
@@ -332,6 +368,7 @@ export function useOfflineDueCustomers() {
   const [dueCustomers, setDueCustomers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { currentShop } = useShop();
+  const isOnline = useIsOnline();
 
   const refetch = useCallback(async () => {
     setLoading(true);
@@ -430,16 +467,21 @@ export function useOfflineDueCustomers() {
     refetch();
   }, [refetch]);
 
+  // Real-time sync - update when sales change
+  useRealtimeSync({
+    table: 'shop_sales',
+    onChange: refetch,
+    enabled: isOnline,
+  });
+
   const updateSalePayment = useCallback(async (saleId: string, paidAmount: number, dueAmount: number) => {
     const status = dueAmount <= 0 ? 'paid' : 'partial';
     await offlineShopService.updateSale(saleId, { paid_amount: paidAmount, due_amount: dueAmount, payment_status: status });
-    await refetch();
-  }, [refetch]);
+  }, []);
 
   const deleteSales = useCallback(async (ids: string[]) => {
     await offlineShopService.deleteSales(ids);
-    await refetch();
-  }, [refetch]);
+  }, []);
 
   return {
     dueCustomers,
@@ -457,6 +499,7 @@ export function useOfflineDailyCashRegister(date?: string) {
   const [registers, setRegisters] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { currentShop } = useShop();
+  const isOnline = useIsOnline();
 
   const refetch = useCallback(async () => {
     setLoading(true);
@@ -477,6 +520,13 @@ export function useOfflineDailyCashRegister(date?: string) {
   useEffect(() => {
     refetch();
   }, [refetch]);
+
+  // Real-time sync - listen to cash register and related transactions
+  useMultiTableRealtimeSync(
+    ['shop_daily_cash_register', 'shop_sales', 'shop_expenses', 'shop_cash_transactions', 'shop_quick_expenses'],
+    refetch,
+    isOnline
+  );
 
   const openRegister = useCallback(async (openingBalance: number) => {
     const result = await offlineShopService.openCashRegister(openingBalance);
