@@ -101,7 +101,28 @@ serve(async (req) => {
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
   const url = new URL(req.url);
-  const pageId = url.searchParams.get("page_id");
+  
+  // Get page_id from URL params OR from body (for POST requests from SDK)
+  let pageId = url.searchParams.get("page_id");
+  let bodyData: Record<string, unknown> = {};
+  
+  // Try to parse body for POST/PUT requests
+  if (req.method === "POST" || req.method === "PUT") {
+    try {
+      const text = await req.text();
+      if (text) {
+        bodyData = JSON.parse(text);
+        // If page_id is in body, use it (for SDK invoke calls)
+        if (bodyData.page_id && !pageId) {
+          pageId = String(bodyData.page_id);
+        }
+      }
+    } catch (e) {
+      console.log("[page-memory] Failed to parse body:", e);
+    }
+  }
+  
+  console.log("[page-memory] page_id:", pageId, "method:", req.method);
 
   // Try to verify JWT first, but allow fallback to page_id based lookup
   let userId = await verifyJWT(req.headers.get("Authorization"));
@@ -122,7 +143,10 @@ serve(async (req) => {
   }
 
   // GET - Fetch page memory (allow with just page_id for read operations)
-  if (req.method === "GET") {
+  // Also handle POST with action=fetch for SDK invoke calls
+  const isFetchRequest = req.method === "GET" || (req.method === "POST" && (!bodyData.account_id || bodyData.action === "fetch"));
+  
+  if (isFetchRequest) {
     try {
       let query = supabase.from("page_memory").select("*");
 
@@ -167,13 +191,13 @@ serve(async (req) => {
     }
   }
 
-  // POST - Create or update page memory
+  // POST - Create or update page memory (when account_id is provided)
   if (req.method === "POST") {
     try {
-      const body = await req.json();
+      // Use already-parsed bodyData
       const { 
         account_id,
-        page_id,
+        page_id: bodyPageId,
         page_name,
         business_type,
         business_category,
@@ -187,11 +211,13 @@ serve(async (req) => {
         selling_rules,
         ai_behavior_rules,
         payment_rules,
-      } = body;
+      } = bodyData as Record<string, unknown>;
+      
+      const finalPageId = bodyPageId || pageId;
 
-      console.log("[page-memory] POST body:", { account_id, page_id, page_name, automation_settings });
+      console.log("[page-memory] POST body:", { account_id, page_id: finalPageId, page_name, automation_settings });
 
-      if (!page_id || !account_id) {
+      if (!finalPageId || !account_id) {
         return new Response(JSON.stringify({ error: "page_id and account_id are required" }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -239,7 +265,7 @@ serve(async (req) => {
         .upsert({
           user_id: userId,
           account_id,
-          page_id,
+          page_id: finalPageId,
           page_name: page_name || account.name,
           business_type,
           business_category,
@@ -270,14 +296,14 @@ serve(async (req) => {
       // Notify webhook about page memory update
       notifyWebhook("page_memory_updated", {
         user_id: userId,
-        page_id,
+        page_id: finalPageId,
         page_name: page_name || account.name,
         business_type,
         preferred_tone,
         automation_settings,
       });
 
-      console.log(`[Page Memory] Updated memory for page ${page_id}`);
+      console.log(`[Page Memory] Updated memory for page ${finalPageId}`);
 
       return new Response(JSON.stringify({ memory }), {
         status: 200,
