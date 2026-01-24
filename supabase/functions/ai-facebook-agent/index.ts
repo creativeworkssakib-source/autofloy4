@@ -745,8 +745,98 @@ function calculateFakeOrderScore(conversation: ConversationState, newMessage: st
   return Math.min(score, 100);
 }
 
+// *** SMART MEMORY MANAGEMENT - Keep database light ***
+const MAX_MESSAGE_HISTORY = 15; // Only keep last 15 messages to save space
+
+// *** GENERATE COMPACT SUMMARY from conversation ***
+function generateCustomerSummary(
+  messageHistory: any[], 
+  existingSummary?: string,
+  senderName?: string
+): string {
+  const topics: Set<string> = new Set();
+  const products: Set<string> = new Set();
+  let hasOrdered = false;
+  let hasComplaint = false;
+  let wantsDiscount = false;
+  let isReturningCustomer = existingSummary ? true : false;
+  
+  for (const msg of messageHistory) {
+    if (msg.role === "user") {
+      const content = msg.content?.toLowerCase() || "";
+      
+      // Track key topics
+      if (/দাম|price|কত/.test(content)) topics.add("দাম জিজ্ঞেস করেছে");
+      if (/order|অর্ডার|কিনব|নিব/.test(content)) topics.add("অর্ডার করতে চায়");
+      if (/delivery|ডেলিভারি/.test(content)) topics.add("ডেলিভারি জানতে চায়");
+      if (/discount|ছাড়|কমাও/.test(content)) { topics.add("ডিসকাউন্ট চায়"); wantsDiscount = true; }
+      if (/problem|সমস্যা|complaint/.test(content)) { topics.add("সমস্যা আছে"); hasComplaint = true; }
+      if (/confirmed|হবে|নিলাম/.test(content)) hasOrdered = true;
+      
+      // Track products
+      if (msg.productContext?.name) {
+        products.add(msg.productContext.name);
+      }
+    }
+  }
+  
+  // Build compact summary
+  let summary = "";
+  if (senderName) summary += `নাম: ${senderName}। `;
+  if (isReturningCustomer) summary += "আগেও কথা হয়েছে। ";
+  if (products.size > 0) summary += `প্রোডাক্ট: ${[...products].slice(-3).join(", ")}। `;
+  if (topics.size > 0) summary += `বিষয়: ${[...topics].slice(-4).join(", ")}। `;
+  if (hasOrdered) summary += "আগে অর্ডার করেছে। ";
+  if (hasComplaint) summary += "⚠️ সমস্যা ছিল - সাবধানে কথা বলুন। ";
+  if (wantsDiscount) summary += "দাম কমাতে চায়। ";
+  
+  // Merge with existing summary
+  if (existingSummary && !summary.includes(existingSummary)) {
+    // Keep important parts from old summary
+    const oldParts = existingSummary.split("। ").filter(p => 
+      p.includes("অর্ডার") || p.includes("সমস্যা") || p.includes("প্রোডাক্ট")
+    );
+    if (oldParts.length > 0) {
+      summary = oldParts.join("। ") + "। " + summary;
+    }
+  }
+  
+  return summary.substring(0, 500); // Max 500 chars
+}
+
+// *** EXTRACT PRODUCTS DISCUSSED ***
+function extractProductsDiscussed(messageHistory: any[]): string[] {
+  const products: Set<string> = new Set();
+  for (const msg of messageHistory) {
+    if (msg.productContext?.name) {
+      products.add(msg.productContext.name);
+    }
+    // Also extract from message content
+    const content = msg.content?.toLowerCase() || "";
+    const productPatterns = /iphone|samsung|xiaomi|realme|oppo|vivo|nokia|huawei/gi;
+    const matches = content.match(productPatterns);
+    if (matches) {
+      matches.forEach((m: string) => products.add(m));
+    }
+  }
+  return [...products].slice(-5); // Keep last 5 products
+}
+
+// *** TRIM MESSAGE HISTORY to save space ***
+function trimMessageHistory(messageHistory: any[]): any[] {
+  if (messageHistory.length <= MAX_MESSAGE_HISTORY) {
+    return messageHistory;
+  }
+  // Keep only last MAX_MESSAGE_HISTORY messages
+  return messageHistory.slice(-MAX_MESSAGE_HISTORY);
+}
+
 // *** ANALYZE CONVERSATION HISTORY FOR CONTEXT ***
-function analyzeConversationHistory(messageHistory: any[]): {
+function analyzeConversationHistory(
+  messageHistory: any[],
+  customerSummary?: string,
+  totalMessagesCount?: number
+): {
   summary: string;
   topicsDiscussed: string[];
   customerMood: string;
@@ -755,6 +845,7 @@ function analyzeConversationHistory(messageHistory: any[]): {
   lastInteractionDays: number;
   customerPreferences: string;
   importantPoints: string[];
+  isReturningCustomer: boolean;
 } {
   const topics: string[] = [];
   const products: string[] = [];
@@ -763,6 +854,9 @@ function analyzeConversationHistory(messageHistory: any[]): {
   const importantPoints: string[] = [];
   let positiveCount = 0;
   let negativeCount = 0;
+  
+  // Check if returning customer
+  const isReturningCustomer = (totalMessagesCount || 0) > messageHistory.length || !!customerSummary;
   
   for (const msg of messageHistory) {
     if (msg.role === "user") {
@@ -791,7 +885,7 @@ function analyzeConversationHistory(messageHistory: any[]): {
         hasOrdered = true;
       }
       
-      // Extract important points customer mentioned
+      // Extract important points
       if (/urgent|জরুরি|তাড়াতাড়ি/.test(content)) {
         importantPoints.push("Customer wants quick response/delivery");
       }
@@ -818,21 +912,26 @@ function analyzeConversationHistory(messageHistory: any[]): {
     lastInteractionDays = Math.floor((now.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
   }
   
-  // Build summary
+  // Build summary - include customer summary if available
   let summary = "";
-  if (messageHistory.length > 0) {
-    summary = `This customer has sent ${messageHistory.length} messages. `;
-    if (topics.includes("order_intent") || hasOrdered) {
-      summary += "They have shown interest in ordering. ";
+  if (customerSummary) {
+    summary = `[Previous history: ${customerSummary}] `;
+  }
+  
+  const actualMessageCount = totalMessagesCount || messageHistory.length;
+  if (actualMessageCount > 0) {
+    summary += `Total messages: ${actualMessageCount}. `;
+    if (isReturningCustomer) {
+      summary += "This is a RETURNING customer - greet warmly! ";
     }
-    if (topics.includes("price_inquiry")) {
-      summary += "They asked about prices. ";
+    if (topics.includes("order_intent") || hasOrdered) {
+      summary += "Interested in ordering. ";
     }
     if (customerMood === "frustrated") {
-      summary += "They seem unhappy - be extra helpful! ";
+      summary += "⚠️ Unhappy - be extra helpful! ";
     }
     if (lastInteractionDays > 1) {
-      summary += `Last message was ${lastInteractionDays} days ago - welcome them back! `;
+      summary += `Last message ${lastInteractionDays} days ago - welcome back! `;
     }
   }
   
@@ -845,48 +944,97 @@ function analyzeConversationHistory(messageHistory: any[]): {
     lastInteractionDays,
     customerPreferences: topics.includes("discount") ? "price-conscious" : "quality-focused",
     importantPoints,
+    isReturningCustomer,
   };
 }
 
-// *** BUILD CONVERSATION CONTEXT FOR AI ***
-function buildConversationContext(messageHistory: any[], senderName?: string): string {
-  if (!messageHistory || messageHistory.length === 0) {
-    return "এটি এই কাস্টমারের সাথে প্রথম কথোপকথন।";
+// *** BUILD CONVERSATION CONTEXT FOR AI - Uses smart summary ***
+function buildConversationContext(
+  messageHistory: any[], 
+  senderName?: string,
+  customerSummary?: string,
+  totalMessagesCount?: number,
+  lastProductsDiscussed?: string[],
+  hasOrderedBefore?: boolean
+): string {
+  const isFirstConversation = (!messageHistory || messageHistory.length === 0) && !customerSummary;
+  
+  if (isFirstConversation) {
+    return "এটি এই কাস্টমারের সাথে প্রথম কথোপকথন। নতুন কাস্টমার - সুন্দরভাবে স্বাগত জানান!";
   }
   
-  const analysis = analyzeConversationHistory(messageHistory);
+  const analysis = analyzeConversationHistory(messageHistory, customerSummary, totalMessagesCount);
   
-  let context = `## 📋 পূর্ববর্তী কথোপকথনের সারসংক্ষেপ (CONVERSATION HISTORY)
-${senderName ? `Customer Name: ${senderName}` : ""}
-Total Messages: ${messageHistory.length}
-Customer Mood: ${analysis.customerMood === "happy" ? "খুশি 😊" : analysis.customerMood === "frustrated" ? "হতাশ 😔" : "স্বাভাবিক"}
-${analysis.lastInteractionDays > 0 ? `Last Interaction: ${analysis.lastInteractionDays} দিন আগে` : ""}
-
-### যে বিষয়গুলো আলোচনা হয়েছে:
-${analysis.topicsDiscussed.length > 0 ? analysis.topicsDiscussed.map(t => `- ${t}`).join("\n") : "- কোনো নির্দিষ্ট বিষয় নেই"}
-
-${analysis.previousProducts.length > 0 ? `### আগে যে প্রোডাক্টগুলো নিয়ে কথা হয়েছে:\n${analysis.previousProducts.map(p => `- ${p}`).join("\n")}` : ""}
-
-${analysis.importantPoints.length > 0 ? `### ⚠️ গুরুত্বপূর্ণ পয়েন্ট:\n${analysis.importantPoints.map(p => `- ${p}`).join("\n")}` : ""}
-
-### সাম্প্রতিক কথোপকথন (Last 5 messages):
+  let context = `## 📋 কাস্টমার কনটেক্সট (CUSTOMER CONTEXT)
+${senderName ? `👤 Customer Name: ${senderName}` : ""}
+${analysis.isReturningCustomer ? "🔄 **এটি একজন পুরানো কাস্টমার - আগেও কথা হয়েছে!**" : "🆕 নতুন কাস্টমার"}
+📊 Total Interactions: ${totalMessagesCount || messageHistory.length}
+😊 Customer Mood: ${analysis.customerMood === "happy" ? "খুশি" : analysis.customerMood === "frustrated" ? "হতাশ ⚠️" : "স্বাভাবিক"}
+${hasOrderedBefore ? "✅ **আগে অর্ডার করেছেন - বিশ্বস্ত কাস্টমার!**" : ""}
+${analysis.lastInteractionDays > 0 ? `⏰ Last Interaction: ${analysis.lastInteractionDays} দিন আগে - স্বাগত জানান!` : ""}
 `;
-  
-  // Add last 5 messages as context
-  const recentMessages = messageHistory.slice(-5);
-  for (const msg of recentMessages) {
-    const role = msg.role === "user" ? "🧑 Customer" : "🤖 AI";
-    const shortContent = msg.content?.length > 100 ? msg.content.substring(0, 100) + "..." : msg.content;
-    context += `${role}: ${shortContent}\n`;
+
+  // Include saved summary if available
+  if (customerSummary) {
+    context += `
+### 💾 সংরক্ষিত সারসংক্ষেপ (Saved Summary):
+${customerSummary}
+`;
+  }
+
+  // Products discussed
+  if (lastProductsDiscussed && lastProductsDiscussed.length > 0) {
+    context += `
+### 📦 আগে যে প্রোডাক্টগুলো নিয়ে কথা হয়েছে:
+${lastProductsDiscussed.map(p => `- ${p}`).join("\n")}
+`;
+  } else if (analysis.previousProducts.length > 0) {
+    context += `
+### 📦 আগে যে প্রোডাক্টগুলো নিয়ে কথা হয়েছে:
+${analysis.previousProducts.map(p => `- ${p}`).join("\n")}
+`;
+  }
+
+  // Topics and important points
+  if (analysis.topicsDiscussed.length > 0) {
+    context += `
+### 💬 যে বিষয়গুলো আলোচনা হয়েছে:
+${analysis.topicsDiscussed.map(t => `- ${t}`).join("\n")}
+`;
+  }
+
+  if (analysis.importantPoints.length > 0) {
+    context += `
+### ⚠️ গুরুত্বপূর্ণ পয়েন্ট (মনে রাখুন!):
+${analysis.importantPoints.map(p => `- ${p}`).join("\n")}
+`;
+  }
+
+  // Add last few messages as immediate context
+  if (messageHistory.length > 0) {
+    context += `
+### 🗣️ সাম্প্রতিক কথোপকথন (Last ${Math.min(5, messageHistory.length)} messages):
+`;
+    const recentMessages = messageHistory.slice(-5);
+    for (const msg of recentMessages) {
+      const role = msg.role === "user" ? "🧑 Customer" : "🤖 AI";
+      const shortContent = msg.content?.length > 80 ? msg.content.substring(0, 80) + "..." : msg.content;
+      context += `${role}: ${shortContent}\n`;
+    }
   }
   
   return context;
 }
 
-// Build system prompt
+// Build system prompt - now uses smart memory fields
 function buildSystemPrompt(
   pageMemory: PageMemory, 
-  conversationState: ConversationState,
+  conversationState: ConversationState & { 
+    customer_summary?: string; 
+    total_messages_count?: number;
+    last_products_discussed?: string[];
+    has_ordered_before?: boolean;
+  },
   productContext?: ProductContext,
   postContext?: PostContext,
   senderName?: string
@@ -895,8 +1043,15 @@ function buildSystemPrompt(
   const language = pageMemory.detected_language === "english" ? "English" : 
                    pageMemory.detected_language === "bangla" ? "বাংলা" : "বাংলা এবং English মিশিয়ে (Banglish)";
   
-  // Build conversation context
-  const conversationContext = buildConversationContext(conversationState.message_history || [], senderName);
+  // Build conversation context with smart memory
+  const conversationContext = buildConversationContext(
+    conversationState.message_history || [], 
+    senderName,
+    conversationState.customer_summary,
+    conversationState.total_messages_count,
+    conversationState.last_products_discussed,
+    conversationState.has_ordered_before
+  );
   
   let prompt = `You are an AI sales agent for a business. You must behave like a polite, trained human sales representative who REMEMBERS all previous conversations.
 
@@ -1255,8 +1410,16 @@ serve(async (req) => {
     const customerResponseIntent = detectCustomerResponseIntent(messageText, conversation.message_history || []);
     console.log(`[AI Agent] Customer Response Intent: ${customerResponseIntent}`);
 
+    // *** SMART MEMORY: Check if returning customer ***
+    const isReturningCustomer = (conversation.total_messages_count || 0) > 0 || !!conversation.customer_summary;
+    if (isReturningCustomer) {
+      console.log(`[AI Agent] 🔄 RETURNING CUSTOMER detected! Previous summary: ${conversation.customer_summary || 'None'}`);
+      console.log(`[AI Agent] Total previous messages: ${conversation.total_messages_count || 0}`);
+      console.log(`[AI Agent] Products discussed before: ${conversation.last_products_discussed?.join(', ') || 'None'}`);
+    }
+
     // Update message history with rich context
-    const messageHistory = conversation.message_history || [];
+    let messageHistory = conversation.message_history || [];
     messageHistory.push({
       role: "user",
       content: messageText,
@@ -1269,6 +1432,22 @@ serve(async (req) => {
       productContext: productContext ? { name: productContext.name, price: productContext.price } : null,
       isReplyToPageComment,
     });
+
+    // *** SMART MEMORY: Trim history to save database space ***
+    const totalMessagesCount = (conversation.total_messages_count || 0) + 1;
+    const trimmedHistory = trimMessageHistory(messageHistory);
+    
+    // *** SMART MEMORY: Generate/update customer summary ***
+    const customerSummary = generateCustomerSummary(
+      messageHistory, 
+      conversation.customer_summary, 
+      senderName || conversation.sender_name
+    );
+    
+    // *** SMART MEMORY: Extract products discussed ***
+    const productsDiscussed = extractProductsDiscussed(messageHistory);
+    
+    console.log(`[AI Agent] 💾 Memory: Keeping ${trimmedHistory.length}/${messageHistory.length} messages, Summary: "${customerSummary.substring(0, 100)}..."`);
 
     // Determine next state
     let nextState = conversation.conversation_state;
@@ -1292,13 +1471,17 @@ serve(async (req) => {
       nextState = getNextState(conversation.conversation_state, intent, false);
     }
 
-    // Update conversation
+    // *** SMART UPDATE: Save trimmed history + summary ***
     await supabase
       .from("ai_conversations")
       .update({
         conversation_state: nextState,
         fake_order_score: fakeScore,
-        message_history: messageHistory,
+        message_history: trimmedHistory, // Only keep last N messages
+        customer_summary: customerSummary, // Store compact summary
+        last_products_discussed: productsDiscussed,
+        total_messages_count: totalMessagesCount,
+        has_ordered_before: conversation.has_ordered_before || nextState === "completed",
         last_message_at: new Date().toISOString(),
         ...collectedData,
       })
