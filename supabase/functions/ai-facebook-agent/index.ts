@@ -1193,8 +1193,84 @@ serve(async (req) => {
         response.inboxMessage = inboxMessage;
       }
     } else {
-      // Inbox message (not comment)
-      response.reactionType = sentiment === "positive" ? "LOVE" : "LIKE";
+      // *** FOR MESSENGER INBOX: Also use SMART analysis for stickers/GIFs/emojis ***
+      const isMediaMessage = messageType === "sticker" || messageType === "gif" || 
+        messageType === "animated_sticker" || messageType === "image" || messageType === "video" ||
+        /^[\s]*[👍❤️🔥💯💕😍🥰😊👏💪🙌❤]+[\s]*$/.test(messageText);
+      
+      if (isMediaMessage) {
+        // Apply smart analysis for media messages in inbox too
+        const smartAnalysis = smartAnalyzeComment(
+          messageText,
+          messageType,
+          attachments,
+          undefined,
+          productContext || undefined,
+          false,
+          undefined,
+          senderName
+        );
+        
+        console.log(`[AI Agent] INBOX SMART ANALYSIS: type=${smartAnalysis.commentType}, sentiment=${smartAnalysis.sentiment}`);
+        
+        // Generate appropriate reply based on message type
+        if (messageType === "sticker" || smartAnalysis.isSticker || smartAnalysis.isJustReaction) {
+          // Sticker/emoji in inbox - respond warmly, don't ask about photos
+          const stickerAnalysis = analyzeSticker(undefined, messageText, attachments);
+          
+          let smartReply = "";
+          if (stickerAnalysis.sentiment === "positive") {
+            const positiveReplies = [
+              `${senderName ? senderName.split(" ")[0] + ", " : ""}ধন্যবাদ! 😊 আপনাকে কীভাবে সাহায্য করতে পারি?`,
+              `${senderName ? senderName.split(" ")[0] + ", " : ""}আপনার সাথে কথা বলতে পেরে ভালো লাগছে! 💕 কিছু জানতে চাইলে বলুন।`,
+              `ধন্যবাদ! 🙏 কোন প্রোডাক্ট সম্পর্কে জানতে চান?`,
+            ];
+            smartReply = positiveReplies[Math.floor(Math.random() * positiveReplies.length)];
+          } else if (stickerAnalysis.sentiment === "negative") {
+            smartReply = `${senderName ? senderName.split(" ")[0] + ", " : ""}কোনো সমস্যা হলে জানাবেন, সাহায্য করার চেষ্টা করব। 🙏`;
+          } else {
+            smartReply = `${senderName ? senderName.split(" ")[0] + ", " : ""}হ্যাঁ, বলুন কীভাবে সাহায্য করতে পারি? 😊`;
+          }
+          
+          response.reply = smartReply;
+          response.reactionType = stickerAnalysis.reaction;
+          response.smartAnalysis = {
+            type: smartAnalysis.commentType,
+            reason: smartAnalysis.reason,
+            sentiment: smartAnalysis.sentiment,
+          };
+        } else if (messageType === "gif") {
+          // GIF in inbox - respond with matching energy
+          const gifAnalysis = analyzeSticker(undefined, messageText, attachments);
+          
+          let gifReply = "";
+          if (gifAnalysis.sentiment === "positive") {
+            const gifReplies = [
+              `হাহা! 😄 আপনার সাথে কথা বলতে মজা লাগছে! কিছু জানতে চান?`,
+              `😊💕 ধন্যবাদ! কীভাবে সাহায্য করতে পারি?`,
+              `🔥 নাইস! কোন প্রোডাক্ট পছন্দ হয়েছে?`,
+            ];
+            gifReply = gifReplies[Math.floor(Math.random() * gifReplies.length)];
+          } else {
+            gifReply = `😊 বলুন, কীভাবে সাহায্য করতে পারি?`;
+          }
+          
+          response.reply = gifReply;
+          response.reactionType = gifAnalysis.reaction;
+          response.smartAnalysis = {
+            type: "gif",
+            reason: gifAnalysis.meaning,
+            sentiment: gifAnalysis.sentiment,
+          };
+        } else if (smartAnalysis.isPhoto && !messageText?.trim()) {
+          // Photo without text - ask context nicely
+          response.reply = `ছবিটা পেয়েছি! 📷 এই ছবি সম্পর্কে কী জানতে চাইছেন? অথবা কোন প্রোডাক্টের ছবি হলে বলুন, দাম জানিয়ে দেব! 😊`;
+          response.reactionType = "LIKE";
+        }
+      } else {
+        // Regular text message
+        response.reactionType = sentiment === "positive" ? "LOVE" : "LIKE";
+      }
     }
 
     if (orderId) {
