@@ -112,13 +112,15 @@ const PageLoader = () => (
   </div>
 );
 
-// Configure React Query with caching
+// Configure React Query - NO CACHING for always fresh data
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 5, // 5 minutes - data won't refetch if fresh
-      gcTime: 1000 * 60 * 30, // 30 minutes cache time
-      refetchOnWindowFocus: false, // Don't refetch when tab gains focus
+      staleTime: 0, // Always consider data stale - refetch immediately
+      gcTime: 0, // Don't cache - always get fresh data
+      refetchOnWindowFocus: true, // Refetch when tab gains focus
+      refetchOnMount: true, // Always refetch on component mount
+      refetchOnReconnect: true, // Refetch when network reconnects
       retry: 1, // Only retry once on failure
     },
   },
