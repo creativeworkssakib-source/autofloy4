@@ -18,6 +18,7 @@ import {
   Trash2,
   Crown,
   Info,
+  ShoppingCart,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -503,7 +504,7 @@ const ConnectFacebook = () => {
               </p>
               
               {/* Features */}
-              <div className="grid grid-cols-3 gap-4 mb-6">
+              <div className="grid grid-cols-4 gap-3 mb-6">
                 <div className="text-center">
                   <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mx-auto mb-2">
                     <MessageSquare className="w-5 h-5 text-primary" />
@@ -521,6 +522,12 @@ const ConnectFacebook = () => {
                     <Shield className="w-5 h-5 text-primary" />
                   </div>
                   <p className="text-xs text-muted-foreground">Spam Block</p>
+                </div>
+                <div className="text-center">
+                  <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mx-auto mb-2">
+                    <ShoppingCart className="w-5 h-5 text-primary" />
+                  </div>
+                  <p className="text-xs text-muted-foreground">Order Taking</p>
                 </div>
               </div>
 
