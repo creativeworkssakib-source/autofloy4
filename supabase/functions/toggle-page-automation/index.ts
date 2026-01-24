@@ -10,6 +10,11 @@ const corsHeaders = {
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const jwtSecret = Deno.env.get("JWT_SECRET")!;
+const tokenEncryptionKey = Deno.env.get("TOKEN_ENCRYPTION_KEY")!;
+const facebookAppId = Deno.env.get("FACEBOOK_APP_ID")!;
+
+const FB_API_VERSION = "v21.0";
+const GRAPH_API_URL = `https://graph.facebook.com/${FB_API_VERSION}`;
 
 // Fallback plan limits (used if database doesn't have the plan)
 const FALLBACK_LIMITS: Record<string, number> = {
@@ -21,6 +26,115 @@ const FALLBACK_LIMITS: Record<string, number> = {
   business: 5,
   lifetime: 999,
 };
+
+// Decrypt v2 encrypted token
+async function decryptToken(encryptedData: string): Promise<string> {
+  if (!encryptedData.startsWith("v2:")) {
+    throw new Error("Invalid token format - expected v2");
+  }
+  
+  const parts = encryptedData.substring(3).split(":");
+  if (parts.length !== 3) {
+    throw new Error("Invalid v2 token structure");
+  }
+  
+  const [saltB64, ivB64, encryptedB64] = parts;
+  
+  const salt = Uint8Array.from(atob(saltB64), c => c.charCodeAt(0));
+  const iv = Uint8Array.from(atob(ivB64), c => c.charCodeAt(0));
+  const encrypted = Uint8Array.from(atob(encryptedB64), c => c.charCodeAt(0));
+  
+  const encoder = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(tokenEncryptionKey),
+    { name: "PBKDF2" },
+    false,
+    ["deriveKey"]
+  );
+  
+  const key = await crypto.subtle.deriveKey(
+    { name: "PBKDF2", salt, iterations: 100000, hash: "SHA-256" },
+    keyMaterial,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["decrypt"]
+  );
+  
+  const decrypted = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv },
+    key,
+    encrypted
+  );
+  
+  return new TextDecoder().decode(decrypted);
+}
+
+// Subscribe page to webhooks via Facebook Graph API
+async function subscribePageToWebhooks(pageId: string, pageAccessToken: string): Promise<boolean> {
+  try {
+    console.log(`[Webhook Subscribe] Subscribing page ${pageId} to webhooks...`);
+    
+    // Subscribe to messages, feed, and messaging_postbacks
+    const subscribeUrl = `${GRAPH_API_URL}/${pageId}/subscribed_apps`;
+    
+    const response = await fetch(subscribeUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        access_token: pageAccessToken,
+        subscribed_fields: ["messages", "feed", "messaging_postbacks"],
+      }),
+    });
+    
+    const result = await response.json();
+    
+    if (result.error) {
+      console.error(`[Webhook Subscribe] Error for page ${pageId}:`, result.error);
+      return false;
+    }
+    
+    console.log(`[Webhook Subscribe] Success for page ${pageId}:`, result);
+    return result.success === true;
+  } catch (error) {
+    console.error(`[Webhook Subscribe] Exception for page ${pageId}:`, error);
+    return false;
+  }
+}
+
+// Unsubscribe page from webhooks
+async function unsubscribePageFromWebhooks(pageId: string, pageAccessToken: string): Promise<boolean> {
+  try {
+    console.log(`[Webhook Unsubscribe] Unsubscribing page ${pageId} from webhooks...`);
+    
+    const unsubscribeUrl = `${GRAPH_API_URL}/${pageId}/subscribed_apps`;
+    
+    const response = await fetch(unsubscribeUrl, {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        access_token: pageAccessToken,
+      }),
+    });
+    
+    const result = await response.json();
+    
+    if (result.error) {
+      console.error(`[Webhook Unsubscribe] Error for page ${pageId}:`, result.error);
+      return false;
+    }
+    
+    console.log(`[Webhook Unsubscribe] Success for page ${pageId}:`, result);
+    return result.success === true;
+  } catch (error) {
+    console.error(`[Webhook Unsubscribe] Exception for page ${pageId}:`, error);
+    return false;
+  }
+}
 
 // Simple JWT verification without external dependency
 async function verifyToken(authHeader: string | null): Promise<string | null> {
@@ -193,10 +307,10 @@ serve(async (req) => {
 
       console.log(`[Toggle Page] user=${userId.substring(0, 8)}... page=${page_id} enabled=${enabled}`);
 
-      // Verify user owns this page
+      // Verify user owns this page and get encrypted token
       const { data: page, error: pageError } = await supabase
         .from("connected_accounts")
-        .select("id, external_id, name, platform, is_connected")
+        .select("id, external_id, name, platform, is_connected, access_token_encrypted, encryption_version")
         .eq("id", page_id)
         .eq("user_id", userId)
         .eq("platform", "facebook")
@@ -206,6 +320,23 @@ serve(async (req) => {
         console.log("[Toggle Page] Page not found:", pageError);
         return new Response(JSON.stringify({ error: "Page not found or access denied" }), {
           status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const externalPageId = page.external_id as string;
+      const pageName = page.name as string;
+      const encryptedToken = page.access_token_encrypted as string;
+
+      // Decrypt the page access token
+      let pageAccessToken: string;
+      try {
+        pageAccessToken = await decryptToken(encryptedToken);
+        console.log(`[Toggle Page] Decrypted token for page ${pageName}`);
+      } catch (decryptError) {
+        console.error("[Toggle Page] Failed to decrypt token:", decryptError);
+        return new Response(JSON.stringify({ error: "Failed to decrypt page token. Please reconnect Facebook." }), {
+          status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
@@ -248,6 +379,24 @@ serve(async (req) => {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
+
+        // *** CRITICAL: Subscribe page to Facebook webhooks ***
+        const webhookSubscribed = await subscribePageToWebhooks(externalPageId, pageAccessToken);
+        if (!webhookSubscribed) {
+          console.error(`[Toggle Page] Failed to subscribe page ${pageName} to webhooks`);
+          return new Response(JSON.stringify({ 
+            error: "Failed to subscribe page to Facebook webhooks. Please try again or reconnect Facebook.",
+            webhook_error: true,
+          }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        console.log(`[Toggle Page] Successfully subscribed ${pageName} to Facebook webhooks`);
+      } else {
+        // If disabling, unsubscribe from webhooks
+        const webhookUnsubscribed = await unsubscribePageFromWebhooks(externalPageId, pageAccessToken);
+        console.log(`[Toggle Page] Webhook unsubscribe result for ${pageName}: ${webhookUnsubscribed}`);
       }
 
       // Update the page connection status
@@ -265,28 +414,22 @@ serve(async (req) => {
         });
       }
 
-      // If enabling, create/update page_memory
-      if (enabled) {
-        const pageName = page.name as string;
-        const externalId = page.external_id as string;
-        
-        await supabase.from("page_memory").upsert({
-          user_id: userId,
-          account_id: page.id,
-          page_id: externalId,
-          page_name: pageName,
-          detected_language: "auto",
-          preferred_tone: "friendly",
-          webhook_subscribed: true,
-          webhook_subscribed_at: new Date().toISOString(),
-          automation_settings: {},
-        }, {
-          onConflict: "user_id,page_id",
-        });
-        console.log(`[Toggle Page] Created/updated page_memory for: ${pageName}`);
-      }
+      // Update page_memory
+      await supabase.from("page_memory").upsert({
+        user_id: userId,
+        account_id: page.id,
+        page_id: externalPageId,
+        page_name: pageName,
+        detected_language: "auto",
+        preferred_tone: "friendly",
+        webhook_subscribed: enabled,
+        webhook_subscribed_at: enabled ? new Date().toISOString() : null,
+        automation_settings: {},
+      }, {
+        onConflict: "user_id,page_id",
+      });
+      console.log(`[Toggle Page] Updated page_memory for: ${pageName}`);
 
-      const pageName = page.name as string;
       console.log(`[Toggle Page] Successfully ${enabled ? "enabled" : "disabled"} automation for: ${pageName}`);
 
       // Get updated connected count for live update
@@ -300,9 +443,10 @@ serve(async (req) => {
       return new Response(JSON.stringify({ 
         success: true, 
         message: enabled 
-          ? `Automation enabled for ${pageName}` 
+          ? `Automation enabled for ${pageName} (Webhook subscribed)` 
           : `Automation disabled for ${pageName}`,
         is_connected: enabled,
+        webhook_subscribed: enabled,
         connectedFacebookPages: newEnabledCount || 0,
       }), {
         status: 200,
