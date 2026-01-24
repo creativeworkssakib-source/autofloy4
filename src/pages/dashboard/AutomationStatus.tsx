@@ -50,8 +50,10 @@ const AutomationStatus = () => {
   const [pageStatusData, setPageStatusData] = useState<PageStatusData | null>(null);
   const [productCount, setProductCount] = useState(0);
 
-  // Load page memory for a specific page
-  const loadPageMemory = async (pageId: string, pages: ConnectedAccount[], prodCount: number) => {
+  // Load page memory for a specific page with retry
+  const loadPageMemory = async (pageId: string, pages: ConnectedAccount[], prodCount: number, retryCount = 0) => {
+    const MAX_RETRIES = 3;
+    
     try {
       const page = pages.find(p => p.external_id === pageId);
       if (!page) {
@@ -59,7 +61,7 @@ const AutomationStatus = () => {
         return;
       }
 
-      console.log("[AutomationStatus] Loading page memory for:", pageId);
+      console.log("[AutomationStatus] Loading page memory for:", pageId, "attempt:", retryCount + 1);
       
       const token = localStorage.getItem("autofloy_token");
       const response = await fetch(
@@ -77,6 +79,10 @@ const AutomationStatus = () => {
       
       if (!response.ok) {
         console.error("[AutomationStatus] Fetch failed:", response.status);
+        if (retryCount < MAX_RETRIES) {
+          await new Promise(r => setTimeout(r, 1000 * (retryCount + 1)));
+          return loadPageMemory(pageId, pages, prodCount, retryCount + 1);
+        }
         return;
       }
       
@@ -104,6 +110,11 @@ const AutomationStatus = () => {
       });
     } catch (error) {
       console.error("Failed to load page memory:", error);
+      // Retry on network error
+      if (retryCount < MAX_RETRIES) {
+        await new Promise(r => setTimeout(r, 1000 * (retryCount + 1)));
+        return loadPageMemory(pageId, pages, prodCount, retryCount + 1);
+      }
     }
   };
 
