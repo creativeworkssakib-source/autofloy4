@@ -51,7 +51,7 @@ const AutomationStatus = () => {
   const [pageStatusData, setPageStatusData] = useState<PageStatusData | null>(null);
   const [productCount, setProductCount] = useState(0);
 
-  // Load page memory for a specific page with retry using Supabase SDK
+  // Load page memory for a specific page with retry using direct fetch
   const loadPageMemory = async (pageId: string, pages: ConnectedAccount[], prodCount: number, retryCount = 0) => {
     const MAX_RETRIES = 3;
     
@@ -70,17 +70,25 @@ const AutomationStatus = () => {
 
       console.log("[AutomationStatus] Loading page memory for:", pageId, "attempt:", retryCount + 1);
       
-      // Use POST method with body - GET cannot have body
-      const { data, error } = await supabase.functions.invoke("page-memory", {
-        method: "POST",
-        headers: {
-          "Cache-Control": "no-cache",
-        },
-        body: { page_id: pageId, action: "fetch" },
-      });
+      // Get auth token
+      const token = localStorage.getItem("auth_token");
       
-      if (error) {
-        console.error("[AutomationStatus] Supabase invoke error:", error);
+      // Use direct fetch with URL params - more reliable
+      const response = await fetch(
+        `https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1/page-memory?page_id=${pageId}&_t=${Date.now()}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": token ? `Bearer ${token}` : "",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+          },
+        }
+      );
+      
+      if (!response.ok) {
+        console.error("[AutomationStatus] Fetch error:", response.status);
         if (retryCount < MAX_RETRIES) {
           await new Promise(r => setTimeout(r, 1000 * (retryCount + 1)));
           return loadPageMemory(pageId, pages, prodCount, retryCount + 1);
@@ -94,6 +102,8 @@ const AutomationStatus = () => {
         setIsLoadingPageMemory(false);
         return;
       }
+      
+      const data = await response.json();
       
       console.log("[AutomationStatus] Raw response:", data);
       
