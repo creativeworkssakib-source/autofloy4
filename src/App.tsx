@@ -54,6 +54,7 @@ const Settings = lazy(() => import("./pages/Settings"));
 const Automations = lazy(() => import("./pages/Automations"));
 const ConnectFacebook = lazy(() => import("./pages/ConnectFacebook"));
 const AuthFacebookCallback = lazy(() => import("./pages/AuthFacebookCallback"));
+const FacebookPageSettings = lazy(() => import("./pages/dashboard/FacebookPageSettings"));
 const Marketing = lazy(() => import("./pages/dashboard/Marketing"));
 
 // Business Selector & Offline Shop pages
@@ -204,6 +205,11 @@ const App = () => (
                   <Route path="/dashboard/automations" element={
                     <ProtectedRoute>
                       <Automations />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/dashboard/automations/facebook/:accountId/:pageId/settings" element={
+                    <ProtectedRoute>
+                      <FacebookPageSettings />
                     </ProtectedRoute>
                   } />
                   <Route path="/dashboard/products" element={
