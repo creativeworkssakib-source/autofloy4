@@ -63,13 +63,18 @@ export type Database = {
           current_product_name: string | null
           current_product_price: number | null
           current_quantity: number | null
+          customer_preferences: Json | null
+          customer_summary: string | null
           fake_order_score: number | null
+          has_ordered_before: boolean | null
           id: string
           last_message_at: string | null
+          last_products_discussed: string[] | null
           message_history: Json | null
           page_id: string
           sender_id: string
           sender_name: string | null
+          total_messages_count: number | null
           updated_at: string
           user_id: string
         }
@@ -83,13 +88,18 @@ export type Database = {
           current_product_name?: string | null
           current_product_price?: number | null
           current_quantity?: number | null
+          customer_preferences?: Json | null
+          customer_summary?: string | null
           fake_order_score?: number | null
+          has_ordered_before?: boolean | null
           id?: string
           last_message_at?: string | null
+          last_products_discussed?: string[] | null
           message_history?: Json | null
           page_id: string
           sender_id: string
           sender_name?: string | null
+          total_messages_count?: number | null
           updated_at?: string
           user_id: string
         }
@@ -103,13 +113,18 @@ export type Database = {
           current_product_name?: string | null
           current_product_price?: number | null
           current_quantity?: number | null
+          customer_preferences?: Json | null
+          customer_summary?: string | null
           fake_order_score?: number | null
+          has_ordered_before?: boolean | null
           id?: string
           last_message_at?: string | null
+          last_products_discussed?: string[] | null
           message_history?: Json | null
           page_id?: string
           sender_id?: string
           sender_name?: string | null
+          total_messages_count?: number | null
           updated_at?: string
           user_id?: string
         }
