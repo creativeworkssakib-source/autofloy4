@@ -4,7 +4,7 @@ import { verify } from "https://deno.land/x/djwt@v3.0.2/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, cache-control, pragma",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
 };
 
@@ -595,6 +595,86 @@ serve(async (req) => {
         console.log(`Deleted variant ${id}`);
 
         return new Response(JSON.stringify({ success: true }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Bulk import products
+      if (action === "bulk_import") {
+        const { products: productsToImport } = body;
+        
+        if (!productsToImport || !Array.isArray(productsToImport) || productsToImport.length === 0) {
+          return new Response(JSON.stringify({ error: "No products provided", success: false, inserted: 0, errors: 0 }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        let inserted = 0;
+        let errors = 0;
+        const categories = new Set<string>();
+
+        // Process products in batch
+        for (const prod of productsToImport) {
+          if (!prod.name) {
+            errors++;
+            continue;
+          }
+
+          try {
+            const { error: insertError } = await supabase
+              .from("products")
+              .insert({
+                user_id: userId,
+                name: prod.name,
+                sku: prod.sku || null,
+                price: prod.price || 0,
+                purchase_price: prod.purchase_price || 0,
+                currency: prod.currency || "BDT",
+                description: prod.description || null,
+                image_url: prod.image_url || null,
+                is_active: prod.is_active ?? true,
+                category: prod.category || null,
+                stock_quantity: prod.stock_quantity ?? null,
+                min_stock_alert: prod.min_stock_alert ?? 5,
+                unit: prod.unit || "pcs",
+                barcode: prod.barcode || null,
+                expiry_date: prod.expiry_date || null,
+                supplier_name: prod.supplier_name || null,
+                brand: prod.brand || null,
+              });
+
+            if (insertError) {
+              console.error("Error inserting product:", prod.name, insertError);
+              errors++;
+            } else {
+              inserted++;
+              if (prod.category) {
+                categories.add(prod.category);
+              }
+            }
+          } catch (e) {
+            console.error("Exception inserting product:", prod.name, e);
+            errors++;
+          }
+        }
+
+        // Auto-create categories
+        for (const catName of categories) {
+          await supabase
+            .from("product_categories")
+            .upsert({ user_id: userId, name: catName }, { onConflict: "user_id,name" });
+        }
+
+        console.log(`Bulk imported ${inserted} products, ${errors} errors for user ${userId}`);
+
+        return new Response(JSON.stringify({ 
+          success: true, 
+          inserted, 
+          errors,
+          totalRows: productsToImport.length 
+        }), {
           status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
