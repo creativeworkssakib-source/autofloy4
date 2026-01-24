@@ -14,23 +14,33 @@ const WEBHOOK_URL = "https://server3.automationlearners.pro/webhook-test/faceboo
 
 // JWT verification without external dependency
 async function verifyJWT(authHeader: string | null): Promise<string | null> {
+  console.log("[JWT] Auth header received:", authHeader ? `Present (${authHeader.length} chars)` : "Missing");
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    console.log("[JWT] No auth header or invalid format. Starts with Bearer:", authHeader?.startsWith("Bearer "));
     return null;
   }
   
   const token = authHeader.substring(7);
   try {
     const parts = token.split(".");
-    if (parts.length !== 3) return null;
+    if (parts.length !== 3) {
+      console.log("[JWT] Invalid token format - not 3 parts");
+      return null;
+    }
     
     // Decode payload
     const payloadBase64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-    const payloadJson = atob(payloadBase64);
+    // Add padding if needed
+    const payloadPadding = (4 - (payloadBase64.length % 4)) % 4;
+    const paddedPayload = payloadBase64 + "=".repeat(payloadPadding);
+    const payloadJson = atob(paddedPayload);
     const payload = JSON.parse(payloadJson);
+    
+    console.log("[JWT] Payload:", { sub: payload.sub, email: payload.email, exp: payload.exp });
     
     // Check expiration
     if (payload.exp && payload.exp * 1000 < Date.now()) {
-      console.log("[JWT] Token expired");
+      console.log("[JWT] Token expired at:", new Date(payload.exp * 1000).toISOString());
       return null;
     }
     
@@ -56,6 +66,7 @@ async function verifyJWT(authHeader: string | null): Promise<string | null> {
       return null;
     }
     
+    console.log("[JWT] Token verified successfully for user:", payload.sub);
     return payload.sub as string;
   } catch (error) {
     console.error("[JWT] Verification failed:", error);
@@ -82,12 +93,16 @@ async function notifyWebhook(eventType: string, data: Record<string, unknown>) {
 }
 
 serve(async (req) => {
+  console.log("[page-memory] Request received:", req.method, req.url);
+  console.log("[page-memory] JWT_SECRET present:", !!jwtSecret, "length:", jwtSecret?.length || 0);
+  
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   const userId = await verifyJWT(req.headers.get("Authorization"));
   if (!userId) {
+    console.log("[page-memory] Auth failed - returning 401");
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
