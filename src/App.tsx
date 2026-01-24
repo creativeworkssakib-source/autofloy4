@@ -217,6 +217,11 @@ const App = () => (
                       <FacebookPageSettings />
                     </ProtectedRoute>
                   } />
+                  <Route path="/dashboard/facebook-settings/:pageId/:accountId" element={
+                    <ProtectedRoute>
+                      <FacebookPageSettings />
+                    </ProtectedRoute>
+                  } />
                   <Route path="/dashboard/automation-status" element={
                     <ProtectedRoute>
                       <AutomationStatus />
