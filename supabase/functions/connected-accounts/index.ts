@@ -498,9 +498,41 @@ serve(async (req) => {
       }
 
       if (deleteAction === "remove") {
+        // Get page_id from account for cleaning up page-related data
+        const pageId = account.external_id;
+        
+        // Delete ALL related data for this page (complete cascade cleanup)
+        console.log(`[Delete] Starting complete cleanup for page ${pageId} (account ${id})`);
+        
+        // 1. Delete AI conversations and orders for this page
+        await supabase.from("ai_orders").delete().eq("page_id", pageId).eq("user_id", userId);
+        await supabase.from("ai_conversations").delete().eq("page_id", pageId).eq("user_id", userId);
+        
+        // 2. Delete execution logs related to automations of this account
+        const { data: accountAutomations } = await supabase
+          .from("automations")
+          .select("id")
+          .eq("account_id", id)
+          .eq("user_id", userId);
+        
+        if (accountAutomations && accountAutomations.length > 0) {
+          const automationIds = accountAutomations.map(a => a.id);
+          await supabase.from("execution_logs").delete().in("automation_id", automationIds);
+        }
+        
+        // 3. Delete outgoing events for this account
+        await supabase.from("outgoing_events").delete().eq("account_id", id).eq("user_id", userId);
+        
+        // 4. Delete page memory (AI context, business rules, etc.)
         await supabase.from("page_memory").delete().eq("account_id", id).eq("user_id", userId);
+        
+        // 5. Delete automations for this account
         await supabase.from("automations").delete().eq("account_id", id).eq("user_id", userId);
+        
+        // 6. Finally delete the connected account itself
         const { error: deleteError } = await supabase.from("connected_accounts").delete().eq("id", id).eq("user_id", userId);
+        
+        console.log(`[Delete] Cleanup complete for page ${pageId}`);
 
         if (deleteError) {
           return new Response(JSON.stringify({ error: "Failed to remove account" }), {
