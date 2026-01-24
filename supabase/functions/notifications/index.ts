@@ -1,10 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { verify } from "https://deno.land/x/djwt@v3.0.2/mod.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, cache-control, pragma",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Max-Age": "86400",
 };
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -29,7 +30,7 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3, delayMs = 100)
   throw lastError;
 }
 
-// JWT token verification using custom JWT_SECRET
+// JWT token verification using custom JWT_SECRET (manual HMAC verification)
 async function verifyToken(authHeader: string | null): Promise<string | null> {
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return null;
@@ -37,15 +38,36 @@ async function verifyToken(authHeader: string | null): Promise<string | null> {
   
   const token = authHeader.substring(7);
   try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    
+    // Decode payload
+    const payloadBase64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const payload = JSON.parse(atob(payloadBase64));
+    
+    // Check expiration
+    if (payload.exp && payload.exp * 1000 < Date.now()) {
+      console.log("Token expired");
+      return null;
+    }
+    
+    // Verify signature
+    const encoder = new TextEncoder();
     const key = await crypto.subtle.importKey(
       "raw",
-      new TextEncoder().encode(jwtSecret),
+      encoder.encode(jwtSecret),
       { name: "HMAC", hash: "SHA-256" },
       false,
       ["verify"]
     );
-    const payload = await verify(token, key);
-    return payload.sub as string;
+    
+    const signatureInput = encoder.encode(parts[0] + "." + parts[1]);
+    const signatureBase64 = parts[2].replace(/-/g, "+").replace(/_/g, "/");
+    const padding = (4 - (signatureBase64.length % 4)) % 4;
+    const signatureBytes = Uint8Array.from(atob(signatureBase64 + "=".repeat(padding)), c => c.charCodeAt(0));
+    
+    const valid = await crypto.subtle.verify("HMAC", key, signatureBytes, signatureInput);
+    return valid ? (payload.sub as string) : null;
   } catch (error) {
     console.error("Token verification failed:", error);
     return null;
