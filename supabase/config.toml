@@ -9,9 +9,6 @@ verify_jwt = false
 [functions.facebook-webhook]
 verify_jwt = false
 
-[functions.fb-oauth]
-verify_jwt = false
-
 [functions.notifications]
 verify_jwt = false
 
@@ -25,4 +22,7 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.automations]
+verify_jwt = false
+
+[functions.page-memory]
 verify_jwt = false
