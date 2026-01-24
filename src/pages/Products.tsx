@@ -509,7 +509,7 @@ const Products = () => {
       }
 
       // Send bulk import request
-      const token = localStorage.getItem("auth_token");
+      const token = localStorage.getItem("autofloy_token");
       const response = await fetch(
         "https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1/products",
         {
