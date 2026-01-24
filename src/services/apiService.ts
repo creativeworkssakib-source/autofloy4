@@ -305,15 +305,46 @@ export interface TogglePageResult {
 
 export async function togglePageAutomation(pageId: string, enabled: boolean): Promise<TogglePageResult> {
   try {
+    const token = localStorage.getItem("autofloy_token");
+    if (!token) {
+      console.error("[togglePageAutomation] No auth token found");
+      return { success: false, error: "Not authenticated" };
+    }
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+    
     const response = await fetch(`${SUPABASE_URL}/functions/v1/toggle-page-automation`, {
       method: "POST",
-      headers: getAuthHeaders(),
+      mode: "cors",
+      credentials: "omit",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`,
+      },
       body: JSON.stringify({ page_id: pageId, enabled }),
+      signal: controller.signal,
     });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error("[togglePageAutomation] Server error:", response.status, errorData);
+      return { 
+        success: false, 
+        error: errorData.error || `Server error: ${response.status}`,
+        upgrade_required: errorData.upgrade_required,
+      };
+    }
+    
     return await response.json();
   } catch (error) {
-    console.error("Failed to toggle page automation:", error);
-    return { success: false, error: "Network error" };
+    console.error("[togglePageAutomation] Fetch failed:", error);
+    if (error instanceof Error && error.name === 'AbortError') {
+      return { success: false, error: "Request timed out. Please try again." };
+    }
+    return { success: false, error: "Network error. Please check your connection and try again." };
   }
 }
 
