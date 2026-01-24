@@ -746,12 +746,21 @@ function detectCustomerResponseIntent(text: string, messageHistory: any[]): stri
   return "general";
 }
 
-// Detect sentiment
+// Detect sentiment with comprehensive Bengali profanity detection
 function detectSentiment(text: string): "positive" | "neutral" | "negative" {
   const lowerText = text.toLowerCase();
   
+  // *** BENGALI PROFANITY/ABUSE DETECTION (HIGHEST PRIORITY) ***
+  const bengaliProfanity = /বোকা[চছ]ো?দা?|বোকাচোদা|বকাচোদা|বুকাচুদা|চুদ|চোদ|মাগি|মাগী|রান্ডি|রান্ডী|হারামি|হারামী|শালা|বাল|খানকি|ভোদা|শুয়োর|কুত্তা|গাধা|মাদারচোদ|বদমাশ|বেশ্যা|পতিতা|ছিনাল|শয়তান|জারজ|হারামজাদা|কামিনা|চুতিয়া|লাউড়া|গু|হাগু|মুত/i;
+  const banglishProfanity = /boka|bokachod|bukachuda|chod|chud|magi|randi|harami|sala|khanki|voda|shuor|kutta|gadha|madarc|besha|potita|jaroj|chutiya|lauda|motherfucker|mf|fuck|fck|shit|bitch|ass|bastard|dick|pussy|whore|slut|cunt|damn|wtf|stfu|idiot|stupid|moron/i;
+  
+  // Check profanity FIRST - always negative
+  if (bengaliProfanity.test(lowerText) || banglishProfanity.test(lowerText)) {
+    return "negative";
+  }
+  
   const positivePatterns = /thanks|thank you|ধন্যবাদ|great|awesome|good|ভালো|সুন্দর|love|excellent|best|amazing|wonderful|nice|beautiful|perfect|super|fantastic|❤️|❤|👍|🔥|💯|💕|😍|🥰|😊|👏|💪|🙌|good job|well done|keep it up|মাশাল্লাহ|অসাম|দারুণ|বাহ|চমৎকার|অসাধারণ|খুব ভালো|অনেক ভালো|wow|woow|বেস্ট|নাইস|লাভ/i;
-  const negativePatterns = /bad|খারাপ|worst|terrible|hate|বাজে|poor|fraud|fake|scam|😡|👎|😤|💔|বোকা|চোর|প্রতারক|ফেক/i;
+  const negativePatterns = /bad|খারাপ|worst|terrible|hate|বাজে|poor|fraud|fake|scam|😡|👎|😤|💔|চোর|প্রতারক|ফেক|ধোকা|धोखा/i;
   
   if (positivePatterns.test(lowerText)) return "positive";
   if (negativePatterns.test(lowerText)) return "negative";
