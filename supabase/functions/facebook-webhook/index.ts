@@ -147,7 +147,32 @@ async function getUserProfile(pageAccessToken: string, userId: string): Promise<
   }
 }
 
-// Call AI Agent
+// *** NEW: Fetch post content directly from Facebook API ***
+async function fetchPostContent(pageAccessToken: string, postId: string): Promise<{ text: string; mediaType?: string } | null> {
+  try {
+    console.log(`[Facebook] Fetching post content for: ${postId}`);
+    const response = await fetch(
+      `${GRAPH_API_URL}/${postId}?fields=message,story,type,attachments{media_type,description}&access_token=${pageAccessToken}`
+    );
+    const result = await response.json();
+    
+    if (result.error) {
+      console.error("[Facebook] Get post error:", result.error);
+      return null;
+    }
+    
+    const text = result.message || result.story || "";
+    const mediaType = result.attachments?.data?.[0]?.media_type || result.type;
+    
+    console.log(`[Facebook] Post content fetched: "${text.substring(0, 100)}..."`);
+    return { text, mediaType };
+  } catch (error) {
+    console.error("[Facebook] Failed to fetch post:", error);
+    return null;
+  }
+}
+
+// Call AI Agent with auto post analysis
 async function callAIAgent(supabase: any, data: {
   pageId: string;
   senderId: string;
@@ -158,6 +183,8 @@ async function callAIAgent(supabase: any, data: {
   isComment: boolean;
   commentId?: string;
   postId?: string;
+  postContent?: string;
+  postMediaType?: string;
   userId: string;
 }): Promise<any> {
   try {
@@ -182,6 +209,13 @@ async function callAIAgent(supabase: any, data: {
     console.error("[AI Agent] Error calling agent:", error);
     return null;
   }
+}
+
+// Check if comment is negative/spam
+function isNegativeComment(text: string): boolean {
+  const lowerText = text.toLowerCase();
+  const negativePatterns = /বাজে|খারাপ|fraud|fake|scam|spam|worst|terrible|hate|cheat|धोखा|😡|👎|😤|🖕|wtf|bullshit|shit|damn/;
+  return negativePatterns.test(lowerText);
 }
 
 serve(async (req) => {
@@ -454,7 +488,8 @@ async function processFeedChange(supabase: any, pageId: string, change: any) {
       return;
     }
 
-    console.log(`[Webhook] Comment on page ${pageId}:`, value.message?.substring(0, 50));
+    const commentText = value.message || "";
+    console.log(`[Webhook] Comment on page ${pageId}: "${commentText.substring(0, 50)}..."`);
 
     // Check if auto-reply is enabled
     if (!pageMemory?.automation_settings?.autoCommentReply) {
@@ -462,16 +497,55 @@ async function processFeedChange(supabase: any, pageId: string, change: any) {
       return;
     }
 
-    // Call AI Agent
+    // Check for negative/spam comment - don't reply to these
+    if (isNegativeComment(commentText)) {
+      console.log("[Webhook] Skipping negative/spam comment");
+      
+      await supabase.from("execution_logs").insert({
+        user_id: account.user_id,
+        automation_id: null,
+        source_platform: "facebook",
+        event_type: "comment_skipped_negative",
+        status: "skipped",
+        incoming_payload: {
+          page_id: pageId,
+          post_id: value.post_id,
+          comment_id: value.comment_id,
+          message: commentText,
+          from: value.from,
+          reason: "Negative or spam comment detected",
+        },
+        response_payload: { skipped: true },
+        processing_time_ms: Date.now() - startTime,
+      });
+      return;
+    }
+
+    // *** AUTO FETCH POST CONTENT FROM FACEBOOK ***
+    let postContent: string | undefined;
+    let postMediaType: string | undefined;
+    
+    if (decryptedToken && value.post_id) {
+      const postData = await fetchPostContent(decryptedToken, value.post_id);
+      if (postData) {
+        postContent = postData.text;
+        postMediaType = postData.mediaType;
+        console.log(`[Webhook] Auto-fetched post content: "${postContent?.substring(0, 100)}..."`);
+      }
+    }
+
+    // Call AI Agent with auto-analyzed post content
     const aiResponse = await callAIAgent(supabase, {
       pageId,
       senderId: value.from?.id,
       senderName: value.from?.name,
-      messageText: value.message || "",
+      messageText: commentText,
       messageType: "text",
       isComment: true,
       commentId: value.comment_id,
       postId: value.post_id,
+      postContent,     // *** NEW: Pass auto-fetched post content ***
+      postMediaType,   // *** NEW: Pass post media type ***
       userId: account.user_id,
     });
 
@@ -485,8 +559,10 @@ async function processFeedChange(supabase: any, pageId: string, change: any) {
       incoming_payload: {
         page_id: pageId,
         post_id: value.post_id,
+        post_content: postContent,
+        post_media_type: postMediaType,
         comment_id: value.comment_id,
-        message: value.message,
+        message: commentText,
         from: value.from,
         created_time: value.created_time,
       },
@@ -495,19 +571,22 @@ async function processFeedChange(supabase: any, pageId: string, change: any) {
     });
 
     if (aiResponse && decryptedToken) {
-      // Reply to comment with short message
-      if (aiResponse.commentReply) {
-        await replyToComment(decryptedToken, value.comment_id, aiResponse.commentReply);
-      }
+      // *** ALWAYS reply to comment with thanks + inbox notification ***
+      const commentReply = aiResponse.commentReply || `ধন্যবাদ কমেন্ট করার জন্য! 🙏 বিস্তারিত তথ্য আপনার ইনবক্সে পাঠিয়ে দিয়েছি। অনুগ্রহ করে চেক করুন 📩`;
+      await replyToComment(decryptedToken, value.comment_id, commentReply);
+      console.log("[Webhook] Comment reply sent with thanks");
 
       // Add reaction if enabled
-      if (aiResponse.shouldReact && pageMemory?.automation_settings?.reactionOnComments) {
+      if (pageMemory?.automation_settings?.reactionOnComments) {
         await addReaction(decryptedToken, value.comment_id, aiResponse.reactionType || "LIKE");
       }
 
-      // Send detailed message to inbox
-      if (aiResponse.shouldSendInbox && aiResponse.inboxMessage && value.from?.id) {
-        await sendFacebookMessage(decryptedToken, value.from.id, aiResponse.inboxMessage);
+      // *** ALWAYS send detailed inbox message based on post context ***
+      if (value.from?.id) {
+        const inboxMessage = aiResponse.inboxMessage || aiResponse.reply || 
+          `আসসালামু আলাইকুম! 👋\n\nআপনার কমেন্টের জন্য ধন্যবাদ।\n\n${postContent ? `আপনি "${postContent.substring(0, 100)}${postContent.length > 100 ? '...' : ''}" পোস্টে কমেন্ট করেছেন।\n\n` : ''}আপনি কী জানতে চাইছেন বিস্তারিত বলুন, আমি সাহায্য করতে পারব। 🙂`;
+        
+        await sendFacebookMessage(decryptedToken, value.from.id, inboxMessage);
         console.log("[Webhook] Inbox message sent to commenter:", value.from.name);
       }
     }

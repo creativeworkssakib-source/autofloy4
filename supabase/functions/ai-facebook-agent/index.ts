@@ -508,11 +508,18 @@ serve(async (req) => {
       isComment = false,
       commentId,
       postId,
+      postContent,      // *** NEW: Auto-fetched post content ***
+      postMediaType,    // *** NEW: Post media type ***
       userId 
-    } = body as MessageContext & { userId: string };
+    } = body as MessageContext & { 
+      userId: string; 
+      postContent?: string; 
+      postMediaType?: string;
+    };
 
     console.log(`[AI Agent] Processing ${isComment ? "comment" : "message"} for page ${pageId}`);
-    console.log(`[AI Agent] Post ID: ${postId}, Message: ${messageText?.substring(0, 50)}`);
+    console.log(`[AI Agent] Post ID: ${postId}, Post Content: ${postContent?.substring(0, 100)}`);
+    console.log(`[AI Agent] Comment/Message: ${messageText?.substring(0, 50)}`);
 
     // Get page memory for context
     const { data: pageMemory } = await supabase
@@ -551,20 +558,37 @@ serve(async (req) => {
       });
     }
 
-    // Get product context from post (if comment) or from message text
+    // Get product context - try from linked post first, then from post content analysis
     let productContext: ProductContext | null = null;
     let postContext: PostContext | null = null;
 
     if (isComment && postId) {
-      // Try to get product from the post
+      // Check if we have this post in database
       const postResult = await getProductFromPost(supabase, pageId, postId, userId);
       postContext = postResult.postContext;
       productContext = postResult.productContext;
     }
 
-    // If no product from post, try to match from message text
-    if (!productContext && messageText) {
+    // *** NEW: Use auto-fetched post content for AI context ***
+    if (isComment && postContent && !postContext) {
+      // Create a virtual post context from the auto-fetched content
+      postContext = {
+        post_id: postId || "",
+        post_text: postContent,
+        media_type: postMediaType,
+      };
+      console.log(`[AI Agent] Using auto-fetched post content for context`);
+    }
+
+    // Try to find matching product from message text or post content
+    if (!productContext) {
+      // First try from comment text
       productContext = await findProductByName(supabase, userId, messageText);
+      
+      // If not found, try from post content
+      if (!productContext && postContent) {
+        productContext = await findProductByName(supabase, userId, postContent);
+      }
     }
 
     // Get or create conversation state
@@ -618,6 +642,7 @@ serve(async (req) => {
     
     console.log(`[AI Agent] Intent: ${intent}, Sentiment: ${sentiment}, State: ${conversation.conversation_state}`);
     console.log(`[AI Agent] Product context: ${productContext?.name || 'none'}`);
+    console.log(`[AI Agent] Post context available: ${!!postContext}`);
 
     // Handle image messages
     let processedMessage = messageText;
@@ -644,6 +669,7 @@ serve(async (req) => {
       intent,
       sentiment,
       productContext: productContext ? { name: productContext.name, price: productContext.price } : null,
+      postContext: postContext ? { text: postContext.post_text } : null,
     });
 
     // Determine next state
@@ -685,7 +711,7 @@ serve(async (req) => {
       console.error("[AI Agent] Failed to update conversation:", updateError);
     }
 
-    // Build AI prompt and get response with product context
+    // Build AI prompt and get response with product and post context
     const updatedConversation = { ...conversation, conversation_state: nextState, ...collectedData };
     const systemPrompt = buildSystemPrompt(pageMemory, updatedConversation, productContext || undefined, postContext || undefined);
     
@@ -781,16 +807,36 @@ serve(async (req) => {
       productContext: productContext ? { name: productContext.name, price: productContext.price } : null,
     };
 
-    // For comments, also prepare inbox message
-    if (isComment && (intent === "order_intent" || intent === "price_inquiry" || intent === "info_request")) {
-      // Include product info in the comment reply if available
+    // *** For comments: ALWAYS thank in comment + send details to inbox ***
+    if (isComment) {
+      // Build smart comment reply based on context
       if (productContext) {
-        response.commentReply = `ধন্যবাদ! ${productContext.name} এর দাম ৳${productContext.price}। বিস্তারিত জানতে ইনবক্স করুন 📩`;
+        response.commentReply = `ধন্যবাদ কমেন্ট করার জন্য! 🙏 "${productContext.name}" এর বিস্তারিত তথ্য আপনার ইনবক্সে পাঠিয়ে দিয়েছি। চেক করুন 📩`;
       } else {
-        response.commentReply = "ধন্যবাদ! বিস্তারিত জানতে আপনার ইনবক্স চেক করুন 📩";
+        response.commentReply = `ধন্যবাদ কমেন্ট করার জন্য! 🙏 বিস্তারিত তথ্য আপনার ইনবক্সে পাঠিয়ে দিয়েছি। অনুগ্রহ করে চেক করুন 📩`;
       }
+      
+      // Build detailed inbox message based on post context
+      let inboxMessage = `আসসালামু আলাইকুম ${senderName || ''} 👋\n\n`;
+      inboxMessage += `আপনার কমেন্টের জন্য ধন্যবাদ!\n\n`;
+      
+      if (postContext?.post_text) {
+        inboxMessage += `আপনি "${postContext.post_text.substring(0, 80)}${postContext.post_text.length > 80 ? '...' : ''}" পোস্টে কমেন্ট করেছেন।\n\n`;
+      }
+      
+      if (productContext) {
+        inboxMessage += `📦 প্রোডাক্ট: ${productContext.name}\n`;
+        inboxMessage += `💰 দাম: ৳${productContext.price}\n`;
+        if (productContext.description) {
+          inboxMessage += `📝 বিবরণ: ${productContext.description}\n`;
+        }
+        inboxMessage += `\nঅর্ডার করতে চাইলে "অর্ডার" লিখুন অথবা আপনার নাম, ফোন ও ঠিকানা দিন।`;
+      } else {
+        inboxMessage += aiReply;
+      }
+      
       response.shouldSendInbox = true;
-      response.inboxMessage = aiReply;
+      response.inboxMessage = inboxMessage;
     }
 
     if (orderId) {
