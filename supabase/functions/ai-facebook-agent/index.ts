@@ -123,12 +123,51 @@ function detectIntent(text: string): string {
 function detectSentiment(text: string): "positive" | "neutral" | "negative" {
   const lowerText = text.toLowerCase();
   
-  const positivePatterns = /thanks|ধন্যবাদ|great|awesome|good|ভালো|সুন্দর|love|excellent|best|amazing|wonderful|❤|👍|🔥|💯/;
+  const positivePatterns = /thanks|ধন্যবাদ|great|awesome|good|ভালো|সুন্দর|love|excellent|best|amazing|wonderful|❤|👍|🔥|💯|nice|good job|মাশাল্লাহ|অসাম/;
   const negativePatterns = /bad|খারাপ|worst|terrible|hate|বাজে|poor|fraud|fake|scam|😡|👎|😤/;
   
   if (positivePatterns.test(lowerText)) return "positive";
   if (negativePatterns.test(lowerText)) return "negative";
   return "neutral";
+}
+
+// Analyze comment to generate appropriate response
+function analyzeCommentForResponse(text: string, intent: string, sentiment: string): {
+  isPositiveFeedback: boolean;
+  isQuestion: boolean;
+  isPriceInquiry: boolean;
+  isOrderIntent: boolean;
+  responseType: string;
+} {
+  const lowerText = text.toLowerCase();
+  
+  // Check for positive feedback/appreciation
+  const positiveFeedbackPatterns = /great|good|nice|awesome|excellent|love|thanks|ধন্যবাদ|ভালো|সুন্দর|মাশাল্লাহ|অসাম|বাহ|wow|👍|❤|🔥|💯|👏|good job|well done|keep it up/i;
+  const isPositiveFeedback = positiveFeedbackPatterns.test(lowerText) && sentiment === "positive";
+  
+  // Check if it's a question
+  const questionPatterns = /\?|কি|কী|কত|কোথায়|কেন|কিভাবে|কবে|আছে|what|how|where|when|why|which|available|stock/i;
+  const isQuestion = questionPatterns.test(lowerText);
+  
+  // Check for price inquiry
+  const isPriceInquiry = intent === "price_inquiry";
+  
+  // Check for order intent
+  const isOrderIntent = intent === "order_intent";
+  
+  let responseType = "general";
+  if (isPositiveFeedback) responseType = "appreciation";
+  else if (isPriceInquiry) responseType = "price";
+  else if (isOrderIntent) responseType = "order";
+  else if (isQuestion) responseType = "question";
+  
+  return {
+    isPositiveFeedback,
+    isQuestion,
+    isPriceInquiry,
+    isOrderIntent,
+    responseType
+  };
 }
 
 // Detect fake order patterns
@@ -809,29 +848,48 @@ serve(async (req) => {
 
     // *** For comments: ALWAYS thank in comment + send details to inbox ***
     if (isComment) {
+      // Analyze the original comment to respond appropriately
+      const commentAnalysis = analyzeCommentForResponse(messageText, intent, sentiment);
+      
       // Build smart comment reply based on context
       if (productContext) {
         response.commentReply = `ধন্যবাদ কমেন্ট করার জন্য! 🙏 "${productContext.name}" এর বিস্তারিত তথ্য আপনার ইনবক্সে পাঠিয়ে দিয়েছি। চেক করুন 📩`;
+      } else if (commentAnalysis.isPositiveFeedback) {
+        response.commentReply = `আপনার সুন্দর কমেন্টের জন্য অনেক ধন্যবাদ! 🥰 আমাদের সাথে থাকার জন্য কৃতজ্ঞ। 💕`;
+      } else if (commentAnalysis.isQuestion) {
+        response.commentReply = `ধন্যবাদ! 🙏 আপনার প্রশ্নের উত্তর ইনবক্সে পাঠিয়ে দিয়েছি। অনুগ্রহ করে চেক করুন 📩`;
       } else {
         response.commentReply = `ধন্যবাদ কমেন্ট করার জন্য! 🙏 বিস্তারিত তথ্য আপনার ইনবক্সে পাঠিয়ে দিয়েছি। অনুগ্রহ করে চেক করুন 📩`;
       }
       
-      // Build detailed inbox message based on post context
+      // Build detailed inbox message based on ACTUAL comment content
       let inboxMessage = `আসসালামু আলাইকুম ${senderName || ''} 👋\n\n`;
-      inboxMessage += `আপনার কমেন্টের জন্য ধন্যবাদ!\n\n`;
       
-      if (postContext?.post_text) {
-        inboxMessage += `আপনি "${postContext.post_text.substring(0, 80)}${postContext.post_text.length > 80 ? '...' : ''}" পোস্টে কমেন্ট করেছেন।\n\n`;
+      // Reference what the customer actually said
+      if (messageText && messageText.trim().length > 0) {
+        inboxMessage += `আপনি কমেন্ট করেছেন: "${messageText}"\n\n`;
+      } else {
+        inboxMessage += `আপনার কমেন্টের জন্য ধন্যবাদ!\n\n`;
       }
       
-      if (productContext) {
+      // Add post context if available
+      if (postContext?.post_text) {
+        inboxMessage += `📱 পোস্ট: "${postContext.post_text.substring(0, 80)}${postContext.post_text.length > 80 ? '...' : ''}"\n\n`;
+      }
+      
+      // Respond based on comment type
+      if (commentAnalysis.isPositiveFeedback) {
+        inboxMessage += `আপনার সুন্দর কথার জন্য অনেক ধন্যবাদ! 🥰\n\n`;
+        inboxMessage += `আমাদের আরও প্রোডাক্ট দেখতে চাইলে বা কোনো প্রশ্ন থাকলে নির্দ্বিধায় জানাবেন। আমরা সবসময় আপনাকে সাহায্য করতে প্রস্তুত! 😊`;
+      } else if (productContext) {
         inboxMessage += `📦 প্রোডাক্ট: ${productContext.name}\n`;
         inboxMessage += `💰 দাম: ৳${productContext.price}\n`;
         if (productContext.description) {
           inboxMessage += `📝 বিবরণ: ${productContext.description}\n`;
         }
-        inboxMessage += `\nঅর্ডার করতে চাইলে "অর্ডার" লিখুন অথবা আপনার নাম, ফোন ও ঠিকানা দিন।`;
+        inboxMessage += `\nঅর্ডার করতে চাইলে "অর্ডার" লিখুন অথবা আপনার নাম, ফোন ও ঠিকানা দিন। 🛒`;
       } else {
+        // Use AI-generated response for context-aware reply
         inboxMessage += aiReply;
       }
       
