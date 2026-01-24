@@ -514,9 +514,10 @@ async function processMessagingEvent(supabase: any, pageId: string, event: any) 
     const message = event.message;
     console.log(`[Webhook] Received message: "${message.text?.substring(0, 50)}..."`);
 
-    // Determine message type
+    // Determine message type with enhanced detection
     let messageType = "text";
     let attachments = null;
+    let messageText = message.text || "";
     
     if (message.attachments) {
       const firstAttachment = message.attachments[0];
@@ -524,10 +525,18 @@ async function processMessagingEvent(supabase: any, pageId: string, event: any) 
       else if (firstAttachment.type === "audio") messageType = "audio";
       else if (firstAttachment.type === "video") messageType = "video";
       else if (firstAttachment.type === "file") messageType = "file";
+      else if (firstAttachment.type === "sticker") messageType = "sticker";
       attachments = message.attachments;
     }
     
-    if (message.sticker_id) messageType = "sticker";
+    // Sticker detection
+    if (message.sticker_id) {
+      messageType = "sticker";
+      // Add sticker context to message
+      messageText = messageText || `[Sticker: ${message.sticker_id}]`;
+    }
+    
+    console.log(`[Webhook] Message type: ${messageType}, Sticker ID: ${message.sticker_id || 'none'}`);
 
     // Get sender profile
     let senderName: string | undefined = undefined;
@@ -536,17 +545,19 @@ async function processMessagingEvent(supabase: any, pageId: string, event: any) 
       senderName = profile?.name || undefined;
     }
 
-    // Call AI Agent
+    // Call AI Agent with enhanced message info
     const aiResponse = await callAIAgent(supabase, {
       pageId,
       senderId,
       senderName,
-      messageText: message.text || `[${messageType} message]`,
+      messageText: messageText || `[${messageType} message]`,
       messageType,
       attachments,
       isComment: false,
       userId: account.user_id,
     });
+    
+    console.log(`[Webhook] AI response received: reply length=${aiResponse?.reply?.length || 0}`);
 
     // Log the execution
     await supabase.from("execution_logs").insert({
@@ -754,54 +765,53 @@ async function processFeedChange(supabase: any, pageId: string, change: any) {
     if (aiResponse && decryptedToken) {
       // Get sender name for personalized message
       const senderName = value.from?.name || "ভাই/আপু";
-      const shortName = senderName.split(" ")[0]; // First name only
+      const shortName = senderName.split(" ")[0];
       
-      // *** STEP 1: Reply to comment with contextual message ***
+      // Log smart analysis
+      console.log(`[Webhook] SMART AI Decision: skipInbox=${aiResponse.skipInboxMessage}, type=${aiResponse.smartAnalysis?.type}, reason="${aiResponse.smartAnalysis?.reason}"`);
+      
+      // *** STEP 1: Reply to comment with AI-generated contextual message ***
       const commentReplyText = aiResponse.commentReply || 
-        `ধন্যবাদ ${shortName}! 🙏 বিস্তারিত তথ্য আপনার ইনবক্সে পাঠিয়ে দিয়েছি। অনুগ্রহ করে চেক করুন 📩`;
+        `ধন্যবাদ ${shortName}! 🙏 কিভাবে সাহায্য করতে পারি বলুন! 😊`;
+      
       const replyResult = await replyToComment(decryptedToken, value.comment_id, commentReplyText);
-      console.log("[Webhook] Comment reply sent:", commentReplyText.substring(0, 50));
+      console.log("[Webhook] Comment reply sent:", commentReplyText.substring(0, 60));
 
-      // Add reaction if enabled
-      if (pageMemory?.automation_settings?.reactionOnComments) {
+      // Add reaction based on AI decision
+      if (pageMemory?.automation_settings?.reactionOnComments && aiResponse.reactionType !== "NONE") {
         await addReaction(decryptedToken, value.comment_id, aiResponse.reactionType || "LIKE");
+        console.log(`[Webhook] Reaction added: ${aiResponse.reactionType}`);
       }
 
-      // *** STEP 2: Try to send inbox message (skip if AI says to) ***
-      if (value.from?.id && !aiResponse.skipInboxMessage) {
-        const inboxMessage = aiResponse.inboxMessage || aiResponse.reply || 
-          `আসসালামু আলাইকুম ${shortName}! 👋\n\nআপনার কমেন্টের জন্য ধন্যবাদ।\n\n${postContent ? `আপনি "${postContent.substring(0, 100)}${postContent.length > 100 ? '...' : ''}" পোস্টে কমেন্ট করেছেন।\n\n` : ''}আপনি কী জানতে চাইছেন বিস্তারিত বলুন, আমি সাহায্য করতে পারব। 🙂`;
+      // *** STEP 2: SMART INBOX DECISION - Only send if AI says to ***
+      if (value.from?.id && !aiResponse.skipInboxMessage && aiResponse.inboxMessage) {
+        console.log("[Webhook] Sending inbox message (AI decided it's needed)...");
         
-        const inboxResult = await sendFacebookMessage(decryptedToken, value.from.id, inboxMessage);
+        const inboxResult = await sendFacebookMessage(decryptedToken, value.from.id, aiResponse.inboxMessage);
         
         if (inboxResult.success) {
-          console.log("[Webhook] Inbox message sent successfully to:", value.from.name);
+          console.log("[Webhook] ✅ Inbox message sent successfully to:", senderName);
         } else {
           // *** STEP 3: SMART FALLBACK - If inbox fails, edit the comment reply ***
           console.log("[Webhook] Inbox message failed (code:", inboxResult.errorCode, "), updating comment reply...");
           
-          // Check if it's a messaging restriction error (551, 10, 230, etc.)
           const isMessagingRestricted = inboxResult.errorCode === 551 || 
                                         inboxResult.errorCode === 10 || 
                                         inboxResult.errorCode === 230 ||
                                         inboxResult.errorCode === 2018278;
           
           if (isMessagingRestricted && replyResult.replyId) {
-            // Prepare fallback message - THANKS + INBOX REQUEST both
             const fallbackReply = `ধন্যবাদ ${shortName}! কমেন্ট করার জন্য অনেক ধন্যবাদ! 🙏❤️\n\n` +
               `আপনাকে বিস্তারিত তথ্য দিতে চাচ্ছিলাম, কিন্তু আপনার ইনবক্সে মেসেজ পাঠাতে পারছি না 😔\n\n` +
-              `অনুগ্রহ করে আমাদের পেজে প্রথমে একটি মেসেজ দিন, তাহলে আমরা আপনাকে সব তথ্য শেয়ার করতে পারব! 📩\n\n` +
-              `অথবা এখানেই আপনার প্রশ্ন লিখুন - আমরা কমেন্টে উত্তর দেব! ✨`;
+              `অনুগ্রহ করে আমাদের পেজে প্রথমে একটি মেসেজ দিন! 📩`;
             
             const editSuccess = await editComment(decryptedToken, replyResult.replyId, fallbackReply);
             
             if (editSuccess) {
-              console.log("[Webhook] Smart fallback: Comment reply updated with thanks + inbox fallback message");
+              console.log("[Webhook] Smart fallback: Comment edited with inbox request");
               
-              // Update log with fallback info
               await supabase.from("execution_logs").insert({
                 user_id: account.user_id,
-                automation_id: null,
                 source_platform: "facebook",
                 event_type: "inbox_fallback_used",
                 status: "success",
@@ -814,21 +824,37 @@ async function processFeedChange(supabase: any, pageId: string, change: any) {
                 },
                 response_payload: { 
                   fallback_used: true,
-                  original_inbox_error: inboxResult.error,
                   comment_edited: true,
-                  fallback_message: fallbackReply
                 },
                 processing_time_ms: Date.now() - startTime,
               });
-            } else {
-              console.log("[Webhook] Failed to edit comment for fallback");
             }
-          } else {
-            console.log("[Webhook] Inbox failed but not a messaging restriction, or no reply ID available");
           }
         }
       } else if (aiResponse.skipInboxMessage) {
-        console.log("[Webhook] Skipping inbox message as per AI recommendation (customer going to inbox)");
+        console.log(`[Webhook] ⏭️ Skipping inbox message - AI decision: ${aiResponse.smartAnalysis?.reason || 'not needed'}`);
+        
+        // Log that we intelligently skipped inbox
+        await supabase.from("execution_logs").insert({
+          user_id: account.user_id,
+          source_platform: "facebook",
+          event_type: "inbox_skipped_smart",
+          status: "success",
+          incoming_payload: {
+            page_id: pageId,
+            comment_id: value.comment_id,
+            message: commentText,
+            from: value.from,
+          },
+          response_payload: { 
+            skipped: true,
+            reason: aiResponse.smartAnalysis?.reason,
+            comment_type: aiResponse.smartAnalysis?.type,
+            reaction_given: aiResponse.reactionType,
+            comment_reply_sent: true,
+          },
+          processing_time_ms: Date.now() - startTime,
+        });
       }
     }
   }
