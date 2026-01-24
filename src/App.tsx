@@ -55,6 +55,7 @@ const Settings = lazy(() => import("./pages/Settings"));
 const Automations = lazy(() => import("./pages/Automations"));
 const ConnectFacebook = lazy(() => import("./pages/ConnectFacebook"));
 const AuthFacebookCallback = lazy(() => import("./pages/AuthFacebookCallback"));
+const AuthGoogleCallback = lazy(() => import("./pages/AuthGoogleCallback"));
 const FacebookPageSettings = lazy(() => import("./pages/dashboard/FacebookPageSettings"));
 const AutomationStatus = lazy(() => import("./pages/dashboard/AutomationStatus"));
 const Marketing = lazy(() => import("./pages/dashboard/Marketing"));
@@ -170,6 +171,7 @@ const App = () => (
                   
                   {/* OAuth callback routes - public but redirects internally */}
                   <Route path="/auth/facebook/callback" element={<AuthFacebookCallback />} />
+                  <Route path="/auth/google/callback" element={<AuthGoogleCallback />} />
                   
                   {/* Protected routes */}
                   <Route path="/checkout" element={

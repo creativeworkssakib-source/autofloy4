@@ -22,6 +22,8 @@ interface AuthContextType {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   signup: (data: { name: string; email: string; phone: string; password: string }) => Promise<{ success: boolean; error?: string }>;
+  loginWithGoogle: () => Promise<void>;
+  handleGoogleCallback: (code: string) => Promise<{ success: boolean; error?: string; isNewUser?: boolean }>;
   logout: () => void;
   refreshUser: () => Promise<void>;
 }
@@ -188,12 +190,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem(CURRENT_USER_KEY);
   };
 
+  // Google OAuth - redirect to Google login
+  const loginWithGoogle = async () => {
+    const redirectUri = `${window.location.origin}/auth/google/callback`;
+    try {
+      const { auth_url } = await authService.getGoogleAuthUrl(redirectUri);
+      window.location.href = auth_url;
+    } catch (error) {
+      console.error("Failed to get Google auth URL:", error);
+      throw error;
+    }
+  };
+
+  // Handle Google OAuth callback
+  const handleGoogleCallback = async (code: string): Promise<{ success: boolean; error?: string; isNewUser?: boolean }> => {
+    const redirectUri = `${window.location.origin}/auth/google/callback`;
+    try {
+      const { user: serviceUser, is_new_user } = await authService.handleGoogleCallback(code, redirectUri);
+      const mappedUser = mapServiceUser(serviceUser);
+      setUser(mappedUser);
+      localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(mappedUser));
+      localStorage.setItem('autofloy_user_id', mappedUser.id);
+      return { success: true, isNewUser: is_new_user };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : "Google login failed" };
+    }
+  };
+
   return (
     <AuthContext.Provider value={{ 
       user, 
       isLoading, 
       login, 
       signup, 
+      loginWithGoogle,
+      handleGoogleCallback,
       logout, 
       refreshUser 
     }}>
