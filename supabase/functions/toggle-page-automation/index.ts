@@ -235,12 +235,21 @@ serve(async (req) => {
 
       console.log(`[Toggle Page] Successfully ${enabled ? "enabled" : "disabled"} automation for: ${page.name}`);
 
+      // Get updated connected count for live update
+      const { count: newEnabledCount } = await supabase
+        .from("connected_accounts")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .eq("platform", "facebook")
+        .eq("is_connected", true);
+
       return new Response(JSON.stringify({ 
         success: true, 
         message: enabled 
           ? `Automation enabled for ${page.name}` 
           : `Automation disabled for ${page.name}`,
         is_connected: enabled,
+        connectedFacebookPages: newEnabledCount || 0,
       }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
