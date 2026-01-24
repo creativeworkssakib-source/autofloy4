@@ -47,6 +47,23 @@ const PLAN_CAPABILITIES: Record<string, {
       invoiceSystem: false,
     },
   },
+  free: {
+    maxFacebookPages: 10,
+    maxWhatsappAccounts: 5,
+    maxAutomationsPerMonth: null, // Trial period - unlimited
+    features: { 
+      messageAutoReply: true, 
+      commentAutoReply: true, 
+      imageAutoReply: true, 
+      voiceAutoReply: true, 
+      deleteNegativeComments: true,
+      whatsappEnabled: true,
+      instagramAutomation: true,
+      tiktokAutomation: true,
+      orderManagementSystem: true,
+      invoiceSystem: true,
+    },
+  },
   trial: {
     maxFacebookPages: 10,
     maxWhatsappAccounts: 5,
@@ -174,17 +191,24 @@ async function getUserPlan(supabase: any, userId: string): Promise<{
   }
 
   const now = new Date();
-  const plan = user.subscription_plan?.toLowerCase() || "none";
+  const plan = user.subscription_plan?.toLowerCase() || "free";
   
-  // Check trial
-  if (plan === "trial") {
+  // Check trial (both "trial" and "free" with active trial)
+  if (plan === "trial" || plan === "free") {
     if (user.is_trial_active && user.trial_end_date) {
       const trialEnd = new Date(user.trial_end_date);
       if (trialEnd > now) {
         return { plan: "trial", isActive: true, capabilities: PLAN_CAPABILITIES.trial };
       }
     }
-    return { plan: "none", isActive: false, reason: "Your 24-hour free trial has ended.", capabilities: PLAN_CAPABILITIES.none };
+    // Even if trial expired, "free" plan with trial period should check trial_end_date
+    if (user.trial_end_date) {
+      const trialEnd = new Date(user.trial_end_date);
+      if (trialEnd > now) {
+        return { plan: "free", isActive: true, capabilities: PLAN_CAPABILITIES.free };
+      }
+    }
+    return { plan: "none", isActive: false, reason: "Your free trial has ended.", capabilities: PLAN_CAPABILITIES.none };
   }
 
   // Check paid plans
