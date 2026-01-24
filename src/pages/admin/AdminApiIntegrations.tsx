@@ -9,6 +9,12 @@ import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 
+// Import premium icons
+import apifyIcon from '@/assets/icons/apify-icon.png';
+import firecrawlIcon from '@/assets/icons/firecrawl-icon.png';
+import googleMapsIcon from '@/assets/icons/google-maps-icon.png';
+import openaiIcon from '@/assets/icons/openai-icon.png';
+
 const SUPABASE_URL = "https://klkrzfwvrmffqkmkyqrh.supabase.co";
 
 interface ApiIntegration {
@@ -25,10 +31,10 @@ interface ApiIntegration {
 }
 
 const providerLabels: Record<string, { name: string; icon: string; color: string }> = {
-  apify: { name: 'Apify', icon: '🤖', color: 'bg-orange-500' },
-  firecrawl: { name: 'Firecrawl', icon: '🔥', color: 'bg-red-500' },
-  google_maps: { name: 'Google Maps', icon: '🗺️', color: 'bg-blue-500' },
-  openai: { name: 'OpenAI', icon: '🧠', color: 'bg-green-500' },
+  apify: { name: 'Apify', icon: apifyIcon, color: 'bg-orange-500' },
+  firecrawl: { name: 'Firecrawl', icon: firecrawlIcon, color: 'bg-red-500' },
+  google_maps: { name: 'Google Maps', icon: googleMapsIcon, color: 'bg-blue-500' },
+  openai: { name: 'OpenAI', icon: openaiIcon, color: 'bg-green-500' },
 };
 
 const AdminApiIntegrations = () => {
@@ -186,8 +192,12 @@ const AdminApiIntegrations = () => {
                 <CardHeader className="pb-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-lg ${providerInfo.color} flex items-center justify-center text-xl`}>
-                        {providerInfo.icon}
+                      <div className="w-12 h-12 rounded-xl overflow-hidden shadow-lg border border-border/50">
+                        <img 
+                          src={providerInfo.icon} 
+                          alt={providerInfo.name} 
+                          className="w-full h-full object-cover"
+                        />
                       </div>
                       <div>
                         <CardTitle className="text-lg flex items-center gap-2">
