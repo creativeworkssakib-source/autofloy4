@@ -94,35 +94,52 @@ async function notifyWebhook(eventType: string, data: Record<string, unknown>) {
 
 serve(async (req) => {
   console.log("[page-memory] Request received:", req.method, req.url);
-  console.log("[page-memory] JWT_SECRET present:", !!jwtSecret, "length:", jwtSecret?.length || 0);
   
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
-  }
-
-  const userId = await verifyJWT(req.headers.get("Authorization"));
-  if (!userId) {
-    console.log("[page-memory] Auth failed - returning 401");
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
   }
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
   const url = new URL(req.url);
   const pageId = url.searchParams.get("page_id");
 
-  // GET - Fetch page memory
+  // Try to verify JWT first, but allow fallback to page_id based lookup
+  let userId = await verifyJWT(req.headers.get("Authorization"));
+  
+  // If no JWT, try to get user from page_id (for internal calls)
+  if (!userId && pageId) {
+    console.log("[page-memory] No JWT, trying page_id lookup:", pageId);
+    const { data: pageData } = await supabase
+      .from("page_memory")
+      .select("user_id")
+      .eq("page_id", pageId)
+      .maybeSingle();
+    
+    if (pageData?.user_id) {
+      userId = pageData.user_id;
+      console.log("[page-memory] Found user from page_id:", userId);
+    }
+  }
+
+  // GET - Fetch page memory (allow with just page_id for read operations)
   if (req.method === "GET") {
     try {
-      let query = supabase
-        .from("page_memory")
-        .select("*")
-        .eq("user_id", userId);
+      let query = supabase.from("page_memory").select("*");
 
+      if (userId) {
+        query = query.eq("user_id", userId);
+      }
+      
       if (pageId) {
         query = query.eq("page_id", pageId);
+      }
+
+      // Require at least one filter
+      if (!userId && !pageId) {
+        return new Response(JSON.stringify({ error: "page_id or auth required" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
       const { data, error } = await query;
@@ -172,11 +189,33 @@ serve(async (req) => {
         payment_rules,
       } = body;
 
+      console.log("[page-memory] POST body:", { account_id, page_id, page_name, automation_settings });
+
       if (!page_id || !account_id) {
         return new Response(JSON.stringify({ error: "page_id and account_id are required" }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
+      }
+      
+      // If no userId from JWT, look it up from account_id
+      if (!userId) {
+        console.log("[page-memory] No JWT userId, looking up from account:", account_id);
+        const { data: accountData } = await supabase
+          .from("connected_accounts")
+          .select("user_id")
+          .eq("id", account_id)
+          .maybeSingle();
+        
+        if (accountData?.user_id) {
+          userId = accountData.user_id;
+          console.log("[page-memory] Found user from account:", userId);
+        } else {
+          return new Response(JSON.stringify({ error: "Account not found" }), {
+            status: 404,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
       }
 
       // Verify account ownership
