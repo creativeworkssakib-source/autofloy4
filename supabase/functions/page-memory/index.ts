@@ -152,6 +152,9 @@ serve(async (req) => {
         faq_context,
         custom_instructions,
         automation_settings,
+        selling_rules,
+        ai_behavior_rules,
+        payment_rules,
       } = body;
 
       if (!page_id || !account_id) {
@@ -176,7 +179,7 @@ serve(async (req) => {
         });
       }
 
-      // Upsert page memory
+      // Upsert page memory with AI behavior configuration
       const { data: memory, error } = await supabase
         .from("page_memory")
         .upsert({
@@ -193,6 +196,9 @@ serve(async (req) => {
           faq_context,
           custom_instructions,
           automation_settings: automation_settings || {},
+          selling_rules: selling_rules || null,
+          ai_behavior_rules: ai_behavior_rules || null,
+          payment_rules: payment_rules || null,
         }, {
           onConflict: "user_id,page_id",
         })

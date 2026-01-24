@@ -23,8 +23,18 @@ import {
   Bot,
   Building2,
   Languages,
-  Sparkles
+  Sparkles,
+  DollarSign,
+  Percent,
+  Brain,
+  HelpCircle,
+  Camera,
+  CheckCircle2,
+  CreditCard,
+  Banknote,
+  AlertTriangle
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
 
 interface AutomationSettings {
   autoCommentReply: boolean;
@@ -39,6 +49,26 @@ interface BusinessInfo {
   servicesOffered: string;
   preferredLanguage: "bangla" | "english" | "mixed";
   tone: "friendly" | "professional";
+}
+
+interface SellingRules {
+  usePriceFromProduct: boolean;
+  allowDiscount: boolean;
+  maxDiscountPercent: number;
+  allowLowProfitSale: boolean;
+}
+
+interface AIBehaviorRules {
+  neverHallucinate: boolean;
+  askClarificationIfUnsure: boolean;
+  askForClearerPhotoIfNeeded: boolean;
+  confirmBeforeOrder: boolean;
+}
+
+interface PaymentRules {
+  codAvailable: boolean;
+  advanceRequiredAbove: number;
+  advancePercentage: number;
 }
 
 const FacebookPageSettings = () => {
@@ -65,6 +95,29 @@ const FacebookPageSettings = () => {
     servicesOffered: "",
     preferredLanguage: "mixed",
     tone: "friendly",
+  });
+
+  // Selling rules
+  const [sellingRules, setSellingRules] = useState<SellingRules>({
+    usePriceFromProduct: true,
+    allowDiscount: false,
+    maxDiscountPercent: 10,
+    allowLowProfitSale: false,
+  });
+
+  // AI behavior rules
+  const [aiBehaviorRules, setAiBehaviorRules] = useState<AIBehaviorRules>({
+    neverHallucinate: true,
+    askClarificationIfUnsure: true,
+    askForClearerPhotoIfNeeded: true,
+    confirmBeforeOrder: true,
+  });
+
+  // Payment rules
+  const [paymentRules, setPaymentRules] = useState<PaymentRules>({
+    codAvailable: true,
+    advanceRequiredAbove: 5000,
+    advancePercentage: 50,
   });
 
   useEffect(() => {
@@ -95,6 +148,35 @@ const FacebookPageSettings = () => {
             preferredLanguage: (memory.detected_language as "bangla" | "english" | "mixed") || "mixed",
             tone: (memory.preferred_tone as "friendly" | "professional") || "friendly",
           });
+
+          // Load selling rules
+          if (memory.selling_rules) {
+            setSellingRules({
+              usePriceFromProduct: memory.selling_rules.usePriceFromProduct ?? true,
+              allowDiscount: memory.selling_rules.allowDiscount ?? false,
+              maxDiscountPercent: memory.selling_rules.maxDiscountPercent ?? 10,
+              allowLowProfitSale: memory.selling_rules.allowLowProfitSale ?? false,
+            });
+          }
+
+          // Load AI behavior rules
+          if (memory.ai_behavior_rules) {
+            setAiBehaviorRules({
+              neverHallucinate: memory.ai_behavior_rules.neverHallucinate ?? true,
+              askClarificationIfUnsure: memory.ai_behavior_rules.askClarificationIfUnsure ?? true,
+              askForClearerPhotoIfNeeded: memory.ai_behavior_rules.askForClearerPhotoIfNeeded ?? true,
+              confirmBeforeOrder: memory.ai_behavior_rules.confirmBeforeOrder ?? true,
+            });
+          }
+
+          // Load payment rules
+          if (memory.payment_rules) {
+            setPaymentRules({
+              codAvailable: memory.payment_rules.codAvailable ?? true,
+              advanceRequiredAbove: memory.payment_rules.advanceRequiredAbove ?? 5000,
+              advancePercentage: memory.payment_rules.advancePercentage ?? 50,
+            });
+          }
         }
       } catch (error) {
         console.error("Failed to load settings:", error);
@@ -139,6 +221,9 @@ const FacebookPageSettings = () => {
         detected_language: businessInfo.preferredLanguage,
         preferred_tone: businessInfo.tone,
         automation_settings: automationSettings as unknown as Record<string, boolean>,
+        selling_rules: sellingRules,
+        ai_behavior_rules: aiBehaviorRules,
+        payment_rules: paymentRules,
       });
       
       if (result) {
@@ -382,11 +467,229 @@ const FacebookPageSettings = () => {
           </Card>
         </motion.div>
 
+        {/* AI Behavior Configuration */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+        >
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Brain className="h-5 w-5 text-primary" />
+                AI Behavior Configuration
+              </CardTitle>
+              <CardDescription>
+                Configure how AI should behave as a trained sales agent
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Selling Rules */}
+              <div className="space-y-4">
+                <h4 className="font-medium flex items-center gap-2 text-sm">
+                  <DollarSign className="h-4 w-4 text-green-500" />
+                  Selling Rules
+                </h4>
+                <div className="grid gap-4 pl-6">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label className="text-sm">Use Price from Product Catalog</Label>
+                      <p className="text-xs text-muted-foreground">AI will always quote prices from your product list</p>
+                    </div>
+                    <Switch
+                      checked={sellingRules.usePriceFromProduct}
+                      onCheckedChange={(checked) => setSellingRules(prev => ({ ...prev, usePriceFromProduct: checked }))}
+                    />
+                  </div>
+                  
+                  <Separator />
+                  
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label className="text-sm">Allow Discount</Label>
+                      <p className="text-xs text-muted-foreground">AI can offer discounts to customers</p>
+                    </div>
+                    <Switch
+                      checked={sellingRules.allowDiscount}
+                      onCheckedChange={(checked) => setSellingRules(prev => ({ ...prev, allowDiscount: checked }))}
+                    />
+                  </div>
+
+                  {sellingRules.allowDiscount && (
+                    <div className="space-y-2">
+                      <Label className="text-sm flex items-center gap-2">
+                        <Percent className="h-3 w-3" />
+                        Maximum Discount Percentage
+                      </Label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={sellingRules.maxDiscountPercent}
+                          onChange={(e) => setSellingRules(prev => ({ ...prev, maxDiscountPercent: parseInt(e.target.value) || 0 }))}
+                          className="w-24"
+                        />
+                        <span className="text-sm text-muted-foreground">%</span>
+                      </div>
+                    </div>
+                  )}
+
+                  <Separator />
+
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label className="text-sm">Allow Low Profit Sale</Label>
+                      <p className="text-xs text-muted-foreground">AI can agree to small profit if customer insists</p>
+                    </div>
+                    <Switch
+                      checked={sellingRules.allowLowProfitSale}
+                      onCheckedChange={(checked) => setSellingRules(prev => ({ ...prev, allowLowProfitSale: checked }))}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <Separator className="my-6" />
+
+              {/* AI Behavior Rules */}
+              <div className="space-y-4">
+                <h4 className="font-medium flex items-center gap-2 text-sm">
+                  <AlertTriangle className="h-4 w-4 text-orange-500" />
+                  AI Safety Rules
+                </h4>
+                <div className="grid gap-4 pl-6">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label className="text-sm">Never Hallucinate Information</Label>
+                      <p className="text-xs text-muted-foreground">AI will never make up product details or prices</p>
+                    </div>
+                    <Switch
+                      checked={aiBehaviorRules.neverHallucinate}
+                      onCheckedChange={(checked) => setAiBehaviorRules(prev => ({ ...prev, neverHallucinate: checked }))}
+                    />
+                  </div>
+
+                  <Separator />
+
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label className="text-sm flex items-center gap-1">
+                        <HelpCircle className="h-3 w-3" />
+                        Ask Clarification if Unsure
+                      </Label>
+                      <p className="text-xs text-muted-foreground">AI will ask customer for clarification when needed</p>
+                    </div>
+                    <Switch
+                      checked={aiBehaviorRules.askClarificationIfUnsure}
+                      onCheckedChange={(checked) => setAiBehaviorRules(prev => ({ ...prev, askClarificationIfUnsure: checked }))}
+                    />
+                  </div>
+
+                  <Separator />
+
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label className="text-sm flex items-center gap-1">
+                        <Camera className="h-3 w-3" />
+                        Ask for Clearer Photo/Details
+                      </Label>
+                      <p className="text-xs text-muted-foreground">AI will request clearer product images if needed</p>
+                    </div>
+                    <Switch
+                      checked={aiBehaviorRules.askForClearerPhotoIfNeeded}
+                      onCheckedChange={(checked) => setAiBehaviorRules(prev => ({ ...prev, askForClearerPhotoIfNeeded: checked }))}
+                    />
+                  </div>
+
+                  <Separator />
+
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label className="text-sm flex items-center gap-1">
+                        <CheckCircle2 className="h-3 w-3" />
+                        Always Confirm Before Order
+                      </Label>
+                      <p className="text-xs text-muted-foreground">AI will confirm all details before placing an order</p>
+                    </div>
+                    <Switch
+                      checked={aiBehaviorRules.confirmBeforeOrder}
+                      onCheckedChange={(checked) => setAiBehaviorRules(prev => ({ ...prev, confirmBeforeOrder: checked }))}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <Separator className="my-6" />
+
+              {/* Payment Rules */}
+              <div className="space-y-4">
+                <h4 className="font-medium flex items-center gap-2 text-sm">
+                  <CreditCard className="h-4 w-4 text-blue-500" />
+                  Payment Rules
+                </h4>
+                <div className="grid gap-4 pl-6">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label className="text-sm flex items-center gap-1">
+                        <Banknote className="h-3 w-3" />
+                        Cash on Delivery (COD) Available
+                      </Label>
+                      <p className="text-xs text-muted-foreground">AI can offer COD as a payment option</p>
+                    </div>
+                    <Switch
+                      checked={paymentRules.codAvailable}
+                      onCheckedChange={(checked) => setPaymentRules(prev => ({ ...prev, codAvailable: checked }))}
+                    />
+                  </div>
+
+                  <Separator />
+
+                  <div className="space-y-3">
+                    <div className="space-y-0.5">
+                      <Label className="text-sm">Advance Payment Required Above</Label>
+                      <p className="text-xs text-muted-foreground">Orders above this amount require advance payment</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">৳</span>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={paymentRules.advanceRequiredAbove}
+                        onChange={(e) => setPaymentRules(prev => ({ ...prev, advanceRequiredAbove: parseInt(e.target.value) || 0 }))}
+                        className="w-32"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="space-y-0.5">
+                      <Label className="text-sm">Advance Percentage</Label>
+                      <p className="text-xs text-muted-foreground">Percentage of order amount required as advance</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={paymentRules.advancePercentage}
+                        onChange={(e) => setPaymentRules(prev => ({ ...prev, advancePercentage: parseInt(e.target.value) || 0 }))}
+                        className="w-24"
+                      />
+                      <span className="text-sm text-muted-foreground">%</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
         {/* Save Button (Mobile) */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 0.3 }}
+          transition={{ delay: 0.4 }}
           className="md:hidden"
         >
           <Button onClick={handleSave} disabled={isSaving} className="w-full">

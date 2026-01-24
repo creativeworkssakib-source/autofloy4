@@ -971,6 +971,24 @@ export interface PageMemory {
   webhook_subscribed: boolean;
   webhook_subscribed_at: string | null;
   automation_settings: Record<string, boolean>;
+  // AI Behavior Configuration
+  selling_rules: {
+    usePriceFromProduct: boolean;
+    allowDiscount: boolean;
+    maxDiscountPercent: number;
+    allowLowProfitSale: boolean;
+  } | null;
+  ai_behavior_rules: {
+    neverHallucinate: boolean;
+    askClarificationIfUnsure: boolean;
+    askForClearerPhotoIfNeeded: boolean;
+    confirmBeforeOrder: boolean;
+  } | null;
+  payment_rules: {
+    codAvailable: boolean;
+    advanceRequiredAbove: number;
+    advancePercentage: number;
+  } | null;
   created_at: string;
   updated_at: string;
 }
