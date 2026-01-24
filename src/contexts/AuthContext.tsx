@@ -192,14 +192,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Google OAuth - redirect to Google login
   const loginWithGoogle = async () => {
+    // Get the Google Client ID from window or use the edge function
+    const GOOGLE_CLIENT_ID = "458754008519-d0feefkvq33klrlqtjplek3i9orogq8t.apps.googleusercontent.com";
     const redirectUri = `${window.location.origin}/auth/google/callback`;
-    try {
-      const { auth_url } = await authService.getGoogleAuthUrl(redirectUri);
-      window.location.href = auth_url;
-    } catch (error) {
-      console.error("Failed to get Google auth URL:", error);
-      throw error;
-    }
+    const scope = encodeURIComponent("openid email profile");
+    const state = crypto.randomUUID();
+    
+    // Store state for verification
+    sessionStorage.setItem('google_oauth_state', state);
+    
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+      `client_id=${GOOGLE_CLIENT_ID}&` +
+      `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+      `response_type=code&` +
+      `scope=${scope}&` +
+      `state=${state}&` +
+      `access_type=offline&` +
+      `prompt=consent`;
+    
+    window.location.href = authUrl;
   };
 
   // Handle Google OAuth callback
