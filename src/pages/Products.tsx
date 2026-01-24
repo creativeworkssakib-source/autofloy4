@@ -510,13 +510,22 @@ const Products = () => {
 
       // Send bulk import request
       const token = localStorage.getItem("autofloy_token");
+      console.log("[Products Import] Token available:", !!token, "Token length:", token?.length || 0);
+      console.log("[Products Import] Products to import:", productsToImport.length);
+      
+      if (!token) {
+        toast.error(language === "en" ? "Please login again" : "আবার লগইন করুন");
+        return;
+      }
+      
       const response = await fetch(
         "https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1/products",
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            ...(token && { Authorization: `Bearer ${token}` }),
+            "Authorization": `Bearer ${token}`,
+            "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtsa3J6Znd2cm1mZnFrbWt5cXJoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU4OTE4MjcsImV4cCI6MjA4MTQ2NzgyN30.ZArRZTr6tGhhnptPXvq7Onn4OhMLxrF7FvKkYC26nXg",
           },
           body: JSON.stringify({
             action: "bulk_import",
@@ -525,7 +534,15 @@ const Products = () => {
         }
       );
 
+      console.log("[Products Import] Response status:", response.status);
       const result = await response.json();
+      console.log("[Products Import] Response body:", result);
+
+      if (!response.ok) {
+        console.error("[Products Import] HTTP Error:", response.status, result);
+        toast.error(result.error || (language === "en" ? `Import failed (${response.status})` : `ইম্পোর্ট হয়নি (${response.status})`));
+        return;
+      }
 
       if (result.success) {
         toast.success(

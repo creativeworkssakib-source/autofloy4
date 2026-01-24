@@ -13,11 +13,21 @@ const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const jwtSecret = Deno.env.get("JWT_SECRET")!;
 
 async function verifyToken(authHeader: string | null): Promise<string | null> {
+  console.log("[products] verifyToken called, hasAuthHeader:", !!authHeader);
+  
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    console.log("[products] No valid auth header found");
     return null;
   }
   
   const token = authHeader.substring(7);
+  console.log("[products] Token length:", token.length);
+  
+  if (!jwtSecret) {
+    console.error("[products] JWT_SECRET not configured!");
+    return null;
+  }
+  
   try {
     const key = await crypto.subtle.importKey(
       "raw",
@@ -27,25 +37,31 @@ async function verifyToken(authHeader: string | null): Promise<string | null> {
       ["sign", "verify"]
     );
     const payload = await verify(token, key);
+    console.log("[products] Token verified successfully, userId:", payload.sub);
     return payload.sub as string;
   } catch (error) {
-    console.error("Token verification failed:", error);
+    console.error("[products] Token verification failed:", error);
     return null;
   }
 }
 
 serve(async (req) => {
+  console.log("[products]", req.method, req.url);
+  
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   const userId = await verifyToken(req.headers.get("Authorization"));
   if (!userId) {
+    console.log("[products] Unauthorized - returning 401");
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
+  
+  console.log("[products] Authenticated user:", userId);
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
   const url = new URL(req.url);
