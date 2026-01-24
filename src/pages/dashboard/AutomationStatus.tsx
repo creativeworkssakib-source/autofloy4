@@ -50,56 +50,17 @@ const AutomationStatus = () => {
   const [pageStatusData, setPageStatusData] = useState<PageStatusData | null>(null);
   const [productCount, setProductCount] = useState(0);
 
-  // Load connected pages
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  // When page selection changes, load page memory
-  useEffect(() => {
-    if (selectedPageId) {
-      loadPageData(selectedPageId);
-    }
-  }, [selectedPageId]);
-
-  const loadData = async () => {
-    setIsLoading(true);
+  // Load page memory for a specific page
+  const loadPageMemory = async (pageId: string, pages: ConnectedAccount[], prodCount: number) => {
     try {
-      const [accounts, productsData] = await Promise.all([
-        fetchConnectedAccounts("facebook"),
-        fetchProducts(),
-      ]);
-
-      const enabledPages = accounts.filter(a => a.is_connected);
-      setConnectedPages(enabledPages);
-      setProductCount(productsData.products?.length || 0);
-
-      // Select page from URL or first enabled page
-      if (urlPageId && enabledPages.some(p => p.external_id === urlPageId)) {
-        setSelectedPageId(urlPageId);
-      } else if (enabledPages.length > 0) {
-        setSelectedPageId(enabledPages[0].external_id);
+      const page = pages.find(p => p.external_id === pageId);
+      if (!page) {
+        console.log("[AutomationStatus] Page not found:", pageId);
+        return;
       }
-    } catch (error) {
-      console.error("Failed to load data:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load automation data",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
-  const loadPageData = async (pageId: string) => {
-    try {
-      const page = connectedPages.find(p => p.external_id === pageId);
-      if (!page) return;
-
-      console.log("[AutomationStatus] Loading page data for:", pageId);
+      console.log("[AutomationStatus] Loading page memory for:", pageId);
       
-      // Use direct fetch with cache-busting
       const token = localStorage.getItem("autofloy_token");
       const response = await fetch(
         `https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1/page-memory?page_id=${pageId}&_t=${Date.now()}`,
@@ -120,29 +81,86 @@ const AutomationStatus = () => {
       }
       
       const data = await response.json();
-      console.log("[AutomationStatus] Loaded data:", data);
+      console.log("[AutomationStatus] Raw response:", data);
       
-      const memories = data?.memories || [];
+      // Handle both array and object response from edge function
+      const memories = data?.memories;
       const memory = Array.isArray(memories) 
         ? memories.find((m: { page_id: string }) => m.page_id === pageId)
         : memories;
       
+      console.log("[AutomationStatus] Parsed memory:", {
+        hasMemory: !!memory,
+        businessDescription: memory?.business_description,
+        automationSettings: memory?.automation_settings,
+        sellingRules: memory?.selling_rules,
+        paymentRules: memory?.payment_rules,
+      });
+      
       setPageStatusData({
         page,
         memory: memory || null,
-        hasProducts: productCount > 0,
+        hasProducts: prodCount > 0,
       });
     } catch (error) {
-      console.error("Failed to load page data:", error);
+      console.error("Failed to load page memory:", error);
     }
   };
+
+  const loadData = async () => {
+    setIsLoading(true);
+    try {
+      const [accounts, productsData] = await Promise.all([
+        fetchConnectedAccounts("facebook"),
+        fetchProducts(),
+      ]);
+
+      const enabledPages = accounts.filter(a => a.is_connected);
+      const prodCount = productsData.products?.length || 0;
+      
+      setConnectedPages(enabledPages);
+      setProductCount(prodCount);
+
+      // Determine which page to load
+      let pageIdToLoad: string | null = null;
+      if (urlPageId && enabledPages.some(p => p.external_id === urlPageId)) {
+        pageIdToLoad = urlPageId;
+      } else if (enabledPages.length > 0) {
+        pageIdToLoad = enabledPages[0].external_id;
+      }
+      
+      if (pageIdToLoad) {
+        setSelectedPageId(pageIdToLoad);
+        // Load page memory with current values directly
+        await loadPageMemory(pageIdToLoad, enabledPages, prodCount);
+      }
+    } catch (error) {
+      console.error("Failed to load data:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load automation data",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Initial load
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  // When page selection changes manually (user clicks dropdown), reload page memory
+  useEffect(() => {
+    if (selectedPageId && connectedPages.length > 0 && !isLoading) {
+      loadPageMemory(selectedPageId, connectedPages, productCount);
+    }
+  }, [selectedPageId]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
     await loadData();
-    if (selectedPageId) {
-      await loadPageData(selectedPageId);
-    }
     setIsRefreshing(false);
     toast({
       title: "Refreshed",
