@@ -261,11 +261,12 @@ serve(async (req) => {
       const userAccessToken = tokenData.access_token;
       console.log("[FB Callback] Got access token");
 
-      // Fetch pages
+      // Fetch pages with extended fields for AI automation
       const allPages: unknown[] = [];
       const pagesUrl = new URL(`https://graph.facebook.com/${FB_API_VERSION}/me/accounts`);
       pagesUrl.searchParams.set("access_token", userAccessToken);
-      pagesUrl.searchParams.set("fields", "id,name,category,access_token,picture{url}");
+      // Extended fields to auto-populate page_memory
+      pagesUrl.searchParams.set("fields", "id,name,category,access_token,picture{url},about,description,bio,website,hours,phone,emails,location");
       pagesUrl.searchParams.set("limit", "100");
 
       let pagesResponse = await fetch(pagesUrl.toString());
@@ -290,7 +291,7 @@ serve(async (req) => {
         });
       }
 
-      // Store pages
+      // Store pages and auto-populate page_memory with Facebook data
       let connectedCount = 0;
       for (const page of allPages) {
         try {
@@ -298,7 +299,35 @@ serve(async (req) => {
           const encryptedToken = await encryptToken(p.access_token as string);
           const pictureUrl = ((p.picture as Record<string, unknown>)?.data as Record<string, unknown>)?.url as string | undefined;
 
-          const { error: upsertError } = await supabase.from("connected_accounts").upsert({
+          // Extract extended page info for AI automation
+          const pageAbout = p.about as string | undefined;
+          const pageDescription = p.description as string | undefined;
+          const pageBio = p.bio as string | undefined;
+          const pageWebsite = p.website as string | undefined;
+          const pagePhone = p.phone as string | undefined;
+          const pageEmails = p.emails as string[] | undefined;
+          const pageHours = p.hours as Record<string, unknown> | undefined;
+          const pageLocation = p.location as Record<string, unknown> | undefined;
+
+          // Build auto-generated business description from available Facebook data
+          const autoBusinessDescription = [
+            pageAbout,
+            pageDescription,
+            pageBio,
+          ].filter(Boolean).join("\n\n") || null;
+
+          // Build business context from location, website, etc.
+          const locationStr = pageLocation ? 
+            [pageLocation.street, pageLocation.city, pageLocation.country].filter(Boolean).join(", ") : null;
+          
+          const contactInfo = [
+            pageWebsite ? `Website: ${pageWebsite}` : null,
+            pagePhone ? `Phone: ${pagePhone}` : null,
+            pageEmails?.length ? `Email: ${pageEmails[0]}` : null,
+            locationStr ? `Location: ${locationStr}` : null,
+          ].filter(Boolean).join("\n");
+
+          const { data: insertedAccount, error: upsertError } = await supabase.from("connected_accounts").upsert({
             user_id: userId,
             platform: "facebook",
             external_id: p.id,
@@ -309,9 +338,32 @@ serve(async (req) => {
             is_connected: false,
             encryption_version: 2,
             picture_url: pictureUrl || null,
-          }, { onConflict: "user_id,platform,external_id" });
+          }, { onConflict: "user_id,platform,external_id" }).select("id").single();
 
-          if (!upsertError) connectedCount++;
+          if (!upsertError && insertedAccount) {
+            connectedCount++;
+            
+            // Auto-create page_memory with fetched Facebook data
+            const { error: memoryError } = await supabase.from("page_memory").upsert({
+              user_id: userId,
+              account_id: insertedAccount.id,
+              page_id: p.id as string,
+              page_name: p.name as string,
+              business_category: p.category as string || null,
+              business_description: autoBusinessDescription,
+              custom_instructions: contactInfo || null,
+              detected_language: "auto",
+              preferred_tone: "friendly",
+              automation_settings: {},
+              webhook_subscribed: false,
+            }, { onConflict: "user_id,page_id" });
+
+            if (memoryError) {
+              console.error("[FB Callback] Error creating page_memory:", memoryError);
+            } else {
+              console.log(`[FB Callback] Auto-populated page_memory for ${p.name}`);
+            }
+          }
         } catch (e) {
           console.error("[FB Callback] Error storing page:", e);
         }
