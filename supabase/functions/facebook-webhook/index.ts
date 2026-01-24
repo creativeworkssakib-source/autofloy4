@@ -17,9 +17,49 @@ const encryptionKey = Deno.env.get("TOKEN_ENCRYPTION_KEY")!;
 // Facebook Graph API
 const GRAPH_API_URL = "https://graph.facebook.com/v18.0";
 
-// Decrypt access token
+// Decrypt access token (v2 format: PBKDF2 + AES-GCM)
 async function decryptToken(encryptedData: string): Promise<string> {
   try {
+    // Check for v2 format
+    if (encryptedData.startsWith("v2:")) {
+      const parts = encryptedData.substring(3).split(":");
+      if (parts.length !== 3) {
+        throw new Error("Invalid v2 token structure");
+      }
+      
+      const [saltB64, ivB64, encryptedB64] = parts;
+      
+      const salt = Uint8Array.from(atob(saltB64), c => c.charCodeAt(0));
+      const iv = Uint8Array.from(atob(ivB64), c => c.charCodeAt(0));
+      const encrypted = Uint8Array.from(atob(encryptedB64), c => c.charCodeAt(0));
+      
+      const encoder = new TextEncoder();
+      const keyMaterial = await crypto.subtle.importKey(
+        "raw",
+        encoder.encode(encryptionKey),
+        { name: "PBKDF2" },
+        false,
+        ["deriveKey"]
+      );
+      
+      const key = await crypto.subtle.deriveKey(
+        { name: "PBKDF2", salt, iterations: 100000, hash: "SHA-256" },
+        keyMaterial,
+        { name: "AES-GCM", length: 256 },
+        false,
+        ["decrypt"]
+      );
+      
+      const decrypted = await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv },
+        key,
+        encrypted
+      );
+      
+      return new TextDecoder().decode(decrypted);
+    }
+    
+    // Legacy v1 format fallback
     const [ivHex, encryptedHex] = encryptedData.split(":");
     const iv = new Uint8Array(ivHex.match(/.{2}/g)!.map(byte => parseInt(byte, 16)));
     const encrypted = new Uint8Array(encryptedHex.match(/.{2}/g)!.map(byte => parseInt(byte, 16)));
