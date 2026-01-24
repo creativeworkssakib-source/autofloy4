@@ -52,6 +52,146 @@ export type Database = {
           },
         ]
       }
+      ai_conversations: {
+        Row: {
+          collected_address: string | null
+          collected_name: string | null
+          collected_phone: string | null
+          conversation_state: string | null
+          created_at: string
+          current_product_id: string | null
+          current_product_name: string | null
+          current_product_price: number | null
+          current_quantity: number | null
+          fake_order_score: number | null
+          id: string
+          last_message_at: string | null
+          message_history: Json | null
+          page_id: string
+          sender_id: string
+          sender_name: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          collected_address?: string | null
+          collected_name?: string | null
+          collected_phone?: string | null
+          conversation_state?: string | null
+          created_at?: string
+          current_product_id?: string | null
+          current_product_name?: string | null
+          current_product_price?: number | null
+          current_quantity?: number | null
+          fake_order_score?: number | null
+          id?: string
+          last_message_at?: string | null
+          message_history?: Json | null
+          page_id: string
+          sender_id: string
+          sender_name?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          collected_address?: string | null
+          collected_name?: string | null
+          collected_phone?: string | null
+          conversation_state?: string | null
+          created_at?: string
+          current_product_id?: string | null
+          current_product_name?: string | null
+          current_product_price?: number | null
+          current_quantity?: number | null
+          fake_order_score?: number | null
+          id?: string
+          last_message_at?: string | null
+          message_history?: Json | null
+          page_id?: string
+          sender_id?: string
+          sender_name?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      ai_orders: {
+        Row: {
+          advance_amount: number | null
+          conversation_id: string | null
+          created_at: string
+          customer_address: string
+          customer_fb_id: string
+          customer_name: string
+          customer_phone: string
+          delivery_charge: number | null
+          fake_order_score: number | null
+          id: string
+          invoice_number: string | null
+          notes: string | null
+          order_status: string | null
+          page_id: string
+          payment_method: string | null
+          products: Json
+          subtotal: number
+          total: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          advance_amount?: number | null
+          conversation_id?: string | null
+          created_at?: string
+          customer_address: string
+          customer_fb_id: string
+          customer_name: string
+          customer_phone: string
+          delivery_charge?: number | null
+          fake_order_score?: number | null
+          id?: string
+          invoice_number?: string | null
+          notes?: string | null
+          order_status?: string | null
+          page_id: string
+          payment_method?: string | null
+          products?: Json
+          subtotal?: number
+          total?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          advance_amount?: number | null
+          conversation_id?: string | null
+          created_at?: string
+          customer_address?: string
+          customer_fb_id?: string
+          customer_name?: string
+          customer_phone?: string
+          delivery_charge?: number | null
+          fake_order_score?: number | null
+          id?: string
+          invoice_number?: string | null
+          notes?: string | null
+          order_status?: string | null
+          page_id?: string
+          payment_method?: string | null
+          products?: Json
+          subtotal?: number
+          total?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_orders_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "ai_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       api_integrations: {
         Row: {
           api_key: string | null
@@ -4307,6 +4447,7 @@ export type Database = {
         Args: { p_preserve_email_history?: boolean; p_user_id: string }
         Returns: Json
       }
+      generate_invoice_number: { Args: never; Returns: string }
       generate_supplier_code: { Args: { p_user_id: string }; Returns: string }
       get_user_role: {
         Args: { _user_id: string }
