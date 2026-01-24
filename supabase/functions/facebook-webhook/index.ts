@@ -372,12 +372,54 @@ async function callAIAgent(supabase: any, data: {
     return null;
   }
 }
-
-// Check if comment is negative/spam
+// *** COMPREHENSIVE BENGALI PROFANITY & ABUSE DETECTION ***
+// Check if comment is negative/spam/abusive
 function isNegativeComment(text: string): boolean {
   const lowerText = text.toLowerCase();
-  const negativePatterns = /বাজে|খারাপ|fraud|fake|scam|spam|worst|terrible|hate|cheat|धोखा|😡|👎|😤|🖕|wtf|bullshit|shit|damn/;
-  return negativePatterns.test(lowerText);
+  
+  // Bengali profanity/slang/abuse words (expanded list)
+  const bengaliProfanity = /বোকা[চছ]ো?দা?|বোকাচোদা|বকাচোদা|বুকাচুদা|bukachuda|bokachoda|চুদ|চোদ|মাগি|মাগী|রান্ডি|রান্ডী|রাড়ি|হারামি|হারামী|শালা|শালী|বাল|খানকি|খানকী|ভোদা|ভোদাই|বাচ্চা|হাউয়া|শুয়োর|শুওর|কুত্তা|কুকুর|গাধা|গাড়া|মাদার|মাদারচোদ|ফাদার|বদমাশ|নোংরা|বেশ্যা|পতিতা|ছিনাল|চোর|ডাকাত|বেটা|বেটি|শয়তান|জারজ|জারজ|হারামজাদা|কামিনা|কামিনি|চুতিয়া|চুতিয়ে|লাউড়া|লাওড়া|গু|গুয়ে|হাগু|মুত|চুমু/i;
+  
+  // English profanity/slang (common)
+  const englishProfanity = /fuck|f\*ck|fck|fuk|f u c k|shit|sh\*t|sht|bitch|b\*tch|btch|ass|a\*\*|asshole|bastard|dick|d\*ck|cock|c\*ck|pussy|p\*ssy|whore|slut|cunt|c\*nt|damn|damm|wtf|stfu|idiot|stupid|dumb|moron|retard|loser|sucker/i;
+  
+  // Negative/spam/scam patterns
+  const negativePatterns = /বাজে|খারাপ|fraud|fake|scam|spam|worst|terrible|hate|cheat|धोखा|😡|👎|😤|🖕|bullshit|racist|fascist|nazi|kill|die|death|murder|ধর্ষক|ধর্ষণ|মারব|মেরে দিব|খুন/i;
+  
+  // Variations and misspellings (Banglish)
+  const banglishProfanity = /boka|bokachod|chod|chud|magi|moghi|maagi|randi|haramee|harami|sala|shala|bal|khanki|voda|vodai|shuor|shuar|kutta|gadha|madarc|fatherc|bokac|besha|bessha|potita|sinalee|chor|dakata|beta|beti|shoitan|jaroj|haramja|kamina|kamini|chutiya|chutia|lauda|lawda|gu|hagu|mut|chumu|motherfucker|mf|suck|suckr/i;
+  
+  return bengaliProfanity.test(lowerText) || 
+         englishProfanity.test(lowerText) || 
+         negativePatterns.test(lowerText) || 
+         banglishProfanity.test(lowerText);
+}
+
+// *** HIDE COMMENT FROM PAGE (not delete, just hide) ***
+async function hideComment(pageAccessToken: string, commentId: string): Promise<boolean> {
+  try {
+    const response = await fetch(`${GRAPH_API_URL}/${commentId}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        access_token: pageAccessToken,
+        is_hidden: true,
+      }),
+    });
+
+    const result = await response.json();
+    if (result.error) {
+      console.error("[Facebook] Hide comment error:", result.error);
+      return false;
+    }
+    console.log("[Facebook] Comment hidden successfully:", commentId);
+    return true;
+  } catch (error) {
+    console.error("[Facebook] Failed to hide comment:", error);
+    return false;
+  }
 }
 
 serve(async (req) => {
@@ -710,16 +752,23 @@ async function processFeedChange(supabase: any, pageId: string, change: any) {
       return;
     }
 
-    // Check for negative/spam comment - don't reply to these
+    // Check for negative/spam/abusive comment - hide and don't reply
     if (isNegativeComment(commentText)) {
-      console.log("[Webhook] Skipping negative/spam comment");
+      console.log("[Webhook] ⚠️ NEGATIVE/ABUSIVE comment detected:", commentText.substring(0, 50));
+      
+      // *** TRY TO HIDE THE ABUSIVE COMMENT ***
+      let hideSuccess = false;
+      if (decryptedToken && value.comment_id) {
+        hideSuccess = await hideComment(decryptedToken, value.comment_id);
+        console.log(`[Webhook] Hide comment result: ${hideSuccess ? 'SUCCESS ✅' : 'FAILED ❌'}`);
+      }
       
       await supabase.from("execution_logs").insert({
         user_id: account.user_id,
         automation_id: null,
         source_platform: "facebook",
-        event_type: "comment_skipped_negative",
-        status: "skipped",
+        event_type: hideSuccess ? "comment_hidden_abusive" : "comment_skipped_negative",
+        status: hideSuccess ? "success" : "skipped",
         incoming_payload: {
           page_id: pageId,
           post_id: value.post_id,
@@ -727,9 +776,14 @@ async function processFeedChange(supabase: any, pageId: string, change: any) {
           parent_id: parentId,
           message: commentText,
           from: value.from,
-          reason: "Negative or spam comment detected",
+          reason: "Negative, spam, or abusive comment detected",
+          was_hidden: hideSuccess,
         },
-        response_payload: { skipped: true },
+        response_payload: { 
+          skipped: true, 
+          hidden: hideSuccess,
+          detection_type: "profanity_filter"
+        },
         processing_time_ms: Date.now() - startTime,
       });
       return;
