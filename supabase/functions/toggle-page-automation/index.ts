@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { verify } from "https://deno.land/x/djwt@v3.0.2/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -23,13 +22,35 @@ const FALLBACK_LIMITS: Record<string, number> = {
   lifetime: 999,
 };
 
+// Simple JWT verification without external dependency
 async function verifyToken(authHeader: string | null): Promise<string | null> {
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    console.log("[verifyToken] No valid auth header");
     return null;
   }
   
   const token = authHeader.substring(7);
+  
   try {
+    // Decode JWT payload (base64url)
+    const parts = token.split(".");
+    if (parts.length !== 3) {
+      console.log("[verifyToken] Invalid JWT structure");
+      return null;
+    }
+    
+    // Decode payload
+    const payloadBase64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const payloadJson = atob(payloadBase64);
+    const payload = JSON.parse(payloadJson);
+    
+    // Check expiration
+    if (payload.exp && payload.exp * 1000 < Date.now()) {
+      console.log("[verifyToken] Token expired");
+      return null;
+    }
+    
+    // Verify signature using HMAC SHA-256
     const key = await crypto.subtle.importKey(
       "raw",
       new TextEncoder().encode(jwtSecret),
@@ -37,17 +58,30 @@ async function verifyToken(authHeader: string | null): Promise<string | null> {
       false,
       ["sign", "verify"]
     );
-    const payload = await verify(token, key);
+    
+    const signatureData = new TextEncoder().encode(parts[0] + "." + parts[1]);
+    const signatureBytes = Uint8Array.from(
+      atob(parts[2].replace(/-/g, '+').replace(/_/g, '/')),
+      c => c.charCodeAt(0)
+    );
+    
+    const isValid = await crypto.subtle.verify("HMAC", key, signatureBytes, signatureData);
+    
+    if (!isValid) {
+      console.log("[verifyToken] Invalid signature");
+      return null;
+    }
+    
+    console.log(`[verifyToken] Valid token for user: ${payload.sub?.substring(0, 8)}...`);
     return payload.sub as string;
   } catch (error) {
-    console.error("Token verification failed:", error);
+    console.error("[verifyToken] Error:", error);
     return null;
   }
 }
 
-// Get max pages for a plan from database
+// deno-lint-ignore no-explicit-any
 async function getPlanMaxPages(supabase: any, planId: string): Promise<number> {
-  // Normalize plan ID
   const normalizedPlan = planId.toLowerCase();
   const dbPlanId = normalizedPlan === "trial" ? "free-trial" : normalizedPlan;
   
@@ -62,15 +96,18 @@ async function getPlanMaxPages(supabase: any, planId: string): Promise<number> {
     return FALLBACK_LIMITS[normalizedPlan] || 0;
   }
 
-  return data.max_facebook_pages || FALLBACK_LIMITS[normalizedPlan] || 0;
+  const maxPages = data.max_facebook_pages as number | null;
+  return maxPages || FALLBACK_LIMITS[normalizedPlan] || 0;
 }
 
-// Get user's effective plan
-async function getUserPlan(supabase: any, userId: string): Promise<{ 
-  plan: string; 
+interface UserPlanResult {
+  plan: string;
   maxPages: number;
   planName: string;
-}> {
+}
+
+// deno-lint-ignore no-explicit-any
+async function getUserPlan(supabase: any, userId: string): Promise<UserPlanResult> {
   const { data: user, error } = await supabase
     .from("users")
     .select("subscription_plan, is_trial_active, trial_end_date, subscription_ends_at")
@@ -78,16 +115,21 @@ async function getUserPlan(supabase: any, userId: string): Promise<{
     .single();
 
   if (error || !user) {
+    console.log(`[getUserPlan] User not found: ${userId}`);
     return { plan: "none", maxPages: 0, planName: "No Plan" };
   }
 
   const now = new Date();
-  const plan = user.subscription_plan?.toLowerCase() || "none";
+  const subscriptionPlan = user.subscription_plan as string | null;
+  const plan = subscriptionPlan?.toLowerCase() || "none";
+  const isTrialActive = user.is_trial_active as boolean | null;
+  const trialEndDate = user.trial_end_date as string | null;
+  const subscriptionEndsAt = user.subscription_ends_at as string | null;
   
   // Check trial
   if (plan === "trial" || plan === "free-trial") {
-    if (user.is_trial_active && user.trial_end_date) {
-      const trialEnd = new Date(user.trial_end_date);
+    if (isTrialActive && trialEndDate) {
+      const trialEnd = new Date(trialEndDate);
       if (trialEnd > now) {
         const maxPages = await getPlanMaxPages(supabase, "free-trial");
         return { plan: "trial", maxPages, planName: "Trial" };
@@ -102,8 +144,8 @@ async function getUserPlan(supabase: any, userId: string): Promise<{
       const maxPages = await getPlanMaxPages(supabase, "lifetime");
       return { plan: "lifetime", maxPages, planName: "Lifetime" };
     }
-    if (user.subscription_ends_at) {
-      const subEnd = new Date(user.subscription_ends_at);
+    if (subscriptionEndsAt) {
+      const subEnd = new Date(subscriptionEndsAt);
       if (subEnd > now) {
         const maxPages = await getPlanMaxPages(supabase, plan);
         const planName = plan.charAt(0).toUpperCase() + plan.slice(1);
@@ -117,27 +159,32 @@ async function getUserPlan(supabase: any, userId: string): Promise<{
 }
 
 serve(async (req) => {
+  console.log(`[toggle-page-automation] ${req.method} request received`);
+  
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
+    console.log("[toggle-page-automation] CORS preflight");
     return new Response(null, { status: 204, headers: corsHeaders });
   }
 
-  const userId = await verifyToken(req.headers.get("Authorization"));
-  if (!userId) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
+  try {
+    const userId = await verifyToken(req.headers.get("Authorization"));
+    if (!userId) {
+      console.log("[toggle-page-automation] Unauthorized - no valid token");
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-  // POST - Toggle page automation
-  if (req.method === "POST") {
-    try {
+    // POST - Toggle page automation
+    if (req.method === "POST") {
       const { page_id, enabled } = await req.json();
 
       if (!page_id || typeof enabled !== "boolean") {
+        console.log("[toggle-page-automation] Bad request - missing params");
         return new Response(JSON.stringify({ error: "page_id and enabled (boolean) are required" }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -156,6 +203,7 @@ serve(async (req) => {
         .single();
 
       if (pageError || !page) {
+        console.log("[Toggle Page] Page not found:", pageError);
         return new Response(JSON.stringify({ error: "Page not found or access denied" }), {
           status: 404,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -165,6 +213,7 @@ serve(async (req) => {
       // If enabling, check plan limits
       if (enabled) {
         const userPlan = await getUserPlan(supabase, userId);
+        console.log(`[Toggle Page] User plan: ${userPlan.planName}, max pages: ${userPlan.maxPages}`);
         
         if (userPlan.maxPages === 0) {
           return new Response(JSON.stringify({ 
@@ -186,6 +235,7 @@ serve(async (req) => {
           .neq("id", page_id);
 
         const currentEnabled = enabledCount || 0;
+        console.log(`[Toggle Page] Current enabled: ${currentEnabled}, max: ${userPlan.maxPages}`);
 
         if (currentEnabled >= userPlan.maxPages) {
           return new Response(JSON.stringify({ 
@@ -217,11 +267,14 @@ serve(async (req) => {
 
       // If enabling, create/update page_memory
       if (enabled) {
+        const pageName = page.name as string;
+        const externalId = page.external_id as string;
+        
         await supabase.from("page_memory").upsert({
           user_id: userId,
           account_id: page.id,
-          page_id: page.external_id,
-          page_name: page.name,
+          page_id: externalId,
+          page_name: pageName,
           detected_language: "auto",
           preferred_tone: "friendly",
           webhook_subscribed: true,
@@ -230,10 +283,11 @@ serve(async (req) => {
         }, {
           onConflict: "user_id,page_id",
         });
-        console.log(`[Toggle Page] Created/updated page_memory for: ${page.name}`);
+        console.log(`[Toggle Page] Created/updated page_memory for: ${pageName}`);
       }
 
-      console.log(`[Toggle Page] Successfully ${enabled ? "enabled" : "disabled"} automation for: ${page.name}`);
+      const pageName = page.name as string;
+      console.log(`[Toggle Page] Successfully ${enabled ? "enabled" : "disabled"} automation for: ${pageName}`);
 
       // Get updated connected count for live update
       const { count: newEnabledCount } = await supabase
@@ -246,26 +300,25 @@ serve(async (req) => {
       return new Response(JSON.stringify({ 
         success: true, 
         message: enabled 
-          ? `Automation enabled for ${page.name}` 
-          : `Automation disabled for ${page.name}`,
+          ? `Automation enabled for ${pageName}` 
+          : `Automation disabled for ${pageName}`,
         is_connected: enabled,
         connectedFacebookPages: newEnabledCount || 0,
       }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
-
-    } catch (error) {
-      console.error("[Toggle Page] Error:", error);
-      return new Response(JSON.stringify({ error: "Internal server error" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
     }
-  }
 
-  return new Response(JSON.stringify({ error: "Method not allowed" }), {
-    status: 405,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      status: 405,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (error) {
+    console.error("[toggle-page-automation] Error:", error);
+    return new Response(JSON.stringify({ error: "Internal server error" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
 });
