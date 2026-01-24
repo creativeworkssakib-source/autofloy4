@@ -16,7 +16,7 @@ interface MessageContext {
   senderId: string;
   senderName?: string;
   messageText: string;
-  messageType: "text" | "image" | "audio" | "sticker" | "emoji" | "video" | "file";
+  messageType: "text" | "image" | "audio" | "sticker" | "emoji" | "video" | "file" | "gif" | "animated_sticker";
   attachments?: any[];
   isComment?: boolean;
   commentId?: string;
@@ -101,39 +101,75 @@ interface SmartCommentAnalysis {
   isPhoto: boolean;
 }
 
-// *** SMART: Analyze sticker/emoji to understand meaning ***
-function analyzeSticker(stickerType?: string, messageText?: string): {
+// *** SMART: Analyze sticker/emoji/GIF to understand meaning ***
+function analyzeSticker(stickerType?: string, messageText?: string, attachments?: any[]): {
   meaning: string;
   sentiment: "positive" | "neutral" | "negative";
   reaction: "LOVE" | "LIKE" | "HAHA" | "WOW" | "NONE";
+  isGif: boolean;
+  isAnimated: boolean;
 } {
   const text = messageText?.toLowerCase() || "";
   
+  // *** GIF DETECTION ***
+  const isGif = attachments?.some(a => 
+    a.type === "animated_image_share" || 
+    a.type === "gif" || 
+    a.url?.includes(".gif") ||
+    a.payload?.url?.includes(".gif")
+  ) || false;
+  
+  // *** ANIMATED STICKER DETECTION ***
+  const isAnimated = attachments?.some(a => 
+    a.type === "animated_sticker" || 
+    a.sticker_id
+  ) || !!stickerType;
+  
   // Common positive stickers/emoji patterns
   if (/👍|💪|👏|🙌|✌️|🤝|💯/.test(text)) {
-    return { meaning: "approval/support", sentiment: "positive", reaction: "LIKE" };
+    return { meaning: "approval/support", sentiment: "positive", reaction: "LIKE", isGif, isAnimated };
   }
   if (/❤️|❤|💕|💖|💗|💓|💞|💝|🥰|😍|😘/.test(text)) {
-    return { meaning: "love/affection", sentiment: "positive", reaction: "LOVE" };
+    return { meaning: "love/affection", sentiment: "positive", reaction: "LOVE", isGif, isAnimated };
   }
   if (/😂|🤣|😆|😄|😁|😀|😃|😅/.test(text)) {
-    return { meaning: "happiness/laughter", sentiment: "positive", reaction: "HAHA" };
+    return { meaning: "happiness/laughter", sentiment: "positive", reaction: "HAHA", isGif, isAnimated };
   }
   if (/😮|😲|🤯|😱|🔥|⚡|💥/.test(text)) {
-    return { meaning: "surprise/amazement", sentiment: "positive", reaction: "WOW" };
+    return { meaning: "surprise/amazement", sentiment: "positive", reaction: "WOW", isGif, isAnimated };
   }
   if (/😢|😭|😔|😞|😟|🙁/.test(text)) {
-    return { meaning: "sadness", sentiment: "negative", reaction: "NONE" };
+    return { meaning: "sadness", sentiment: "negative", reaction: "NONE", isGif, isAnimated };
   }
   if (/😡|😤|👎|🖕|💔/.test(text)) {
-    return { meaning: "anger/dislike", sentiment: "negative", reaction: "NONE" };
+    return { meaning: "anger/dislike", sentiment: "negative", reaction: "NONE", isGif, isAnimated };
   }
   if (/🤔|🤷|❓|⁉️/.test(text)) {
-    return { meaning: "question/confusion", sentiment: "neutral", reaction: "LIKE" };
+    return { meaning: "question/confusion", sentiment: "neutral", reaction: "LIKE", isGif, isAnimated };
+  }
+  
+  // *** GIF CONTEXT ANALYSIS ***
+  if (isGif) {
+    // GIFs are usually meant to express emotions/reactions
+    // Try to understand the context from any accompanying text
+    if (/thank|thanks|ধন্যবাদ|ty|thx/.test(text)) {
+      return { meaning: "thank_you_gif", sentiment: "positive", reaction: "LOVE", isGif, isAnimated };
+    }
+    if (/happy|excited|yay|wow|অসাধারণ|দারুণ/.test(text)) {
+      return { meaning: "excitement_gif", sentiment: "positive", reaction: "WOW", isGif, isAnimated };
+    }
+    if (/lol|lmao|haha|😂|funny|মজা/.test(text)) {
+      return { meaning: "funny_gif", sentiment: "positive", reaction: "HAHA", isGif, isAnimated };
+    }
+    if (/love|❤|পছন্দ|ভালোবাসি/.test(text)) {
+      return { meaning: "love_gif", sentiment: "positive", reaction: "LOVE", isGif, isAnimated };
+    }
+    // Default for GIFs without clear context - assume positive reaction
+    return { meaning: "reaction_gif", sentiment: "positive", reaction: "LIKE", isGif, isAnimated };
   }
   
   // Default for unknown stickers
-  return { meaning: "general_reaction", sentiment: "neutral", reaction: "LIKE" };
+  return { meaning: "general_reaction", sentiment: "neutral", reaction: "LIKE", isGif, isAnimated };
 }
 
 // *** SMART: Analyze photo to understand intent ***
@@ -177,9 +213,49 @@ function smartAnalyzeComment(
   const originalText = messageText?.trim() || "";
   const shortName = senderName?.split(" ")[0] || "";
   
+  // *** GIF / ANIMATED STICKER HANDLING ***
+  const isGifType = messageType === "gif" || messageType === "animated_sticker" || 
+    attachments?.some(a => 
+      a.type === "animated_image_share" || 
+      a.type === "gif" || 
+      a.url?.includes(".gif") ||
+      a.payload?.url?.includes(".gif")
+    );
+  
+  if (isGifType) {
+    const gifAnalysis = analyzeSticker(undefined, originalText, attachments);
+    
+    // GIFs are reactions - respond with matching energy but no inbox needed
+    let gifReply = "";
+    if (gifAnalysis.sentiment === "positive") {
+      const positiveReplies = ["😄💕", "🔥🙌", "💯😊", "❤️✨", "👏😍"];
+      gifReply = positiveReplies[Math.floor(Math.random() * positiveReplies.length)];
+    } else if (gifAnalysis.sentiment === "negative") {
+      gifReply = ""; // Don't reply to negative GIFs
+    } else {
+      gifReply = "😊👍";
+    }
+    
+    return {
+      needsInboxMessage: false, // GIFs are reactions, no inbox needed
+      commentReply: gifReply,
+      reactionType: gifAnalysis.reaction,
+      reason: `GIF detected: ${gifAnalysis.meaning}`,
+      commentType: "gif",
+      sentiment: gifAnalysis.sentiment,
+      isQuestion: false,
+      isOrderIntent: false,
+      isPriceInquiry: false,
+      isJustReaction: true,
+      isThankYou: false,
+      isSticker: false,
+      isPhoto: false,
+    };
+  }
+  
   // *** STICKER HANDLING ***
   if (messageType === "sticker" || /^\s*[^\w\s\u0980-\u09FF]{1,5}\s*$/.test(originalText)) {
-    const stickerAnalysis = analyzeSticker(undefined, originalText);
+    const stickerAnalysis = analyzeSticker(undefined, originalText, attachments);
     
     return {
       needsInboxMessage: false, // Stickers don't need inbox
@@ -198,6 +274,25 @@ function smartAnalyzeComment(
       isJustReaction: true,
       isThankYou: false,
       isSticker: true,
+      isPhoto: false,
+    };
+  }
+  
+  // *** VIDEO HANDLING ***
+  if (messageType === "video" || attachments?.some(a => a.type === "video" || a.type === "video_inline")) {
+    return {
+      needsInboxMessage: false, // Videos are usually reactions, wait for context
+      commentReply: `ভিডিওটা পেয়েছি! 🎬 এই ভিডিও সম্পর্কে কী বলতে চাইছেন? 😊`,
+      reactionType: "LIKE",
+      reason: "Video attachment detected",
+      commentType: "video",
+      sentiment: "neutral",
+      isQuestion: false,
+      isOrderIntent: false,
+      isPriceInquiry: false,
+      isJustReaction: true,
+      isThankYou: false,
+      isSticker: false,
       isPhoto: false,
     };
   }

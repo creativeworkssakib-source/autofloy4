@@ -523,20 +523,31 @@ async function processMessagingEvent(supabase: any, pageId: string, event: any) 
       const firstAttachment = message.attachments[0];
       if (firstAttachment.type === "image") messageType = "image";
       else if (firstAttachment.type === "audio") messageType = "audio";
-      else if (firstAttachment.type === "video") messageType = "video";
+      else if (firstAttachment.type === "video" || firstAttachment.type === "video_inline") messageType = "video";
       else if (firstAttachment.type === "file") messageType = "file";
       else if (firstAttachment.type === "sticker") messageType = "sticker";
+      // *** GIF DETECTION ***
+      else if (firstAttachment.type === "animated_image_share" || 
+               firstAttachment.type === "gif" ||
+               firstAttachment.url?.includes(".gif") ||
+               firstAttachment.payload?.url?.includes(".gif")) {
+        messageType = "gif";
+      }
+      // *** ANIMATED STICKER ***
+      else if (firstAttachment.type === "animated_sticker") {
+        messageType = "animated_sticker";
+      }
       attachments = message.attachments;
     }
     
-    // Sticker detection
+    // Sticker detection (sticker_id present)
     if (message.sticker_id) {
       messageType = "sticker";
       // Add sticker context to message
       messageText = messageText || `[Sticker: ${message.sticker_id}]`;
     }
     
-    console.log(`[Webhook] Message type: ${messageType}, Sticker ID: ${message.sticker_id || 'none'}`);
+    console.log(`[Webhook] Message type: ${messageType}, Sticker ID: ${message.sticker_id || 'none'}, Has attachments: ${!!attachments}`);
 
     // Get sender profile
     let senderName: string | undefined = undefined;
@@ -667,9 +678,31 @@ async function processFeedChange(supabase: any, pageId: string, change: any) {
 
     const commentText = value.message || "";
     const parentId = value.parent_id; // *** IMPORTANT: This is the parent comment ID if this is a reply ***
+    const commentAttachment = value.attachment; // Facebook sends attachment for stickers/GIFs/photos in comments
     
-    console.log(`[Webhook] Comment on page ${pageId}: "${commentText.substring(0, 50)}..."`);
-    console.log(`[Webhook] Parent ID: ${parentId || 'none (top-level comment)'}`);
+    // *** DETECT COMMENT TYPE (text, sticker, gif, photo, video) ***
+    let commentMessageType = "text";
+    let commentAttachments = null;
+    
+    if (commentAttachment) {
+      const attachType = commentAttachment.type?.toLowerCase() || "";
+      const attachUrl = commentAttachment.url || commentAttachment.media?.source || "";
+      
+      if (attachType === "sticker" || attachType.includes("sticker")) {
+        commentMessageType = "sticker";
+      } else if (attachType === "animated_image_share" || attachType === "gif" || 
+                 attachType.includes("animated") || attachUrl.includes(".gif")) {
+        commentMessageType = "gif";
+      } else if (attachType === "photo" || attachType === "image") {
+        commentMessageType = "image";
+      } else if (attachType === "video" || attachType === "video_inline") {
+        commentMessageType = "video";
+      }
+      commentAttachments = [commentAttachment];
+    }
+    
+    console.log(`[Webhook] Comment on page ${pageId}: "${commentText.substring(0, 50)}..." type: ${commentMessageType}`);
+    console.log(`[Webhook] Parent ID: ${parentId || 'none (top-level comment)'}, Has attachment: ${!!commentAttachment}`);
 
     // Check if auto-reply is enabled
     if (!pageMemory?.automation_settings?.autoCommentReply) {
@@ -727,8 +760,9 @@ async function processFeedChange(supabase: any, pageId: string, change: any) {
       pageId,
       senderId: value.from?.id,
       senderName: value.from?.name,
-      messageText: commentText,
-      messageType: "text",
+      messageText: commentText || `[${commentMessageType} comment]`,
+      messageType: commentMessageType,      // *** NOW USING DETECTED TYPE (gif, sticker, image, etc.) ***
+      attachments: commentAttachments || undefined,      // *** PASS ATTACHMENTS FOR ANALYSIS ***
       isComment: true,
       commentId: value.comment_id,
       postId: value.post_id,
