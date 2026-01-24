@@ -482,12 +482,9 @@ const Products = () => {
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
       const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
-      // Process each row and create products
-      let successCount = 0;
-      let failCount = 0;
-
-      for (const row of jsonData as any[]) {
-        const productData = {
+      // Parse all products first
+      const productsToImport = (jsonData as any[])
+        .map((row) => ({
           name: row["Product Name"] || row["প্রোডাক্ট নাম"] || row["Product Name *"] || row["প্রোডাক্ট নাম *"] || row["name"],
           sku: row["SKU"] || row["sku"] || null,
           barcode: row["Barcode"] || row["বারকোড"] || null,
@@ -503,31 +500,50 @@ const Products = () => {
           description: row["Description"] || row["বিবরণ"] || null,
           currency: "BDT",
           is_active: true,
-        };
+        }))
+        .filter((p) => p.name);
 
-        if (productData.name) {
-          const result = await createProduct(productData);
-          if (result) {
-            successCount++;
-          } else {
-            failCount++;
-          }
+      if (productsToImport.length === 0) {
+        toast.error(language === "en" ? "No valid products found" : "কোনো প্রোডাক্ট পাওয়া যায়নি");
+        return;
+      }
+
+      // Send bulk import request
+      const token = localStorage.getItem("auth_token");
+      const response = await fetch(
+        "https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1/products",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token && { Authorization: `Bearer ${token}` }),
+          },
+          body: JSON.stringify({
+            action: "bulk_import",
+            products: productsToImport,
+          }),
         }
-      }
-
-      toast.success(
-        language === "en"
-          ? `${successCount} products imported successfully`
-          : `${successCount}টি প্রোডাক্ট ইম্পোর্ট হয়েছে`
       );
-      if (failCount > 0) {
-        toast.warning(
+
+      const result = await response.json();
+
+      if (result.success) {
+        toast.success(
           language === "en"
-            ? `${failCount} products failed to import`
-            : `${failCount}টি প্রোডাক্ট ইম্পোর্ট হয়নি`
+            ? `${result.inserted} products imported successfully`
+            : `${result.inserted}টি প্রোডাক্ট ইম্পোর্ট হয়েছে`
         );
+        if (result.errors > 0) {
+          toast.warning(
+            language === "en"
+              ? `${result.errors} products failed to import`
+              : `${result.errors}টি প্রোডাক্ট ইম্পোর্ট হয়নি`
+          );
+        }
+        loadProducts();
+      } else {
+        toast.error(result.error || (language === "en" ? "Import failed" : "ইম্পোর্ট হয়নি"));
       }
-      loadProducts();
     } catch (error) {
       console.error("Import error:", error);
       toast.error(language === "en" ? "Import failed" : "ইম্পোর্ট হয়নি");
