@@ -166,7 +166,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
                 <Zap className="w-4 h-4 sm:w-5 sm:h-5 text-primary-foreground" />
               </motion.div>
               <span className="text-lg sm:text-xl font-bold">
-                Auto<span className="gradient-text">Flow</span>
+                Auto<span className="gradient-text">Floy</span>
               </span>
             </Link>
             {/* Mobile close button inside sidebar */}
