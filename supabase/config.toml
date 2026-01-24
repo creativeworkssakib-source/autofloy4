@@ -9,7 +9,7 @@ verify_jwt = false
 [functions.facebook-webhook]
 verify_jwt = false
 
-[functions.facebook-oauth]
+[functions.fb-oauth]
 verify_jwt = false
 
 [functions.notifications]
