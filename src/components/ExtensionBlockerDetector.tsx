@@ -87,11 +87,10 @@ export const ExtensionBlockerDetector = () => {
 
   return (
     <Alert 
-      variant="destructive" 
-      className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-[450px] z-50 shadow-lg border-warning bg-warning/10"
+      className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-[450px] z-50 shadow-2xl border-2 border-destructive bg-card"
     >
-      <AlertTriangle className="h-5 w-5 text-warning" />
-      <AlertTitle className="text-warning-foreground flex items-center justify-between">
+      <AlertTriangle className="h-5 w-5 text-destructive" />
+      <AlertTitle className="text-foreground flex items-center justify-between font-semibold">
         <span>Browser Extension Blocking Detected</span>
         <Button 
           variant="ghost" 
@@ -102,8 +101,8 @@ export const ExtensionBlockerDetector = () => {
           <X className="h-4 w-4" />
         </Button>
       </AlertTitle>
-      <AlertDescription className="text-muted-foreground mt-2 space-y-3">
-        <p>
+      <AlertDescription className="text-foreground mt-2 space-y-3">
+        <p className="font-medium">
           আপনার browser-এ কোনো extension (Ad blocker, VPN, etc.) API requests block করছে।
         </p>
         <div className="flex flex-wrap gap-2">
