@@ -128,19 +128,24 @@ const FacebookPageSettings = () => {
       try {
         console.log("[FacebookPageSettings] Loading settings via edge function...");
         
-        // Use supabase.functions.invoke for reliable fetching
-        const { data, error } = await supabase.functions.invoke("page-memory", {
-          method: "GET",
-          body: undefined,
-          headers: {
-            "Content-Type": "application/json",
-          },
-        });
+        // Use fetch with query params for GET request
+        const token = localStorage.getItem("autofloy_token");
+        const response = await fetch(
+          `https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1/page-memory?page_id=${pageId}`,
+          {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+              ...(token && { Authorization: `Bearer ${token}` }),
+            },
+          }
+        );
         
-        if (error) {
-          console.error("[FacebookPageSettings] Fetch error:", error);
-          throw error;
+        if (!response.ok) {
+          throw new Error(`Failed to fetch: ${response.status}`);
         }
+        
+        const data = await response.json();
         
         console.log("[FacebookPageSettings] Raw response:", data);
         
