@@ -218,19 +218,19 @@ async function getUserProfile(pageAccessToken: string, userId: string): Promise<
   }
 }
 
-// *** NEW: Fetch post content directly from Facebook API ***
+// *** IMPROVED: Fetch post content using multiple strategies ***
 async function fetchPostContent(pageAccessToken: string, postId: string): Promise<{ text: string; mediaType?: string } | null> {
   try {
     console.log(`[Facebook] Fetching post content for: ${postId}`);
     
-    // Try different field combinations to handle various permission levels
-    const fieldOptions = [
-      "message,story,type",           // Standard fields
-      "message,type",                  // Without story  
-      "description,title,type",        // For reels/videos
+    // Strategy 1: Try to get post directly with minimal fields (works with pages_manage_posts)
+    const simpleFieldOptions = [
+      "message",                        // Most basic - just message
+      "message,type",                   // With type
+      "message,story",                  // With story
     ];
     
-    for (const fields of fieldOptions) {
+    for (const fields of simpleFieldOptions) {
       try {
         const response = await fetch(
           `${GRAPH_API_URL}/${postId}?fields=${fields}&access_token=${pageAccessToken}`
@@ -238,30 +238,64 @@ async function fetchPostContent(pageAccessToken: string, postId: string): Promis
         const result = await response.json();
         
         if (!result.error) {
-          const text = result.message || result.story || result.description || result.title || "";
+          const text = result.message || result.story || "";
           const mediaType = result.type || "unknown";
           
           if (text) {
-            console.log(`[Facebook] Post content fetched with fields [${fields}]: "${text.substring(0, 100)}..."`);
+            console.log(`[Facebook] ✅ Post content fetched with fields [${fields}]: "${text.substring(0, 100)}..."`);
             return { text, mediaType };
           }
         } else {
-          // Log error but continue trying other field combinations
-          console.log(`[Facebook] Fields [${fields}] failed:`, result.error.code, result.error.message?.substring(0, 100));
-          
-          // Permission error - skip remaining attempts
-          if (result.error.code === 10 || result.error.code === 190) {
-            console.log("[Facebook] Permission error - will proceed without post content");
-            break;
-          }
+          console.log(`[Facebook] Fields [${fields}] failed: code=${result.error.code}`);
         }
       } catch (innerError) {
         console.log(`[Facebook] Error with fields [${fields}]:`, innerError);
       }
     }
     
-    // If all attempts fail, return null but don't error out
-    console.log("[Facebook] Could not fetch post content, proceeding without it");
+    // Strategy 2: Try to get post via attachment/permalinks approach
+    try {
+      const attachmentResponse = await fetch(
+        `${GRAPH_API_URL}/${postId}?fields=attachments{description,title,type}&access_token=${pageAccessToken}`
+      );
+      const attachmentResult = await attachmentResponse.json();
+      
+      if (!attachmentResult.error && attachmentResult.attachments?.data?.[0]) {
+        const attachment = attachmentResult.attachments.data[0];
+        const text = attachment.description || attachment.title || "";
+        if (text) {
+          console.log(`[Facebook] ✅ Post content from attachments: "${text.substring(0, 100)}..."`);
+          return { text, mediaType: attachment.type || "unknown" };
+        }
+      }
+    } catch (attachError) {
+      console.log("[Facebook] Attachment strategy failed:", attachError);
+    }
+    
+    // Strategy 3: Try to get page's recent posts and match
+    try {
+      // Extract page ID from post ID (format: pageId_postId)
+      const parts = postId.split("_");
+      if (parts.length === 2) {
+        const extractedPageId = parts[0];
+        const feedResponse = await fetch(
+          `${GRAPH_API_URL}/${extractedPageId}/feed?fields=id,message&limit=10&access_token=${pageAccessToken}`
+        );
+        const feedResult = await feedResponse.json();
+        
+        if (!feedResult.error && feedResult.data) {
+          const matchingPost = feedResult.data.find((p: any) => p.id === postId);
+          if (matchingPost?.message) {
+            console.log(`[Facebook] ✅ Post content from feed: "${matchingPost.message.substring(0, 100)}..."`);
+            return { text: matchingPost.message, mediaType: "post" };
+          }
+        }
+      }
+    } catch (feedError) {
+      console.log("[Facebook] Feed strategy failed:", feedError);
+    }
+    
+    console.log("[Facebook] ⚠️ Could not fetch post content with any strategy, proceeding without it");
     return null;
   } catch (error) {
     console.error("[Facebook] Failed to fetch post:", error);
