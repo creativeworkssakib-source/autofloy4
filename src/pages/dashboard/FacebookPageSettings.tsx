@@ -213,11 +213,11 @@ const FacebookPageSettings = () => {
     
     setIsSaving(true);
     try {
-      console.log("[FacebookPageSettings] Saving directly to database...");
+      console.log("[FacebookPageSettings] Saving via edge function...");
       
-      // Direct database update using Supabase client
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const updateData: any = {
+      const payload = {
+        account_id: accountId,
+        page_id: pageId,
         page_name: pageName,
         business_description: businessInfo.businessDescription,
         products_summary: businessInfo.servicesOffered,
@@ -227,20 +227,17 @@ const FacebookPageSettings = () => {
         selling_rules: sellingRules,
         ai_behavior_rules: aiBehaviorRules,
         payment_rules: paymentRules,
-        updated_at: new Date().toISOString(),
       };
       
-      const { data, error } = await supabase
-        .from("page_memory")
-        .update(updateData)
-        .eq("page_id", pageId)
-        .eq("account_id", accountId)
-        .select()
-        .single();
+      // Use supabase.functions.invoke which handles auth automatically
+      const { data, error } = await supabase.functions.invoke("page-memory", {
+        method: "POST",
+        body: payload,
+      });
       
       if (error) {
-        console.error("[FacebookPageSettings] Update error:", error);
-        throw new Error(error.message);
+        console.error("[FacebookPageSettings] Edge function error:", error);
+        throw new Error(error.message || "Failed to save");
       }
       
       console.log("[FacebookPageSettings] Saved successfully:", data);
