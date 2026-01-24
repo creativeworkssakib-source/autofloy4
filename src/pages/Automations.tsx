@@ -13,6 +13,8 @@ import {
   Loader2,
   AlertTriangle,
   Crown,
+  Activity,
+  CheckCircle2,
 } from "lucide-react";
 import {
   fetchAutomationsWithAccess,
@@ -167,13 +169,24 @@ const Automations = () => {
                       </div>
                     </div>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => navigate("/connect-facebook")}
-                  >
-                    Manage
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => navigate("/dashboard/automation-status")}
+                      className="gap-1.5"
+                    >
+                      <Activity className="h-4 w-4" />
+                      Status
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => navigate("/connect-facebook")}
+                    >
+                      Manage
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
