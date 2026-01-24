@@ -11,7 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { fetchPageMemory, savePageMemory } from "@/services/apiService";
+import { fetchPageMemory } from "@/services/apiService";
+import { supabase } from "@/integrations/supabase/client";
 import { 
   ArrowLeft, 
   Save, 
@@ -212,28 +213,41 @@ const FacebookPageSettings = () => {
     
     setIsSaving(true);
     try {
-      const result = await savePageMemory({
-        account_id: accountId,
-        page_id: pageId,
+      console.log("[FacebookPageSettings] Saving directly to database...");
+      
+      // Direct database update using Supabase client
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const updateData: any = {
         page_name: pageName,
         business_description: businessInfo.businessDescription,
         products_summary: businessInfo.servicesOffered,
         detected_language: businessInfo.preferredLanguage,
         preferred_tone: businessInfo.tone,
-        automation_settings: automationSettings as unknown as Record<string, boolean>,
+        automation_settings: automationSettings,
         selling_rules: sellingRules,
         ai_behavior_rules: aiBehaviorRules,
         payment_rules: paymentRules,
-      });
+        updated_at: new Date().toISOString(),
+      };
       
-      if (result) {
-        toast({
-          title: "Settings Saved",
-          description: "Your automation settings have been saved successfully.",
-        });
-      } else {
-        throw new Error("Failed to save");
+      const { data, error } = await supabase
+        .from("page_memory")
+        .update(updateData)
+        .eq("page_id", pageId)
+        .eq("account_id", accountId)
+        .select()
+        .single();
+      
+      if (error) {
+        console.error("[FacebookPageSettings] Update error:", error);
+        throw new Error(error.message);
       }
+      
+      console.log("[FacebookPageSettings] Saved successfully:", data);
+      toast({
+        title: "Settings Saved",
+        description: "Your automation settings have been saved successfully.",
+      });
     } catch (error) {
       console.error("Failed to save settings:", error);
       toast({
