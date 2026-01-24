@@ -88,8 +88,8 @@ async function decryptToken(encryptedData: string): Promise<string> {
   }
 }
 
-// Send message via Facebook API
-async function sendFacebookMessage(pageAccessToken: string, recipientId: string, message: string) {
+// Send message via Facebook API - returns error details if failed
+async function sendFacebookMessage(pageAccessToken: string, recipientId: string, message: string): Promise<{ success: boolean; error?: any; errorCode?: number }> {
   try {
     const response = await fetch(`${GRAPH_API_URL}/me/messages`, {
       method: "POST",
@@ -107,18 +107,22 @@ async function sendFacebookMessage(pageAccessToken: string, recipientId: string,
     const result = await response.json();
     if (result.error) {
       console.error("[Facebook] Send message error:", result.error);
-      return false;
+      return { 
+        success: false, 
+        error: result.error, 
+        errorCode: result.error.code 
+      };
     }
     console.log("[Facebook] Message sent successfully to:", recipientId);
-    return true;
+    return { success: true };
   } catch (error) {
     console.error("[Facebook] Failed to send message:", error);
-    return false;
+    return { success: false, error };
   }
 }
 
-// Reply to a comment
-async function replyToComment(pageAccessToken: string, commentId: string, message: string) {
+// Reply to a comment - returns the reply comment ID for later editing
+async function replyToComment(pageAccessToken: string, commentId: string, message: string): Promise<{ success: boolean; replyId?: string }> {
   try {
     const response = await fetch(`${GRAPH_API_URL}/${commentId}/comments`, {
       method: "POST",
@@ -134,12 +138,39 @@ async function replyToComment(pageAccessToken: string, commentId: string, messag
     const result = await response.json();
     if (result.error) {
       console.error("[Facebook] Reply to comment error:", result.error);
-      return false;
+      return { success: false };
     }
-    console.log("[Facebook] Comment reply sent successfully");
-    return true;
+    console.log("[Facebook] Comment reply sent successfully, ID:", result.id);
+    return { success: true, replyId: result.id };
   } catch (error) {
     console.error("[Facebook] Failed to reply to comment:", error);
+    return { success: false };
+  }
+}
+
+// Edit/Update an existing comment (for smart fallback)
+async function editComment(pageAccessToken: string, commentId: string, newMessage: string): Promise<boolean> {
+  try {
+    const response = await fetch(`${GRAPH_API_URL}/${commentId}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        access_token: pageAccessToken,
+        message: newMessage,
+      }),
+    });
+
+    const result = await response.json();
+    if (result.error) {
+      console.error("[Facebook] Edit comment error:", result.error);
+      return false;
+    }
+    console.log("[Facebook] Comment edited successfully");
+    return true;
+  } catch (error) {
+    console.error("[Facebook] Failed to edit comment:", error);
     return false;
   }
 }
@@ -461,8 +492,12 @@ async function processMessagingEvent(supabase: any, pageId: string, event: any) 
 
     // Send AI response if available
     if (aiResponse?.reply && decryptedToken) {
-      await sendFacebookMessage(decryptedToken, senderId, aiResponse.reply);
-      console.log("[Webhook] AI reply sent to:", senderId);
+      const sendResult = await sendFacebookMessage(decryptedToken, senderId, aiResponse.reply);
+      if (sendResult.success) {
+        console.log("[Webhook] AI reply sent to:", senderId);
+      } else {
+        console.log("[Webhook] Failed to send AI reply, error code:", sendResult.errorCode);
+      }
     }
   }
 
@@ -624,23 +659,75 @@ async function processFeedChange(supabase: any, pageId: string, change: any) {
     });
 
     if (aiResponse && decryptedToken) {
-      // *** ALWAYS reply to comment with thanks + inbox notification ***
-      const commentReply = aiResponse.commentReply || `ধন্যবাদ কমেন্ট করার জন্য! 🙏 বিস্তারিত তথ্য আপনার ইনবক্সে পাঠিয়ে দিয়েছি। অনুগ্রহ করে চেক করুন 📩`;
-      await replyToComment(decryptedToken, value.comment_id, commentReply);
-      console.log("[Webhook] Comment reply sent with thanks");
+      // *** STEP 1: Reply to comment with initial thanks message ***
+      const initialCommentReply = aiResponse.commentReply || `ধন্যবাদ কমেন্ট করার জন্য! 🙏 বিস্তারিত তথ্য আপনার ইনবক্সে পাঠিয়ে দিয়েছি। অনুগ্রহ করে চেক করুন 📩`;
+      const replyResult = await replyToComment(decryptedToken, value.comment_id, initialCommentReply);
+      console.log("[Webhook] Initial comment reply sent");
 
       // Add reaction if enabled
       if (pageMemory?.automation_settings?.reactionOnComments) {
         await addReaction(decryptedToken, value.comment_id, aiResponse.reactionType || "LIKE");
       }
 
-      // *** ALWAYS send detailed inbox message based on post context ***
+      // *** STEP 2: Try to send inbox message ***
       if (value.from?.id) {
         const inboxMessage = aiResponse.inboxMessage || aiResponse.reply || 
           `আসসালামু আলাইকুম! 👋\n\nআপনার কমেন্টের জন্য ধন্যবাদ।\n\n${postContent ? `আপনি "${postContent.substring(0, 100)}${postContent.length > 100 ? '...' : ''}" পোস্টে কমেন্ট করেছেন।\n\n` : ''}আপনি কী জানতে চাইছেন বিস্তারিত বলুন, আমি সাহায্য করতে পারব। 🙂`;
         
-        await sendFacebookMessage(decryptedToken, value.from.id, inboxMessage);
-        console.log("[Webhook] Inbox message sent to commenter:", value.from.name);
+        const inboxResult = await sendFacebookMessage(decryptedToken, value.from.id, inboxMessage);
+        
+        if (inboxResult.success) {
+          console.log("[Webhook] Inbox message sent successfully to:", value.from.name);
+        } else {
+          // *** STEP 3: SMART FALLBACK - If inbox fails, edit the comment reply ***
+          console.log("[Webhook] Inbox message failed (code:", inboxResult.errorCode, "), updating comment reply...");
+          
+          // Check if it's a messaging restriction error (551, 10, 230, etc.)
+          const isMessagingRestricted = inboxResult.errorCode === 551 || 
+                                        inboxResult.errorCode === 10 || 
+                                        inboxResult.errorCode === 230 ||
+                                        inboxResult.errorCode === 2018278;
+          
+          if (isMessagingRestricted && replyResult.replyId) {
+            // Prepare fallback message - ask user to message first
+            const fallbackReply = `ধন্যবাদ কমেন্ট করার জন্য! 🙏\n\n` +
+              `আপনাকে বিস্তারিত জানাতে চাইছিলাম, কিন্তু আপনার ইনবক্সে মেসেজ পাঠাতে পারছি না 😔\n\n` +
+              `অনুগ্রহ করে আমাদের পেজে প্রথমে একটি মেসেজ দিন, তাহলে আমরা আপনাকে সব তথ্য শেয়ার করতে পারব! 📩\n\n` +
+              `(অথবা এই পোস্টের নিচে আপনার প্রশ্ন লিখুন, আমরা এখানেই উত্তর দেব ✨)`;
+            
+            const editSuccess = await editComment(decryptedToken, replyResult.replyId, fallbackReply);
+            
+            if (editSuccess) {
+              console.log("[Webhook] Smart fallback: Comment reply updated with inbox fallback message");
+              
+              // Update log with fallback info
+              await supabase.from("execution_logs").insert({
+                user_id: account.user_id,
+                automation_id: null,
+                source_platform: "facebook",
+                event_type: "inbox_fallback_used",
+                status: "success",
+                incoming_payload: {
+                  page_id: pageId,
+                  comment_id: value.comment_id,
+                  reply_comment_id: replyResult.replyId,
+                  inbox_error_code: inboxResult.errorCode,
+                  from: value.from,
+                },
+                response_payload: { 
+                  fallback_used: true,
+                  original_inbox_error: inboxResult.error,
+                  comment_edited: true 
+                },
+                processing_time_ms: Date.now() - startTime,
+              });
+            } else {
+              console.log("[Webhook] Failed to edit comment for fallback");
+            }
+          } else {
+            console.log("[Webhook] Inbox failed but not a messaging restriction, or no reply ID available");
+          }
+        }
       }
     }
   }
