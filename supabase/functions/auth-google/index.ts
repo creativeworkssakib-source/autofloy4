@@ -198,7 +198,7 @@ serve(async (req) => {
             avatar_url: googleUser.picture,
             email_verified: true, // Google emails are verified
             is_active: true,
-            subscription_plan: "free",
+            subscription_plan: "trial",
             is_trial_active: true,
             trial_end_date: trialEndDate.toISOString(),
             auth_provider: "google",
@@ -225,7 +225,7 @@ serve(async (req) => {
             total_signups: 1,
             first_signup_at: new Date().toISOString(),
             trial_used: true,
-            last_plan: "free",
+            last_plan: "trial",
           }, { onConflict: "email" });
       }
 
