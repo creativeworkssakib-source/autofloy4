@@ -279,9 +279,13 @@ export async function removeAccount(id: string): Promise<{ success: boolean; mes
 // Facebook OAuth
 export async function getFacebookOAuthUrl(): Promise<{ url?: string; configured: boolean; error?: string }> {
   try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/fb-oauth?action=start`, {
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/connected-accounts?action=fb-start`, {
       headers: getAuthHeaders(),
     });
+    if (!response.ok) {
+      console.error("Facebook OAuth URL failed:", response.status);
+      return { configured: false, error: "Failed to connect to server" };
+    }
     return await response.json();
   } catch (error) {
     console.error("Failed to get Facebook OAuth URL:", error);
