@@ -9,6 +9,9 @@ verify_jwt = false
 [functions.admin-reset-password]
 verify_jwt = false
 
+[functions.ai-facebook-agent]
+verify_jwt = false
+
 [functions.auth-confirm-deletion]
 verify_jwt = false
 
