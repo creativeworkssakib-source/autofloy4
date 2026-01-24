@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
-import ConnectPageModal from "@/components/automations/ConnectPageModal";
 import PlatformAutomationsGrid from "@/components/automations/PlatformAutomationsGrid";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -32,7 +31,6 @@ const Automations = () => {
   const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const [isLoading, setIsLoading] = useState(true);
-  const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
   const [connectedPages, setConnectedPages] = useState<ConnectedPage[]>([]);
   const [connectedAccounts, setConnectedAccounts] = useState<ConnectedAccount[]>([]);
   
@@ -190,23 +188,6 @@ const Automations = () => {
           />
         )}
       </div>
-
-      {/* Connect Page Modal */}
-      <ConnectPageModal
-        isOpen={isConnectModalOpen && hasAccess}
-        onClose={() => setIsConnectModalOpen(false)}
-        onConnected={() => {
-          fetchConnectedAccounts("facebook").then((accounts) => {
-            const connected = accounts.filter((a: ConnectedAccount) => a.is_connected);
-            setConnectedAccounts(connected);
-            setConnectedPages(connected.map((a: ConnectedAccount) => ({
-              id: a.external_id,
-              name: a.name || "Facebook Page",
-              accountId: a.id,
-            })));
-          });
-        }}
-      />
     </DashboardLayout>
   );
 };
