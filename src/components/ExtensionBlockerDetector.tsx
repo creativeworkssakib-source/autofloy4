@@ -1,110 +1,63 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { AlertTriangle, X, ExternalLink } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 
-// Track failed fetches globally
-let failedFetchCount = 0;
-let successfulFetchCount = 0;
-let lastResetTime = Date.now();
-const FAILURE_THRESHOLD = 5; // Number of failures before showing warning
-const RESET_INTERVAL = 60000; // Reset count every 60 seconds
-
 // Check if already dismissed
 const isDismissed = () => sessionStorage.getItem('extension-warning-dismissed') === 'true';
-
-// Intercept fetch to detect failures
-const originalFetch = window.fetch;
-window.fetch = async (...args) => {
-  try {
-    const response = await originalFetch(...args);
-    
-    // Count successful API calls
-    const firstArg = args[0];
-    let url = '';
-    if (typeof firstArg === 'string') {
-      url = firstArg;
-    } else if (firstArg instanceof Request) {
-      url = firstArg.url;
-    } else if (firstArg instanceof URL) {
-      url = firstArg.href;
-    }
-    
-    if (url.includes('supabase.co/functions')) {
-      successfulFetchCount++;
-      // If we have successful calls, reset failure count
-      if (successfulFetchCount >= 2) {
-        failedFetchCount = 0;
-      }
-    }
-    
-    return response;
-  } catch (error) {
-    // Reset counter if enough time has passed
-    if (Date.now() - lastResetTime > RESET_INTERVAL) {
-      failedFetchCount = 0;
-      successfulFetchCount = 0;
-      lastResetTime = Date.now();
-    }
-    
-    // Only count failures to our API
-    const firstArg = args[0];
-    let url = '';
-    if (typeof firstArg === 'string') {
-      url = firstArg;
-    } else if (firstArg instanceof Request) {
-      url = firstArg.url;
-    } else if (firstArg instanceof URL) {
-      url = firstArg.href;
-    }
-    
-    if (url.includes('supabase.co/functions')) {
-      failedFetchCount++;
-      // Only dispatch event if:
-      // 1. Threshold reached
-      // 2. No successful calls (means all are failing)
-      // 3. Not already dismissed
-      if (failedFetchCount >= FAILURE_THRESHOLD && successfulFetchCount === 0 && !isDismissed()) {
-        window.dispatchEvent(new CustomEvent('extension-blocking-detected'));
-      }
-    }
-    throw error;
-  }
-};
 
 export const ExtensionBlockerDetector = () => {
   const [showWarning, setShowWarning] = useState(false);
 
+  // Only run detection once on mount
   useEffect(() => {
-    // Don't show if already dismissed
     if (isDismissed()) {
       return;
     }
 
-    const handleBlockingDetected = () => {
-      if (!isDismissed()) {
-        setShowWarning(true);
+    // Wait a bit for initial API calls to complete, then check if there were issues
+    const checkTimer = setTimeout(async () => {
+      try {
+        // Do a simple test fetch to our API
+        const testUrl = `https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1/site-settings`;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        
+        const response = await fetch(testUrl, {
+          method: 'GET',
+          signal: controller.signal,
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        clearTimeout(timeoutId);
+        
+        // If we get here, fetch worked - no blocking
+        // (Response status doesn't matter, just that the request wasn't blocked)
+      } catch (error) {
+        // Check if it's a network error (extension blocking) vs timeout/abort
+        if (error instanceof TypeError && error.message === 'Failed to fetch') {
+          // This is likely extension blocking
+          if (!isDismissed()) {
+            setShowWarning(true);
+          }
+        }
       }
-    };
+    }, 3000); // Wait 3 seconds before checking
 
-    window.addEventListener('extension-blocking-detected', handleBlockingDetected);
-    return () => {
-      window.removeEventListener('extension-blocking-detected', handleBlockingDetected);
-    };
+    return () => clearTimeout(checkTimer);
   }, []);
 
-  const handleDismiss = () => {
+  const handleDismiss = useCallback(() => {
     setShowWarning(false);
     sessionStorage.setItem('extension-warning-dismissed', 'true');
-    // Reset counters
-    failedFetchCount = 0;
-    successfulFetchCount = 0;
-  };
+  }, []);
 
-  const handleOpenIncognito = () => {
+  const handleOpenIncognito = useCallback(() => {
     navigator.clipboard.writeText(window.location.href);
     alert('URL copied! Open an Incognito window (Ctrl+Shift+N) and paste it there.');
-  };
+  }, []);
 
   if (!showWarning) {
     return null;
