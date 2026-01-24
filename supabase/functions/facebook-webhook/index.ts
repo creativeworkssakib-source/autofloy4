@@ -191,18 +191,31 @@ async function getUserProfile(pageAccessToken: string, userId: string): Promise<
 async function fetchPostContent(pageAccessToken: string, postId: string): Promise<{ text: string; mediaType?: string } | null> {
   try {
     console.log(`[Facebook] Fetching post content for: ${postId}`);
+    // Use simpler fields to avoid deprecated API errors
     const response = await fetch(
-      `${GRAPH_API_URL}/${postId}?fields=message,story,type,attachments{media_type,description}&access_token=${pageAccessToken}`
+      `${GRAPH_API_URL}/${postId}?fields=message,story,type&access_token=${pageAccessToken}`
     );
     const result = await response.json();
     
     if (result.error) {
       console.error("[Facebook] Get post error:", result.error);
+      // Try alternative approach for reels/videos
+      if (result.error.code === 12 || result.error.code === 100) {
+        console.log("[Facebook] Trying alternative API for video/reel content");
+        const altResponse = await fetch(
+          `${GRAPH_API_URL}/${postId}?fields=description,title&access_token=${pageAccessToken}`
+        );
+        const altResult = await altResponse.json();
+        if (!altResult.error) {
+          const text = altResult.description || altResult.title || "";
+          return { text, mediaType: "video" };
+        }
+      }
       return null;
     }
     
     const text = result.message || result.story || "";
-    const mediaType = result.attachments?.data?.[0]?.media_type || result.type;
+    const mediaType = result.type || "unknown";
     
     console.log(`[Facebook] Post content fetched: "${text.substring(0, 100)}..."`);
     return { text, mediaType };
