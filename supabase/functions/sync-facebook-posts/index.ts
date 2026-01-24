@@ -9,8 +9,53 @@ const corsHeaders = {
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const encryptionKey = Deno.env.get("TOKEN_ENCRYPTION_KEY")!;
+const jwtSecret = Deno.env.get("JWT_SECRET")!;
 
 const GRAPH_API_URL = "https://graph.facebook.com/v18.0";
+
+// JWT token verification using custom JWT_SECRET (manual HMAC verification)
+async function verifyToken(authHeader: string | null): Promise<string | null> {
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return null;
+  }
+  
+  const token = authHeader.substring(7);
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    
+    // Decode payload
+    const payloadBase64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const payload = JSON.parse(atob(payloadBase64));
+    
+    // Check expiration
+    if (payload.exp && payload.exp * 1000 < Date.now()) {
+      console.log("[Sync Posts] Token expired");
+      return null;
+    }
+    
+    // Verify signature
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      "raw",
+      encoder.encode(jwtSecret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["verify"]
+    );
+    
+    const signatureInput = encoder.encode(parts[0] + "." + parts[1]);
+    const signatureBase64 = parts[2].replace(/-/g, "+").replace(/_/g, "/");
+    const padding = (4 - (signatureBase64.length % 4)) % 4;
+    const signatureBytes = Uint8Array.from(atob(signatureBase64 + "=".repeat(padding)), c => c.charCodeAt(0));
+    
+    const valid = await crypto.subtle.verify("HMAC", key, signatureBytes, signatureInput);
+    return valid ? (payload.sub as string) : null;
+  } catch (error) {
+    console.error("[Sync Posts] Token verification failed:", error);
+    return null;
+  }
+}
 
 // Base64 decode helper
 function base64Decode(str: string): ArrayBuffer {
@@ -145,26 +190,17 @@ serve(async (req) => {
       });
     }
 
-    // Extract user from JWT token
+    // Verify custom JWT token
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: "No authorization header" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    const userId = await verifyToken(authHeader);
     
-    if (authError || !user) {
+    if (!userId) {
       return new Response(JSON.stringify({ error: "Invalid or expired token" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const userId = user.id;
     console.log(`[Sync Posts] Starting sync for page ${pageId}, user ${userId}`);
 
     // Get the connected account
