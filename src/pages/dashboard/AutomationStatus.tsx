@@ -10,11 +10,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { 
   fetchConnectedAccounts, 
-  fetchPageMemory, 
   fetchProducts,
   ConnectedAccount,
   PageMemory 
 } from "@/services/apiService";
+import { supabase } from "@/integrations/supabase/client";
 import {
   AutomationChecklist,
   AutomationSimulator,
@@ -97,11 +97,39 @@ const AutomationStatus = () => {
       const page = connectedPages.find(p => p.external_id === pageId);
       if (!page) return;
 
-      const memory = await fetchPageMemory(pageId);
+      console.log("[AutomationStatus] Loading page data for:", pageId);
+      
+      // Use direct fetch with cache-busting
+      const token = localStorage.getItem("autofloy_token");
+      const response = await fetch(
+        `https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1/page-memory?page_id=${pageId}&_t=${Date.now()}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            ...(token && { Authorization: `Bearer ${token}` }),
+          },
+        }
+      );
+      
+      if (!response.ok) {
+        console.error("[AutomationStatus] Fetch failed:", response.status);
+        return;
+      }
+      
+      const data = await response.json();
+      console.log("[AutomationStatus] Loaded data:", data);
+      
+      const memories = data?.memories || [];
+      const memory = Array.isArray(memories) 
+        ? memories.find((m: { page_id: string }) => m.page_id === pageId)
+        : memories;
       
       setPageStatusData({
         page,
-        memory: Array.isArray(memory) ? memory[0] : memory,
+        memory: memory || null,
         hasProducts: productCount > 0,
       });
     } catch (error) {
