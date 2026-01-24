@@ -21,6 +21,8 @@ interface MessageContext {
   isComment?: boolean;
   commentId?: string;
   postId?: string;
+  parentCommentId?: string;      // NEW: For detecting comment replies
+  isReplyToPageComment?: boolean; // NEW: Is this a reply to the page's own comment
 }
 
 interface PageMemory {
@@ -80,6 +82,50 @@ interface PostContext {
   linked_product_id?: string;
   product_detected_name?: string;
   product?: ProductContext;
+}
+
+// *** NEW: Detect if customer is responding to AI's previous message ***
+function detectCustomerResponseIntent(text: string): {
+  isAcknowledgment: boolean;
+  isGoingToInbox: boolean;
+  isAskingQuestion: boolean;
+  isProvingInfo: boolean;
+  responseType: string;
+} {
+  const lowerText = text.toLowerCase();
+  
+  // Customer saying they will/are messaging inbox
+  const inboxPatterns = /sms|message|inbox|মেসেজ|ইনবক্স|msg|dm|দিচ্ছি|করছি|দিব|করব|পাঠাচ্ছি|দিয়েছি|দিলাম|করলাম|পাঠালাম/i;
+  const goingPatterns = /করতেছি|kortec|করতেছ|যাচ্ছি|করি|করছি|দিচ্ছি|দেই|দিই|দিতেছি|পাঠাচ্ছি|পাঠাই/i;
+  
+  // Acknowledgment patterns (ok, understood, etc.)
+  const ackPatterns = /^(ok|okay|ওকে|ঠিক আছে|বুঝলাম|বুঝেছি|আচ্ছা|হ্যাঁ|হা|yes|yep|yeah|ji|জি|hmm|হুম)[\s!.]*$/i;
+  
+  // Question patterns
+  const questionPatterns = /\?|কি|কী|কত|কোথায়|কেন|কিভাবে|কবে|আছে|what|how|where|when|why|which|available|stock|দাম|price/i;
+  
+  // Providing information (name, phone, address)
+  const infoPatterns = /^[a-zA-Z\u0980-\u09FF\s]{2,50}$|01[3-9]\d{8}|আমার নাম|আমি |my name|i am/i;
+  
+  const isGoingToInbox = (inboxPatterns.test(lowerText) && goingPatterns.test(lowerText)) || 
+                         /sms.*kort|msg.*kort|message.*দি|inbox.*দি|মেসেজ.*দি|ইনবক্স.*দি/i.test(lowerText);
+  const isAcknowledgment = ackPatterns.test(text.trim());
+  const isAskingQuestion = questionPatterns.test(lowerText) && !isGoingToInbox;
+  const isProvingInfo = infoPatterns.test(text.trim()) && text.length > 3 && text.length < 100;
+  
+  let responseType = "general";
+  if (isGoingToInbox) responseType = "going_to_inbox";
+  else if (isAcknowledgment) responseType = "acknowledgment";
+  else if (isAskingQuestion) responseType = "question";
+  else if (isProvingInfo) responseType = "providing_info";
+  
+  return {
+    isAcknowledgment,
+    isGoingToInbox,
+    isAskingQuestion,
+    isProvingInfo,
+    responseType
+  };
 }
 
 // Detect message intent
@@ -564,18 +610,23 @@ serve(async (req) => {
       isComment = false,
       commentId,
       postId,
-      postContent,      // *** NEW: Auto-fetched post content ***
-      postMediaType,    // *** NEW: Post media type ***
+      postContent,      // Auto-fetched post content
+      postMediaType,    // Post media type
+      parentCommentId,  // *** NEW: Parent comment ID for reply detection ***
+      isReplyToPageComment, // *** NEW: Is this a reply to page's comment ***
       userId 
     } = body as MessageContext & { 
       userId: string; 
       postContent?: string; 
       postMediaType?: string;
+      parentCommentId?: string;
+      isReplyToPageComment?: boolean;
     };
 
     console.log(`[AI Agent] Processing ${isComment ? "comment" : "message"} for page ${pageId}`);
     console.log(`[AI Agent] Post ID: ${postId}, Post Content: ${postContent?.substring(0, 100)}`);
     console.log(`[AI Agent] Comment/Message: ${messageText?.substring(0, 50)}`);
+    console.log(`[AI Agent] Is reply to page comment: ${isReplyToPageComment}, Parent: ${parentCommentId}`);
 
     // Get page memory for context
     const { data: pageMemory } = await supabase
@@ -625,7 +676,7 @@ serve(async (req) => {
       productContext = postResult.productContext;
     }
 
-    // *** NEW: Use auto-fetched post content for AI context ***
+    // Use auto-fetched post content for AI context
     if (isComment && postContent && !postContext) {
       // Create a virtual post context from the auto-fetched content
       postContext = {
@@ -696,7 +747,11 @@ serve(async (req) => {
     const intent = detectIntent(messageText);
     const sentiment = detectSentiment(messageText);
     
+    // *** NEW: Detect customer response intent (for comment replies) ***
+    const customerResponseIntent = detectCustomerResponseIntent(messageText);
+    
     console.log(`[AI Agent] Intent: ${intent}, Sentiment: ${sentiment}, State: ${conversation.conversation_state}`);
+    console.log(`[AI Agent] Customer Response Intent: ${customerResponseIntent.responseType}`);
     console.log(`[AI Agent] Product context: ${productContext?.name || 'none'}`);
     console.log(`[AI Agent] Post context available: ${!!postContext}`);
 
@@ -724,6 +779,8 @@ serve(async (req) => {
       timestamp: new Date().toISOString(),
       intent,
       sentiment,
+      customerResponseIntent: customerResponseIntent.responseType,
+      isReplyToPageComment,
       productContext: productContext ? { name: productContext.name, price: productContext.price } : null,
       postContext: postContext ? { text: postContext.post_text } : null,
     });
@@ -862,6 +919,8 @@ serve(async (req) => {
       reactionType: sentiment === "positive" ? "LOVE" : sentiment === "negative" ? "NONE" : "LIKE",
       fakeOrderScore: fakeScore,
       productContext: productContext ? { name: productContext.name, price: productContext.price } : null,
+      customerResponseIntent: customerResponseIntent.responseType,
+      isReplyToPageComment,
     };
 
     // *** For comments: SMART contextual reply based on what user actually said ***
@@ -871,88 +930,128 @@ serve(async (req) => {
       
       console.log(`[AI Agent] Comment Analysis: feedbackType=${commentAnalysis.feedbackType}, responseType=${commentAnalysis.responseType}, isPositive=${commentAnalysis.isPositiveFeedback}`);
       console.log(`[AI Agent] Original comment: "${messageText}"`);
+      console.log(`[AI Agent] Is reply to page: ${isReplyToPageComment}, Customer response type: ${customerResponseIntent.responseType}`);
       
-      // *** SMART COMMENT REPLY - Based on what user actually said ***
-      if (commentAnalysis.isPositiveFeedback) {
-        // Generate contextual appreciation reply based on feedback type
-        switch (commentAnalysis.feedbackType) {
-          case "praise":
-            // User said something like "Great job", "Awesome", "Nice", etc.
-            response.commentReply = `অনেক ধন্যবাদ! 🥰 আপনার সুন্দর কথা আমাদের অনুপ্রাণিত করে। আমাদের সাথে থাকার জন্য কৃতজ্ঞ! 💕`;
-            break;
-          case "thanks":
-            // User said "Thanks", "ধন্যবাদ", etc.
-            response.commentReply = `আপনাকেও ধন্যবাদ! 🙏 আমাদের সাথে থাকার জন্য কৃতজ্ঞ। যেকোনো প্রয়োজনে জানাবেন! 😊`;
-            break;
-          case "emoji_reaction":
-            // User just reacted with emoji like 👍 or ❤️
-            response.commentReply = `ধন্যবাদ! 🥰💕`;
-            break;
-          case "love":
-            // User expressed love
-            response.commentReply = `অনেক অনেক ধন্যবাদ! 💕🥰 আপনার ভালোবাসা আমাদের অনুপ্রেরণা! 💖`;
-            break;
-          default:
-            response.commentReply = `আপনার সুন্দর কমেন্টের জন্য অনেক ধন্যবাদ! 🥰 আমাদের সাথে থাকার জন্য কৃতজ্ঞ। 💕`;
+      // *** NEW: SMART REPLY FOR COMMENT REPLIES (when customer replies to AI's comment) ***
+      if (isReplyToPageComment || parentCommentId) {
+        console.log(`[AI Agent] Detected reply to page's previous comment - generating contextual response`);
+        
+        // Customer is replying to the page's comment - understand what they're saying
+        if (customerResponseIntent.isGoingToInbox) {
+          // Customer says they're going to message in inbox
+          response.commentReply = `ধন্যবাদ! 🙏 আপনার মেসেজের অপেক্ষায় আছি ইনবক্সে। সেখানে বিস্তারিত আলাপ করব! 📩😊`;
+          response.skipInboxMessage = true; // Don't send inbox message, they're coming to inbox
+          response.reactionType = "LIKE";
+        } else if (customerResponseIntent.isAcknowledgment) {
+          // Customer said ok/understood/etc.
+          response.commentReply = `ধন্যবাদ! 🙏 যেকোনো প্রয়োজনে জানাবেন। আমরা সবসময় আছি! 😊`;
+          response.skipInboxMessage = true;
+          response.reactionType = "LIKE";
+        } else if (customerResponseIntent.isAskingQuestion) {
+          // Customer is asking a follow-up question
+          response.commentReply = `ভালো প্রশ্ন! 👍 উত্তর আপনার ইনবক্সে পাঠিয়ে দিলাম। অনুগ্রহ করে চেক করুন 📩`;
+          // Let the inbox message contain the actual answer
+          response.reactionType = "LIKE";
+        } else if (customerResponseIntent.isProvingInfo) {
+          // Customer is providing some info (name, phone, etc.)
+          response.commentReply = `ধন্যবাদ! 🙏 আপনার তথ্য পেয়েছি। বিস্তারিত ইনবক্সে জানাচ্ছি 📩`;
+          response.reactionType = "LIKE";
+        } else {
+          // General reply to page's comment - acknowledge and continue
+          response.commentReply = `ধন্যবাদ ${senderName?.split(" ")[0] || ''}! 🙏 আপনার কথা বুঝেছি। আরো কোনো প্রশ্ন থাকলে জানাবেন! 😊`;
+          response.reactionType = "LIKE";
         }
-        // For positive feedback, reaction should always be LOVE
-        response.reactionType = "LOVE";
-      } else if (productContext) {
-        // Comment is about a product
-        response.commentReply = `ধন্যবাদ কমেন্ট করার জন্য! 🙏 "${productContext.name}" এর বিস্তারিত তথ্য আপনার ইনবক্সে পাঠিয়ে দিয়েছি। চেক করুন 📩`;
-        response.reactionType = "LIKE";
-      } else if (commentAnalysis.isPriceInquiry) {
-        // Price inquiry
-        response.commentReply = `ধন্যবাদ! 🙏 দামসহ বিস্তারিত তথ্য আপনার ইনবক্সে পাঠিয়ে দিয়েছি। অনুগ্রহ করে চেক করুন 📩`;
-        response.reactionType = "LIKE";
-      } else if (commentAnalysis.isQuestion) {
-        // General question
-        response.commentReply = `ধন্যবাদ! 🙏 আপনার প্রশ্নের উত্তর ইনবক্সে পাঠিয়ে দিয়েছি। অনুগ্রহ করে চেক করুন 📩`;
-        response.reactionType = "LIKE";
-      } else if (commentAnalysis.isOrderIntent) {
-        // Order intent
-        response.commentReply = `ধন্যবাদ! 🛒 অর্ডারের জন্য আপনার ইনবক্সে মেসেজ করেছি। অনুগ্রহ করে চেক করুন 📩`;
-        response.reactionType = "LIKE";
-      } else {
-        // General comment - still acknowledge what they said
-        response.commentReply = `ধন্যবাদ কমেন্ট করার জন্য! 🙏 বিস্তারিত তথ্য আপনার ইনবক্সে পাঠিয়ে দিয়েছি। অনুগ্রহ করে চেক করুন 📩`;
-        response.reactionType = "LIKE";
-      }
-      
-      // Build detailed inbox message based on ACTUAL comment content
-      let inboxMessage = `আসসালামু আলাইকুম ${senderName || ''} 👋\n\n`;
-      
-      // Reference what the customer actually said
-      if (messageText && messageText.trim().length > 0) {
-        inboxMessage += `আপনি কমেন্ট করেছেন: "${messageText}"\n\n`;
-      } else {
-        inboxMessage += `আপনার কমেন্টের জন্য ধন্যবাদ!\n\n`;
-      }
-      
-      // Add post context if available
-      if (postContext?.post_text) {
-        inboxMessage += `📱 পোস্ট: "${postContext.post_text.substring(0, 80)}${postContext.post_text.length > 80 ? '...' : ''}"\n\n`;
-      }
-      
-      // Respond based on comment type - CONTEXTUAL response
-      if (commentAnalysis.isPositiveFeedback) {
-        // For positive feedback, send a warm thank you without pushing for sales
-        inboxMessage += `আপনার "${messageText}" কমেন্টের জন্য অনেক ধন্যবাদ! 🥰\n\n`;
-        inboxMessage += `আপনার এই সুন্দর কথা আমাদের অনুপ্রাণিত করে। আমাদের আরও প্রোডাক্ট দেখতে চাইলে বা কোনো প্রশ্ন থাকলে নির্দ্বিধায় জানাবেন। আমরা সবসময় আপনাকে সাহায্য করতে প্রস্তুত! 😊`;
-      } else if (productContext) {
-        inboxMessage += `📦 প্রোডাক্ট: ${productContext.name}\n`;
-        inboxMessage += `💰 দাম: ৳${productContext.price}\n`;
-        if (productContext.description) {
-          inboxMessage += `📝 বিবরণ: ${productContext.description}\n`;
+        
+        // Build inbox message for reply context
+        let inboxMessage = `আসসালামু আলাইকুম ${senderName || ''} 👋\n\n`;
+        inboxMessage += `আপনি আমাদের কমেন্টের রিপ্লাইতে বলেছেন: "${messageText}"\n\n`;
+        
+        if (customerResponseIntent.isGoingToInbox) {
+          inboxMessage += `আপনি ইনবক্সে মেসেজ করছেন জেনে খুশি হলাম! এখানে আমরা বিস্তারিত আলোচনা করতে পারব। কী জানতে চান বলুন 🙂`;
+        } else if (!customerResponseIntent.isAcknowledgment) {
+          inboxMessage += aiReply;
         }
-        inboxMessage += `\nঅর্ডার করতে চাইলে "অর্ডার" লিখুন অথবা আপনার নাম, ফোন ও ঠিকানা দিন। 🛒`;
+        
+        response.inboxMessage = inboxMessage;
+        
       } else {
-        // Use AI-generated response for context-aware reply
+        // *** ORIGINAL COMMENT (not a reply to page's comment) ***
+        
+        // *** SMART COMMENT REPLY - Based on what user actually said ***
+        if (commentAnalysis.isPositiveFeedback) {
+          // Generate contextual appreciation reply based on feedback type
+          switch (commentAnalysis.feedbackType) {
+            case "praise":
+              // User said something like "Great job", "Awesome", "Nice", etc.
+              response.commentReply = `অনেক ধন্যবাদ! 🥰 আপনার সুন্দর কথা আমাদের অনুপ্রাণিত করে। আমাদের সাথে থাকার জন্য কৃতজ্ঞ! 💕`;
+              break;
+            case "thanks":
+              // User said "Thanks", "ধন্যবাদ", etc.
+              response.commentReply = `আপনাকেও ধন্যবাদ! 🙏 আমাদের সাথে থাকার জন্য কৃতজ্ঞ। যেকোনো প্রয়োজনে জানাবেন! 😊`;
+              break;
+            case "emoji_reaction":
+              // User just reacted with emoji like 👍 or ❤️
+              response.commentReply = `ধন্যবাদ! 🥰💕`;
+              break;
+            case "love":
+              // User expressed love
+              response.commentReply = `অনেক অনেক ধন্যবাদ! 💕🥰 আপনার ভালোবাসা আমাদের অনুপ্রেরণা! 💖`;
+              break;
+            default:
+              response.commentReply = `আপনার সুন্দর কমেন্টের জন্য অনেক ধন্যবাদ! 🥰 আমাদের সাথে থাকার জন্য কৃতজ্ঞ। 💕`;
+          }
+          // For positive feedback, reaction should always be LOVE
+          response.reactionType = "LOVE";
+        } else if (productContext) {
+          // Comment is about a product
+          response.commentReply = `ধন্যবাদ কমেন্ট করার জন্য! 🙏 "${productContext.name}" এর বিস্তারিত তথ্য আপনার ইনবক্সে পাঠিয়ে দিয়েছি। চেক করুন 📩`;
+          response.reactionType = "LIKE";
+        } else if (commentAnalysis.isPriceInquiry) {
+          // Price inquiry
+          response.commentReply = `ধন্যবাদ! 🙏 দামসহ বিস্তারিত তথ্য আপনার ইনবক্সে পাঠিয়ে দিয়েছি। অনুগ্রহ করে চেক করুন 📩`;
+          response.reactionType = "LIKE";
+        } else if (commentAnalysis.isQuestion) {
+          // General question
+          response.commentReply = `ধন্যবাদ! 🙏 আপনার প্রশ্নের উত্তর ইনবক্সে পাঠিয়ে দিয়েছি। অনুগ্রহ করে চেক করুন 📩`;
+          response.reactionType = "LIKE";
+        } else if (commentAnalysis.isOrderIntent) {
+          // Order intent
+          response.commentReply = `ধন্যবাদ! 🛒 অর্ডারের জন্য আপনার ইনবক্সে মেসেজ করেছি। অনুগ্রহ করে চেক করুন 📩`;
+          response.reactionType = "LIKE";
+        } else {
+          // General comment - still acknowledge what they said
+          response.commentReply = `ধন্যবাদ কমেন্ট করার জন্য! 🙏 বিস্তারিত তথ্য আপনার ইনবক্সে পাঠিয়ে দিয়েছি। অনুগ্রহ করে চেক করুন 📩`;
+          response.reactionType = "LIKE";
+        }
+        
+        // Build detailed inbox message based on ACTUAL comment content
+        let inboxMessage = `আসসালামু আলাইকুম ${senderName || ''} 👋\n\n`;
+        
+        // Reference what the customer actually said
+        if (messageText && messageText.trim().length > 0) {
+          inboxMessage += `আপনি কমেন্ট করেছেন: "${messageText}"\n\n`;
+        } else {
+          inboxMessage += `আপনার কমেন্টের জন্য ধন্যবাদ!\n\n`;
+        }
+        
+        // Add post context if available
+        if (postContext?.post_text) {
+          const shortPostText = postContext.post_text.length > 80 
+            ? postContext.post_text.substring(0, 80) + "..." 
+            : postContext.post_text;
+          inboxMessage += `📱 পোস্ট: "${shortPostText}"\n\n`;
+        }
+        
+        // Add AI-generated response
         inboxMessage += aiReply;
+        
+        // Add product context if available
+        if (productContext) {
+          inboxMessage += `\n\n📦 প্রোডাক্ট: ${productContext.name}\n💰 দাম: ৳${productContext.price}`;
+        }
+        
+        response.inboxMessage = inboxMessage;
       }
-      
-      response.shouldSendInbox = true;
-      response.inboxMessage = inboxMessage;
     }
 
     if (orderId) {
@@ -969,8 +1068,8 @@ serve(async (req) => {
   } catch (error) {
     console.error("[AI Agent] Error:", error);
     return new Response(JSON.stringify({ 
-      error: error instanceof Error ? error.message : "Unknown error",
-      reply: "দুঃখিত, একটু সমস্যা হয়েছে। একটু পরে আবার চেষ্টা করুন।"
+      error: "Internal error",
+      reply: "দুঃখিত, একটু সমস্যা হয়েছে। একটু পরে আবার চেষ্টা করুন।" 
     }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

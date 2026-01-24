@@ -303,6 +303,35 @@ async function fetchPostContent(pageAccessToken: string, postId: string): Promis
   }
 }
 
+// *** NEW: Check if a comment is a reply to page's own comment ***
+async function checkIfReplyToPageComment(
+  pageAccessToken: string, 
+  parentCommentId: string, 
+  pageId: string
+): Promise<boolean> {
+  try {
+    // Fetch the parent comment to check its author
+    const response = await fetch(
+      `${GRAPH_API_URL}/${parentCommentId}?fields=from&access_token=${pageAccessToken}`
+    );
+    const result = await response.json();
+    
+    if (result.error) {
+      console.log("[Facebook] Could not fetch parent comment:", result.error);
+      return false;
+    }
+    
+    // Check if the parent comment was made by the page
+    const isFromPage = result.from?.id === pageId;
+    console.log(`[Facebook] Parent comment author: ${result.from?.id}, Page ID: ${pageId}, IsFromPage: ${isFromPage}`);
+    
+    return isFromPage;
+  } catch (error) {
+    console.error("[Facebook] Error checking parent comment:", error);
+    return false;
+  }
+}
+
 // Call AI Agent with auto post analysis
 async function callAIAgent(supabase: any, data: {
   pageId: string;
@@ -316,6 +345,8 @@ async function callAIAgent(supabase: any, data: {
   postId?: string;
   postContent?: string;
   postMediaType?: string;
+  parentCommentId?: string;       // *** NEW: Parent comment ID ***
+  isReplyToPageComment?: boolean; // *** NEW: Is reply to page's comment ***
   userId: string;
 }): Promise<any> {
   try {
@@ -624,7 +655,10 @@ async function processFeedChange(supabase: any, pageId: string, change: any) {
     }
 
     const commentText = value.message || "";
+    const parentId = value.parent_id; // *** IMPORTANT: This is the parent comment ID if this is a reply ***
+    
     console.log(`[Webhook] Comment on page ${pageId}: "${commentText.substring(0, 50)}..."`);
+    console.log(`[Webhook] Parent ID: ${parentId || 'none (top-level comment)'}`);
 
     // Check if auto-reply is enabled
     if (!pageMemory?.automation_settings?.autoCommentReply) {
@@ -646,6 +680,7 @@ async function processFeedChange(supabase: any, pageId: string, change: any) {
           page_id: pageId,
           post_id: value.post_id,
           comment_id: value.comment_id,
+          parent_id: parentId,
           message: commentText,
           from: value.from,
           reason: "Negative or spam comment detected",
@@ -654,6 +689,13 @@ async function processFeedChange(supabase: any, pageId: string, change: any) {
         processing_time_ms: Date.now() - startTime,
       });
       return;
+    }
+
+    // *** NEW: Check if this is a reply to page's own comment ***
+    let isReplyToPageComment = false;
+    if (parentId && decryptedToken) {
+      isReplyToPageComment = await checkIfReplyToPageComment(decryptedToken, parentId, pageId);
+      console.log(`[Webhook] Is reply to page's comment: ${isReplyToPageComment}`);
     }
 
     // *** AUTO FETCH POST CONTENT FROM FACEBOOK ***
@@ -669,7 +711,7 @@ async function processFeedChange(supabase: any, pageId: string, change: any) {
       }
     }
 
-    // Call AI Agent with auto-analyzed post content
+    // Call AI Agent with auto-analyzed post content and reply context
     const aiResponse = await callAIAgent(supabase, {
       pageId,
       senderId: value.from?.id,
@@ -679,8 +721,10 @@ async function processFeedChange(supabase: any, pageId: string, change: any) {
       isComment: true,
       commentId: value.comment_id,
       postId: value.post_id,
-      postContent,     // *** NEW: Pass auto-fetched post content ***
-      postMediaType,   // *** NEW: Pass post media type ***
+      postContent,           // Auto-fetched post content
+      postMediaType,         // Post media type
+      parentCommentId: parentId,          // *** NEW: Parent comment ID ***
+      isReplyToPageComment,               // *** NEW: Is reply to page's comment ***
       userId: account.user_id,
     });
 
@@ -689,7 +733,7 @@ async function processFeedChange(supabase: any, pageId: string, change: any) {
       user_id: account.user_id,
       automation_id: null,
       source_platform: "facebook",
-      event_type: "comment_received",
+      event_type: isReplyToPageComment ? "comment_reply_to_page" : "comment_received",
       status: aiResponse ? "success" : "error",
       incoming_payload: {
         page_id: pageId,
@@ -697,6 +741,8 @@ async function processFeedChange(supabase: any, pageId: string, change: any) {
         post_content: postContent,
         post_media_type: postMediaType,
         comment_id: value.comment_id,
+        parent_id: parentId,
+        is_reply_to_page: isReplyToPageComment,
         message: commentText,
         from: value.from,
         created_time: value.created_time,
@@ -710,19 +756,19 @@ async function processFeedChange(supabase: any, pageId: string, change: any) {
       const senderName = value.from?.name || "ভাই/আপু";
       const shortName = senderName.split(" ")[0]; // First name only
       
-      // *** STEP 1: Reply to comment with initial thanks message ***
-      const initialCommentReply = aiResponse.commentReply || 
+      // *** STEP 1: Reply to comment with contextual message ***
+      const commentReplyText = aiResponse.commentReply || 
         `ধন্যবাদ ${shortName}! 🙏 বিস্তারিত তথ্য আপনার ইনবক্সে পাঠিয়ে দিয়েছি। অনুগ্রহ করে চেক করুন 📩`;
-      const replyResult = await replyToComment(decryptedToken, value.comment_id, initialCommentReply);
-      console.log("[Webhook] Initial comment reply sent");
+      const replyResult = await replyToComment(decryptedToken, value.comment_id, commentReplyText);
+      console.log("[Webhook] Comment reply sent:", commentReplyText.substring(0, 50));
 
       // Add reaction if enabled
       if (pageMemory?.automation_settings?.reactionOnComments) {
         await addReaction(decryptedToken, value.comment_id, aiResponse.reactionType || "LIKE");
       }
 
-      // *** STEP 2: Try to send inbox message ***
-      if (value.from?.id) {
+      // *** STEP 2: Try to send inbox message (skip if AI says to) ***
+      if (value.from?.id && !aiResponse.skipInboxMessage) {
         const inboxMessage = aiResponse.inboxMessage || aiResponse.reply || 
           `আসসালামু আলাইকুম ${shortName}! 👋\n\nআপনার কমেন্টের জন্য ধন্যবাদ।\n\n${postContent ? `আপনি "${postContent.substring(0, 100)}${postContent.length > 100 ? '...' : ''}" পোস্টে কমেন্ট করেছেন।\n\n` : ''}আপনি কী জানতে চাইছেন বিস্তারিত বলুন, আমি সাহায্য করতে পারব। 🙂`;
         
@@ -781,6 +827,8 @@ async function processFeedChange(supabase: any, pageId: string, change: any) {
             console.log("[Webhook] Inbox failed but not a messaging restriction, or no reply ID available");
           }
         }
+      } else if (aiResponse.skipInboxMessage) {
+        console.log("[Webhook] Skipping inbox message as per AI recommendation (customer going to inbox)");
       }
     }
   }
