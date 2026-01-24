@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { verify } from "https://deno.land/x/djwt@v3.0.2/mod.ts";
 import { Resend } from "https://esm.sh/resend@2.0.0";
 import { getWelcomeEmailTemplate } from "../_shared/email-templates.ts";
 
@@ -14,23 +13,53 @@ const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const jwtSecret = Deno.env.get("JWT_SECRET")!;
 const resendApiKey = Deno.env.get("RESEND_API_KEY")!;
 
-async function verifyToken(authHeader: string | null): Promise<string | null> {
+// JWT verification using native Web Crypto API (no external dependencies)
+async function verifyJWT(authHeader: string | null): Promise<string | null> {
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return null;
   }
   
   const token = authHeader.substring(7);
   try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    
+    // Decode payload
+    const payloadBase64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const payloadJson = atob(payloadBase64);
+    const payload = JSON.parse(payloadJson);
+    
+    // Check expiration
+    if (payload.exp && payload.exp * 1000 < Date.now()) {
+      console.log("[JWT] Token expired");
+      return null;
+    }
+    
+    // Verify signature using Web Crypto API
+    const encoder = new TextEncoder();
     const key = await crypto.subtle.importKey(
       "raw",
-      new TextEncoder().encode(jwtSecret),
+      encoder.encode(jwtSecret),
       { name: "HMAC", hash: "SHA-256" },
       false,
-      ["sign", "verify"]
+      ["verify"]
     );
-    const payload = await verify(token, key);
+    
+    const signatureInput = encoder.encode(parts[0] + "." + parts[1]);
+    const signatureBase64 = parts[2].replace(/-/g, "+").replace(/_/g, "/");
+    const padding = (4 - (signatureBase64.length % 4)) % 4;
+    const paddedSignature = signatureBase64 + "=".repeat(padding);
+    const signatureBytes = Uint8Array.from(atob(paddedSignature), c => c.charCodeAt(0));
+    
+    const valid = await crypto.subtle.verify("HMAC", key, signatureBytes, signatureInput);
+    if (!valid) {
+      console.log("[JWT] Invalid signature");
+      return null;
+    }
+    
     return payload.sub as string;
-  } catch {
+  } catch (error) {
+    console.error("[JWT] Verification failed:", error);
     return null;
   }
 }
@@ -41,7 +70,7 @@ serve(async (req) => {
   }
 
   try {
-    const userId = await verifyToken(req.headers.get("Authorization"));
+    const userId = await verifyJWT(req.headers.get("Authorization"));
     if (!userId) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
@@ -98,7 +127,7 @@ serve(async (req) => {
         });
       }
 
-      console.log("Welcome email sent successfully:", emailData);
+      console.log("[send-welcome-email] Email sent successfully:", emailData);
       
       return new Response(JSON.stringify({ 
         message: "Welcome email sent successfully" 
@@ -106,8 +135,8 @@ serve(async (req) => {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
-    } catch (emailErr: any) {
-      console.error("Email send exception:", emailErr);
+    } catch (emailErr: unknown) {
+      console.error("[send-welcome-email] Email send exception:", emailErr);
       return new Response(JSON.stringify({ 
         error: "Failed to send welcome email",
         code: "EMAIL_SEND_FAILED"
@@ -117,7 +146,7 @@ serve(async (req) => {
       });
     }
   } catch (error) {
-    console.error("Send welcome email error:", error);
+    console.error("[send-welcome-email] Error:", error);
     return new Response(JSON.stringify({ error: "Internal server error" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
