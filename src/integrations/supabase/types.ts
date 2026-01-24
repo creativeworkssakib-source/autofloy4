@@ -4373,12 +4373,14 @@ export type Database = {
       }
       users: {
         Row: {
+          auth_provider: string | null
           avatar_url: string | null
           can_sync_business: boolean
           created_at: string | null
           display_name: string | null
           email: string
           email_verified: boolean | null
+          google_id: string | null
           has_used_trial: boolean
           id: string
           is_trial_active: boolean | null
@@ -4394,12 +4396,14 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          auth_provider?: string | null
           avatar_url?: string | null
           can_sync_business?: boolean
           created_at?: string | null
           display_name?: string | null
           email: string
           email_verified?: boolean | null
+          google_id?: string | null
           has_used_trial?: boolean
           id?: string
           is_trial_active?: boolean | null
@@ -4415,12 +4419,14 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          auth_provider?: string | null
           avatar_url?: string | null
           can_sync_business?: boolean
           created_at?: string | null
           display_name?: string | null
           email?: string
           email_verified?: boolean | null
+          google_id?: string | null
           has_used_trial?: boolean
           id?: string
           is_trial_active?: boolean | null
