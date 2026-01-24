@@ -107,7 +107,13 @@ async function verifyJWT(authHeader: string | null): Promise<string | null> {
   }
 }
 
-async function getPlanLimits(supabase: ReturnType<typeof createClient>, planId: string) {
+interface PlanLimits {
+  maxFacebookPages: number;
+  maxWhatsappAccounts: number;
+}
+
+// deno-lint-ignore no-explicit-any
+async function getPlanLimits(supabase: any, planId: string): Promise<PlanLimits> {
   const normalizedPlan = planId.toLowerCase();
   const dbPlanId = normalizedPlan === "trial" ? "free-trial" : normalizedPlan;
 
@@ -119,8 +125,10 @@ async function getPlanLimits(supabase: ReturnType<typeof createClient>, planId: 
 
   if (!data) return FALLBACK_LIMITS[normalizedPlan] || FALLBACK_LIMITS.none;
 
+  const maxFbPages = typeof data.max_facebook_pages === 'number' ? data.max_facebook_pages : 0;
+
   return {
-    maxFacebookPages: data.max_facebook_pages || FALLBACK_LIMITS[normalizedPlan]?.maxFacebookPages || 0,
+    maxFacebookPages: maxFbPages || FALLBACK_LIMITS[normalizedPlan]?.maxFacebookPages || 0,
     maxWhatsappAccounts: FALLBACK_LIMITS[normalizedPlan]?.maxWhatsappAccounts || 0,
   };
 }
@@ -132,7 +140,17 @@ interface UserData {
   subscription_ends_at: string | null;
 }
 
-async function getUserPlan(supabase: ReturnType<typeof createClient>, userId: string) {
+interface UserPlanResult {
+  plan: string;
+  planName: string;
+  isActive: boolean;
+  reason?: string;
+  maxFacebookPages: number;
+  maxWhatsappAccounts: number;
+}
+
+// deno-lint-ignore no-explicit-any
+async function getUserPlan(supabase: any, userId: string): Promise<UserPlanResult> {
   const { data, error } = await supabase
     .from("users")
     .select("subscription_plan, is_trial_active, trial_end_date, subscription_ends_at")
