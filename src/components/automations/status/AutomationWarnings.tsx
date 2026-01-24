@@ -72,7 +72,7 @@ const AutomationWarnings = ({
       description: "AI cannot provide accurate pricing without product catalog",
       icon: Package,
       actionLabel: "Add Products",
-      actionPath: "/products",
+      actionPath: "/dashboard/products",
     });
   }
 
