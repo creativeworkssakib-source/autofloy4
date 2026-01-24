@@ -347,6 +347,15 @@ const ConnectFacebook = () => {
                 </Badge>
               </div>
               <Progress value={Math.min((enabledCount / planLimits.maxFacebookPages) * 100, 100)} className="h-2" />
+              
+              {/* Status message based on count */}
+              <p className="text-xs text-muted-foreground mt-2">
+                {enabledCount === 0 && "No pages connected yet. Toggle ON a page to start automation."}
+                {enabledCount === 1 && `1 page connected. You can connect ${planLimits.maxFacebookPages - 1} more.`}
+                {enabledCount > 1 && enabledCount < planLimits.maxFacebookPages && `${enabledCount} pages connected. You can connect ${planLimits.maxFacebookPages - enabledCount} more.`}
+                {enabledCount >= planLimits.maxFacebookPages && "All page slots used!"}
+              </p>
+              
               {enabledCount >= planLimits.maxFacebookPages && (
                 <div className="flex items-center gap-2 mt-2 text-sm text-amber-600">
                   <Info className="w-4 h-4" />
