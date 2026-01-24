@@ -11,7 +11,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { fetchPageMemory } from "@/services/apiService";
 import { supabase } from "@/integrations/supabase/client";
 import { 
   ArrowLeft, 
@@ -127,9 +126,32 @@ const FacebookPageSettings = () => {
       
       setIsLoading(true);
       try {
-        const memory = await fetchPageMemory(pageId);
+        console.log("[FacebookPageSettings] Loading settings via edge function...");
         
-        if (memory && !Array.isArray(memory)) {
+        // Use supabase.functions.invoke for reliable fetching
+        const { data, error } = await supabase.functions.invoke("page-memory", {
+          method: "GET",
+          body: undefined,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
+        
+        if (error) {
+          console.error("[FacebookPageSettings] Fetch error:", error);
+          throw error;
+        }
+        
+        console.log("[FacebookPageSettings] Raw response:", data);
+        
+        // Find the memory for this page
+        const memories = data?.memories || [];
+        const memory = Array.isArray(memories) 
+          ? memories.find((m: { page_id: string }) => m.page_id === pageId)
+          : memories;
+        
+        if (memory) {
+          console.log("[FacebookPageSettings] Loaded memory:", memory);
           setPageName(memory.page_name || "Facebook Page");
           
           // Load automation settings
@@ -178,6 +200,8 @@ const FacebookPageSettings = () => {
               advancePercentage: memory.payment_rules.advancePercentage ?? 50,
             });
           }
+        } else {
+          console.log("[FacebookPageSettings] No memory found for page:", pageId);
         }
       } catch (error) {
         console.error("Failed to load settings:", error);
