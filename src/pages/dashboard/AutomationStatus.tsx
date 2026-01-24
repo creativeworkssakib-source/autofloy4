@@ -44,6 +44,7 @@ const AutomationStatus = () => {
   const { toast } = useToast();
 
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingPageMemory, setIsLoadingPageMemory] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [connectedPages, setConnectedPages] = useState<ConnectedAccount[]>([]);
   const [selectedPageId, setSelectedPageId] = useState<string>("");
@@ -54,10 +55,16 @@ const AutomationStatus = () => {
   const loadPageMemory = async (pageId: string, pages: ConnectedAccount[], prodCount: number, retryCount = 0) => {
     const MAX_RETRIES = 3;
     
+    // Set loading state on first attempt
+    if (retryCount === 0) {
+      setIsLoadingPageMemory(true);
+    }
+    
     try {
       const page = pages.find(p => p.external_id === pageId);
       if (!page) {
         console.log("[AutomationStatus] Page not found:", pageId);
+        setIsLoadingPageMemory(false);
         return;
       }
 
@@ -83,6 +90,13 @@ const AutomationStatus = () => {
           await new Promise(r => setTimeout(r, 1000 * (retryCount + 1)));
           return loadPageMemory(pageId, pages, prodCount, retryCount + 1);
         }
+        // On final failure, still set page data with null memory
+        setPageStatusData({
+          page,
+          memory: null,
+          hasProducts: prodCount > 0,
+        });
+        setIsLoadingPageMemory(false);
         return;
       }
       
@@ -108,6 +122,7 @@ const AutomationStatus = () => {
         memory: memory || null,
         hasProducts: prodCount > 0,
       });
+      setIsLoadingPageMemory(false);
     } catch (error) {
       console.error("Failed to load page memory:", error);
       // Retry on network error
@@ -115,6 +130,16 @@ const AutomationStatus = () => {
         await new Promise(r => setTimeout(r, 1000 * (retryCount + 1)));
         return loadPageMemory(pageId, pages, prodCount, retryCount + 1);
       }
+      // On final failure, still set page data
+      const page = pages.find(p => p.external_id === pageId);
+      if (page) {
+        setPageStatusData({
+          page,
+          memory: null,
+          hasProducts: prodCount > 0,
+        });
+      }
+      setIsLoadingPageMemory(false);
     }
   };
 
@@ -354,86 +379,107 @@ const AutomationStatus = () => {
           </motion.div>
         )}
 
-        {/* Main Content Grid */}
-        {connectedPages.length > 0 && pageStatusData && (
+        {/* Main Content Grid - Show when pages are connected */}
+        {connectedPages.length > 0 && (
           <>
-            {/* Warnings Section */}
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.15 }}
-            >
-              <AutomationWarnings
-                isConnected={checklistStatus.isConnected}
-                hasBusinessDescription={checklistStatus.hasBusinessInfo}
-                hasProducts={productCount > 0}
-                hasAutomationsEnabled={checklistStatus.hasAutomationsEnabled}
-                onNavigate={(path) => {
-                  // Handle relative paths for page settings
-                  if (path.includes("facebook-settings") && pageStatusData) {
-                    navigate(`/dashboard/facebook-settings/${pageStatusData.page.external_id}/${pageStatusData.page.id}`);
-                  } else {
-                    navigate(path);
-                  }
-                }}
-              />
-            </motion.div>
-
-            <div className="grid gap-6 lg:grid-cols-2">
-              {/* Checklist */}
+            {/* Loading state for page memory */}
+            {isLoadingPageMemory && !pageStatusData && (
               <motion.div
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.2 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="space-y-6"
               >
-                <AutomationChecklist
-                  {...checklistStatus}
-                  onItemClick={(itemId) => {
-                    // Navigate to relevant settings
-                    if (itemId === "facebook_connected") {
-                      navigate("/connect-facebook");
-                    } else if (itemId === "page_selected") {
-                      navigate("/connect-facebook");
-                    } else if (pageStatusData) {
-                      navigate(`/dashboard/facebook-settings/${pageStatusData.page.external_id}/${pageStatusData.page.id}`);
-                    }
-                  }}
-                />
+                <Skeleton className="h-24 w-full" />
+                <div className="grid gap-6 lg:grid-cols-2">
+                  <Skeleton className="h-[300px]" />
+                  <Skeleton className="h-[300px]" />
+                </div>
+                <Skeleton className="h-[150px]" />
               </motion.div>
+            )}
 
-              {/* Simulator */}
-              <motion.div
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.25 }}
-              >
-                <AutomationSimulator
-                  isAutomationReady={allChecksComplete}
-                  automationSettings={{
-                    autoCommentReply: automationSettings.autoCommentReply,
-                    autoInboxReply: automationSettings.autoInboxReply,
-                    orderTaking: automationSettings.orderTaking,
-                  }}
-                />
-              </motion.div>
-            </div>
+            {/* Content when pageStatusData is available */}
+            {pageStatusData && (
+              <>
+                {/* Warnings Section */}
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.15 }}
+                >
+                  <AutomationWarnings
+                    isConnected={checklistStatus.isConnected}
+                    hasBusinessDescription={checklistStatus.hasBusinessInfo}
+                    hasProducts={productCount > 0}
+                    hasAutomationsEnabled={checklistStatus.hasAutomationsEnabled}
+                    onNavigate={(path) => {
+                      // Handle relative paths for page settings
+                      if (path.includes("facebook-settings") && pageStatusData) {
+                        navigate(`/dashboard/facebook-settings/${pageStatusData.page.external_id}/${pageStatusData.page.id}`);
+                      } else {
+                        navigate(path);
+                      }
+                    }}
+                  />
+                </motion.div>
 
-            {/* Control Summary */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-            >
-              <AutomationControlSummary
-                language={pageStatusData.memory?.detected_language || "mixed"}
-                tone={pageStatusData.memory?.preferred_tone || "friendly"}
-                orderTaking={automationSettings.orderTaking || false}
-                commentAutomation={automationSettings.autoCommentReply || false}
-                inboxAutomation={automationSettings.autoInboxReply || false}
-                discountAllowed={pageStatusData.memory?.selling_rules?.allowDiscount || false}
-                maxDiscountPercent={pageStatusData.memory?.selling_rules?.maxDiscountPercent || 0}
-              />
-            </motion.div>
+                <div className="grid gap-6 lg:grid-cols-2">
+                  {/* Checklist */}
+                  <motion.div
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.2 }}
+                  >
+                    <AutomationChecklist
+                      {...checklistStatus}
+                      onItemClick={(itemId) => {
+                        // Navigate to relevant settings
+                        if (itemId === "facebook_connected") {
+                          navigate("/connect-facebook");
+                        } else if (itemId === "page_selected") {
+                          navigate("/connect-facebook");
+                        } else if (pageStatusData) {
+                          navigate(`/dashboard/facebook-settings/${pageStatusData.page.external_id}/${pageStatusData.page.id}`);
+                        }
+                      }}
+                    />
+                  </motion.div>
+
+                  {/* Simulator */}
+                  <motion.div
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.25 }}
+                  >
+                    <AutomationSimulator
+                      isAutomationReady={allChecksComplete}
+                      automationSettings={{
+                        autoCommentReply: automationSettings.autoCommentReply,
+                        autoInboxReply: automationSettings.autoInboxReply,
+                        orderTaking: automationSettings.orderTaking,
+                      }}
+                    />
+                  </motion.div>
+                </div>
+
+                {/* Control Summary */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3 }}
+                >
+                  <AutomationControlSummary
+                    language={pageStatusData.memory?.detected_language || "mixed"}
+                    tone={pageStatusData.memory?.preferred_tone || "friendly"}
+                    orderTaking={automationSettings.orderTaking || false}
+                    commentAutomation={automationSettings.autoCommentReply || false}
+                    inboxAutomation={automationSettings.autoInboxReply || false}
+                    discountAllowed={pageStatusData.memory?.selling_rules?.allowDiscount || false}
+                    maxDiscountPercent={pageStatusData.memory?.selling_rules?.maxDiscountPercent || 0}
+                  />
+                </motion.div>
+              </>
+            )}
           </>
         )}
       </div>
