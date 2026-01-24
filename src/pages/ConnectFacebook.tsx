@@ -166,13 +166,16 @@ const ConnectFacebook = () => {
         setPages(prev => prev.map(p => 
           p.id === pageId ? { ...p, is_connected: enabled } : p
         ));
-        // Update plan limits count
+        // Update plan limits count from server response (more reliable)
         if (planLimits) {
+          const newCount = typeof result.connectedFacebookPages === 'number' 
+            ? result.connectedFacebookPages 
+            : (enabled 
+              ? planLimits.connectedFacebookPages + 1 
+              : Math.max(0, planLimits.connectedFacebookPages - 1));
           setPlanLimits({
             ...planLimits,
-            connectedFacebookPages: enabled 
-              ? planLimits.connectedFacebookPages + 1 
-              : planLimits.connectedFacebookPages - 1,
+            connectedFacebookPages: newCount,
           });
         }
         toast({

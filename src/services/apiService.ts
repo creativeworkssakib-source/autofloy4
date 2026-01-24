@@ -300,6 +300,7 @@ export interface TogglePageResult {
   error?: string;
   upgrade_required?: boolean;
   is_connected?: boolean;
+  connectedFacebookPages?: number;
 }
 
 export async function togglePageAutomation(pageId: string, enabled: boolean): Promise<TogglePageResult> {
