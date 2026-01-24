@@ -692,6 +692,65 @@ export type Database = {
           },
         ]
       }
+      facebook_posts: {
+        Row: {
+          created_at: string
+          engagement_count: number | null
+          id: string
+          is_synced: boolean | null
+          linked_product_id: string | null
+          media_type: string | null
+          media_url: string | null
+          page_id: string
+          post_id: string
+          post_text: string | null
+          product_detected_name: string | null
+          thumbnail_url: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          engagement_count?: number | null
+          id?: string
+          is_synced?: boolean | null
+          linked_product_id?: string | null
+          media_type?: string | null
+          media_url?: string | null
+          page_id: string
+          post_id: string
+          post_text?: string | null
+          product_detected_name?: string | null
+          thumbnail_url?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          engagement_count?: number | null
+          id?: string
+          is_synced?: boolean | null
+          linked_product_id?: string | null
+          media_type?: string | null
+          media_url?: string | null
+          page_id?: string
+          post_id?: string
+          post_text?: string | null
+          product_detected_name?: string | null
+          thumbnail_url?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "facebook_posts_linked_product_id_fkey"
+            columns: ["linked_product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fraud_detection_logs: {
         Row: {
           action_taken: string | null

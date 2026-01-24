@@ -62,6 +62,26 @@ interface ConversationState {
   message_history: any[];
 }
 
+interface ProductContext {
+  id: string;
+  name: string;
+  price: number;
+  description?: string;
+  category?: string;
+  sku?: string;
+  is_active: boolean;
+  variants?: any[];
+}
+
+interface PostContext {
+  post_id: string;
+  post_text?: string;
+  media_type?: string;
+  linked_product_id?: string;
+  product_detected_name?: string;
+  product?: ProductContext;
+}
+
 // Detect message intent
 function detectIntent(text: string): string {
   const lowerText = text.toLowerCase();
@@ -138,8 +158,13 @@ function calculateFakeOrderScore(conversation: ConversationState, newMessage: st
   return Math.min(score, 100);
 }
 
-// Build system prompt based on page memory and rules
-function buildSystemPrompt(pageMemory: PageMemory, conversationState: ConversationState): string {
+// Build system prompt based on page memory, rules, and product context
+function buildSystemPrompt(
+  pageMemory: PageMemory, 
+  conversationState: ConversationState,
+  productContext?: ProductContext,
+  postContext?: PostContext
+): string {
   const tone = pageMemory.preferred_tone === "professional" ? "পেশাদার" : "বন্ধুত্বপূর্ণ";
   const language = pageMemory.detected_language === "english" ? "English" : 
                    pageMemory.detected_language === "bangla" ? "বাংলা" : "বাংলা এবং English মিশিয়ে (Banglish)";
@@ -149,8 +174,39 @@ function buildSystemPrompt(pageMemory: PageMemory, conversationState: Conversati
 ## Business Context
 ${pageMemory.business_description || "General e-commerce business"}
 
-## Products/Services
-${pageMemory.products_summary || "Various products available"}
+## Products/Services Overview
+${pageMemory.products_summary || "Various products available"}`;
+
+  // Add specific product context if available
+  if (productContext) {
+    prompt += `
+
+## 🎯 CURRENT PRODUCT BEING DISCUSSED (from customer's comment/inquiry)
+- Product Name: ${productContext.name}
+- Price: ৳${productContext.price}
+- Category: ${productContext.category || "N/A"}
+- SKU: ${productContext.sku || "N/A"}
+- Description: ${productContext.description || "N/A"}
+- Status: ${productContext.is_active ? "In Stock" : "Out of Stock"}
+
+IMPORTANT: When the customer asks about price or details, use THIS product's information.`;
+  }
+
+  // Add post context if this is a comment
+  if (postContext) {
+    prompt += `
+
+## 📱 POST CONTEXT (Comment was made on this post)
+- Post Content: ${postContext.post_text || "N/A"}
+- Media Type: ${postContext.media_type || "N/A"}`;
+    
+    if (postContext.product_detected_name && !productContext) {
+      prompt += `
+- Detected Product: ${postContext.product_detected_name} (Note: exact product not found in database)`;
+    }
+  }
+
+  prompt += `
 
 ## Communication Style
 - Tone: ${tone}
@@ -347,6 +403,92 @@ function getNextState(currentState: string, intent: string, hasAllOrderInfo: boo
   }
 }
 
+// Get product context from post
+async function getProductFromPost(
+  supabase: any, 
+  pageId: string, 
+  postId: string, 
+  userId: string
+): Promise<{ postContext: PostContext | null; productContext: ProductContext | null }> {
+  console.log(`[AI Agent] Looking up post context for post_id: ${postId}`);
+  
+  // First, check if we have this post synced
+  const { data: fbPost, error: postError } = await supabase
+    .from("facebook_posts")
+    .select(`
+      post_id,
+      post_text,
+      media_type,
+      linked_product_id,
+      product_detected_name,
+      products:linked_product_id (
+        id,
+        name,
+        price,
+        description,
+        category,
+        sku,
+        is_active
+      )
+    `)
+    .eq("page_id", pageId)
+    .eq("post_id", postId)
+    .single();
+
+  if (fbPost) {
+    const postContext: PostContext = {
+      post_id: fbPost.post_id,
+      post_text: fbPost.post_text,
+      media_type: fbPost.media_type,
+      linked_product_id: fbPost.linked_product_id,
+      product_detected_name: fbPost.product_detected_name,
+    };
+
+    let productContext: ProductContext | null = null;
+    if (fbPost.products) {
+      productContext = fbPost.products as ProductContext;
+    }
+
+    console.log(`[AI Agent] Found post context with product: ${productContext?.name || 'none'}`);
+    return { postContext, productContext };
+  }
+
+  console.log(`[AI Agent] Post not found in database, will try to fetch from Facebook`);
+  return { postContext: null, productContext: null };
+}
+
+// Try to match product by name from message text
+async function findProductByName(
+  supabase: any, 
+  userId: string, 
+  messageText: string
+): Promise<ProductContext | null> {
+  // Get all user's products
+  const { data: products, error } = await supabase
+    .from("products")
+    .select("id, name, price, description, category, sku, is_active")
+    .eq("user_id", userId)
+    .eq("is_active", true);
+
+  if (error || !products || products.length === 0) {
+    return null;
+  }
+
+  // Simple fuzzy match - check if any product name appears in the message
+  const lowerMessage = messageText.toLowerCase();
+  for (const product of products) {
+    const productNameLower = product.name.toLowerCase();
+    // Check for partial match
+    if (lowerMessage.includes(productNameLower) || 
+        productNameLower.split(" ").some((word: string) => word.length > 3 && lowerMessage.includes(word))) {
+      console.log(`[AI Agent] Matched product by name: ${product.name}`);
+      return product as ProductContext;
+    }
+  }
+
+  return null;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -370,6 +512,7 @@ serve(async (req) => {
     } = body as MessageContext & { userId: string };
 
     console.log(`[AI Agent] Processing ${isComment ? "comment" : "message"} for page ${pageId}`);
+    console.log(`[AI Agent] Post ID: ${postId}, Message: ${messageText?.substring(0, 50)}`);
 
     // Get page memory for context
     const { data: pageMemory } = await supabase
@@ -408,6 +551,22 @@ serve(async (req) => {
       });
     }
 
+    // Get product context from post (if comment) or from message text
+    let productContext: ProductContext | null = null;
+    let postContext: PostContext | null = null;
+
+    if (isComment && postId) {
+      // Try to get product from the post
+      const postResult = await getProductFromPost(supabase, pageId, postId, userId);
+      postContext = postResult.postContext;
+      productContext = postResult.productContext;
+    }
+
+    // If no product from post, try to match from message text
+    if (!productContext && messageText) {
+      productContext = await findProductByName(supabase, userId, messageText);
+    }
+
     // Get or create conversation state
     let { data: conversation } = await supabase
       .from("ai_conversations")
@@ -437,11 +596,28 @@ serve(async (req) => {
       conversation = newConv;
     }
 
+    // If we found a product, update the conversation with it
+    if (productContext && !conversation.current_product_id) {
+      await supabase
+        .from("ai_conversations")
+        .update({
+          current_product_id: productContext.id,
+          current_product_name: productContext.name,
+          current_product_price: productContext.price,
+        })
+        .eq("id", conversation.id);
+
+      conversation.current_product_id = productContext.id;
+      conversation.current_product_name = productContext.name;
+      conversation.current_product_price = productContext.price;
+    }
+
     // Detect intent and sentiment
     const intent = detectIntent(messageText);
     const sentiment = detectSentiment(messageText);
     
     console.log(`[AI Agent] Intent: ${intent}, Sentiment: ${sentiment}, State: ${conversation.conversation_state}`);
+    console.log(`[AI Agent] Product context: ${productContext?.name || 'none'}`);
 
     // Handle image messages
     let processedMessage = messageText;
@@ -467,6 +643,7 @@ serve(async (req) => {
       timestamp: new Date().toISOString(),
       intent,
       sentiment,
+      productContext: productContext ? { name: productContext.name, price: productContext.price } : null,
     });
 
     // Determine next state
@@ -508,9 +685,9 @@ serve(async (req) => {
       console.error("[AI Agent] Failed to update conversation:", updateError);
     }
 
-    // Build AI prompt and get response
+    // Build AI prompt and get response with product context
     const updatedConversation = { ...conversation, conversation_state: nextState, ...collectedData };
-    const systemPrompt = buildSystemPrompt(pageMemory, updatedConversation);
+    const systemPrompt = buildSystemPrompt(pageMemory, updatedConversation, productContext || undefined, postContext || undefined);
     
     // Format message history for AI
     const aiMessages = messageHistory.slice(-10).map((msg: any) => ({
@@ -541,6 +718,11 @@ serve(async (req) => {
       const { data: invoiceData } = await supabase.rpc("generate_invoice_number");
       invoiceNumber = invoiceData;
 
+      const orderProduct = productContext || {
+        name: updatedConversation.current_product_name,
+        price: updatedConversation.current_product_price,
+      };
+
       const { data: order, error: orderError } = await supabase
         .from("ai_orders")
         .insert({
@@ -551,13 +733,14 @@ serve(async (req) => {
           customer_name: updatedConversation.collected_name,
           customer_phone: updatedConversation.collected_phone,
           customer_address: updatedConversation.collected_address,
-          products: updatedConversation.current_product_name ? [{
-            name: updatedConversation.current_product_name,
-            price: updatedConversation.current_product_price,
+          products: orderProduct.name ? [{
+            id: productContext?.id,
+            name: orderProduct.name,
+            price: orderProduct.price,
             quantity: updatedConversation.current_quantity || 1,
           }] : [],
-          subtotal: updatedConversation.current_product_price || 0,
-          total: updatedConversation.current_product_price || 0,
+          subtotal: orderProduct.price || 0,
+          total: orderProduct.price || 0,
           payment_method: pageMemory.payment_rules?.codAvailable ? "cod" : "advance",
           fake_order_score: fakeScore,
           invoice_number: invoiceNumber,
@@ -595,11 +778,17 @@ serve(async (req) => {
       shouldReact: isComment,
       reactionType: sentiment === "positive" ? "LOVE" : "LIKE",
       fakeOrderScore: fakeScore,
+      productContext: productContext ? { name: productContext.name, price: productContext.price } : null,
     };
 
     // For comments, also prepare inbox message
     if (isComment && (intent === "order_intent" || intent === "price_inquiry" || intent === "info_request")) {
-      response.commentReply = "ধন্যবাদ! বিস্তারিত জানতে আপনার ইনবক্স চেক করুন 📩";
+      // Include product info in the comment reply if available
+      if (productContext) {
+        response.commentReply = `ধন্যবাদ! ${productContext.name} এর দাম ৳${productContext.price}। বিস্তারিত জানতে ইনবক্স করুন 📩`;
+      } else {
+        response.commentReply = "ধন্যবাদ! বিস্তারিত জানতে আপনার ইনবক্স চেক করুন 📩";
+      }
       response.shouldSendInbox = true;
       response.inboxMessage = aiReply;
     }
@@ -609,7 +798,7 @@ serve(async (req) => {
       response.invoiceNumber = invoiceNumber;
     }
 
-    console.log(`[AI Agent] Response prepared for ${senderId}, state: ${nextState}`);
+    console.log(`[AI Agent] Response prepared for ${senderId}, state: ${nextState}, product: ${productContext?.name || 'none'}`);
 
     return new Response(JSON.stringify(response), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

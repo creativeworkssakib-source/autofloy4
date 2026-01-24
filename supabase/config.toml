@@ -141,6 +141,9 @@ verify_jwt = false
 [functions.subscription-renew]
 verify_jwt = false
 
+[functions.sync-facebook-posts]
+verify_jwt = false
+
 [functions.toggle-page-automation]
 verify_jwt = false
 

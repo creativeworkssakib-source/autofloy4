@@ -35,6 +35,8 @@ import {
   AlertTriangle
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import FacebookPostsManager from "@/components/automations/FacebookPostsManager";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface AutomationSettings {
   autoCommentReply: boolean;
@@ -75,6 +77,7 @@ const FacebookPageSettings = () => {
   const { pageId, accountId } = useParams<{ pageId: string; accountId: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user } = useAuth();
   
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -724,6 +727,21 @@ const FacebookPageSettings = () => {
             </CardContent>
           </Card>
         </motion.div>
+
+        {/* Post-Product Mapping */}
+        {user?.id && pageId && accountId && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.35 }}
+          >
+            <FacebookPostsManager 
+              pageId={pageId} 
+              accountId={accountId} 
+              userId={user.id} 
+            />
+          </motion.div>
+        )}
 
         {/* Save Button (Mobile) */}
         <motion.div
