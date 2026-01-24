@@ -640,6 +640,76 @@ function detectIntent(text: string): string {
   return "general";
 }
 
+// *** DETECT CUSTOMER RESPONSE INTENT - Understand what customer is trying to say ***
+function detectCustomerResponseIntent(text: string, messageHistory: any[]): string {
+  const lowerText = text.toLowerCase();
+  
+  // Check if customer is acknowledging/going to inbox
+  if (/inbox|ইনবক্স|dm|যাচ্ছি|আসছি|দেখছি|চেক কর|coming|checking/.test(lowerText)) {
+    return "going_to_inbox";
+  }
+  
+  // Check if customer is providing requested info
+  if (messageHistory.length > 0) {
+    const lastAiMessage = [...messageHistory].reverse().find(m => m.role === "assistant");
+    if (lastAiMessage) {
+      const lastContent = lastAiMessage.content?.toLowerCase() || "";
+      
+      // AI asked for name
+      if (/নাম|name/.test(lastContent) && text.length > 2 && text.length < 50 && !/\d/.test(text)) {
+        return "providing_name";
+      }
+      
+      // AI asked for phone
+      if (/ফোন|phone|নম্বর|number/.test(lastContent) && /01[3-9]\d{8}/.test(text)) {
+        return "providing_phone";
+      }
+      
+      // AI asked for address
+      if (/ঠিকানা|address|কোথায়|where/.test(lastContent) && text.length > 10) {
+        return "providing_address";
+      }
+    }
+  }
+  
+  // Check for follow-up question
+  if (/আর|আরো|আরেকটা|another|more|অন্য/.test(lowerText)) {
+    return "follow_up_question";
+  }
+  
+  // Check for confirmation
+  if (/হ্যাঁ|হা|yes|ok|ঠিক আছে|okay|sure|done|হবে|confirmed|চাই|নিব/.test(lowerText)) {
+    return "confirmation";
+  }
+  
+  // Check for hesitation/thinking
+  if (/later|পরে|ভাবছি|thinking|দেখি|consider/.test(lowerText)) {
+    return "hesitation";
+  }
+  
+  // Check for complaint/issue
+  if (/সমস্যা|problem|issue|না পেয়েছি|পাইনি|ভুল|wrong|mistake/.test(lowerText)) {
+    return "complaint";
+  }
+  
+  // Check for comparison
+  if (/এটা নাকি|which|কোনটা|compare|ভালো কোনটা/.test(lowerText)) {
+    return "comparison_request";
+  }
+  
+  // Check for urgency
+  if (/urgent|জরুরি|তাড়াতাড়ি|quickly|fast|এখনই|now/.test(lowerText)) {
+    return "urgent_request";
+  }
+  
+  // Check if just providing info
+  if (text.length > 5 && !/\?|কি|কী|কত|কেন|কোথায়|কখন/.test(text)) {
+    return "providing_info";
+  }
+  
+  return "general";
+}
+
 // Detect sentiment
 function detectSentiment(text: string): "positive" | "neutral" | "negative" {
   const lowerText = text.toLowerCase();
@@ -675,18 +745,171 @@ function calculateFakeOrderScore(conversation: ConversationState, newMessage: st
   return Math.min(score, 100);
 }
 
+// *** ANALYZE CONVERSATION HISTORY FOR CONTEXT ***
+function analyzeConversationHistory(messageHistory: any[]): {
+  summary: string;
+  topicsDiscussed: string[];
+  customerMood: string;
+  previousProducts: string[];
+  hasOrdered: boolean;
+  lastInteractionDays: number;
+  customerPreferences: string;
+  importantPoints: string[];
+} {
+  const topics: string[] = [];
+  const products: string[] = [];
+  let hasOrdered = false;
+  let customerMood = "neutral";
+  const importantPoints: string[] = [];
+  let positiveCount = 0;
+  let negativeCount = 0;
+  
+  for (const msg of messageHistory) {
+    if (msg.role === "user") {
+      const content = msg.content?.toLowerCase() || "";
+      
+      // Track topics
+      if (/দাম|price|কত/.test(content)) topics.push("price_inquiry");
+      if (/order|অর্ডার|কিনব|নিব/.test(content)) topics.push("order_intent");
+      if (/details|বিস্তারিত/.test(content)) topics.push("product_inquiry");
+      if (/delivery|ডেলিভারি/.test(content)) topics.push("delivery_inquiry");
+      if (/payment|পেমেন্ট/.test(content)) topics.push("payment_inquiry");
+      if (/return|রিটার্ন|বদলে/.test(content)) topics.push("return_inquiry");
+      if (/problem|সমস্যা|complaint/.test(content)) topics.push("complaint");
+      
+      // Track sentiment
+      if (msg.sentiment === "positive") positiveCount++;
+      if (msg.sentiment === "negative") negativeCount++;
+      
+      // Track product mentions
+      if (msg.productContext?.name) {
+        products.push(msg.productContext.name);
+      }
+      
+      // Check for order completion
+      if (msg.intent === "confirmation" || /confirmed|order placed|অর্ডার হয়েছে/.test(content)) {
+        hasOrdered = true;
+      }
+      
+      // Extract important points customer mentioned
+      if (/urgent|জরুরি|তাড়াতাড়ি/.test(content)) {
+        importantPoints.push("Customer wants quick response/delivery");
+      }
+      if (/discount|ছাড়|কমাও/.test(content)) {
+        importantPoints.push("Customer asked about discounts");
+      }
+      if (/quality|কোয়ালিটি|মান/.test(content)) {
+        importantPoints.push("Customer is concerned about quality");
+      }
+    }
+  }
+  
+  // Determine overall mood
+  if (positiveCount > negativeCount + 1) customerMood = "happy";
+  else if (negativeCount > positiveCount) customerMood = "frustrated";
+  else customerMood = "neutral";
+  
+  // Calculate last interaction
+  const lastMsg = messageHistory[messageHistory.length - 1];
+  let lastInteractionDays = 0;
+  if (lastMsg?.timestamp) {
+    const lastDate = new Date(lastMsg.timestamp);
+    const now = new Date();
+    lastInteractionDays = Math.floor((now.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+  }
+  
+  // Build summary
+  let summary = "";
+  if (messageHistory.length > 0) {
+    summary = `This customer has sent ${messageHistory.length} messages. `;
+    if (topics.includes("order_intent") || hasOrdered) {
+      summary += "They have shown interest in ordering. ";
+    }
+    if (topics.includes("price_inquiry")) {
+      summary += "They asked about prices. ";
+    }
+    if (customerMood === "frustrated") {
+      summary += "They seem unhappy - be extra helpful! ";
+    }
+    if (lastInteractionDays > 1) {
+      summary += `Last message was ${lastInteractionDays} days ago - welcome them back! `;
+    }
+  }
+  
+  return {
+    summary,
+    topicsDiscussed: [...new Set(topics)],
+    customerMood,
+    previousProducts: [...new Set(products)],
+    hasOrdered,
+    lastInteractionDays,
+    customerPreferences: topics.includes("discount") ? "price-conscious" : "quality-focused",
+    importantPoints,
+  };
+}
+
+// *** BUILD CONVERSATION CONTEXT FOR AI ***
+function buildConversationContext(messageHistory: any[], senderName?: string): string {
+  if (!messageHistory || messageHistory.length === 0) {
+    return "এটি এই কাস্টমারের সাথে প্রথম কথোপকথন।";
+  }
+  
+  const analysis = analyzeConversationHistory(messageHistory);
+  
+  let context = `## 📋 পূর্ববর্তী কথোপকথনের সারসংক্ষেপ (CONVERSATION HISTORY)
+${senderName ? `Customer Name: ${senderName}` : ""}
+Total Messages: ${messageHistory.length}
+Customer Mood: ${analysis.customerMood === "happy" ? "খুশি 😊" : analysis.customerMood === "frustrated" ? "হতাশ 😔" : "স্বাভাবিক"}
+${analysis.lastInteractionDays > 0 ? `Last Interaction: ${analysis.lastInteractionDays} দিন আগে` : ""}
+
+### যে বিষয়গুলো আলোচনা হয়েছে:
+${analysis.topicsDiscussed.length > 0 ? analysis.topicsDiscussed.map(t => `- ${t}`).join("\n") : "- কোনো নির্দিষ্ট বিষয় নেই"}
+
+${analysis.previousProducts.length > 0 ? `### আগে যে প্রোডাক্টগুলো নিয়ে কথা হয়েছে:\n${analysis.previousProducts.map(p => `- ${p}`).join("\n")}` : ""}
+
+${analysis.importantPoints.length > 0 ? `### ⚠️ গুরুত্বপূর্ণ পয়েন্ট:\n${analysis.importantPoints.map(p => `- ${p}`).join("\n")}` : ""}
+
+### সাম্প্রতিক কথোপকথন (Last 5 messages):
+`;
+  
+  // Add last 5 messages as context
+  const recentMessages = messageHistory.slice(-5);
+  for (const msg of recentMessages) {
+    const role = msg.role === "user" ? "🧑 Customer" : "🤖 AI";
+    const shortContent = msg.content?.length > 100 ? msg.content.substring(0, 100) + "..." : msg.content;
+    context += `${role}: ${shortContent}\n`;
+  }
+  
+  return context;
+}
+
 // Build system prompt
 function buildSystemPrompt(
   pageMemory: PageMemory, 
   conversationState: ConversationState,
   productContext?: ProductContext,
-  postContext?: PostContext
+  postContext?: PostContext,
+  senderName?: string
 ): string {
   const tone = pageMemory.preferred_tone === "professional" ? "পেশাদার" : "বন্ধুত্বপূর্ণ";
   const language = pageMemory.detected_language === "english" ? "English" : 
                    pageMemory.detected_language === "bangla" ? "বাংলা" : "বাংলা এবং English মিশিয়ে (Banglish)";
   
-  let prompt = `You are an AI sales agent for a business. You must behave like a polite, trained human sales representative.
+  // Build conversation context
+  const conversationContext = buildConversationContext(conversationState.message_history || [], senderName);
+  
+  let prompt = `You are an AI sales agent for a business. You must behave like a polite, trained human sales representative who REMEMBERS all previous conversations.
+
+## 🧠 CRITICAL: MEMORY & CONTEXT AWARENESS
+- You MUST remember what the customer said before
+- Reference their previous messages when relevant
+- If they asked about a product before, remember it
+- If they expressed concerns, address them
+- Use their name if known: ${senderName || "Not provided"}
+- Be consistent with what you said before
+- If customer returns after some time, welcome them back warmly
+
+${conversationContext}
 
 ## Business Context
 ${pageMemory.business_description || "General e-commerce business"}
@@ -719,8 +942,9 @@ ${pageMemory.products_summary || "Various products available"}`;
 - Tone: ${tone}
 - Language: ${language}
 - Be patient and helpful
+- Reference previous conversations naturally
 
-## CRITICAL RULES`;
+## 🎯 SMART RESPONSE RULES`;
 
   if (pageMemory.ai_behavior_rules?.neverHallucinate) {
     prompt += `
@@ -738,16 +962,30 @@ ${pageMemory.products_summary || "Various products available"}`;
   
   if (conversationState.current_product_name) {
     prompt += `
-- Product: ${conversationState.current_product_name} (৳${conversationState.current_product_price})`;
+- Active Product Discussion: ${conversationState.current_product_name} (৳${conversationState.current_product_price})`;
+  }
+  
+  if (conversationState.collected_name) {
+    prompt += `
+- Customer Name Collected: ${conversationState.collected_name}`;
+  }
+  
+  if (conversationState.collected_phone) {
+    prompt += `
+- Customer Phone Collected: ${conversationState.collected_phone}`;
   }
 
   prompt += `
 
 ## Response Guidelines
-- Keep responses concise (2-4 sentences)
+- Keep responses concise but personalized (2-4 sentences)
+- Use customer's name when known
+- Reference what they said before if relevant
 - Use appropriate emojis sparingly
 - Be specific about prices when known
-- Never be pushy`;
+- Show that you remember their preferences
+- Never be pushy
+- If they're returning after a while, acknowledge it warmly`;
 
   return prompt;
 }
@@ -1013,7 +1251,11 @@ serve(async (req) => {
 
     console.log(`[AI Agent] Intent: ${intent}, Sentiment: ${sentiment}`);
 
-    // Update message history
+    // *** DETECT CUSTOMER RESPONSE INTENT for smarter replies ***
+    const customerResponseIntent = detectCustomerResponseIntent(messageText, conversation.message_history || []);
+    console.log(`[AI Agent] Customer Response Intent: ${customerResponseIntent}`);
+
+    // Update message history with rich context
     const messageHistory = conversation.message_history || [];
     messageHistory.push({
       role: "user",
@@ -1022,6 +1264,10 @@ serve(async (req) => {
       intent,
       sentiment,
       messageType,
+      customerResponseIntent,
+      postContext: postContext ? { text: postContext.post_text } : null,
+      productContext: productContext ? { name: productContext.name, price: productContext.price } : null,
+      isReplyToPageComment,
     });
 
     // Determine next state
@@ -1058,14 +1304,38 @@ serve(async (req) => {
       })
       .eq("id", conversation.id);
 
-    // Build AI prompt and get response
-    const updatedConversation = { ...conversation, conversation_state: nextState, ...collectedData };
-    const systemPrompt = buildSystemPrompt(pageMemory, updatedConversation, productContext || undefined, postContext || undefined);
+    // Build AI prompt and get response with full context
+    const updatedConversation = { 
+      ...conversation, 
+      conversation_state: nextState, 
+      message_history: messageHistory, // Include updated history
+      ...collectedData 
+    };
+    const systemPrompt = buildSystemPrompt(
+      pageMemory, 
+      updatedConversation, 
+      productContext || undefined, 
+      postContext || undefined,
+      senderName || conversation.sender_name // Pass sender name
+    );
     
-    const aiMessages = messageHistory.slice(-10).map((msg: any) => ({
-      role: msg.role,
-      content: msg.content,
-    }));
+    // Build rich AI messages with context
+    const aiMessages = messageHistory.slice(-10).map((msg: any) => {
+      let content = msg.content;
+      
+      // Add context hints to user messages for better understanding
+      if (msg.role === "user" && msg.customerResponseIntent) {
+        const intentHint = msg.customerResponseIntent !== "general" 
+          ? ` [Customer intent: ${msg.customerResponseIntent}]` 
+          : "";
+        content = content + intentHint;
+      }
+      
+      return {
+        role: msg.role,
+        content: content,
+      };
+    });
 
     const aiReply = await callAI(systemPrompt, aiMessages);
 
