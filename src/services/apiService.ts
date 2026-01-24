@@ -1010,20 +1010,84 @@ export async function fetchPageMemory(pageId?: string): Promise<PageMemory | Pag
   }
 }
 
-export async function savePageMemory(memory: Partial<PageMemory>): Promise<PageMemory | null> {
-  try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/page-memory`, {
-      method: "POST",
-      headers: getAuthHeaders(),
-      body: JSON.stringify(memory),
-    });
-    if (!response.ok) return null;
-    const data = await response.json();
-    return data.memory;
-  } catch (error) {
-    console.error("Failed to save page memory:", error);
-    return null;
+export async function savePageMemory(memory: Partial<PageMemory>, retries = 3): Promise<PageMemory | null> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+  
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      console.log(`[savePageMemory] Attempt ${attempt}/${retries}`);
+      
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/page-memory`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify(memory),
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        console.error(`[savePageMemory] Response not OK: ${response.status}`);
+        if (attempt === retries) return null;
+        await new Promise(r => setTimeout(r, 1000 * attempt)); // Wait before retry
+        continue;
+      }
+      
+      const data = await response.json();
+      console.log("[savePageMemory] Success:", data);
+      return data.memory;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      console.error(`[savePageMemory] Attempt ${attempt} failed:`, error);
+      
+      if (attempt === retries) {
+        // On final failure, try to save directly via supabase client as fallback
+        console.log("[savePageMemory] Trying direct database fallback...");
+        try {
+          const { supabase } = await import("@/integrations/supabase/client");
+          
+          const { data: existingMemory } = await supabase
+            .from("page_memory")
+            .select("id, user_id")
+            .eq("page_id", memory.page_id || "")
+            .maybeSingle();
+          
+          if (existingMemory) {
+            const { data, error } = await supabase
+              .from("page_memory")
+              .update({
+                page_name: memory.page_name,
+                business_description: memory.business_description,
+                products_summary: memory.products_summary,
+                detected_language: memory.detected_language,
+                preferred_tone: memory.preferred_tone,
+                automation_settings: memory.automation_settings as Record<string, boolean>,
+                selling_rules: memory.selling_rules,
+                ai_behavior_rules: memory.ai_behavior_rules,
+                payment_rules: memory.payment_rules,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", existingMemory.id)
+              .select()
+              .single();
+            
+            if (!error && data) {
+              console.log("[savePageMemory] Direct fallback success");
+              return data as unknown as PageMemory;
+            }
+          }
+        } catch (fallbackError) {
+          console.error("[savePageMemory] Fallback also failed:", fallbackError);
+        }
+        return null;
+      }
+      
+      await new Promise(r => setTimeout(r, 1000 * attempt)); // Wait before retry
+    }
   }
+  
+  return null;
 }
 
 export async function subscribePageToWebhook(pageId: string, subscribe: boolean = true): Promise<boolean> {
