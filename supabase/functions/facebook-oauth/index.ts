@@ -1,7 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { verify } from "https://deno.land/x/djwt@v3.0.2/mod.ts";
-import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -19,41 +17,28 @@ const facebookRedirectUri = Deno.env.get("FACEBOOK_REDIRECT_URI");
 // Facebook Graph API version
 const FB_API_VERSION = "v21.0";
 
-/**
- * FACEBOOK_SCOPES - Valid permissions for Page management
- * 
- * These scopes are required for automation features:
- * - pages_show_list: List pages the user manages (REQUIRED, no dependencies)
- * - pages_read_engagement: Read page content, followers, metadata (depends on pages_show_list)
- * - pages_manage_posts: Create/edit/delete posts (depends on pages_read_engagement, pages_show_list)
- * - pages_manage_metadata: Subscribe to webhooks, update settings (depends on pages_show_list)
- * - pages_messaging: Manage Messenger conversations (depends on pages_manage_metadata, pages_show_list)
- * 
- * IMPORTANT: These permissions require App Review for production use.
- * In development mode, only test users (app admins/developers/testers) can grant them.
- * 
- * Reference: https://developers.facebook.com/docs/permissions
- */
 const FACEBOOK_SCOPES = [
-  // Core permission - required to list pages
   "pages_show_list",
-  // Read page content and metadata
   "pages_read_engagement",
-  // Create and manage posts (for posting automation)
   "pages_manage_posts",
-  // Manage page settings and webhooks
   "pages_manage_metadata",
-  // Messenger inbox access (for DM automation)
   "pages_messaging",
-  // Read user content and comments on page
   "pages_read_user_content",
-  // Manage comments (reply, delete, hide)
   "pages_manage_engagement",
-  // Business management for accessing all pages
   "business_management",
 ];
 
-// Secure AES-GCM encryption with PBKDF2 key derivation (v2 format)
+// Simple base64 encode for ArrayBuffer
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+// Secure AES-GCM encryption
 async function encryptToken(token: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(token);
@@ -89,83 +74,107 @@ async function encryptToken(token: string): Promise<string> {
     data
   );
   
-  return `v2:${base64Encode(salt.buffer)}:${base64Encode(iv.buffer)}:${base64Encode(encrypted)}`;
+  return `v2:${arrayBufferToBase64(salt.buffer)}:${arrayBufferToBase64(iv.buffer)}:${arrayBufferToBase64(encrypted)}`;
 }
 
-async function verifyToken(authHeader: string | null): Promise<string | null> {
+// JWT verification without external dependency
+async function verifyJWT(authHeader: string | null): Promise<string | null> {
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return null;
   }
   
   const token = authHeader.substring(7);
   try {
+    const parts = token.split(".");
+    if (parts.length !== 3) {
+      return null;
+    }
+    
+    // Decode payload
+    const payloadBase64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const payloadJson = atob(payloadBase64);
+    const payload = JSON.parse(payloadJson);
+    
+    // Check expiration
+    if (payload.exp && payload.exp * 1000 < Date.now()) {
+      console.log("[JWT] Token expired");
+      return null;
+    }
+    
+    // Verify signature using crypto.subtle
+    const encoder = new TextEncoder();
     const key = await crypto.subtle.importKey(
       "raw",
-      new TextEncoder().encode(jwtSecret),
+      encoder.encode(jwtSecret),
       { name: "HMAC", hash: "SHA-256" },
       false,
-      ["sign", "verify"]
+      ["verify"]
     );
-    const payload = await verify(token, key);
+    
+    const signatureInput = encoder.encode(parts[0] + "." + parts[1]);
+    const signatureBase64 = parts[2].replace(/-/g, "+").replace(/_/g, "/");
+    
+    // Pad base64 if needed
+    const padding = (4 - (signatureBase64.length % 4)) % 4;
+    const paddedSignature = signatureBase64 + "=".repeat(padding);
+    
+    const signatureBytes = Uint8Array.from(atob(paddedSignature), c => c.charCodeAt(0));
+    
+    const valid = await crypto.subtle.verify("HMAC", key, signatureBytes, signatureInput);
+    
+    if (!valid) {
+      console.log("[JWT] Invalid signature");
+      return null;
+    }
+    
     return payload.sub as string;
   } catch (error) {
-    console.error("Token verification failed:", error);
+    console.error("[JWT] Verification failed:", error);
     return null;
   }
 }
 
 function getAppBaseUrl(): string {
-  // Always redirect to the published app URL
-  // The FACEBOOK_REDIRECT_URI is the edge function URL, not the app URL
   const appUrl = Deno.env.get("APP_BASE_URL");
   if (appUrl) {
-    return appUrl.replace(/\/$/, ""); // Remove trailing slash if any
+    return appUrl.replace(/\/$/, "");
   }
-  // Fallback to hardcoded production URL
   return "https://autofloy4.lovable.app";
 }
 
-// Parse Facebook error for user-friendly messages
-function parseFacebookError(error: any): { code: string; message: string } {
-  if (!error) {
+function parseFacebookError(error: unknown): { code: string; message: string } {
+  if (!error || typeof error !== "object") {
     return { code: "unknown_error", message: "An unknown error occurred" };
   }
 
-  const fbError = error.error || error;
-  const code = fbError.code?.toString() || "unknown";
-  const type = fbError.type || "";
-  const message = fbError.message || "Facebook returned an error";
-  const subcode = fbError.error_subcode?.toString() || "";
+  const err = error as Record<string, unknown>;
+  const fbError = (err.error || err) as Record<string, unknown>;
+  const code = String(fbError.code || "unknown");
+  const type = String(fbError.type || "");
+  const message = String(fbError.message || "Facebook returned an error");
+  const subcode = String(fbError.error_subcode || "");
 
-  // Common Facebook error codes
   if (code === "190" || type === "OAuthException") {
-    if (subcode === "460") {
-      return { code: "password_changed", message: "The user changed their password. Please reconnect." };
-    }
-    if (subcode === "463") {
-      return { code: "token_expired", message: "The access token has expired. Please reconnect." };
-    }
-    if (subcode === "467") {
-      return { code: "token_invalid", message: "The access token is invalid. Please reconnect." };
-    }
+    if (subcode === "460") return { code: "password_changed", message: "The user changed their password. Please reconnect." };
+    if (subcode === "463") return { code: "token_expired", message: "The access token has expired. Please reconnect." };
+    if (subcode === "467") return { code: "token_invalid", message: "The access token is invalid. Please reconnect." };
     return { code: "auth_error", message: "Authentication failed. Please try again." };
   }
 
   if (code === "10" || message.toLowerCase().includes("permission")) {
-    return { 
-      code: "permission_denied", 
-      message: "Required permissions were not granted. Please allow all requested permissions." 
-    };
+    return { code: "permission_denied", message: "Required permissions were not granted." };
   }
 
   if (code === "4" || code === "17") {
-    return { code: "rate_limit", message: "Too many requests. Please wait a moment and try again." };
+    return { code: "rate_limit", message: "Too many requests. Please wait and try again." };
   }
 
   return { code: `fb_error_${code}`, message };
 }
 
 serve(async (req) => {
+  console.log(`[Facebook OAuth] Request: ${req.method} ${req.url}`);
+  
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -173,17 +182,17 @@ serve(async (req) => {
   const url = new URL(req.url);
   let action = url.searchParams.get("action");
   
-  // Auto-detect callback if 'code' parameter exists (Facebook redirect)
+  // Auto-detect callback if 'code' parameter exists
   if (!action && url.searchParams.has("code")) {
     action = "callback";
-    console.log("[Facebook OAuth] Auto-detected callback from Facebook redirect");
+    console.log("[Facebook OAuth] Auto-detected callback");
   }
 
   console.log(`[Facebook OAuth] action=${action}`);
 
-  // GET oauth/start - Returns the Facebook OAuth URL
+  // GET ?action=start - Returns OAuth URL
   if (req.method === "GET" && action === "start") {
-    const userId = await verifyToken(req.headers.get("Authorization"));
+    const userId = await verifyJWT(req.headers.get("Authorization"));
     if (!userId) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
@@ -192,13 +201,9 @@ serve(async (req) => {
     }
 
     if (!facebookAppId || !facebookAppSecret || !facebookRedirectUri) {
-      console.error("[Facebook OAuth] Missing configuration:", {
-        hasAppId: !!facebookAppId,
-        hasAppSecret: !!facebookAppSecret,
-        hasRedirectUri: !!facebookRedirectUri,
-      });
+      console.error("[Facebook OAuth] Missing config");
       return new Response(JSON.stringify({ 
-        error: "Facebook OAuth is not configured. Please add FACEBOOK_APP_ID, FACEBOOK_APP_SECRET, and FACEBOOK_REDIRECT_URI secrets.",
+        error: "Facebook OAuth not configured",
         configured: false 
       }), {
         status: 503,
@@ -206,14 +211,12 @@ serve(async (req) => {
       });
     }
 
-    // Generate CSRF state token with user ID
     const state = btoa(JSON.stringify({ 
       userId, 
       timestamp: Date.now(),
       nonce: crypto.randomUUID(),
     }));
     
-    // Join scopes with comma (Facebook's expected format)
     const scopeString = FACEBOOK_SCOPES.join(",");
 
     const oauthUrl = new URL(`https://www.facebook.com/${FB_API_VERSION}/dialog/oauth`);
@@ -223,8 +226,7 @@ serve(async (req) => {
     oauthUrl.searchParams.set("state", state);
     oauthUrl.searchParams.set("response_type", "code");
 
-    console.log(`[Facebook OAuth] Generated OAuth URL for user ${userId.substring(0, 8)}...`);
-    console.log(`[Facebook OAuth] Requested scopes: ${scopeString}`);
+    console.log(`[Facebook OAuth] Generated URL for user ${userId.substring(0, 8)}...`);
 
     return new Response(JSON.stringify({ 
       url: oauthUrl.toString(), 
@@ -236,48 +238,34 @@ serve(async (req) => {
     });
   }
 
-  // GET oauth/callback - Handles the OAuth callback from Facebook
+  // GET ?action=callback - Handle Facebook redirect
   if (req.method === "GET" && action === "callback") {
     const code = url.searchParams.get("code");
     const state = url.searchParams.get("state");
     const error = url.searchParams.get("error");
-    const errorReason = url.searchParams.get("error_reason");
     const errorDescription = url.searchParams.get("error_description");
 
     const appBaseUrl = getAppBaseUrl();
     
     console.log(`[Facebook OAuth Callback] code=${!!code}, state=${!!state}, error=${error}`);
 
-    // Handle OAuth errors from Facebook
     if (error) {
-      console.error(`[Facebook OAuth] Error from Facebook: ${error} - ${errorReason} - ${errorDescription}`);
-      
-      let userMessage = errorDescription || "Facebook connection was cancelled or denied.";
-      let errorCode = error;
-
-      if (error === "access_denied") {
-        userMessage = "You cancelled the Facebook connection or denied the required permissions.";
-        errorCode = "access_denied";
-      }
-
+      console.error(`[Facebook OAuth] Error: ${error} - ${errorDescription}`);
+      const userMessage = errorDescription || "Connection was cancelled.";
       return new Response(null, {
         status: 302,
-        headers: { 
-          Location: `${appBaseUrl}/connect-facebook?error=${encodeURIComponent(errorCode)}&message=${encodeURIComponent(userMessage)}` 
-        },
+        headers: { Location: `${appBaseUrl}/connect-facebook?error=${encodeURIComponent(error)}&message=${encodeURIComponent(userMessage)}` },
       });
     }
 
     if (!code || !state) {
-      console.error("[Facebook OAuth] Missing code or state in callback");
       return new Response(null, {
         status: 302,
-        headers: { Location: `${appBaseUrl}/connect-facebook?error=missing_params&message=${encodeURIComponent("Missing authorization code or state. Please try again.")}` },
+        headers: { Location: `${appBaseUrl}/connect-facebook?error=missing_params&message=${encodeURIComponent("Missing code or state.")}` },
       });
     }
 
     try {
-      // Decode and validate state
       let stateData;
       try {
         stateData = JSON.parse(atob(state));
@@ -286,24 +274,17 @@ serve(async (req) => {
       }
 
       const userId = stateData.userId;
-      if (!userId) {
-        throw new Error("Invalid state: missing userId");
-      }
+      if (!userId) throw new Error("Missing userId in state");
 
-      // Check state timestamp (expire after 10 minutes)
       if (stateData.timestamp && Date.now() - stateData.timestamp > 10 * 60 * 1000) {
-        throw new Error("Authorization session expired. Please try again.");
+        throw new Error("Session expired");
       }
 
-      console.log(`[Facebook OAuth] Processing callback for user ${userId.substring(0, 8)}...`);
+      console.log(`[Facebook OAuth] Processing for user ${userId.substring(0, 8)}...`);
 
       const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-      // Variables for page tracking
-      let connectedCount = 0;
-      const connectedPageNames: string[] = [];
-
-      // Exchange code for user access token
+      // Exchange code for token
       const tokenUrl = new URL(`https://graph.facebook.com/${FB_API_VERSION}/oauth/access_token`);
       tokenUrl.searchParams.set("client_id", facebookAppId!);
       tokenUrl.searchParams.set("redirect_uri", facebookRedirectUri!);
@@ -314,16 +295,14 @@ serve(async (req) => {
       const tokenData = await tokenResponse.json();
 
       if (tokenData.error) {
-        console.error("[Facebook OAuth] Token exchange error:", tokenData.error);
-        const parsed = parseFacebookError(tokenData);
-        throw new Error(parsed.message);
+        console.error("[Facebook OAuth] Token error:", tokenData.error);
+        throw new Error(parseFacebookError(tokenData).message);
       }
 
       const userAccessToken = tokenData.access_token;
-      console.log("[Facebook OAuth] Successfully exchanged code for user access token");
+      console.log("[Facebook OAuth] Got access token");
 
-      // ========== CHECK GRANTED PERMISSIONS ==========
-      // Verify that user granted all required permissions
+      // Check permissions
       const permissionsUrl = new URL(`https://graph.facebook.com/${FB_API_VERSION}/me/permissions`);
       permissionsUrl.searchParams.set("access_token", userAccessToken);
 
@@ -331,190 +310,140 @@ serve(async (req) => {
       const permissionsData = await permissionsResponse.json();
 
       if (permissionsData.error) {
-        console.error("[Facebook OAuth] Permissions check error:", permissionsData.error);
-        throw new Error("Failed to verify permissions. Please try again.");
+        throw new Error("Failed to verify permissions");
       }
 
       const grantedPermissions = (permissionsData.data || [])
         .filter((p: { status: string }) => p.status === "granted")
         .map((p: { permission: string }) => p.permission);
 
-      console.log(`[Facebook OAuth] Granted permissions: ${grantedPermissions.join(", ")}`);
+      console.log(`[Facebook OAuth] Granted: ${grantedPermissions.join(", ")}`);
 
-      // Check which required permissions are missing
       const missingPermissions = FACEBOOK_SCOPES.filter(scope => !grantedPermissions.includes(scope));
 
       if (missingPermissions.length > 0) {
-        console.warn(`[Facebook OAuth] Missing permissions: ${missingPermissions.join(", ")}`);
-        
-        // Redirect to OAuth with auth_type=rerequest to ask for missing permissions
-        const scopeString = FACEBOOK_SCOPES.join(",");
-        const reRequestState = btoa(JSON.stringify({ 
-          userId, 
-          timestamp: Date.now(),
-          nonce: crypto.randomUUID(),
-          rerequest: true,
-        }));
+        console.warn(`[Facebook OAuth] Missing: ${missingPermissions.join(", ")}`);
         
         const reAuthUrl = new URL(`https://www.facebook.com/${FB_API_VERSION}/dialog/oauth`);
         reAuthUrl.searchParams.set("client_id", facebookAppId!);
         reAuthUrl.searchParams.set("redirect_uri", facebookRedirectUri!);
-        reAuthUrl.searchParams.set("scope", scopeString);
-        reAuthUrl.searchParams.set("state", reRequestState);
+        reAuthUrl.searchParams.set("scope", FACEBOOK_SCOPES.join(","));
+        reAuthUrl.searchParams.set("state", btoa(JSON.stringify({ userId, timestamp: Date.now(), nonce: crypto.randomUUID() })));
         reAuthUrl.searchParams.set("response_type", "code");
-        reAuthUrl.searchParams.set("auth_type", "rerequest"); // Force re-request declined permissions
+        reAuthUrl.searchParams.set("auth_type", "rerequest");
 
-        // Show error and redirect to re-authorize
-        const missingList = missingPermissions.map(p => p.replace(/_/g, " ")).join(", ");
-        console.log(`[Facebook OAuth] Redirecting to re-request permissions: ${missingList}`);
-        
         return new Response(null, {
           status: 302,
           headers: { 
-            Location: `${appBaseUrl}/connect-facebook?error=missing_permissions&message=${encodeURIComponent(`Required permissions not granted: ${missingList}. Please reconnect and grant ALL permissions to use automation features.`)}&reauth_url=${encodeURIComponent(reAuthUrl.toString())}` 
+            Location: `${appBaseUrl}/connect-facebook?error=missing_permissions&message=${encodeURIComponent(`Missing permissions: ${missingPermissions.join(", ")}`)}&reauth_url=${encodeURIComponent(reAuthUrl.toString())}` 
           },
         });
       }
 
-      console.log("[Facebook OAuth] All required permissions granted ✓");
-
-      // ========== FETCH PAGES WITH PAGINATION ==========
-      const allPages: any[] = [];
-      let nextUrl: string | null = null;
+      // Fetch pages with pagination
+      const allPages: unknown[] = [];
       
-      // First request
       const pagesUrl = new URL(`https://graph.facebook.com/${FB_API_VERSION}/me/accounts`);
       pagesUrl.searchParams.set("access_token", userAccessToken);
-      pagesUrl.searchParams.set("fields", "id,name,category,fan_count,access_token,tasks,picture{url}");
-      pagesUrl.searchParams.set("limit", "100"); // Get maximum pages per request
+      pagesUrl.searchParams.set("fields", "id,name,category,access_token,picture{url}");
+      pagesUrl.searchParams.set("limit", "100");
 
       let pagesResponse = await fetch(pagesUrl.toString());
       let pagesData = await pagesResponse.json();
 
       if (pagesData.error) {
-        console.error("[Facebook OAuth] Pages fetch error:", pagesData.error);
-        const parsed = parseFacebookError(pagesData);
-        throw new Error(parsed.message);
+        throw new Error(parseFacebookError(pagesData).message);
       }
 
-      // Add first batch
-      if (pagesData.data) {
-        allPages.push(...pagesData.data);
-      }
+      if (pagesData.data) allPages.push(...pagesData.data);
 
-      // Handle pagination - fetch all pages
       while (pagesData.paging?.next) {
-        console.log(`[Facebook OAuth] Fetching next page of results... (current: ${allPages.length} pages)`);
-        const paginationUrl = pagesData.paging.next as string;
-        pagesResponse = await fetch(paginationUrl);
+        console.log(`[Facebook OAuth] Fetching more pages (${allPages.length})`);
+        pagesResponse = await fetch(pagesData.paging.next);
         pagesData = await pagesResponse.json();
-        
-        if (pagesData.error) {
-          console.error("[Facebook OAuth] Pagination fetch error:", pagesData.error);
-          break; // Don't fail entirely, just stop pagination
-        }
-        
-        if (pagesData.data) {
-          allPages.push(...pagesData.data);
-        }
+        if (pagesData.error) break;
+        if (pagesData.data) allPages.push(...pagesData.data);
       }
 
-      const pages = allPages;
-      console.log(`[Facebook OAuth] Found ${pages.length} total pages for user (with pagination)`);
+      console.log(`[Facebook OAuth] Found ${allPages.length} pages`);
 
-      if (pages.length === 0) {
-        console.warn("[Facebook OAuth] No pages found for user");
+      if (allPages.length === 0) {
         return new Response(null, {
           status: 302,
-          headers: { 
-            Location: `${appBaseUrl}/connect-facebook?error=no_pages&message=${encodeURIComponent("No Facebook Pages found. Make sure you have admin access to at least one Facebook Page and granted all permissions.")}` 
-          },
+          headers: { Location: `${appBaseUrl}/connect-facebook?error=no_pages&message=${encodeURIComponent("No pages found.")}` },
         });
       }
 
-      // Store ALL pages with automation disabled - user will enable manually
+      // Store pages
+      let connectedCount = 0;
 
-      // Store ALL pages with is_connected = false (user must enable manually)
-      for (const page of pages) {
+      for (const page of allPages) {
         try {
-          const encryptedToken = await encryptToken(page.access_token);
-          
-          // Store the page with is_connected = FALSE (automation disabled by default)
-          // Extract picture URL from Facebook response
-          const pictureUrl = page.picture?.data?.url || null;
+          const p = page as Record<string, unknown>;
+          const encryptedToken = await encryptToken(p.access_token as string);
+          const pictureData = p.picture as Record<string, unknown> | undefined;
+          const pictureUrl = (pictureData?.data as Record<string, unknown> | undefined)?.url as string | undefined;
 
-          const { data: accountData, error: upsertError } = await supabase.from("connected_accounts").upsert({
+          const { error: upsertError } = await supabase.from("connected_accounts").upsert({
             user_id: userId,
             platform: "facebook",
-            external_id: page.id,
-            name: page.name,
-            category: page.category || null,
+            external_id: p.id,
+            name: p.name,
+            category: p.category || null,
             access_token: "encrypted",
             access_token_encrypted: encryptedToken,
-            is_connected: false, // User must manually enable automation
+            is_connected: false,
             encryption_version: 2,
-            picture_url: pictureUrl, // Store page profile picture
+            picture_url: pictureUrl || null,
           }, {
             onConflict: "user_id,platform,external_id",
-          }).select("id").single();
+          });
 
-          if (upsertError || !accountData) {
-            console.error(`[Facebook OAuth] Failed to store page ${page.id}:`, upsertError);
-            continue;
+          if (!upsertError) {
+            connectedCount++;
+            console.log(`[Facebook OAuth] Stored: ${p.name}`);
           }
-
-          connectedCount++;
-          connectedPageNames.push(page.name);
-          console.log(`[Facebook OAuth] Stored page (disabled): ${page.name} (${page.id})`);
         } catch (pageError) {
-          console.error(`[Facebook OAuth] Error processing page ${page.id}:`, pageError);
+          console.error(`[Facebook OAuth] Error storing page:`, pageError);
         }
       }
 
       if (connectedCount === 0) {
-        throw new Error("Failed to store any Facebook pages. Please try again.");
+        throw new Error("Failed to store pages");
       }
 
-      console.log(`[Facebook OAuth] Stored ${connectedCount}/${pages.length} pages (disabled) for user ${userId.substring(0, 8)}...`);
+      console.log(`[Facebook OAuth] Stored ${connectedCount}/${allPages.length} pages`);
 
-      // Redirect to connect-facebook page with success - user will enable pages there
       return new Response(null, {
         status: 302,
-        headers: { 
-          Location: `${appBaseUrl}/connect-facebook?success=true&pages=${connectedCount}` 
-        },
+        headers: { Location: `${appBaseUrl}/connect-facebook?success=true&pages=${connectedCount}` },
       });
 
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
-      console.error("[Facebook OAuth] Callback error:", errorMessage);
+      const errorMessage = error instanceof Error ? error.message : "An error occurred";
+      console.error("[Facebook OAuth] Error:", errorMessage);
       
       return new Response(null, {
         status: 302,
-        headers: { 
-          Location: `${appBaseUrl}/connect-facebook?error=callback_failed&message=${encodeURIComponent(errorMessage)}` 
-        },
+        headers: { Location: `${appBaseUrl}/connect-facebook?error=callback_failed&message=${encodeURIComponent(errorMessage)}` },
       });
     }
   }
 
-  // Return available scopes (for documentation/debugging)
+  // GET ?action=scopes
   if (req.method === "GET" && action === "scopes") {
     return new Response(JSON.stringify({ 
       scopes: FACEBOOK_SCOPES,
-      description: "These are the Facebook permissions requested by this app.",
-      note: "These permissions require App Review for production use. In development mode, only test users can grant them.",
+      description: "Required Facebook permissions",
     }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 
-  // Handle case when action is missing but no code either
   if (!action) {
     return new Response(JSON.stringify({ 
       error: "Missing action parameter",
-      hint: "Use action=start to begin OAuth, or this endpoint will auto-detect callback when Facebook redirects with 'code' parameter",
       available_actions: ["start", "callback", "scopes"]
     }), {
       status: 400,
@@ -522,9 +451,7 @@ serve(async (req) => {
     });
   }
 
-  return new Response(JSON.stringify({ 
-    error: "Invalid action. Use action=start, action=callback, or action=scopes" 
-  }), {
+  return new Response(JSON.stringify({ error: "Invalid action" }), {
     status: 400,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
