@@ -1238,6 +1238,7 @@ export type Database = {
       page_memory: {
         Row: {
           account_id: string
+          ai_behavior_rules: Json | null
           automation_settings: Json | null
           business_category: string | null
           business_description: string | null
@@ -1249,8 +1250,10 @@ export type Database = {
           id: string
           page_id: string
           page_name: string | null
+          payment_rules: Json | null
           preferred_tone: string | null
           products_summary: string | null
+          selling_rules: Json | null
           updated_at: string
           user_id: string
           webhook_subscribed: boolean | null
@@ -1258,6 +1261,7 @@ export type Database = {
         }
         Insert: {
           account_id: string
+          ai_behavior_rules?: Json | null
           automation_settings?: Json | null
           business_category?: string | null
           business_description?: string | null
@@ -1269,8 +1273,10 @@ export type Database = {
           id?: string
           page_id: string
           page_name?: string | null
+          payment_rules?: Json | null
           preferred_tone?: string | null
           products_summary?: string | null
+          selling_rules?: Json | null
           updated_at?: string
           user_id: string
           webhook_subscribed?: boolean | null
@@ -1278,6 +1284,7 @@ export type Database = {
         }
         Update: {
           account_id?: string
+          ai_behavior_rules?: Json | null
           automation_settings?: Json | null
           business_category?: string | null
           business_description?: string | null
@@ -1289,8 +1296,10 @@ export type Database = {
           id?: string
           page_id?: string
           page_name?: string | null
+          payment_rules?: Json | null
           preferred_tone?: string | null
           products_summary?: string | null
+          selling_rules?: Json | null
           updated_at?: string
           user_id?: string
           webhook_subscribed?: boolean | null
