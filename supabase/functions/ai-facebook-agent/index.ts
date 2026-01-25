@@ -1083,7 +1083,8 @@ function buildSystemPrompt(
   productContext?: ProductContext,
   postContext?: PostContext,
   senderName?: string,
-  allProducts?: ProductContext[]
+  allProducts?: ProductContext[],
+  orderTakingEnabled: boolean = true // New parameter for order taking toggle
 ): string {
   const tone = pageMemory.preferred_tone === "professional" ? "পেশাদার" : "বন্ধুত্বপূর্ণ";
   const language = pageMemory.detected_language === "english" ? "English" : 
@@ -1146,14 +1147,28 @@ ${productCatalog}`;
 - **টোন:** ${tone}
 - **ভাষা:** ${language}
 - ধৈর্য্য ধরে সাহায্য করুন
-- পূর্বের কথোপকথন মনে রাখুন
+- পূর্বের কথোপকথন মনে রাখুন`;
+
+  // Order Collection Flow - ONLY show if order taking is enabled
+  if (orderTakingEnabled) {
+    prompt += `
 
 ## 🛒 ORDER COLLECTION FLOW (Very Important!)
 When customer wants to order, follow this EXACT sequence:
 1. **collecting_name:** "অর্ডার করতে আপনার নাম বলুন"
 2. **collecting_phone:** "আপনার ফোন নম্বর দিন (01XXXXXXXXX)"  
 3. **collecting_address:** "পূর্ণ ঠিকানা দিন (এলাকা, রোড, বাড়ি নম্বর)"
-4. **order_confirmation:** Confirm the order with product name, price, and collected info
+4. **order_confirmation:** Confirm the order with product name, price, and collected info`;
+  } else {
+    prompt += `
+
+## 🚫 ORDER TAKING DISABLED
+- **DO NOT take orders or collect customer information (name, phone, address)**
+- If customer wants to order, politely say: "অর্ডার করতে সরাসরি পেজে মেসেজ দিন অথবা আমাদের নম্বরে কল করুন। আমরা আপনাকে সাহায্য করব! 📞"
+- You can provide product info, prices, and answer questions but CANNOT process orders`;
+  }
+
+  prompt += `
 
 ## 📍 Current Conversation State: ${conversationState.conversation_state}`;
   
@@ -1505,6 +1520,8 @@ serve(async (req) => {
 
     // Check automation settings
     const settings = pageMemory.automation_settings || {};
+    const orderTakingEnabled = settings.orderTaking !== false; // Default true for backwards compat
+    
     if (isComment && !settings.autoCommentReply) {
       return new Response(JSON.stringify({ skip: true, reason: "Comment auto-reply disabled" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -1515,6 +1532,8 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    
+    console.log(`[AI Agent] Settings: orderTaking=${orderTakingEnabled}, autoCommentReply=${settings.autoCommentReply}, autoInboxReply=${settings.autoInboxReply}`);
 
     // Get product context
     let productContext: ProductContext | null = null;
@@ -1634,26 +1653,46 @@ serve(async (req) => {
     
     console.log(`[AI Agent] 💾 Memory: Keeping ${trimmedHistory.length}/${messageHistory.length} messages, Summary: "${customerSummary.substring(0, 100)}..."`);
 
-    // Determine next state
+    // Determine next state (RESPECT orderTaking toggle!)
     let nextState = conversation.conversation_state;
     let collectedData: any = {};
 
-    if (conversation.conversation_state === "collecting_name" && intent !== "cancellation") {
-      collectedData.collected_name = messageText.trim();
-      nextState = "collecting_phone";
-    } else if (conversation.conversation_state === "collecting_phone" && intent !== "cancellation") {
-      const phoneMatch = messageText.match(/(?:\+?88)?01[3-9]\d{8}/);
-      if (phoneMatch) {
-        collectedData.collected_phone = phoneMatch[0];
-        nextState = "collecting_address";
+    // If orderTaking is DISABLED, don't allow order collection flow
+    if (!orderTakingEnabled) {
+      // Reset any order-related states to idle
+      if (["collecting_name", "collecting_phone", "collecting_address", "order_confirmation"].includes(conversation.conversation_state)) {
+        console.log("[AI Agent] ⛔ Order taking disabled, resetting to idle");
+        nextState = "idle";
+      } else if (intent === "order_intent") {
+        // Block new order intents
+        console.log("[AI Agent] ⛔ Order intent detected but order taking is DISABLED");
+        nextState = "product_inquiry"; // Stay in inquiry mode instead of starting order flow
+      } else {
+        nextState = getNextState(conversation.conversation_state, intent, false);
+        // Make sure it doesn't go to order collection
+        if (["collecting_name", "collecting_phone", "collecting_address", "order_confirmation"].includes(nextState)) {
+          nextState = "product_inquiry";
+        }
       }
-    } else if (conversation.conversation_state === "collecting_address" && intent !== "cancellation") {
-      collectedData.collected_address = messageText.trim();
-      nextState = "order_confirmation";
-    } else if (conversation.conversation_state === "order_confirmation" && intent === "confirmation") {
-      nextState = "completed";
     } else {
-      nextState = getNextState(conversation.conversation_state, intent, false);
+      // Normal order flow when orderTaking is enabled
+      if (conversation.conversation_state === "collecting_name" && intent !== "cancellation") {
+        collectedData.collected_name = messageText.trim();
+        nextState = "collecting_phone";
+      } else if (conversation.conversation_state === "collecting_phone" && intent !== "cancellation") {
+        const phoneMatch = messageText.match(/(?:\+?88)?01[3-9]\d{8}/);
+        if (phoneMatch) {
+          collectedData.collected_phone = phoneMatch[0];
+          nextState = "collecting_address";
+        }
+      } else if (conversation.conversation_state === "collecting_address" && intent !== "cancellation") {
+        collectedData.collected_address = messageText.trim();
+        nextState = "order_confirmation";
+      } else if (conversation.conversation_state === "order_confirmation" && intent === "confirmation") {
+        nextState = "completed";
+      } else {
+        nextState = getNextState(conversation.conversation_state, intent, false);
+      }
     }
 
     // *** SMART UPDATE: Save trimmed history + summary ***
@@ -1685,7 +1724,8 @@ serve(async (req) => {
       productContext || undefined, 
       postContext || undefined,
       senderName || conversation.sender_name,
-      allProducts // Pass all products for AI knowledge
+      allProducts, // Pass all products for AI knowledge
+      orderTakingEnabled // Pass order taking toggle
     );
     
     // Build rich AI messages with context
