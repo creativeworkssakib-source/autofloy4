@@ -142,7 +142,7 @@ const AutomationSimulator = ({
     comment: "e.g., 'এই প্রোডাক্টের দাম কত?' or 'Is this available?'",
     inbox: "e.g., 'I want to order this product' or 'ভাই এটা নিব'",
     image: "📷 AI will analyze the image using Vision API and respond in Bengali",
-    voice: "🎤 Voice messages will be acknowledged - AI will ask customer to type their request",
+    voice: "🎤 AI will transcribe & understand voice messages using Gemini AI",
     video: "🎬 AI will analyze video content using Vision API and respond helpfully",
   };
 
