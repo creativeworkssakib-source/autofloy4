@@ -109,21 +109,6 @@ export async function deleteResource(resource: string, id: string): Promise<void
 
 // ============ TYPE DEFINITIONS ============
 
-export interface CMSPage {
-  id: string;
-  slug: string;
-  title: string;
-  title_bn?: string;
-  content?: string;
-  content_bn?: string;
-  meta_title?: string;
-  meta_description?: string;
-  og_image_url?: string;
-  is_published: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
 export interface BlogPost {
   id: string;
   slug: string;
@@ -221,22 +206,6 @@ export interface EmailTemplate {
 }
 
 // ============ SPECIFIC RESOURCE FUNCTIONS ============
-
-// CMS Pages
-export const fetchCMSPages = (options?: { page?: number; limit?: number; search?: string }) =>
-  fetchResource<CMSPage[]>('cms_pages', options);
-
-export const fetchCMSPage = (id: string) =>
-  fetchResource<CMSPage>('cms_pages', { id });
-
-export const createCMSPage = (data: Partial<CMSPage>) =>
-  createResource<CMSPage>('cms_pages', data);
-
-export const updateCMSPage = (id: string, data: Partial<CMSPage>) =>
-  updateResource<CMSPage>('cms_pages', id, data);
-
-export const deleteCMSPage = (id: string) =>
-  deleteResource('cms_pages', id);
 
 // Blog Posts
 export const fetchBlogPosts = (options?: { page?: number; limit?: number; search?: string }) =>
