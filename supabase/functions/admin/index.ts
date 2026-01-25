@@ -958,24 +958,23 @@ Deno.serve(async (req) => {
         );
       }
 
-      // Delete user (cascading will handle related records)
-      const { error } = await supabase
-        .from("users")
-        .delete()
-        .eq("id", userId);
+      // Use the delete_user_completely function to cascade delete all related data
+      const { error } = await supabase.rpc("delete_user_completely", {
+        target_user_id: userId,
+      });
 
       if (error) {
         console.error("[Admin] Delete user error:", error);
         return new Response(
-          JSON.stringify({ error: "Failed to delete user" }),
+          JSON.stringify({ error: "Failed to delete user: " + error.message }),
           { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
-      console.log(`[Admin] User ${authResult.userId} deleted user ${userId}`);
+      console.log(`[Admin] User ${authResult.userId} permanently deleted user ${userId} and all related data`);
 
       return new Response(
-        JSON.stringify({ success: true, message: "User deleted" }),
+        JSON.stringify({ success: true, message: "User and all related data deleted" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
