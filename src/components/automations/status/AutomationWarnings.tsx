@@ -60,7 +60,7 @@ const AutomationWarnings = ({
       description: "AI cannot understand your business without a description",
       icon: Building2,
       actionLabel: "Add Description",
-      actionPath: "/dashboard/facebook-settings",
+      actionPath: "/dashboard/automations",
     });
   }
 
@@ -84,7 +84,7 @@ const AutomationWarnings = ({
       description: "Enable at least one automation feature to start AI replies",
       icon: ToggleRight,
       actionLabel: "Enable Automation",
-      actionPath: "/dashboard/facebook-settings",
+      actionPath: "/dashboard/automations",
     });
   }
 

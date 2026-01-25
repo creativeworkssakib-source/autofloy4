@@ -346,7 +346,7 @@ const AutomationStatus = () => {
                         variant="outline"
                         size="sm"
                         className="gap-2"
-                        onClick={() => navigate(`/dashboard/facebook-settings/${pageStatusData.page.external_id}/${pageStatusData.page.id}`)}
+                        onClick={() => navigate(`/dashboard/automations`)}
                       >
                         <Settings className="h-4 w-4" />
                         Settings
@@ -417,12 +417,7 @@ const AutomationStatus = () => {
                     hasProducts={productCount > 0}
                     hasAutomationsEnabled={checklistStatus.hasAutomationsEnabled}
                     onNavigate={(path) => {
-                      // Handle relative paths for page settings
-                      if (path.includes("facebook-settings") && pageStatusData) {
-                        navigate(`/dashboard/facebook-settings/${pageStatusData.page.external_id}/${pageStatusData.page.id}`);
-                      } else {
-                        navigate(path);
-                      }
+                      navigate(path);
                     }}
                   />
                 </motion.div>
@@ -442,8 +437,8 @@ const AutomationStatus = () => {
                           navigate("/connect-facebook");
                         } else if (itemId === "page_selected") {
                           navigate("/connect-facebook");
-                        } else if (pageStatusData) {
-                          navigate(`/dashboard/facebook-settings/${pageStatusData.page.external_id}/${pageStatusData.page.id}`);
+                        } else {
+                          navigate(`/dashboard/automations`);
                         }
                       }}
                     />
