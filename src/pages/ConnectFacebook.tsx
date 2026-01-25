@@ -137,21 +137,18 @@ const ConnectFacebook = () => {
         const isIframe = window.top && window.top !== window.self;
         const isMobile = isMobileDevice();
         
-        // On mobile or iframe, use window.open to avoid redirect issues
-        // Mobile browsers often block or have issues with direct location.href for OAuth
-        if (isIframe || isMobile) {
-          // For mobile, use _self to stay in same tab (avoids popup blocker)
-          const target = isMobile ? '_self' : '_blank';
-          const newWindow = window.open(result.url, target);
-          
-          // If popup was blocked on mobile, try direct navigation
-          if (!newWindow && isMobile) {
-            window.location.href = result.url;
-          }
-          
+        // Mobile: ALWAYS use direct navigation - window.open gets popup blocked
+        if (isMobile) {
+          window.location.href = result.url;
+          return;
+        }
+        
+        // Iframe (desktop preview): open in new tab
+        if (isIframe) {
+          window.open(result.url, '_blank');
           setTimeout(() => setIsConnecting(false), 2000);
         } else {
-          // Desktop: direct navigation works best
+          // Desktop browser: direct navigation
           window.location.href = result.url;
         }
       } else {
