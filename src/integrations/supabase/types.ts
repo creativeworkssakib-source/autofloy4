@@ -4523,10 +4523,12 @@ export type Database = {
     }
     Functions: {
       can_email_use_trial: { Args: { p_email: string }; Returns: Json }
-      delete_user_completely: {
-        Args: { p_preserve_email_history?: boolean; p_user_id: string }
-        Returns: Json
-      }
+      delete_user_completely:
+        | {
+            Args: { p_preserve_email_history?: boolean; p_user_id: string }
+            Returns: Json
+          }
+        | { Args: { target_user_id: string }; Returns: undefined }
       generate_invoice_number: { Args: never; Returns: string }
       generate_supplier_code: { Args: { p_user_id: string }; Returns: string }
       get_user_role: {
