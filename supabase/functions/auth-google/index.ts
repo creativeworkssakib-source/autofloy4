@@ -201,21 +201,23 @@ serve(async (req) => {
         const randomPassword = generateRandomPassword();
         const passwordHash = await hashPassword(randomPassword);
         
-        // Calculate trial end date (14 days from now for new users)
+        // Calculate trial end date (24 hours from now for new users - consistent with email signup)
         const now = new Date();
-        const trialEndDate = new Date();
-        trialEndDate.setDate(trialEndDate.getDate() + 14);
+        const trialEndDate = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 24 hours
 
         // Determine subscription based on trial eligibility
         let subscriptionPlan = "trial";
         let isTrialActive = true;
         let userTrialEndDate: string = trialEndDate.toISOString();
+        let subscriptionStartedAt: string = now.toISOString();
+        let subscriptionEndsAt: string = trialEndDate.toISOString();
 
         if (!canUseTrial) {
           // Returning user - expired trial, no free access
           subscriptionPlan = "trial";
           isTrialActive = false;
           userTrialEndDate = now.toISOString(); // Already expired
+          subscriptionEndsAt = now.toISOString(); // Already expired
           console.log(`Returning Google user ${googleUser.email}: expired trial assigned`);
         }
 
@@ -232,6 +234,8 @@ serve(async (req) => {
             is_trial_active: isTrialActive,
             trial_end_date: userTrialEndDate,
             trial_started_at: canUseTrial ? now.toISOString() : null,
+            subscription_started_at: subscriptionStartedAt,
+            subscription_ends_at: subscriptionEndsAt,
             auth_provider: "google",
             google_id: googleUser.id,
             has_used_trial: true,
