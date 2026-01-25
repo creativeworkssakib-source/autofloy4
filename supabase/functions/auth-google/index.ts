@@ -155,6 +155,15 @@ serve(async (req) => {
       // Connect to Supabase
       const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
+      // Check if this email has already used trial (prevent trial abuse)
+      const { data: trialCheck } = await supabase
+        .rpc("can_email_use_trial", { p_email: googleUser.email.toLowerCase() });
+
+      const canUseTrial = trialCheck?.can_use_trial !== false;
+      const isReturningUser = trialCheck?.is_returning_user === true;
+      
+      console.log(`Google user ${googleUser.email} trial check: canUseTrial=${canUseTrial}, isReturning=${isReturningUser}`);
+
       // Check if user exists by email
       const { data: existingUser, error: fetchError } = await supabase
         .from("users")
@@ -169,25 +178,46 @@ serve(async (req) => {
         // User exists - update their Google info if needed
         userId = existingUser.id;
         
-        // Update avatar if not set
+        // Update avatar and google_id if not set
+        const updateData: Record<string, unknown> = {
+          email_verified: true // Google emails are verified
+        };
+        
         if (!existingUser.avatar_url && googleUser.picture) {
-          await supabase
-            .from("users")
-            .update({ 
-              avatar_url: googleUser.picture,
-              email_verified: true // Google emails are verified
-            })
-            .eq("id", userId);
+          updateData.avatar_url = googleUser.picture;
         }
+        if (!existingUser.google_id) {
+          updateData.google_id = googleUser.id;
+          updateData.auth_provider = "google";
+        }
+        
+        await supabase
+          .from("users")
+          .update(updateData)
+          .eq("id", userId);
       } else {
         // Create new user
         isNewUser = true;
         const randomPassword = generateRandomPassword();
         const passwordHash = await hashPassword(randomPassword);
         
-        // Calculate trial end date (14 days from now)
+        // Calculate trial end date (14 days from now for new users)
+        const now = new Date();
         const trialEndDate = new Date();
         trialEndDate.setDate(trialEndDate.getDate() + 14);
+
+        // Determine subscription based on trial eligibility
+        let subscriptionPlan = "trial";
+        let isTrialActive = true;
+        let userTrialEndDate: string = trialEndDate.toISOString();
+
+        if (!canUseTrial) {
+          // Returning user - expired trial, no free access
+          subscriptionPlan = "trial";
+          isTrialActive = false;
+          userTrialEndDate = now.toISOString(); // Already expired
+          console.log(`Returning Google user ${googleUser.email}: expired trial assigned`);
+        }
 
         const { data: newUser, error: insertError } = await supabase
           .from("users")
@@ -198,11 +228,13 @@ serve(async (req) => {
             avatar_url: googleUser.picture,
             email_verified: true, // Google emails are verified
             is_active: true,
-            subscription_plan: "trial",
-            is_trial_active: true,
-            trial_end_date: trialEndDate.toISOString(),
+            subscription_plan: subscriptionPlan,
+            is_trial_active: isTrialActive,
+            trial_end_date: userTrialEndDate,
+            trial_started_at: canUseTrial ? now.toISOString() : null,
             auth_provider: "google",
             google_id: googleUser.id,
+            has_used_trial: true,
           })
           .select()
           .single();
@@ -217,16 +249,28 @@ serve(async (req) => {
 
         userId = newUser.id;
 
-        // Track email usage
-        await supabase
-          .from("email_usage_history")
-          .upsert({
-            email: googleUser.email.toLowerCase(),
-            total_signups: 1,
-            first_signup_at: new Date().toISOString(),
-            trial_used: true,
-            last_plan: "trial",
-          }, { onConflict: "email" });
+        // Track email usage for first-time users
+        if (canUseTrial && !isReturningUser) {
+          await supabase
+            .from("email_usage_history")
+            .insert({
+              email: googleUser.email.toLowerCase(),
+              total_signups: 1,
+              first_signup_at: new Date().toISOString(),
+              trial_used: true,
+              last_plan: "trial",
+            });
+        } else {
+          // Update existing email history
+          await supabase
+            .from("email_usage_history")
+            .upsert({
+              email: googleUser.email.toLowerCase(),
+              total_signups: 1,
+              trial_used: true,
+              last_plan: "trial",
+            }, { onConflict: "email" });
+        }
       }
 
       // Generate JWT token

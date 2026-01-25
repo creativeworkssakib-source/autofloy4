@@ -262,11 +262,13 @@ serve(async (req) => {
     let userTrialEndDate: string | null = trialEndDate.toISOString();
 
     if (!canUseTrial) {
-      // Returning user - restore to their last plan status (without trial)
-      subscriptionPlan = lastPlan === "trial" ? "free" : lastPlan;
+      // Returning user - no trial access, set to expired trial state
+      // IMPORTANT: 'free' is not a valid enum value, must use valid plans
+      // For returning users who used trial, they get trial but expired
+      subscriptionPlan = "trial";
       isTrialActive = false;
-      userTrialEndDate = null;
-      console.log(`Returning user ${email}: assigning plan=${subscriptionPlan}, no trial`);
+      userTrialEndDate = new Date().toISOString(); // Already expired
+      console.log(`Returning user ${email}: assigning expired trial (no free access)`);
     }
 
     // Insert user with appropriate trial status
