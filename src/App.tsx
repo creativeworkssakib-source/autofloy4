@@ -95,7 +95,7 @@ const AdminSubscriptions = lazy(() => import("./pages/admin/AdminSubscriptions")
 const AdminSiteSettings = lazy(() => import("./pages/admin/AdminSiteSettings"));
 const AdminWebhooks = lazy(() => import("./pages/admin/AdminWebhooks"));
 const AdminPasscodeReset = lazy(() => import("./pages/admin/AdminPasscodeReset"));
-const AdminContentPages = lazy(() => import("./pages/admin/AdminContentPages"));
+
 const AdminBlogPosts = lazy(() => import("./pages/admin/AdminBlogPosts"));
 const AdminPricingPlans = lazy(() => import("./pages/admin/AdminPricingPlans"));
 const AdminAppearance = lazy(() => import("./pages/admin/AdminAppearance"));
@@ -401,11 +401,6 @@ const App = () => (
                   <Route path="/admin/passcode-reset" element={
                     <AdminProtectedRoute>
                       <AdminPasscodeReset />
-                    </AdminProtectedRoute>
-                  } />
-                  <Route path="/admin/content-pages" element={
-                    <AdminProtectedRoute>
-                      <AdminContentPages />
                     </AdminProtectedRoute>
                   } />
                   <Route path="/admin/blog-posts" element={
