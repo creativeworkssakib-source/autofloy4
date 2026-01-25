@@ -234,11 +234,41 @@ const FacebookAutomationSection = ({
     }
   };
 
-  const handleFeatureToggle = (feature: keyof AutomationFeatures) => {
-    setAutomationFeatures(prev => ({
-      ...prev,
-      [feature]: !prev[feature],
-    }));
+  const handleFeatureToggle = async (feature: keyof AutomationFeatures) => {
+    const newFeatures = {
+      ...automationFeatures,
+      [feature]: !automationFeatures[feature],
+    };
+    setAutomationFeatures(newFeatures);
+    
+    // Auto-save to database immediately
+    try {
+      await savePageMemory({
+        account_id: accountId,
+        page_id: pageId,
+        page_name: pageName,
+        business_description: businessInfo.businessDescription,
+        products_summary: businessInfo.servicesOffered,
+        detected_language: businessInfo.preferredLanguage,
+        preferred_tone: businessInfo.tone,
+        automation_settings: newFeatures as unknown as Record<string, boolean>,
+        selling_rules: sellingRules,
+        ai_behavior_rules: aiBehaviorRules,
+        payment_rules: paymentRules,
+      });
+      toast({
+        title: newFeatures[feature] ? "Enabled" : "Disabled",
+        description: `${feature.replace(/([A-Z])/g, ' $1').trim()} has been ${newFeatures[feature] ? 'enabled' : 'disabled'}.`,
+      });
+    } catch (error) {
+      // Revert on error
+      setAutomationFeatures(automationFeatures);
+      toast({
+        title: "Failed",
+        description: "Could not update setting. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const enabledCount = Object.values(automationFeatures).filter(v => v).length;
