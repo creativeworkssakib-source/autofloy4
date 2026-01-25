@@ -959,8 +959,9 @@ Deno.serve(async (req) => {
       }
 
       // Use the delete_user_completely function to cascade delete all related data
-      const { error } = await supabase.rpc("delete_user_completely", {
-        target_user_id: userId,
+      const { data: deleteResult, error } = await supabase.rpc("delete_user_completely", {
+        p_user_id: userId,
+        p_preserve_email_history: true,
       });
 
       if (error) {
