@@ -278,19 +278,38 @@ function smartAnalyzeComment(
     };
   }
   
-  // *** VIDEO HANDLING ***
+  // *** VIDEO HANDLING - AI will analyze with Vision API ***
   if (messageType === "video" || attachments?.some(a => a.type === "video" || a.type === "video_inline")) {
     return {
-      needsInboxMessage: false, // Videos are usually reactions, wait for context
-      commentReply: `ভিডিওটা পেয়েছি! 🎬 এই ভিডিও সম্পর্কে কী বলতে চাইছেন? 😊`,
-      reactionType: "LIKE",
-      reason: "Video attachment detected",
+      needsInboxMessage: true, // Send to AI for Vision analysis
+      commentReply: `ভিডিওটা দেখছি! 🎬 একটু অপেক্ষা করুন... 😊`,
+      reactionType: "WOW",
+      reason: "Video attachment detected - will be analyzed by Vision API",
       commentType: "video",
       sentiment: "neutral",
       isQuestion: false,
       isOrderIntent: false,
       isPriceInquiry: false,
-      isJustReaction: true,
+      isJustReaction: false,
+      isThankYou: false,
+      isSticker: false,
+      isPhoto: false,
+    };
+  }
+  
+  // *** AUDIO/VOICE MESSAGE HANDLING ***
+  if (messageType === "audio" || attachments?.some(a => a.type === "audio")) {
+    return {
+      needsInboxMessage: true, // Process voice message
+      commentReply: `🎤 ভয়েস মেসেজ পেয়েছি! ধন্যবাদ!`,
+      reactionType: "LIKE",
+      reason: "Voice/audio message detected",
+      commentType: "audio",
+      sentiment: "neutral",
+      isQuestion: false,
+      isOrderIntent: false,
+      isPriceInquiry: false,
+      isJustReaction: false,
       isThankYou: false,
       isSticker: false,
       isPhoto: false,
@@ -2046,6 +2065,86 @@ Available products: ${allProducts.map(p => `${p.name} - ৳${p.price}`).slice(0,
             response.reply = `ছবিটা পেয়েছি! 📷 এই ছবি সম্পর্কে কী জানতে চাইছেন? অথবা কোন প্রোডাক্টের ছবি হলে বলুন, দাম জানিয়ে দেব! 😊`;
             response.reactionType = "LIKE";
           }
+        } else if (messageType === "video") {
+          // *** VIDEO ANALYSIS - Use Vision API for video frames ***
+          console.log(`[AI Agent] 🎬 Video detected, using Vision API for analysis`);
+          
+          // Extract video URLs/thumbnails from attachments
+          const videoUrls: string[] = [];
+          if (attachments) {
+            for (const att of attachments) {
+              // Try to get video URL or thumbnail
+              const url = att.payload?.url || att.url || att.payload?.preview_url;
+              if (url && url.startsWith("http")) {
+                videoUrls.push(url);
+              }
+            }
+          }
+          
+          if (videoUrls.length > 0) {
+            const videoSystemPrompt = `You are a helpful Bangladeshi business assistant. The customer sent a video. Analyze the video content and respond in Bangla (Bengali).
+
+Instructions:
+- Describe what you see in the video briefly
+- If it shows a product, try to identify it from your catalog and mention the price
+- If they're asking about something, answer helpfully
+- If it's a product demonstration or unboxing, express interest and offer help
+- Keep response SHORT (2-3 sentences max)
+
+Available products: ${allProducts.map(p => `${p.name} - ৳${p.price}`).slice(0, 20).join(", ")}
+
+Be friendly and helpful! Use emojis.`;
+
+            const videoMessages = messageText?.trim() 
+              ? [{ role: "user", content: `Customer said: "${messageText}". Analyze their video.` }]
+              : [{ role: "user", content: "Customer sent a video. Analyze it and respond helpfully." }];
+            
+            const videoReply = await callAI(videoSystemPrompt, videoMessages, videoUrls);
+            response.reply = videoReply;
+            response.reactionType = "WOW";
+            response.smartAnalysis = {
+              type: "video_analyzed",
+              reason: "Vision API used for video analysis",
+              sentiment: "neutral",
+            };
+            console.log(`[AI Agent] ✅ Video analysis complete`);
+          } else {
+            response.reply = `ভিডিওটা পেয়েছি! 🎬 সুন্দর! এই ভিডিও সম্পর্কে কিছু জানতে চাইলে বলুন। কোন প্রোডাক্টের ভিডিও হলে দাম জানাতে পারি! 😊`;
+            response.reactionType = "WOW";
+          }
+        } else if (messageType === "audio") {
+          // *** VOICE/AUDIO MESSAGE HANDLING ***
+          console.log(`[AI Agent] 🎤 Voice message detected`);
+          
+          // Extract audio URL for potential transcription
+          let audioUrl: string | undefined;
+          if (attachments) {
+            for (const att of attachments) {
+              const url = att.payload?.url || att.url;
+              if (url && url.startsWith("http")) {
+                audioUrl = url;
+                break;
+              }
+            }
+          }
+          
+          // For now, provide a helpful response acknowledging the voice message
+          // Future: Could integrate Whisper or Google Speech-to-Text for transcription
+          const voiceResponses = [
+            `🎤 ভয়েস মেসেজ পেয়েছি! দুঃখিত, এই মুহূর্তে আমি ভয়েস শুনতে পারছি না। আপনি কি টাইপ করে জানাতে পারবেন কী দরকার? 😊`,
+            `🎤 আপনার ভয়েস মেসেজ পেয়েছি! প্লিজ টেক্সট এ লিখে জানান কীভাবে সাহায্য করতে পারি? ধন্যবাদ! 🙏`,
+            `🎤 ভয়েস পেয়েছি! দয়া করে আপনার প্রশ্ন বা অর্ডার টাইপ করে পাঠান, দ্রুত উত্তর দিতে পারব! 💬`
+          ];
+          
+          response.reply = voiceResponses[Math.floor(Math.random() * voiceResponses.length)];
+          response.reactionType = "LIKE";
+          response.smartAnalysis = {
+            type: "voice_message",
+            reason: "Voice message received - requested text input",
+            sentiment: "neutral",
+            audioUrl: audioUrl,
+          };
+          console.log(`[AI Agent] 🎤 Voice message handled, requested text input`);
         }
       } else {
         // Regular text message

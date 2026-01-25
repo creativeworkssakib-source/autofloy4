@@ -11,6 +11,7 @@ import {
   Inbox, 
   Image, 
   Mic, 
+  Video,
   Sparkles,
   ShoppingCart,
   DollarSign,
@@ -42,7 +43,7 @@ const AutomationSimulator = ({
   isAutomationReady,
   automationSettings,
 }: AutomationSimulatorProps) => {
-  const [messageType, setMessageType] = useState<"comment" | "inbox" | "image" | "voice">("comment");
+  const [messageType, setMessageType] = useState<"comment" | "inbox" | "image" | "voice" | "video">("comment");
   const [testMessage, setTestMessage] = useState("");
   const [isSimulating, setIsSimulating] = useState(false);
   const [result, setResult] = useState<SimulationResult | null>(null);
@@ -140,8 +141,9 @@ const AutomationSimulator = ({
   const placeholders: Record<string, string> = {
     comment: "e.g., 'এই প্রোডাক্টের দাম কত?' or 'Is this available?'",
     inbox: "e.g., 'I want to order this product' or 'ভাই এটা নিব'",
-    image: "[Image placeholder] - Describe what the image contains",
-    voice: "[Voice placeholder] - Type what the voice message would say",
+    image: "📷 AI will analyze the image using Vision API and respond in Bengali",
+    voice: "🎤 Voice messages will be acknowledged - AI will ask customer to type their request",
+    video: "🎬 AI will analyze video content using Vision API and respond helpfully",
   };
 
   return (
@@ -159,22 +161,26 @@ const AutomationSimulator = ({
       <CardContent className="space-y-4">
         {/* Message Type Tabs */}
         <Tabs value={messageType} onValueChange={(v) => setMessageType(v as typeof messageType)}>
-          <TabsList className="grid grid-cols-4 w-full">
-            <TabsTrigger value="comment" className="gap-1.5 text-xs">
-              <MessageSquare className="h-3.5 w-3.5" />
-              Comment
+          <TabsList className="grid grid-cols-5 w-full">
+            <TabsTrigger value="comment" className="gap-1 text-xs px-1">
+              <MessageSquare className="h-3 w-3" />
+              <span className="hidden sm:inline">Comment</span>
             </TabsTrigger>
-            <TabsTrigger value="inbox" className="gap-1.5 text-xs">
-              <Inbox className="h-3.5 w-3.5" />
-              Inbox
+            <TabsTrigger value="inbox" className="gap-1 text-xs px-1">
+              <Inbox className="h-3 w-3" />
+              <span className="hidden sm:inline">Inbox</span>
             </TabsTrigger>
-            <TabsTrigger value="image" className="gap-1.5 text-xs">
-              <Image className="h-3.5 w-3.5" />
-              Image
+            <TabsTrigger value="image" className="gap-1 text-xs px-1">
+              <Image className="h-3 w-3" />
+              <span className="hidden sm:inline">Image</span>
             </TabsTrigger>
-            <TabsTrigger value="voice" className="gap-1.5 text-xs">
-              <Mic className="h-3.5 w-3.5" />
-              Voice
+            <TabsTrigger value="video" className="gap-1 text-xs px-1">
+              <Video className="h-3 w-3" />
+              <span className="hidden sm:inline">Video</span>
+            </TabsTrigger>
+            <TabsTrigger value="voice" className="gap-1 text-xs px-1">
+              <Mic className="h-3 w-3" />
+              <span className="hidden sm:inline">Voice</span>
             </TabsTrigger>
           </TabsList>
         </Tabs>
