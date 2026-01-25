@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import PlatformAutomationCard, { PlatformConfig } from "./PlatformAutomationCard";
 import PlatformAutomationSection from "./PlatformAutomationSection";
+import FacebookAutomationSection from "./FacebookAutomationSection";
 import { 
   Facebook, 
   Instagram, 
@@ -141,6 +142,20 @@ const PlatformAutomationsGrid = ({
   // Show platform-specific section if selected and available
   if (selectedPlatform && isSelectedAvailable) {
     const selectedPage = selectedPlatform === 'facebook' ? connectedFacebookPages[0] : null;
+    
+    // Use FacebookAutomationSection for Facebook
+    if (selectedPlatform === 'facebook' && selectedPage) {
+      return (
+        <FacebookAutomationSection
+          pageId={selectedPage.id}
+          pageName={selectedPage.name}
+          accountId={selectedPage.accountId || selectedPage.id}
+          onBack={() => setSelectedPlatform(null)}
+        />
+      );
+    }
+    
+    // Use generic PlatformAutomationSection for other platforms
     return (
       <PlatformAutomationSection
         platformId={selectedPlatform}
