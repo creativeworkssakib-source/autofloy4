@@ -2114,8 +2114,8 @@ Be friendly and helpful! Use emojis.`;
             response.reactionType = "WOW";
           }
         } else if (messageType === "audio") {
-          // *** VOICE/AUDIO MESSAGE HANDLING WITH TRANSCRIPTION ***
-          console.log(`[AI Agent] 🎤 Voice message detected - attempting transcription`);
+          // *** VOICE/AUDIO MESSAGE HANDLING - CONTEXTUAL RESPONSE (v2.0) ***
+          console.log(`[AI Agent] 🎤 [V2] Voice message detected - using contextual response (no transcription)`);
           
           // Extract audio URL
           let audioUrl: string | undefined;
