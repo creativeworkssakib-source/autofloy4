@@ -479,19 +479,6 @@ const ConnectFacebook = () => {
 
                     {/* Actions */}
                     <div className="flex items-center gap-2">
-                      {/* Settings Button - Only show when enabled */}
-                      {page.is_connected && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-primary"
-                          onClick={() => navigate(`/dashboard/automations/facebook/${page.id}/${page.external_id}/settings`)}
-                          title="Configure automation settings"
-                        >
-                          <Settings className="w-4 h-4" />
-                        </Button>
-                      )}
-
                       {/* Toggle Switch */}
                       {togglingPages.has(page.id) ? (
                         <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
