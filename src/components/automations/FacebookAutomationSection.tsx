@@ -314,45 +314,6 @@ const FacebookAutomationSection = ({
           </CardHeader>
           <Separator />
           <CardContent className="pt-4 space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-sm font-medium flex items-center gap-2">
-                  <Palette className="h-4 w-4 text-muted-foreground" />
-                  Response Tone
-                </Label>
-                <Select value={preferredTone} onValueChange={setPreferredTone}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="friendly">😊 Friendly & Warm</SelectItem>
-                    <SelectItem value="professional">💼 Professional</SelectItem>
-                    <SelectItem value="casual">😎 Casual & Fun</SelectItem>
-                    <SelectItem value="formal">🎩 Formal & Respectful</SelectItem>
-                    <SelectItem value="sales">💰 Sales-Focused</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="space-y-2">
-                <Label className="text-sm font-medium flex items-center gap-2">
-                  <Languages className="h-4 w-4 text-muted-foreground" />
-                  Response Language
-                </Label>
-                <Select value={detectedLanguage} onValueChange={setDetectedLanguage}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="auto">🌐 Auto-Detect</SelectItem>
-                    <SelectItem value="bengali">বাংলা (Bengali)</SelectItem>
-                    <SelectItem value="english">English</SelectItem>
-                    <SelectItem value="mixed">Mixed (Banglish)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
             <div className="space-y-2">
               <Label className="text-sm font-medium">Business Description</Label>
               <Textarea
@@ -373,14 +334,43 @@ const FacebookAutomationSection = ({
               />
             </div>
 
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Custom Instructions (Optional)</Label>
-              <Textarea
-                placeholder="Any special instructions for AI... (e.g., Always mention free shipping on orders over ৳1000)"
-                value={customInstructions}
-                onChange={(e) => setCustomInstructions(e.target.value)}
-                className="min-h-[60px] resize-none"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium flex items-center gap-2">
+                  <Languages className="h-4 w-4 text-muted-foreground" />
+                  Preferred Language
+                </Label>
+                <Select value={detectedLanguage} onValueChange={setDetectedLanguage}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">🌐 Auto-Detect</SelectItem>
+                    <SelectItem value="bengali">বাংলা (Bengali)</SelectItem>
+                    <SelectItem value="english">English</SelectItem>
+                    <SelectItem value="mixed">Mixed (Banglish)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="space-y-2">
+                <Label className="text-sm font-medium flex items-center gap-2">
+                  <Palette className="h-4 w-4 text-muted-foreground" />
+                  Response Tone
+                </Label>
+                <Select value={preferredTone} onValueChange={setPreferredTone}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="friendly">😊 Friendly</SelectItem>
+                    <SelectItem value="professional">💼 Professional</SelectItem>
+                    <SelectItem value="casual">😎 Casual</SelectItem>
+                    <SelectItem value="formal">🎩 Formal</SelectItem>
+                    <SelectItem value="sales">💰 Sales-Focused</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </CardContent>
         </Card>
