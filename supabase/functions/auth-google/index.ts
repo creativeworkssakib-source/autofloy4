@@ -1,6 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import * as djwt from "https://deno.land/x/djwt@v2.8/mod.ts";
+import { Resend } from "https://esm.sh/resend@2.0.0";
+import { getWelcomeEmailTemplate } from "../_shared/email-templates.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,6 +14,7 @@ const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const JWT_SECRET = Deno.env.get("JWT_SECRET")!;
 const GOOGLE_CLIENT_ID = Deno.env.get("GOOGLE_CLIENT_ID");
 const GOOGLE_CLIENT_SECRET = Deno.env.get("GOOGLE_CLIENT_SECRET");
+const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 
 interface GoogleTokenResponse {
   access_token: string;
@@ -274,6 +277,32 @@ serve(async (req) => {
               trial_used: true,
               last_plan: "trial",
             }, { onConflict: "email" });
+        }
+
+        // Send welcome email to new Google users
+        if (RESEND_API_KEY) {
+          try {
+            const resend = new Resend(RESEND_API_KEY);
+            const userName = googleUser.name || googleUser.email.split("@")[0];
+            const emailHtml = getWelcomeEmailTemplate(userName, googleUser.email);
+
+            const { error: emailError } = await resend.emails.send({
+              from: "AutoFloy <noreply@fileforge.site>",
+              to: [googleUser.email],
+              subject: "🎉 Welcome to AutoFloy - Your Account is Ready!",
+              html: emailHtml,
+            });
+
+            if (emailError) {
+              console.error("Welcome email error for Google user:", emailError);
+            } else {
+              console.log("Welcome email sent to Google user:", googleUser.email);
+            }
+          } catch (emailErr) {
+            console.error("Welcome email exception:", emailErr);
+          }
+        } else {
+          console.warn("RESEND_API_KEY not configured, skipping welcome email");
         }
       }
 
