@@ -2169,6 +2169,7 @@ OUTPUT FORMAT:
 - Do NOT add explanations or commentary
 - If completely unintelligible, respond: "[অস্পষ্ট অডিও]"`;
 
+              // Use inline_data format for Gemini audio (similar to image handling)
               const transcriptionResponse = await fetch(AI_GATEWAY_URL, {
                 method: "POST",
                 headers: {
@@ -2183,10 +2184,11 @@ OUTPUT FORMAT:
                       role: "user", 
                       content: [
                         { 
-                          type: "audio_url", 
-                          audio_url: { 
-                            url: `data:${contentType};base64,${audioBase64}` 
-                          } 
+                          type: "file",
+                          file: {
+                            filename: "voice_message.mp4",
+                            file_data: `data:${contentType};base64,${audioBase64}`
+                          }
                         },
                         { type: "text", text: "Transcribe this voice message from a customer." }
                       ]
