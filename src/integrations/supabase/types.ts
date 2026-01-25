@@ -4383,6 +4383,7 @@ export type Database = {
           google_id: string | null
           has_used_trial: boolean
           id: string
+          is_active: boolean | null
           is_trial_active: boolean | null
           password_hash: string
           phone: string | null
@@ -4406,6 +4407,7 @@ export type Database = {
           google_id?: string | null
           has_used_trial?: boolean
           id?: string
+          is_active?: boolean | null
           is_trial_active?: boolean | null
           password_hash: string
           phone?: string | null
@@ -4429,6 +4431,7 @@ export type Database = {
           google_id?: string | null
           has_used_trial?: boolean
           id?: string
+          is_active?: boolean | null
           is_trial_active?: boolean | null
           password_hash?: string
           phone?: string | null
