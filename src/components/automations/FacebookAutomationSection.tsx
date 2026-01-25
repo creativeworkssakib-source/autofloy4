@@ -285,8 +285,29 @@ const FacebookAutomationSection = ({
         repliesToday={0}
         lastActivityTime={null}
         enabledAutomationsCount={enabledCount}
-        totalAutomations={15}
+        totalAutomations={9}
       />
+
+      {/* Custom Instructions */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.05 }}
+      >
+        <Card className="border-border/50 bg-card/50">
+          <CardContent className="pt-4">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Custom Instructions (Optional)</Label>
+              <Textarea
+                placeholder="Any special instructions for AI responses..."
+                value={customInstructions}
+                onChange={(e) => setCustomInstructions(e.target.value)}
+                className="min-h-[60px] resize-none"
+              />
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
 
       {/* AI Automation Controls */}
       <FacebookAIAutomation
