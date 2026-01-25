@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { Resend } from "https://esm.sh/resend@2.0.0";
-import { getTrialExpiringEmailTemplate } from "../_shared/email-templates.ts";
+import { getTrialExpiringEmailTemplate, getPlanExpiredEmailTemplate, getSubscriptionExpiredEmailTemplate } from "../_shared/email-templates.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -18,6 +18,15 @@ const REMINDER_THRESHOLDS = [
   { hours: 6, type: "6h" },
   { hours: 2, type: "2h" },
 ];
+
+// Plan display names
+const planDisplayNames: Record<string, string> = {
+  starter: "Starter",
+  professional: "Professional",
+  business: "Business",
+  lifetime: "Lifetime",
+  trial: "Trial",
+};
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -117,7 +126,7 @@ serve(async (req) => {
     // Also check for expired trials that need to be deactivated
     const { data: expiredTrials, error: expiredError } = await supabase
       .from("users")
-      .select("id, email")
+      .select("id, email, display_name")
       .eq("subscription_plan", "trial")
       .eq("is_trial_active", true)
       .lt("trial_end_date", now.toISOString());
@@ -126,6 +135,21 @@ serve(async (req) => {
       console.log(`[Trial Expiry] Deactivating ${expiredTrials.length} expired trials`);
       
       for (const user of expiredTrials) {
+        // Send expired email
+        const userName = user.display_name || user.email.split("@")[0];
+        try {
+          const emailHtml = getSubscriptionExpiredEmailTemplate(userName);
+          await resend.emails.send({
+            from: "AutoFloy <noreply@fileforge.site>",
+            to: [user.email],
+            subject: "😢 Your AutoFloy Trial Has Expired",
+            html: emailHtml,
+          });
+          console.log(`[Trial Expiry] Sent expiry email to ${user.email}`);
+        } catch (emailErr) {
+          console.error(`[Trial Expiry] Email error for ${user.id}:`, emailErr);
+        }
+
         const { error: deactivateError } = await supabase
           .from("users")
           .update({ 
@@ -143,10 +167,62 @@ serve(async (req) => {
       }
     }
 
+    // Check for expired PAID subscriptions (not trials)
+    const { data: expiredPaidPlans, error: paidError } = await supabase
+      .from("users")
+      .select("id, email, display_name, subscription_plan")
+      .in("subscription_plan", ["starter", "professional", "business"])
+      .eq("is_trial_active", false)
+      .not("subscription_ends_at", "is", null)
+      .lt("subscription_ends_at", now.toISOString());
+
+    let paidPlansExpired = 0;
+    if (!paidError && expiredPaidPlans && expiredPaidPlans.length > 0) {
+      console.log(`[Plan Expiry] Processing ${expiredPaidPlans.length} expired paid plans`);
+      
+      for (const user of expiredPaidPlans) {
+        const userName = user.display_name || user.email.split("@")[0];
+        const previousPlan = planDisplayNames[user.subscription_plan] || user.subscription_plan;
+        
+        // Send plan expired email
+        try {
+          const emailHtml = getPlanExpiredEmailTemplate(userName, previousPlan);
+          await resend.emails.send({
+            from: "AutoFloy <noreply@fileforge.site>",
+            to: [user.email],
+            subject: `⏰ Your ${previousPlan} Plan Has Expired - AutoFloy`,
+            html: emailHtml,
+          });
+          console.log(`[Plan Expiry] Sent expiry email to ${user.email}`);
+        } catch (emailErr) {
+          console.error(`[Plan Expiry] Email error for ${user.id}:`, emailErr);
+          errors.push(`Plan email error for ${user.id}: ${emailErr instanceof Error ? emailErr.message : String(emailErr)}`);
+        }
+
+        // Update user to expired state
+        const { error: updateError } = await supabase
+          .from("users")
+          .update({ 
+            subscription_plan: "none",
+            subscription_ends_at: null
+          })
+          .eq("id", user.id);
+
+        if (updateError) {
+          console.error(`[Plan Expiry] Update error for ${user.id}:`, updateError);
+          errors.push(`Plan update error for ${user.id}: ${updateError.message}`);
+        } else {
+          paidPlansExpired++;
+          console.log(`[Plan Expiry] Expired plan for ${user.id}`);
+        }
+      }
+    }
+
     const result = {
       success: true,
       emailsSent,
       expiredTrialsDeactivated: expiredTrials?.length || 0,
+      paidPlansExpired,
       errors: errors.length > 0 ? errors : undefined,
       timestamp: now.toISOString(),
     };
