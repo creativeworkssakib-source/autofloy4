@@ -2113,10 +2113,10 @@ Be friendly and helpful! Use emojis.`;
             response.reactionType = "WOW";
           }
         } else if (messageType === "audio") {
-          // *** VOICE/AUDIO MESSAGE HANDLING ***
-          console.log(`[AI Agent] 🎤 Voice message detected`);
+          // *** VOICE/AUDIO MESSAGE HANDLING WITH TRANSCRIPTION ***
+          console.log(`[AI Agent] 🎤 Voice message detected - attempting transcription`);
           
-          // Extract audio URL for potential transcription
+          // Extract audio URL
           let audioUrl: string | undefined;
           if (attachments) {
             for (const att of attachments) {
@@ -2128,23 +2128,156 @@ Be friendly and helpful! Use emojis.`;
             }
           }
           
-          // For now, provide a helpful response acknowledging the voice message
-          // Future: Could integrate Whisper or Google Speech-to-Text for transcription
-          const voiceResponses = [
-            `🎤 ভয়েস মেসেজ পেয়েছি! দুঃখিত, এই মুহূর্তে আমি ভয়েস শুনতে পারছি না। আপনি কি টাইপ করে জানাতে পারবেন কী দরকার? 😊`,
-            `🎤 আপনার ভয়েস মেসেজ পেয়েছি! প্লিজ টেক্সট এ লিখে জানান কীভাবে সাহায্য করতে পারি? ধন্যবাদ! 🙏`,
-            `🎤 ভয়েস পেয়েছি! দয়া করে আপনার প্রশ্ন বা অর্ডার টাইপ করে পাঠান, দ্রুত উত্তর দিতে পারব! 💬`
-          ];
+          // Check if AI Media Understanding is enabled for voice
+          const mediaUnderstandingEnabled = settings.aiMediaUnderstanding !== false;
           
-          response.reply = voiceResponses[Math.floor(Math.random() * voiceResponses.length)];
-          response.reactionType = "LIKE";
-          response.smartAnalysis = {
-            type: "voice_message",
-            reason: "Voice message received - requested text input",
-            sentiment: "neutral",
-            audioUrl: audioUrl,
-          };
-          console.log(`[AI Agent] 🎤 Voice message handled, requested text input`);
+          if (audioUrl && mediaUnderstandingEnabled) {
+            try {
+              console.log(`[AI Agent] 🎤 Downloading audio from: ${audioUrl.substring(0, 100)}...`);
+              
+              // Download the audio file
+              const audioResponse = await fetch(audioUrl);
+              if (!audioResponse.ok) {
+                throw new Error(`Failed to download audio: ${audioResponse.status}`);
+              }
+              
+              const audioBuffer = await audioResponse.arrayBuffer();
+              const audioBase64 = btoa(
+                new Uint8Array(audioBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+              );
+              
+              // Determine MIME type (Facebook sends mp4/m4a audio)
+              const contentType = audioResponse.headers.get("content-type") || "audio/mp4";
+              console.log(`[AI Agent] 🎤 Audio downloaded: ${audioBuffer.byteLength} bytes, type: ${contentType}`);
+              
+              // Use Gemini to transcribe the audio
+              const transcriptionSystemPrompt = `You are an audio transcription assistant for a Bengali e-commerce page.
+
+TASK: Transcribe the voice message and extract the customer's request.
+
+INSTRUCTIONS:
+1. Listen carefully to the audio
+2. Transcribe exactly what the customer said
+3. If Bengali, write in Bengali script
+4. If English, write in English
+5. If mixed (Banglish), preserve as spoken
+6. If unclear, note what you could understand
+
+OUTPUT FORMAT:
+- Provide ONLY the transcription, nothing else
+- Do NOT add explanations or commentary
+- If completely unintelligible, respond: "[অস্পষ্ট অডিও]"`;
+
+              const transcriptionResponse = await fetch(AI_GATEWAY_URL, {
+                method: "POST",
+                headers: {
+                  "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  model: "google/gemini-2.5-flash",
+                  messages: [
+                    { role: "system", content: transcriptionSystemPrompt },
+                    { 
+                      role: "user", 
+                      content: [
+                        { 
+                          type: "audio_url", 
+                          audio_url: { 
+                            url: `data:${contentType};base64,${audioBase64}` 
+                          } 
+                        },
+                        { type: "text", text: "Transcribe this voice message from a customer." }
+                      ]
+                    }
+                  ],
+                  max_tokens: 500,
+                }),
+              });
+              
+              if (!transcriptionResponse.ok) {
+                const errorText = await transcriptionResponse.text();
+                console.error(`[AI Agent] 🎤 Transcription API error: ${transcriptionResponse.status}`, errorText);
+                throw new Error(`Transcription failed: ${transcriptionResponse.status}`);
+              }
+              
+              const transcriptionData = await transcriptionResponse.json();
+              const transcribedText = transcriptionData.choices?.[0]?.message?.content?.trim() || "";
+              
+              console.log(`[AI Agent] 🎤 Transcription result: "${transcribedText}"`);
+              
+              if (transcribedText && transcribedText !== "[অস্পষ্ট অডিও]") {
+                // Successfully transcribed - now process as a normal message
+                console.log(`[AI Agent] 🎤 Processing transcribed text as normal message`);
+                
+                // Build response with transcription context
+                const voiceReplyPrompt = `${systemPrompt}
+
+VOICE MESSAGE CONTEXT:
+The customer sent a voice message. I have transcribed it for you.
+
+TRANSCRIPTION: "${transcribedText}"
+
+INSTRUCTIONS:
+1. First acknowledge that you heard their voice message
+2. Then respond to their actual request naturally
+3. If they asked about a product/price, provide that info
+4. If they want to order, start order collection
+5. Keep the response helpful and natural in Bengali`;
+
+                const voiceAiMessages = conversation?.message_history?.length > 0
+                  ? [...conversation.message_history, { role: "user", content: transcribedText }]
+                  : [{ role: "user", content: transcribedText }];
+                
+                const voiceReply = await callAI(voiceReplyPrompt, voiceAiMessages);
+                
+                // Add "I heard your voice message" prefix if not already there
+                const hasAcknowledgment = voiceReply.includes("ভয়েস") || voiceReply.includes("voice") || voiceReply.includes("শুনেছি") || voiceReply.includes("পেয়েছি");
+                response.reply = hasAcknowledgment 
+                  ? voiceReply 
+                  : `🎤 ভয়েস মেসেজ শুনেছি! ${voiceReply}`;
+                
+                response.reactionType = "LIKE";
+                response.smartAnalysis = {
+                  type: "voice_transcribed",
+                  reason: "Voice message transcribed and processed",
+                  transcription: transcribedText,
+                  sentiment: "neutral",
+                };
+                
+                console.log(`[AI Agent] ✅ Voice message transcribed and responded`);
+              } else {
+                // Transcription unclear
+                response.reply = `🎤 ভয়েস মেসেজ পেয়েছি! অডিওটা একটু অস্পষ্ট ছিল। আপনি কি প্লিজ টাইপ করে জানাবেন কী দরকার? 😊`;
+                response.reactionType = "LIKE";
+                response.smartAnalysis = {
+                  type: "voice_unclear",
+                  reason: "Voice message was unclear",
+                  sentiment: "neutral",
+                };
+              }
+            } catch (transcriptionError) {
+              console.error(`[AI Agent] 🎤 Transcription error:`, transcriptionError);
+              // Fallback to asking for text
+              response.reply = `🎤 ভয়েস মেসেজ পেয়েছি! দুঃখিত, এই মুহূর্তে শুনতে সমস্যা হচ্ছে। আপনি কি টাইপ করে জানাতে পারবেন? 😊`;
+              response.reactionType = "LIKE";
+              response.smartAnalysis = {
+                type: "voice_error",
+                reason: `Transcription failed: ${transcriptionError}`,
+                sentiment: "neutral",
+                audioUrl: audioUrl,
+              };
+            }
+          } else {
+            // No audio URL or AI Media Understanding disabled
+            response.reply = `🎤 ভয়েস মেসেজ পেয়েছি! আপনি কি টাইপ করে জানাতে পারবেন কী দরকার? আমি দ্রুত উত্তর দিব! 😊`;
+            response.reactionType = "LIKE";
+            response.smartAnalysis = {
+              type: "voice_no_transcription",
+              reason: mediaUnderstandingEnabled ? "No audio URL available" : "AI Media Understanding disabled",
+              sentiment: "neutral",
+            };
+          }
         }
       } else {
         // Regular text message
