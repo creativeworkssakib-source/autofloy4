@@ -15,12 +15,6 @@ import {
   Brain,
   Sparkles,
   Trash2,
-  Ban,
-  Package,
-  Bot,
-  AlertCircle,
-  Heart,
-  Camera,
   Loader2,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -45,11 +39,11 @@ interface FacebookAIAutomationProps {
 }
 
 const defaultOptions: Omit<AIAutomationOption, "enabled">[] = [
-  // Reply Automations
+  // Auto Reply (5 items)
   {
     id: "inbox_auto_reply",
     name: "AI Inbox Auto Reply",
-    description: "Automatically reply to Facebook inbox messages with human-like responses",
+    description: "Auto-reply to Facebook Messenger messages",
     icon: MessageCircle,
     iconColor: "text-primary",
     iconBg: "bg-primary/10",
@@ -58,25 +52,16 @@ const defaultOptions: Omit<AIAutomationOption, "enabled">[] = [
   {
     id: "comment_auto_reply",
     name: "AI Comment Auto Reply",
-    description: "Reply to post comments with context-aware and spam-safe responses",
+    description: "Reply to post comments automatically",
     icon: MessageSquare,
     iconColor: "text-secondary",
     iconBg: "bg-secondary/10",
     category: "reply",
   },
   {
-    id: "order_taking",
-    name: "Order Taking",
-    description: "AI can take orders from customers via Messenger",
-    icon: ShoppingCart,
-    iconColor: "text-success",
-    iconBg: "bg-success/10",
-    category: "reply",
-  },
-  {
     id: "faq_auto_answer",
     name: "AI FAQ Auto Answer",
-    description: "Detect common questions and instantly answer FAQs",
+    description: "Detect and answer common questions",
     icon: HelpCircle,
     iconColor: "text-accent",
     iconBg: "bg-accent/10",
@@ -85,7 +70,7 @@ const defaultOptions: Omit<AIAutomationOption, "enabled">[] = [
   {
     id: "sales_assistant",
     name: "AI Sales Assistant",
-    description: "Handle price & order inquiries with a sales-friendly tone",
+    description: "Handle price & order inquiries",
     icon: ShoppingCart,
     iconColor: "text-success",
     iconBg: "bg-success/10",
@@ -94,72 +79,36 @@ const defaultOptions: Omit<AIAutomationOption, "enabled">[] = [
   {
     id: "support_assistant",
     name: "AI Support Assistant",
-    description: "Handle complaints & support questions professionally",
+    description: "Handle complaints professionally",
     icon: HeadphonesIcon,
     iconColor: "text-warning",
     iconBg: "bg-warning/10",
     category: "reply",
   },
-  {
-    id: "product_inventory_reply",
-    name: "Product & Inventory Replies",
-    description: "AI responds based on your product catalog and stock availability",
-    icon: Package,
-    iconColor: "text-primary",
-    iconBg: "bg-primary/10",
-    category: "reply",
-  },
-  // Moderation Automations
-  {
-    id: "reaction_on_comments",
-    name: "Reaction on Comments",
-    description: "Automatically react (Like/Love) to comments on your posts",
-    icon: Heart,
-    iconColor: "text-pink-500",
-    iconBg: "bg-pink-500/10",
-    category: "moderation",
-  },
+  // Moderation (2 items)
   {
     id: "spam_filter",
-    name: "AI Spam & Abuse Filter",
-    description: "Detect and filter spam, scams, and abusive content",
+    name: "AI Spam Filter",
+    description: "Filter spam and abusive content",
     icon: ShieldAlert,
     iconColor: "text-destructive",
     iconBg: "bg-destructive/10",
     category: "moderation",
   },
   {
-    id: "comment_deletion",
-    name: "Auto Delete Spam Comments",
-    description: "Automatically delete detected spam and abusive comments",
+    id: "auto_delete_spam",
+    name: "Auto Delete Spam",
+    description: "Automatically delete spam comments",
     icon: Trash2,
     iconColor: "text-destructive",
     iconBg: "bg-destructive/10",
     category: "moderation",
   },
+  // AI Intelligence (2 items)
   {
-    id: "user_blocking",
-    name: "Auto Block Abusive Users",
-    description: "Block users who repeatedly post spam or abusive content",
-    icon: Ban,
-    iconColor: "text-destructive",
-    iconBg: "bg-destructive/10",
-    category: "moderation",
-  },
-  // Intelligence Features
-  {
-    id: "ai_media_understanding",
-    name: "AI Media Understanding",
-    description: "AI can understand and respond to images and voice messages",
-    icon: Camera,
-    iconColor: "text-purple-500",
-    iconBg: "bg-purple-500/10",
-    category: "intelligence",
-  },
-  {
-    id: "language_tone_matching",
-    name: "AI Language & Tone Matching",
-    description: "Detect Bangla/English automatically and match your page personality",
+    id: "language_detection",
+    name: "Language Detection",
+    description: "Detect and respond in user's language",
     icon: Languages,
     iconColor: "text-primary",
     iconBg: "bg-primary/10",
@@ -167,20 +116,11 @@ const defaultOptions: Omit<AIAutomationOption, "enabled">[] = [
   },
   {
     id: "business_memory",
-    name: "AI Business Memory",
-    description: "Remember page info and conversations for contextual responses",
+    name: "Business Memory",
+    description: "Remember conversations for context",
     icon: Brain,
     iconColor: "text-secondary",
     iconBg: "bg-secondary/10",
-    category: "intelligence",
-  },
-  {
-    id: "human_like_responses",
-    name: "Human-Like AI Responses",
-    description: "Generate natural, conversational responses that feel human",
-    icon: Bot,
-    iconColor: "text-accent",
-    iconBg: "bg-accent/10",
     category: "intelligence",
   },
 ];
@@ -374,7 +314,7 @@ const FacebookAIAutomation = ({ pageId, pageName, accountId, onSettingsChange }:
             </div>
           ) : (
             <>
-              {renderOptionGroup("Reply Automations", replyOptions, 0)}
+              {renderOptionGroup("Auto Reply", replyOptions, 0)}
               {renderOptionGroup("Moderation", moderationOptions, replyOptions.length)}
               {renderOptionGroup("AI Intelligence", intelligenceOptions, replyOptions.length + moderationOptions.length)}
             </>
