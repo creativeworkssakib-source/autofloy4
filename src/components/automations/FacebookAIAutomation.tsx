@@ -19,6 +19,8 @@ import {
   Package,
   Bot,
   AlertCircle,
+  Heart,
+  Camera,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { sendToWebhook, isWebhookActive } from "@/services/webhookService";
@@ -64,6 +66,15 @@ const defaultOptions: Omit<AIAutomationOption, "enabled">[] = [
     category: "reply",
   },
   {
+    id: "order_taking",
+    name: "Order Taking",
+    description: "AI can take orders from customers via Messenger",
+    icon: ShoppingCart,
+    iconColor: "text-success",
+    iconBg: "bg-success/10",
+    category: "reply",
+  },
+  {
     id: "faq_auto_answer",
     name: "AI FAQ Auto Answer",
     description: "Detect common questions and instantly answer FAQs",
@@ -101,6 +112,15 @@ const defaultOptions: Omit<AIAutomationOption, "enabled">[] = [
   },
   // Moderation Automations
   {
+    id: "reaction_on_comments",
+    name: "Reaction on Comments",
+    description: "Automatically react (Like/Love) to comments on your posts",
+    icon: Heart,
+    iconColor: "text-pink-500",
+    iconBg: "bg-pink-500/10",
+    category: "moderation",
+  },
+  {
     id: "spam_filter",
     name: "AI Spam & Abuse Filter",
     description: "Detect and filter spam, scams, and abusive content",
@@ -128,6 +148,15 @@ const defaultOptions: Omit<AIAutomationOption, "enabled">[] = [
     category: "moderation",
   },
   // Intelligence Features
+  {
+    id: "ai_media_understanding",
+    name: "AI Media Understanding",
+    description: "AI can understand and respond to images and voice messages",
+    icon: Camera,
+    iconColor: "text-purple-500",
+    iconBg: "bg-purple-500/10",
+    category: "intelligence",
+  },
   {
     id: "language_tone_matching",
     name: "AI Language & Tone Matching",
