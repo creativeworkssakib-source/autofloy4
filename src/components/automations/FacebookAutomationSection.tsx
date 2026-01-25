@@ -292,6 +292,7 @@ const FacebookAutomationSection = ({
       <FacebookAIAutomation
         pageId={pageId}
         pageName={pageName}
+        accountId={accountId}
         onSettingsChange={handleSettingsChange}
       />
 

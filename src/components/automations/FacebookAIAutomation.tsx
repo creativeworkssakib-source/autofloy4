@@ -21,9 +21,10 @@ import {
   AlertCircle,
   Heart,
   Camera,
+  Loader2,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { sendToWebhook, isWebhookActive } from "@/services/webhookService";
+import { fetchPageMemory, savePageMemory } from "@/services/apiService";
 
 interface AIAutomationOption {
   id: string;
@@ -39,11 +40,9 @@ interface AIAutomationOption {
 interface FacebookAIAutomationProps {
   pageId: string;
   pageName: string;
+  accountId?: string;
   onSettingsChange?: (settings: Record<string, boolean>) => void;
 }
-
-// Webhook ID from database - this matches the webhook_configs table
-const FACEBOOK_WEBHOOK_ID = "facebook";
 
 const defaultOptions: Omit<AIAutomationOption, "enabled">[] = [
   // Reply Automations
@@ -186,96 +185,102 @@ const defaultOptions: Omit<AIAutomationOption, "enabled">[] = [
   },
 ];
 
-const FacebookAIAutomation = ({ pageId, pageName, onSettingsChange }: FacebookAIAutomationProps) => {
+const FacebookAIAutomation = ({ pageId, pageName, accountId, onSettingsChange }: FacebookAIAutomationProps) => {
   const { toast } = useToast();
   const [options, setOptions] = useState<AIAutomationOption[]>(() => 
     defaultOptions.map(opt => ({ ...opt, enabled: false }))
   );
   const [isSaving, setIsSaving] = useState(false);
-  const [webhookActive, setWebhookActive] = useState<boolean | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Check if Facebook webhook is active
+  // Load saved settings from page_memory
   useEffect(() => {
-    async function checkWebhook() {
-      const active = await isWebhookActive(FACEBOOK_WEBHOOK_ID);
-      setWebhookActive(active);
-    }
-    checkWebhook();
-  }, []);
-
-  // Load saved settings from localStorage
-  useEffect(() => {
-    const saved = localStorage.getItem(`fb_ai_automation_${pageId}`);
-    if (saved) {
+    const loadSettings = async () => {
+      setIsLoading(true);
       try {
-        const savedSettings = JSON.parse(saved);
-        setOptions(prev => prev.map(opt => ({
-          ...opt,
-          enabled: savedSettings[opt.id] ?? false
-        })));
-      } catch (e) {
-        console.error("Failed to parse saved settings:", e);
+        const result = await fetchPageMemory(pageId);
+        // Handle both array and single object responses
+        const memory = Array.isArray(result) 
+          ? result.find(m => m.page_id === pageId) 
+          : result;
+        
+        if (memory?.automation_settings) {
+          const savedSettings = memory.automation_settings as Record<string, boolean>;
+          setOptions(prev => prev.map(opt => ({
+            ...opt,
+            enabled: savedSettings[opt.id] ?? false
+          })));
+        }
+      } catch (error) {
+        console.error("Failed to load automation settings:", error);
+        // Fallback to localStorage
+        const saved = localStorage.getItem(`fb_ai_automation_${pageId}`);
+        if (saved) {
+          try {
+            const savedSettings = JSON.parse(saved);
+            setOptions(prev => prev.map(opt => ({
+              ...opt,
+              enabled: savedSettings[opt.id] ?? false
+            })));
+          } catch (e) {
+            console.error("Failed to parse saved settings:", e);
+          }
+        }
+      } finally {
+        setIsLoading(false);
       }
-    }
+    };
+    
+    loadSettings();
   }, [pageId]);
 
   const handleToggle = async (optionId: string, enabled: boolean) => {
-    // Check webhook status
-    if (webhookActive === false) {
-      toast({
-        title: "Webhook Not Configured",
-        description: "Facebook automation webhook is not active. Contact admin to configure it.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     // Optimistic update
     setOptions(prev => prev.map(opt => 
       opt.id === optionId ? { ...opt, enabled } : opt
     ));
 
-    // Save to localStorage
+    // Build new settings object
     const newSettings: Record<string, boolean> = {};
     options.forEach(opt => {
       newSettings[opt.id] = opt.id === optionId ? enabled : opt.enabled;
     });
+
+    // Save to localStorage as backup
     localStorage.setItem(`fb_ai_automation_${pageId}`, JSON.stringify(newSettings));
 
     // Notify parent
     onSettingsChange?.(newSettings);
 
-    // Send to webhook using database URL
-    try {
-      setIsSaving(true);
-      const result = await sendToWebhook(FACEBOOK_WEBHOOK_ID, {
-        page_id: pageId,
-        page_name: pageName,
-        event_type: "automation_toggle",
-        setting_id: optionId,
-        enabled,
-        all_settings: newSettings,
-      });
-
-      if (result.success) {
+    // Save to page_memory
+    if (accountId) {
+      try {
+        setIsSaving(true);
+        await savePageMemory({
+          account_id: accountId,
+          page_id: pageId,
+          page_name: pageName,
+          automation_settings: newSettings,
+        });
+        
         toast({
           title: enabled ? "Automation Enabled" : "Automation Disabled",
           description: `${options.find(o => o.id === optionId)?.name} has been ${enabled ? "activated" : "paused"}.`,
         });
-      } else {
+      } catch (error) {
+        console.error("Failed to save settings:", error);
         toast({
           title: "Settings Saved Locally",
-          description: result.error || "Changes saved. Will sync when connection is restored.",
+          description: "Changes saved locally. Will sync when connection is restored.",
         });
+      } finally {
+        setIsSaving(false);
       }
-    } catch (error) {
-      console.error("Failed to sync settings:", error);
+    } else {
       toast({
-        title: "Settings Saved Locally",
-        description: "Changes saved. Will sync when connection is restored.",
+        title: enabled ? "Automation Enabled" : "Automation Disabled",
+        description: `${options.find(o => o.id === optionId)?.name} has been ${enabled ? "activated" : "paused"}.`,
       });
-    } finally {
-      setIsSaving(false);
     }
   };
 
@@ -319,7 +324,7 @@ const FacebookAIAutomation = ({ pageId, pageName, onSettingsChange }: FacebookAI
               <Switch
                 checked={option.enabled}
                 onCheckedChange={(checked) => handleToggle(option.id, checked)}
-                disabled={isSaving || webhookActive === false}
+                disabled={isSaving}
               />
             </div>
           </motion.div>
@@ -348,31 +353,32 @@ const FacebookAIAutomation = ({ pageId, pageName, onSettingsChange }: FacebookAI
                 </CardDescription>
               </div>
             </div>
-            <Badge 
-              variant={enabledCount > 0 ? "default" : "secondary"}
-              className={enabledCount > 0 ? "bg-success text-success-foreground" : ""}
-            >
-              {enabledCount} / {options.length} Active
-            </Badge>
-          </div>
-          
-          {/* Webhook Status Banner */}
-          {webhookActive === false && (
-            <div className="mt-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20 flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 text-destructive shrink-0" />
-              <p className="text-xs text-destructive">
-                Facebook webhook is not configured. Automations won't work until an admin sets up the webhook URL in Admin Panel → Webhooks.
-              </p>
+            <div className="flex items-center gap-2">
+              {isSaving && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+              <Badge 
+                variant={enabledCount > 0 ? "default" : "secondary"}
+                className={enabledCount > 0 ? "bg-success text-success-foreground" : ""}
+              >
+                {enabledCount} / {options.length} Active
+              </Badge>
             </div>
-          )}
+          </div>
         </CardHeader>
 
         <Separator />
 
         <CardContent className="pt-6 space-y-6">
-          {renderOptionGroup("Reply Automations", replyOptions, 0)}
-          {renderOptionGroup("Moderation", moderationOptions, replyOptions.length)}
-          {renderOptionGroup("AI Intelligence", intelligenceOptions, replyOptions.length + moderationOptions.length)}
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            </div>
+          ) : (
+            <>
+              {renderOptionGroup("Reply Automations", replyOptions, 0)}
+              {renderOptionGroup("Moderation", moderationOptions, replyOptions.length)}
+              {renderOptionGroup("AI Intelligence", intelligenceOptions, replyOptions.length + moderationOptions.length)}
+            </>
+          )}
         </CardContent>
       </Card>
     </motion.div>
