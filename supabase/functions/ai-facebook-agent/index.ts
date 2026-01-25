@@ -1309,9 +1309,56 @@ When customer wants to order, follow this EXACT sequence:
   return prompt;
 }
 
-// Call Lovable AI
-async function callAI(systemPrompt: string, messages: any[]): Promise<string> {
+// Call Lovable AI - supports text and vision (image analysis)
+async function callAI(systemPrompt: string, messages: any[], imageUrls?: string[]): Promise<string> {
   try {
+    // Build the messages array - support multi-modal (text + images)
+    const formattedMessages: any[] = [
+      { role: "system", content: systemPrompt },
+    ];
+    
+    // Add conversation history
+    for (const msg of messages) {
+      formattedMessages.push({
+        role: msg.role,
+        content: msg.content,
+      });
+    }
+    
+    // If there are images, add them to the last user message or create new one
+    if (imageUrls && imageUrls.length > 0) {
+      console.log(`[AI] Adding ${imageUrls.length} images for vision analysis`);
+      
+      // Build multi-modal content array for the image message
+      const imageContent: any[] = [];
+      
+      // Add text instruction first
+      imageContent.push({
+        type: "text",
+        text: "Please analyze this image and respond appropriately. If it's a product photo, describe what you see and offer to help with pricing or ordering. If it's a screenshot or other content, describe it and ask how you can help."
+      });
+      
+      // Add each image
+      for (const imageUrl of imageUrls) {
+        if (imageUrl && imageUrl.startsWith("http")) {
+          imageContent.push({
+            type: "image_url",
+            image_url: {
+              url: imageUrl,
+            },
+          });
+        }
+      }
+      
+      // Add as a new user message with images
+      if (imageContent.length > 1) {
+        formattedMessages.push({
+          role: "user",
+          content: imageContent,
+        });
+      }
+    }
+
     const response = await fetch(AI_GATEWAY_URL, {
       method: "POST",
       headers: {
@@ -1320,12 +1367,9 @@ async function callAI(systemPrompt: string, messages: any[]): Promise<string> {
       },
       body: JSON.stringify({
         model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: systemPrompt },
-          ...messages,
-        ],
-        max_tokens: 300, // Reduced for shorter replies
-        temperature: 0.6, // Slightly lower for more focused responses
+        messages: formattedMessages,
+        max_tokens: 400, // Slightly more for image descriptions
+        temperature: 0.6,
       }),
     });
 
@@ -1746,7 +1790,19 @@ serve(async (req) => {
       };
     });
 
-    const aiReply = await callAI(systemPrompt, aiMessages);
+    // Extract image URLs from attachments for Vision API
+    const imageUrls: string[] = [];
+    if (attachments && (messageType === "image" || messageType === "video")) {
+      for (const att of attachments) {
+        const url = att.payload?.url || att.url;
+        if (url && url.startsWith("http")) {
+          imageUrls.push(url);
+        }
+      }
+      console.log(`[AI Agent] 📷 Extracted ${imageUrls.length} image URLs for Vision analysis`);
+    }
+
+    const aiReply = await callAI(systemPrompt, aiMessages, imageUrls.length > 0 ? imageUrls : undefined);
 
     // Add AI response to history
     messageHistory.push({
@@ -1941,10 +1997,55 @@ serve(async (req) => {
             reason: gifAnalysis.meaning,
             sentiment: gifAnalysis.sentiment,
           };
-        } else if (smartAnalysis.isPhoto && !messageText?.trim()) {
-          // Photo without text - ask context nicely
-          response.reply = `ছবিটা পেয়েছি! 📷 এই ছবি সম্পর্কে কী জানতে চাইছেন? অথবা কোন প্রোডাক্টের ছবি হলে বলুন, দাম জানিয়ে দেব! 😊`;
-          response.reactionType = "LIKE";
+        } else if (smartAnalysis.isPhoto || messageType === "image") {
+          // Photo message - use AI Vision to analyze the image
+          console.log(`[AI Agent] 📷 Photo detected, using Vision API for analysis`);
+          
+          // Extract image URLs from attachments
+          const photoUrls: string[] = [];
+          if (attachments) {
+            for (const att of attachments) {
+              const url = att.payload?.url || att.url;
+              if (url && url.startsWith("http")) {
+                photoUrls.push(url);
+              }
+            }
+          }
+          
+          if (photoUrls.length > 0) {
+            // Use Vision API to analyze the image
+            const visionSystemPrompt = `You are a helpful Bangladeshi business assistant. Analyze the image the customer sent and respond in Bangla (Bengali).
+
+If it's a product photo:
+- Describe what you see briefly
+- If you recognize it as a product you sell, mention the name and price
+- Offer to help with ordering
+
+If it's a screenshot or other content:
+- Describe what you see
+- Ask how you can help
+
+Keep response SHORT (2-3 sentences max). Be friendly and helpful.
+Available products: ${allProducts.map(p => `${p.name} - ৳${p.price}`).slice(0, 20).join(", ")}`;
+
+            const visionMessages = messageText?.trim() 
+              ? [{ role: "user", content: messageText }]
+              : [{ role: "user", content: "এই ছবি দেখুন" }];
+            
+            const visionReply = await callAI(visionSystemPrompt, visionMessages, photoUrls);
+            response.reply = visionReply;
+            response.reactionType = "LIKE";
+            response.smartAnalysis = {
+              type: "photo_analyzed",
+              reason: "Vision API used for image analysis",
+              sentiment: "neutral",
+            };
+            console.log(`[AI Agent] ✅ Vision analysis complete`);
+          } else {
+            // No valid image URL - fallback response
+            response.reply = `ছবিটা পেয়েছি! 📷 এই ছবি সম্পর্কে কী জানতে চাইছেন? অথবা কোন প্রোডাক্টের ছবি হলে বলুন, দাম জানিয়ে দেব! 😊`;
+            response.reactionType = "LIKE";
+          }
         }
       } else {
         // Regular text message
