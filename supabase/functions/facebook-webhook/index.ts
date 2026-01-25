@@ -616,6 +616,32 @@ async function processMessagingEvent(supabase: any, pageId: string, event: any) 
     
     console.log(`[Webhook] Message type: ${messageType}, Sticker ID: ${message.sticker_id || 'none'}, Has attachments: ${!!attachments}`);
 
+    // Check if AI Media Understanding is enabled for media messages
+    const isMediaMessage = messageType !== "text";
+    const aiMediaUnderstandingEnabled = pageMemory?.automation_settings?.aiMediaUnderstanding !== false; // Default true
+    
+    if (isMediaMessage && !aiMediaUnderstandingEnabled) {
+      console.log("[Webhook] AI Media Understanding disabled, using simple response for media:", messageType);
+      // Send a simple generic response instead of AI analysis
+      if (decryptedToken) {
+        await sendFacebookMessage(decryptedToken, senderId, "ধন্যবাদ! কিভাবে সাহায্য করতে পারি বলুন। 😊");
+      }
+      await supabase.from("execution_logs").insert({
+        user_id: account.user_id,
+        source_platform: "facebook",
+        event_type: "media_message_simple_reply",
+        status: "success",
+        incoming_payload: {
+          sender_id: senderId,
+          page_id: pageId,
+          message_type: messageType,
+          reason: "AI Media Understanding disabled"
+        },
+        processing_time_ms: Date.now() - startTime,
+      });
+      return;
+    }
+
     // Get sender profile
     let senderName: string | undefined = undefined;
     if (decryptedToken) {
@@ -776,6 +802,30 @@ async function processFeedChange(supabase: any, pageId: string, change: any) {
       console.log("[Webhook] Auto comment reply disabled for page:", pageId);
       return;
     }
+    
+    // Check if AI Media Understanding is enabled for media comments
+    const isMediaComment = commentMessageType !== "text";
+    const aiMediaUnderstandingEnabled = pageMemory?.automation_settings?.aiMediaUnderstanding !== false; // Default true
+    
+    if (isMediaComment && !aiMediaUnderstandingEnabled) {
+      console.log("[Webhook] AI Media Understanding disabled, skipping media comment analysis:", commentMessageType);
+      // Still log but skip AI processing for media
+      await supabase.from("execution_logs").insert({
+        user_id: account.user_id,
+        source_platform: "facebook",
+        event_type: "media_comment_skipped",
+        status: "skipped",
+        incoming_payload: {
+          page_id: pageId,
+          post_id: value.post_id,
+          comment_id: value.comment_id,
+          message_type: commentMessageType,
+          reason: "AI Media Understanding disabled"
+        },
+        processing_time_ms: Date.now() - startTime,
+      });
+      return;
+    }
 
     // Check for negative/spam/abusive comment - hide and don't reply
     if (isNegativeComment(commentText)) {
@@ -891,9 +941,15 @@ async function processFeedChange(supabase: any, pageId: string, change: any) {
       console.log("[Webhook] Comment reply sent:", commentReplyText.substring(0, 60));
 
       // Add reaction based on AI decision
-      if (pageMemory?.automation_settings?.reactionOnComments && aiResponse.reactionType !== "NONE") {
-        await addReaction(decryptedToken, value.comment_id, aiResponse.reactionType || "LIKE");
-        console.log(`[Webhook] Reaction added: ${aiResponse.reactionType}`);
+      const reactionEnabled = pageMemory?.automation_settings?.reactionOnComments;
+      const reactionType = aiResponse.reactionType || "LIKE";
+      console.log(`[Webhook] Reaction check: enabled=${reactionEnabled}, type=${reactionType}, shouldReact=${reactionType !== "NONE"}`);
+      
+      if (reactionEnabled && reactionType !== "NONE") {
+        const reactionSuccess = await addReaction(decryptedToken, value.comment_id, reactionType);
+        console.log(`[Webhook] Reaction ${reactionType} ${reactionSuccess ? 'added ✅' : 'FAILED ❌'} to comment:`, value.comment_id);
+      } else {
+        console.log(`[Webhook] Reaction skipped: ${!reactionEnabled ? 'disabled in settings' : 'reaction type is NONE'}`);
       }
 
       // *** STEP 2: SMART INBOX DECISION - Only send if AI says to ***
