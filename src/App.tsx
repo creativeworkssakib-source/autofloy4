@@ -56,7 +56,7 @@ const Automations = lazy(() => import("./pages/Automations"));
 const ConnectFacebook = lazy(() => import("./pages/ConnectFacebook"));
 const AuthFacebookCallback = lazy(() => import("./pages/AuthFacebookCallback"));
 const AuthGoogleCallback = lazy(() => import("./pages/AuthGoogleCallback"));
-const FacebookPageSettings = lazy(() => import("./pages/dashboard/FacebookPageSettings"));
+// FacebookPageSettings removed - functionality moved to FacebookAutomationSection
 const AutomationStatus = lazy(() => import("./pages/dashboard/AutomationStatus"));
 const Marketing = lazy(() => import("./pages/dashboard/Marketing"));
 
@@ -214,16 +214,7 @@ const App = () => (
                       <Automations />
                     </ProtectedRoute>
                   } />
-                  <Route path="/dashboard/automations/facebook/:accountId/:pageId/settings" element={
-                    <ProtectedRoute>
-                      <FacebookPageSettings />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/dashboard/facebook-settings/:pageId/:accountId" element={
-                    <ProtectedRoute>
-                      <FacebookPageSettings />
-                    </ProtectedRoute>
-                  } />
+                  {/* FacebookPageSettings routes removed - functionality moved to FacebookAutomationSection */}
                   <Route path="/dashboard/automation-status" element={
                     <ProtectedRoute>
                       <AutomationStatus />
