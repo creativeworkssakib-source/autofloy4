@@ -1947,9 +1947,10 @@ serve(async (req) => {
         response.inboxMessage = inboxMessage;
       }
     } else {
-      // *** FOR MESSENGER INBOX: Also use SMART analysis for stickers/GIFs/emojis ***
+      // *** FOR MESSENGER INBOX: Also use SMART analysis for stickers/GIFs/emojis/audio ***
       const isMediaMessage = messageType === "sticker" || messageType === "gif" || 
         messageType === "animated_sticker" || messageType === "image" || messageType === "video" ||
+        messageType === "audio" ||
         /^[\s]*[👍❤️🔥💯💕😍🥰😊👏💪🙌❤]+[\s]*$/.test(messageText);
       
       if (isMediaMessage) {
