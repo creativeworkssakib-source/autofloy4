@@ -6,16 +6,20 @@ import { Button } from "@/components/ui/button";
 // Check if already dismissed
 const isDismissed = () => sessionStorage.getItem('extension-warning-dismissed') === 'true';
 
+// Check if user is authenticated
+const isAuthenticated = () => !!localStorage.getItem('autofloy_token');
+
 export const ExtensionBlockerDetector = () => {
   const [showWarning, setShowWarning] = useState(false);
 
-  // Only run detection once on mount
+  // Only run detection once on mount AND only if user is authenticated
   useEffect(() => {
-    if (isDismissed()) {
+    // Skip if already dismissed or if user is not logged in
+    if (isDismissed() || !isAuthenticated()) {
       return;
     }
 
-    // Test multiple endpoints that are commonly blocked
+    // Test using OPTIONS request which doesn't require auth
     const checkTimer = setTimeout(async () => {
       const testUrls = [
         'https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1/dashboard-stats',
@@ -30,15 +34,17 @@ export const ExtensionBlockerDetector = () => {
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 3000);
           
-          await fetch(testUrl, {
-            method: 'GET',
+          // Use OPTIONS request to check connectivity without requiring auth
+          // This avoids 401 errors and just checks if the endpoint is reachable
+          const response = await fetch(testUrl, {
+            method: 'OPTIONS',
             signal: controller.signal,
-            headers: {
-              'Content-Type': 'application/json'
-            }
           });
           
           clearTimeout(timeoutId);
+          
+          // OPTIONS should return 204 for CORS preflight
+          // If we get here without error, the endpoint is reachable
         } catch (error) {
           if (error instanceof TypeError && error.message === 'Failed to fetch') {
             blockedCount++;
