@@ -114,6 +114,11 @@ const ConnectFacebook = () => {
     loadPages();
   }, []);
 
+  // Detect mobile device
+  const isMobileDevice = () => {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  };
+
   // Start OAuth flow
   const handleConnectFacebook = async () => {
     setIsConnecting(true);
@@ -129,10 +134,24 @@ const ConnectFacebook = () => {
       }
 
       if (result.url) {
-        if (window.top && window.top !== window.self) {
-          window.open(result.url, '_blank');
+        const isIframe = window.top && window.top !== window.self;
+        const isMobile = isMobileDevice();
+        
+        // On mobile or iframe, use window.open to avoid redirect issues
+        // Mobile browsers often block or have issues with direct location.href for OAuth
+        if (isIframe || isMobile) {
+          // For mobile, use _self to stay in same tab (avoids popup blocker)
+          const target = isMobile ? '_self' : '_blank';
+          const newWindow = window.open(result.url, target);
+          
+          // If popup was blocked on mobile, try direct navigation
+          if (!newWindow && isMobile) {
+            window.location.href = result.url;
+          }
+          
           setTimeout(() => setIsConnecting(false), 2000);
         } else {
+          // Desktop: direct navigation works best
           window.location.href = result.url;
         }
       } else {
