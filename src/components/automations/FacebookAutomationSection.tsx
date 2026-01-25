@@ -285,95 +285,40 @@ const FacebookAutomationSection = ({
         repliesToday={0}
         lastActivityTime={null}
         enabledAutomationsCount={enabledCount}
-        totalAutomations={9}
+        totalAutomations={5}
       />
 
-      {/* Custom Instructions */}
+      {/* AI Preferences */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.05 }}
       >
         <Card className="border-border/50 bg-card/50">
-          <CardContent className="pt-4">
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Custom Instructions (Optional)</Label>
-              <Textarea
-                placeholder="Any special instructions for AI responses..."
-                value={customInstructions}
-                onChange={(e) => setCustomInstructions(e.target.value)}
-                className="min-h-[60px] resize-none"
-              />
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
-
-      {/* AI Automation Controls */}
-      <FacebookAIAutomation
-        pageId={pageId}
-        pageName={pageName}
-        accountId={accountId}
-        onSettingsChange={handleSettingsChange}
-      />
-
-      {/* AI Memory & Preferences */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-      >
-        <Card className="border-border/50 bg-card/50">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Building2 className="h-4 w-4 text-primary" />
-              Business Information
-            </CardTitle>
-            <CardDescription>
-              Help AI understand your business better for accurate responses
-            </CardDescription>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Globe className="h-4 w-4 text-primary" />
+                AI Preferences
+              </CardTitle>
+              <Button
+                size="sm"
+                onClick={handleSaveMemory}
+                disabled={isSaving}
+                className="gap-2"
+              >
+                {isSaving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                Save
+              </Button>
+            </div>
           </CardHeader>
           <Separator />
           <CardContent className="pt-4 space-y-4">
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Business Description</Label>
-              <Textarea
-                placeholder="Describe your business, what you sell, and your unique selling points..."
-                value={businessDescription}
-                onChange={(e) => setBusinessDescription(e.target.value)}
-                className="min-h-[80px] resize-none"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Services / Products Offered</Label>
-              <Textarea
-                placeholder="List your main products or services, pricing info, etc..."
-                value={servicesOffered}
-                onChange={(e) => setServicesOffered(e.target.value)}
-                className="min-h-[60px] resize-none"
-              />
-            </div>
-
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-sm font-medium flex items-center gap-2">
-                  <Languages className="h-4 w-4 text-muted-foreground" />
-                  Preferred Language
-                </Label>
-                <Select value={detectedLanguage} onValueChange={setDetectedLanguage}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="auto">🌐 Auto-Detect</SelectItem>
-                    <SelectItem value="bengali">বাংলা (Bengali)</SelectItem>
-                    <SelectItem value="english">English</SelectItem>
-                    <SelectItem value="mixed">Mixed (Banglish)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              
               <div className="space-y-2">
                 <Label className="text-sm font-medium flex items-center gap-2">
                   <Palette className="h-4 w-4 text-muted-foreground" />
@@ -384,14 +329,62 @@ const FacebookAutomationSection = ({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="friendly">😊 Friendly</SelectItem>
-                    <SelectItem value="professional">💼 Professional</SelectItem>
-                    <SelectItem value="casual">😎 Casual</SelectItem>
-                    <SelectItem value="formal">🎩 Formal</SelectItem>
-                    <SelectItem value="sales">💰 Sales-Focused</SelectItem>
+                    <SelectItem value="friendly">Friendly & Warm</SelectItem>
+                    <SelectItem value="professional">Professional</SelectItem>
+                    <SelectItem value="casual">Casual</SelectItem>
+                    <SelectItem value="formal">Formal</SelectItem>
+                    <SelectItem value="sales">Sales-Focused</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+              
+              <div className="space-y-2">
+                <Label className="text-sm font-medium flex items-center gap-2">
+                  <Languages className="h-4 w-4 text-muted-foreground" />
+                  Response Language
+                </Label>
+                <Select value={detectedLanguage} onValueChange={setDetectedLanguage}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">Auto-Detect</SelectItem>
+                    <SelectItem value="bengali">বাংলা (Bengali)</SelectItem>
+                    <SelectItem value="english">English</SelectItem>
+                    <SelectItem value="mixed">Mixed (Banglish)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Business Description</Label>
+              <Textarea
+                placeholder="Describe your business... (helps AI understand context)"
+                value={businessDescription}
+                onChange={(e) => setBusinessDescription(e.target.value)}
+                className="min-h-[80px] resize-none"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Services / Products Offered</Label>
+              <Textarea
+                placeholder="List your main products or services..."
+                value={servicesOffered}
+                onChange={(e) => setServicesOffered(e.target.value)}
+                className="min-h-[60px] resize-none"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Custom Instructions (Optional)</Label>
+              <Textarea
+                placeholder="Any special instructions for AI responses..."
+                value={customInstructions}
+                onChange={(e) => setCustomInstructions(e.target.value)}
+                className="min-h-[60px] resize-none"
+              />
             </div>
           </CardContent>
         </Card>
