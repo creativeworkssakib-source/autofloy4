@@ -1,5 +1,5 @@
 import { motion, useMotionValue, useTransform, animate, useInView } from "framer-motion";
-import { useEffect, useRef, useState, memo, useCallback } from "react";
+import { useEffect, useRef, useState, memo, useCallback, forwardRef } from "react";
 import { TrendingUp, Users, Clock, Wallet, Star, BadgeCheck, ThumbsUp, Plus, LogIn, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
@@ -122,7 +122,7 @@ const BenefitCard = memo(({ benefit, index }: { benefit: typeof benefits[0]; ind
 
 BenefitCard.displayName = "BenefitCard";
 
-const BenefitsSection = memo(() => {
+const BenefitsSection = forwardRef<HTMLElement, Record<string, never>>((_props, _ref) => {
   const { settings } = useSiteSettings();
   const { user } = useAuth();
   const [reviews, setReviews] = useState<Review[]>(defaultReviews);

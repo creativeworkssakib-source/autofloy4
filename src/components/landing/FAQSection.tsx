@@ -1,5 +1,5 @@
 import { motion, useInView } from "framer-motion";
-import { memo, useRef } from "react";
+import { forwardRef, useRef } from "react";
 import {
   Accordion,
   AccordionContent,
@@ -9,7 +9,7 @@ import {
 import { useLanguage } from "@/contexts/LanguageContext";
 import { HelpCircle } from "lucide-react";
 
-const FAQSection = memo(() => {
+const FAQSection = forwardRef<HTMLElement, Record<string, never>>((_props, _ref) => {
   const { t } = useLanguage();
   const sectionRef = useRef(null);
   const isInView = useInView(sectionRef, { once: true, margin: "-100px" });
