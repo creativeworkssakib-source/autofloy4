@@ -63,6 +63,7 @@ const AutomationStatus = lazy(() => import("./pages/dashboard/AutomationStatus")
 const Marketing = lazy(() => import("./pages/dashboard/Marketing"));
 const Orders = lazy(() => import("./pages/dashboard/Orders"));
 const DigitalProducts = lazy(() => import("./pages/dashboard/DigitalProducts"));
+const AIMediaLibrary = lazy(() => import("./pages/dashboard/AIMediaLibrary"));
 
 // Business Selector & Offline Shop pages
 const BusinessSelector = lazy(() => import("./pages/BusinessSelector"));
@@ -259,6 +260,11 @@ const App = () => (
                   <Route path="/dashboard/digital-products" element={
                     <ProtectedRoute>
                       <DigitalProducts />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/dashboard/ai-media" element={
+                    <ProtectedRoute>
+                      <AIMediaLibrary />
                     </ProtectedRoute>
                   } />
                   
