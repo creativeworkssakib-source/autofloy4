@@ -18,6 +18,7 @@ import { DynamicAppearance } from "@/components/DynamicAppearance";
 import BackToTopButton from "@/components/ui/BackToTopButton";
 import { OfflineReadyIndicator } from "@/components/OfflineIndicators";
 import { ExtensionBlockerDetector } from "@/components/ExtensionBlockerDetector";
+import { GlobalUpdateNotification } from "@/components/GlobalUpdateNotification";
 import { Loader2 } from "lucide-react";
 
 // Eagerly loaded routes (small, critical)
@@ -146,6 +147,7 @@ const App = () => (
               <BackToTopButton />
               <OfflineReadyIndicator />
               <ExtensionBlockerDetector />
+              <GlobalUpdateNotification />
               <Suspense fallback={<PageLoader />}>
                 <Routes>
                   {/* Public routes */}

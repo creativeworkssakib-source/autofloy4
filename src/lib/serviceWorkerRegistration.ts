@@ -2,7 +2,7 @@
  * Service Worker Registration
  * 
  * Registers the PWA service worker and handles updates
- * Auto-updates when new version is available
+ * Auto-updates immediately when new version is available
  */
 
 type Config = {
@@ -10,6 +10,9 @@ type Config = {
   onUpdate?: (registration: ServiceWorkerRegistration) => void;
   onOfflineReady?: () => void;
 };
+
+// Check interval - every 1 minute for faster updates
+const UPDATE_CHECK_INTERVAL = 60 * 1000;
 
 export function register(config?: Config): void {
   if ('serviceWorker' in navigator) {
@@ -21,20 +24,23 @@ export function register(config?: Config): void {
         .then((registration) => {
           console.log('Service Worker registered successfully');
 
-          // Check for updates more frequently - every 5 minutes
+          // Check for updates frequently - every 1 minute
           setInterval(() => {
-            registration.update();
-          }, 5 * 60 * 1000); // Check every 5 minutes
+            registration.update().catch(err => {
+              console.debug('SW update check failed:', err);
+            });
+          }, UPDATE_CHECK_INTERVAL);
 
           registration.onupdatefound = () => {
             const installingWorker = registration.installing;
             if (installingWorker == null) {
               return;
             }
+            
             installingWorker.onstatechange = () => {
               if (installingWorker.state === 'installed') {
                 if (navigator.serviceWorker.controller) {
-                  // New content available - force refresh
+                  // New content available - force refresh immediately
                   console.log('New content is available; auto-updating...');
                   
                   // Skip waiting and claim clients immediately
@@ -46,10 +52,8 @@ export function register(config?: Config): void {
                     config.onUpdate(registration);
                   }
                   
-                  // Auto reload after short delay to get new version
-                  setTimeout(() => {
-                    window.location.reload();
-                  }, 1000);
+                  // Don't auto-reload here - let GlobalUpdateNotification handle it
+                  // This prevents jarring reloads during user activity
                 } else {
                   // Content cached for offline use
                   console.log('Content is cached for offline use.');
@@ -68,10 +72,13 @@ export function register(config?: Config): void {
           console.error('Service Worker registration failed:', error);
         });
 
-      // Listen for controller change and reload
+      // Listen for controller change - this means SW was updated
+      let refreshing = false;
       navigator.serviceWorker.addEventListener('controllerchange', () => {
-        console.log('New service worker activated, reloading...');
-        window.location.reload();
+        if (refreshing) return;
+        refreshing = true;
+        console.log('New service worker activated');
+        // Don't auto-reload - let the update notification handle it
       });
     });
   }
@@ -95,6 +102,29 @@ export function checkForUpdates(): void {
     navigator.serviceWorker.ready.then((registration) => {
       registration.update();
     });
+  }
+}
+
+// Clear all caches and force update
+export async function forceUpdate(): Promise<void> {
+  try {
+    // Clear all caches
+    if ('caches' in window) {
+      const cacheNames = await caches.keys();
+      await Promise.all(cacheNames.map(name => caches.delete(name)));
+    }
+    
+    // Unregister service worker
+    if ('serviceWorker' in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map(reg => reg.unregister()));
+    }
+    
+    // Reload
+    window.location.reload();
+  } catch (error) {
+    console.error('Force update failed:', error);
+    window.location.reload();
   }
 }
 
