@@ -19,6 +19,7 @@ import {
   Users,
   DollarSign,
   Sparkles,
+  Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,6 +38,7 @@ import { digitalProductService, DigitalProduct } from "@/services/digitalProduct
 import { toast } from "sonner";
 import { DigitalProductFormModal } from "@/components/digital-products/DigitalProductFormModal";
 import { DigitalProductDetailModal } from "@/components/digital-products/DigitalProductDetailModal";
+import { DigitalProductBulkUploadModal } from "@/components/digital-products/DigitalProductBulkUploadModal";
 
 const productTypeIcons: Record<string, typeof FileCode> = {
   subscription: Key,
@@ -62,6 +64,7 @@ const DigitalProducts = () => {
   const [filterType, setFilterType] = useState<string>("all");
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<DigitalProduct | null>(null);
   const [stats, setStats] = useState({ totalProducts: 0, totalSales: 0, totalRevenue: 0, pendingDeliveries: 0 });
 
@@ -162,16 +165,25 @@ const DigitalProducts = () => {
                 : "Sell subscriptions, APIs, courses, software"}
             </p>
           </div>
-          <Button
-            variant="gradient"
-            onClick={() => {
-              setSelectedProduct(null);
-              setIsFormModalOpen(true);
-            }}
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            {language === "bn" ? "নতুন প্রোডাক্ট" : "Add Product"}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setIsBulkUploadOpen(true)}
+            >
+              <Upload className="w-4 h-4 mr-2" />
+              {language === "bn" ? "বাল্ক আপলোড" : "Bulk Upload"}
+            </Button>
+            <Button
+              variant="gradient"
+              onClick={() => {
+                setSelectedProduct(null);
+                setIsFormModalOpen(true);
+              }}
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              {language === "bn" ? "নতুন প্রোডাক্ট" : "Add Product"}
+            </Button>
+          </div>
         </div>
 
         {/* Stats */}
@@ -450,6 +462,15 @@ const DigitalProducts = () => {
           setSelectedProduct(null);
         }}
         product={selectedProduct}
+      />
+
+      <DigitalProductBulkUploadModal
+        isOpen={isBulkUploadOpen}
+        onClose={() => setIsBulkUploadOpen(false)}
+        onSuccess={() => {
+          loadData();
+          setIsBulkUploadOpen(false);
+        }}
       />
     </DashboardLayout>
   );
