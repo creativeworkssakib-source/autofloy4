@@ -141,33 +141,42 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   return (
     <div className="min-h-screen bg-muted/30">
       {/* Mobile Header */}
-      <header className="lg:hidden fixed top-0 left-0 right-0 z-50 h-16 bg-card border-b border-border flex items-center justify-between px-4">
-        <Link to="/" className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
-            {settings.logo_url ? (
-              <img src={settings.logo_url} alt={settings.company_name} className="w-6 h-6 rounded object-contain" />
-            ) : (
-              <Zap className="w-4 h-4 text-primary-foreground" />
-            )}
-          </div>
-          <span className="font-bold">{settings.company_name}</span>
-        </Link>
+      <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-card border-b border-border">
+        {/* Top row - Logo, notifications, menu */}
+        <div className="h-14 flex items-center justify-between px-3">
+          <Link to="/" className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
+              {settings.logo_url ? (
+                <img src={settings.logo_url} alt={settings.company_name} className="w-6 h-6 rounded object-contain" />
+              ) : (
+                <Zap className="w-4 h-4 text-primary-foreground" />
+              )}
+            </div>
+            <span className="font-bold text-sm">{settings.company_name}</span>
+          </Link>
 
-        <div className="flex items-center gap-2">
-          <NotificationCenter
-            notifications={notifications}
-            unreadCount={unreadCount}
-            onMarkAsRead={markAsRead}
-            onMarkAllAsRead={markAllAsRead}
-            onRemove={removeNotification}
-            onClearAll={clearAll}
-          />
-          <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="p-2 hover:bg-muted rounded-lg"
-          >
-            {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-          </button>
+          <div className="flex items-center gap-1.5">
+            <NotificationCenter
+              notifications={notifications}
+              unreadCount={unreadCount}
+              onMarkAsRead={markAsRead}
+              onMarkAllAsRead={markAllAsRead}
+              onRemove={removeNotification}
+              onClearAll={clearAll}
+            />
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="p-2 hover:bg-muted rounded-lg"
+            >
+              {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
+          </div>
+        </div>
+        
+        {/* Bottom row - Mode switchers */}
+        <div className="h-12 flex items-center justify-center gap-2 px-3 border-t border-border/50 bg-muted/30">
+          <BusinessModeSwitcher syncEnabled={syncEnabled} />
+          <ProductTypeSwitcher />
         </div>
       </header>
 
@@ -296,7 +305,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
       )}
 
       {/* Main Content */}
-      <main className="lg:ml-64 pt-16 lg:pt-0 min-h-screen flex flex-col">
+      <main className="lg:ml-64 pt-[6.5rem] lg:pt-0 min-h-screen flex flex-col">
         {/* Desktop Header */}
         <header className="hidden lg:flex h-16 items-center justify-between px-8 border-b border-border bg-card">
           <div className="flex items-center gap-4">
