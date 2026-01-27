@@ -31,7 +31,7 @@ export const ProductTypeSwitcher = () => {
 
   return (
     <TooltipProvider>
-      <div className="inline-flex items-center gap-1 p-1.5 rounded-2xl bg-gradient-to-r from-muted/80 to-muted/40 border border-border/50 backdrop-blur-sm shadow-sm">
+      <div className="inline-flex items-center gap-1 p-1 sm:p-1.5 rounded-xl sm:rounded-2xl bg-gradient-to-r from-muted/80 to-muted/40 border border-border/50 backdrop-blur-sm shadow-sm">
         {types.map((type) => {
           const isActive = productType === type.id;
           const Icon = type.icon;
@@ -43,7 +43,7 @@ export const ProductTypeSwitcher = () => {
                 <button
                   onClick={() => setProductType(type.id)}
                   className={cn(
-                    "relative flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-300 overflow-hidden",
+                    "relative flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold transition-all duration-300 overflow-hidden",
                     isActive
                       ? isDigital
                         ? "text-white shadow-lg shadow-purple-500/30"
@@ -55,7 +55,7 @@ export const ProductTypeSwitcher = () => {
                   {isActive && !isDigital && (
                     <motion.div
                       layoutId="productTypeBg"
-                      className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-100 to-cyan-100 dark:from-blue-900/40 dark:to-cyan-900/40 border border-blue-200/50 dark:border-blue-700/50"
+                      className="absolute inset-0 rounded-lg sm:rounded-xl bg-gradient-to-r from-blue-100 to-cyan-100 dark:from-blue-900/40 dark:to-cyan-900/40 border border-blue-200/50 dark:border-blue-700/50"
                       initial={false}
                       transition={{ type: "spring", bounce: 0.2, duration: 0.4 }}
                     />
@@ -65,18 +65,18 @@ export const ProductTypeSwitcher = () => {
                   {isActive && isDigital && (
                     <motion.div
                       layoutId="productTypeBg"
-                      className="absolute inset-0 rounded-xl"
+                      className="absolute inset-0 rounded-lg sm:rounded-xl"
                       initial={false}
                       transition={{ type: "spring", bounce: 0.2, duration: 0.4 }}
                     >
                       {/* Main gradient */}
-                      <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-600" />
+                      <div className="absolute inset-0 rounded-lg sm:rounded-xl bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-600" />
                       
                       {/* Shimmer overlay */}
-                      <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer" />
+                      <div className="absolute inset-0 rounded-lg sm:rounded-xl bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer" />
                       
                       {/* Glow effect */}
-                      <div className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-600 opacity-40 blur-lg -z-10" />
+                      <div className="absolute -inset-1 rounded-xl sm:rounded-2xl bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-600 opacity-40 blur-lg -z-10" />
                     </motion.div>
                   )}
                   
@@ -89,13 +89,13 @@ export const ProductTypeSwitcher = () => {
                     transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
                   >
                     <Icon className={cn(
-                      "w-4 h-4",
+                      "w-3.5 h-3.5 sm:w-4 sm:h-4",
                       isActive && isDigital && "drop-shadow-[0_0_6px_rgba(255,255,255,0.5)]"
                     )} />
                   </motion.div>
                   
-                  {/* Label */}
-                  <span className="relative z-10 hidden sm:inline">
+                  {/* Label - Always visible */}
+                  <span className="relative z-10">
                     {isDigital ? "Digital" : "Physical"}
                   </span>
                   
