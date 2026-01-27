@@ -104,6 +104,7 @@ interface ProductMediaItem {
   file_url: string;
   thumbnail_url?: string;
   description?: string;
+  product_source?: "physical" | "digital";
 }
 
 interface PostContext {
@@ -1905,17 +1906,23 @@ ${product.api_endpoint ? `- Endpoint: আছে` : ""}
 async function getProductMedia(
   supabase: any,
   userId: string,
-  productId?: string
+  productId?: string,
+  productSource?: "physical" | "digital"
 ): Promise<ProductMediaItem[]> {
   try {
     let query = supabase
       .from("product_media")
-      .select("id, product_id, media_type, file_url, thumbnail_url, description")
+      .select("id, product_id, media_type, file_url, thumbnail_url, description, product_source")
       .eq("user_id", userId)
       .order("sort_order", { ascending: true });
     
     if (productId) {
       query = query.eq("product_id", productId);
+    }
+    
+    // Filter by product source if specified
+    if (productSource) {
+      query = query.eq("product_source", productSource);
     }
     
     const { data, error } = await query.limit(20);
@@ -2163,10 +2170,10 @@ serve(async (req) => {
     const productMedia = await getProductMedia(
       supabase, 
       effectiveUserId, 
-      productContext?.id // Get media for specific product if available
+      productContext?.id, // Get media for specific product if available
+      productContext?.isDigital ? "digital" : "physical" // Filter by product type
     );
-    console.log(`[AI Agent] 📸 Loaded ${productMedia.length} media items for AI`);
-
+    console.log(`[AI Agent] 📸 Loaded ${productMedia.length} media items for AI (source: ${productContext?.isDigital ? "digital" : "physical"})`);
 
 
     // Get or create conversation

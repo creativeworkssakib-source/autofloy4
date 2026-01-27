@@ -1929,6 +1929,7 @@ export type Database = {
           id: string
           media_type: string
           product_id: string
+          product_source: string
           sort_order: number | null
           thumbnail_url: string | null
           updated_at: string
@@ -1944,6 +1945,7 @@ export type Database = {
           id?: string
           media_type: string
           product_id: string
+          product_source?: string
           sort_order?: number | null
           thumbnail_url?: string | null
           updated_at?: string
@@ -1959,6 +1961,7 @@ export type Database = {
           id?: string
           media_type?: string
           product_id?: string
+          product_source?: string
           sort_order?: number | null
           thumbnail_url?: string | null
           updated_at?: string
