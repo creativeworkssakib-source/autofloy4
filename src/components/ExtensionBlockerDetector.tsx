@@ -4,9 +4,10 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 
-// Check if already dismissed (persist for 24 hours)
+// Check if already dismissed (persist for 7 days now)
 const DISMISS_KEY = 'extension-warning-dismissed';
 const DISMISS_EXPIRY_KEY = 'extension-warning-dismissed-expiry';
+const FALLBACK_SUCCESS_KEY = 'rpc-fallback-success';
 
 const isDismissed = () => {
   try {
@@ -18,7 +19,6 @@ const isDismissed = () => {
       if (Date.now() < expiryTime) {
         return true;
       }
-      // Expired, clear the storage
       localStorage.removeItem(DISMISS_KEY);
       localStorage.removeItem(DISMISS_EXPIRY_KEY);
     }
@@ -37,6 +37,25 @@ const isAuthenticated = () => {
   }
 };
 
+// Check if RPC fallback has worked successfully
+// If RPC fallback works, we don't need to show the warning
+const hasRpcFallbackSucceeded = () => {
+  try {
+    return localStorage.getItem(FALLBACK_SUCCESS_KEY) === 'true';
+  } catch {
+    return false;
+  }
+};
+
+// Mark RPC fallback as successful - called from apiService
+export const markRpcFallbackSuccess = () => {
+  try {
+    localStorage.setItem(FALLBACK_SUCCESS_KEY, 'true');
+  } catch {
+    // Ignore
+  }
+};
+
 // Check if running in a context where extensions are likely not the issue
 const isMobileDevice = () => {
   if (typeof navigator === 'undefined') return false;
@@ -44,106 +63,108 @@ const isMobileDevice = () => {
   return /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(ua);
 };
 
+// Check if running in PWA, APK or native app
+const isNativeApp = () => {
+  if (typeof window === 'undefined') return false;
+  
+  // PWA standalone mode
+  if (window.matchMedia('(display-mode: standalone)').matches) return true;
+  if ((navigator as any).standalone === true) return true;
+  
+  // Capacitor/Cordova
+  if ((window as any).Capacitor?.isNativePlatform?.()) return true;
+  
+  // Electron
+  if (navigator.userAgent.toLowerCase().includes('electron')) return true;
+  if ((window as any).electron) return true;
+  
+  return false;
+};
+
 export const ExtensionBlockerDetector = () => {
   const [showWarning, setShowWarning] = useState(false);
-  const [isChecking, setIsChecking] = useState(false);
   const isMobile = useIsMobile();
 
   useEffect(() => {
-    // Skip if already dismissed, not logged in, or on a real mobile device
-    // Mobile devices typically don't have browser extensions that block requests
-    if (isDismissed() || !isAuthenticated()) {
+    // Skip if already dismissed, not logged in, on mobile device, or in native app
+    if (isDismissed() || !isAuthenticated() || isMobileDevice() || isNativeApp()) {
       return;
     }
 
-    // On real mobile devices, skip detection as they rarely have blocking extensions
-    if (isMobileDevice()) {
-      console.log('[ExtensionBlockerDetector] Skipping - mobile device detected');
+    // If RPC fallback has worked before, don't show warning
+    // This means the app is working fine even if edge functions are blocked
+    if (hasRpcFallbackSucceeded()) {
+      console.log('[ExtensionBlockerDetector] RPC fallback working - skipping detection');
       return;
     }
 
-    setIsChecking(true);
-
-    // Wait longer before checking to avoid race conditions
-    const checkTimer = setTimeout(async () => {
-      // Re-check auth status after delay
-      if (!isAuthenticated() || isDismissed()) {
-        setIsChecking(false);
+    // Check after a longer delay to allow fallbacks to work
+    const checkTimer = setTimeout(() => {
+      // Re-check conditions
+      if (!isAuthenticated() || isDismissed() || hasRpcFallbackSucceeded()) {
         return;
       }
 
-      const testUrls = [
-        'https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1/dashboard-stats',
-        'https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1/execution-logs',
-        'https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1/automations'
-      ];
-      
-      let blockedCount = 0;
-      let successCount = 0;
-      let timeoutCount = 0;
-      
-      for (const testUrl of testUrls) {
+      // Only show warning if both edge functions AND RPC fallbacks are failing
+      // Since the console shows RPC fallbacks working, this should not trigger
+      const checkBothFailing = async () => {
         try {
+          // Try a simple RPC call to see if Supabase is accessible
+          const testUrl = 'https://klkrzfwvrmffqkmkyqrh.supabase.co/rest/v1/rpc/get_user_dashboard_stats';
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+          const timeoutId = setTimeout(() => controller.abort(), 10000);
           
           const response = await fetch(testUrl, {
-            method: 'OPTIONS',
+            method: 'POST',
+            headers: {
+              'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtsa3J6Znd2cm1mZnFrbWt5cXJoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU4OTE4MjcsImV4cCI6MjA4MTQ2NzgyN30.ZArRZTr6tGhhnptPXvq7Onn4OhMLxrF7FvKkYC26nXg',
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ p_user_id: 'test' }),
             signal: controller.signal,
             cache: 'no-store',
           });
           
           clearTimeout(timeoutId);
           
-          // If we get any response (even error status), the request went through
-          successCount++;
-          console.log('[ExtensionBlockerDetector] Success for:', testUrl, response.status);
+          // If we get any response (even 4xx/5xx), Supabase is reachable
+          // Only "Failed to fetch" means completely blocked
+          console.log('[ExtensionBlockerDetector] RPC test response:', response.status);
+          markRpcFallbackSuccess();
+          return; // Don't show warning
+          
         } catch (error) {
-          // Only count as blocked if it's a specific network error (Failed to fetch)
-          // This happens when extensions block the request entirely
           if (error instanceof TypeError && error.message === 'Failed to fetch') {
-            blockedCount++;
-            console.log('[ExtensionBlockerDetector] Blocked:', testUrl);
-          } else if (error instanceof DOMException && error.name === 'AbortError') {
-            // Timeout - could be slow network, don't count as blocked
-            timeoutCount++;
-            console.log('[ExtensionBlockerDetector] Timeout for:', testUrl);
+            // Both edge functions AND direct Supabase calls are blocked
+            // This is a real block, show warning
+            console.log('[ExtensionBlockerDetector] All requests blocked - showing warning');
+            if (!isDismissed()) {
+              setShowWarning(true);
+            }
           } else {
-            // Other errors (CORS, etc.) mean the request reached the server
-            successCount++;
-            console.log('[ExtensionBlockerDetector] Other error (counted as success):', testUrl, error);
+            // Other errors (CORS, timeout, etc.) - Supabase is reachable
+            console.log('[ExtensionBlockerDetector] Other error (not blocked):', error);
+            markRpcFallbackSuccess();
           }
         }
-      }
-      
-      setIsChecking(false);
-      
-      // Only show warning if ALL 3 endpoints are blocked AND no successful requests
-      // AND not just timeouts (which could be network issues)
-      const isBlocked = blockedCount === 3 && successCount === 0 && timeoutCount === 0;
-      
-      if (isBlocked && !isDismissed()) {
-        console.log('[ExtensionBlockerDetector] All endpoints blocked - showing warning');
-        setShowWarning(true);
-      } else {
-        console.log('[ExtensionBlockerDetector] Not blocked:', { blockedCount, successCount, timeoutCount });
-      }
-    }, 5000); // Wait 5 seconds to let the page fully load
+      };
+
+      checkBothFailing();
+    }, 8000); // Wait 8 seconds for fallbacks to complete
 
     return () => {
       clearTimeout(checkTimer);
-      setIsChecking(false);
     };
   }, []);
 
   const handleDismiss = useCallback(() => {
     setShowWarning(false);
-    // Dismiss for 24 hours
+    // Dismiss for 7 days now (longer to reduce annoyance)
     try {
       localStorage.setItem(DISMISS_KEY, 'true');
-      localStorage.setItem(DISMISS_EXPIRY_KEY, String(Date.now() + 24 * 60 * 60 * 1000));
+      localStorage.setItem(DISMISS_EXPIRY_KEY, String(Date.now() + 7 * 24 * 60 * 60 * 1000));
     } catch {
-      // Ignore localStorage errors
+      // Ignore
     }
   }, []);
 
@@ -159,7 +180,6 @@ export const ExtensionBlockerDetector = () => {
     }
   }, [isMobile]);
 
-  // Don't show anything if not warning
   if (!showWarning) {
     return null;
   }

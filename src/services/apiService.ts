@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { markRpcFallbackSuccess } from "@/components/ExtensionBlockerDetector";
 
 const SUPABASE_URL = "https://klkrzfwvrmffqkmkyqrh.supabase.co";
 
@@ -597,6 +598,7 @@ export async function fetchDashboardStats(): Promise<DashboardStats | null> {
     }
 
     console.log("[dashboard-stats] RPC fallback success:", data);
+    markRpcFallbackSuccess(); // Mark that fallback works - no need for extension warning
     return data as unknown as DashboardStats;
   } catch (fallbackError) {
     console.error("[dashboard-stats] RPC fallback error:", fallbackError);
@@ -703,6 +705,7 @@ export async function fetchExecutionLogs(limit: number = 5): Promise<ExecutionLo
     }
     
     console.log("[execution-logs] RPC fallback success:", data?.length || 0, "logs");
+    markRpcFallbackSuccess(); // Mark that fallback works - no need for extension warning
     return (data || []) as ExecutionLog[];
   } catch (error) {
     console.error("[execution-logs] All fallbacks failed:", error);
