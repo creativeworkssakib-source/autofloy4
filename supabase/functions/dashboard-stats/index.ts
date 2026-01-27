@@ -89,14 +89,32 @@ serve(async (req) => {
       .eq("user_id", userId)
       .eq("is_connected", true);
 
-    // Get total orders and revenue
+    // Get total orders and revenue from both orders tables
     const { data: orders } = await supabase
       .from("orders")
       .select("total, created_at")
       .eq("user_id", userId);
 
+    // Get AI orders as well
+    const { data: aiOrders } = await supabase
+      .from("ai_orders")
+      .select("total, created_at, order_status")
+      .eq("user_id", userId);
+
     const todayOrders = orders?.filter(o => new Date(o.created_at!) >= today) || [];
+    const todayAiOrders = aiOrders?.filter(o => new Date(o.created_at!) >= today) || [];
     const todayRevenue = todayOrders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+    const todayAiRevenue = todayAiOrders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+    
+    // Combined stats
+    const totalTodayOrders = todayOrders.length + todayAiOrders.length;
+    const totalTodayRevenue = todayRevenue + todayAiRevenue;
+    
+    // AI-specific stats
+    const totalAiOrders = aiOrders?.length || 0;
+    const pendingAiOrders = aiOrders?.filter(o => o.order_status === "pending").length || 0;
+    const confirmedAiOrders = aiOrders?.filter(o => o.order_status === "confirmed" || o.order_status === "delivered").length || 0;
+    const totalAiRevenue = aiOrders?.filter(o => o.order_status === "delivered").reduce((sum, o) => sum + (Number(o.total) || 0), 0) || 0;
 
     const messagesHandled = todayLogs?.length || 0;
     const messagesYesterday = yesterdayLogs?.length || 0;
@@ -120,8 +138,15 @@ serve(async (req) => {
       hoursSaved,
       estimatedValue: Math.round(hoursSaved * 100), // Assuming ৳100/hour value
       connectedPages: connectedAccounts?.length || 0,
-      todayOrders: todayOrders.length,
-      todayRevenue,
+      todayOrders: totalTodayOrders,
+      todayRevenue: totalTodayRevenue,
+      // AI-specific stats
+      totalAiOrders,
+      pendingAiOrders,
+      confirmedAiOrders,
+      totalAiRevenue,
+      todayAiOrders: todayAiOrders.length,
+      todayAiRevenue,
     };
 
     return new Response(JSON.stringify({ stats }), {

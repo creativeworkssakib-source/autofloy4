@@ -110,7 +110,7 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get orders for the date range
+    // Get orders for the date range (regular orders)
     const { data: orders, error: ordersError } = await supabase
       .from("orders")
       .select("*")
@@ -120,6 +120,18 @@ serve(async (req) => {
 
     if (ordersError) {
       console.error("Error fetching orders:", ordersError);
+    }
+
+    // Get AI orders for the date range
+    const { data: aiOrders, error: aiOrdersError } = await supabase
+      .from("ai_orders")
+      .select("*")
+      .eq("user_id", userId)
+      .gte("created_at", dateRange.start.toISOString())
+      .lte("created_at", dateRange.end.toISOString());
+
+    if (aiOrdersError) {
+      console.error("Error fetching AI orders:", aiOrdersError);
     }
 
     // Get products for inventory stats
@@ -135,6 +147,7 @@ serve(async (req) => {
     const productsList = productsData || [];
 
     const ordersList = orders || [];
+    const aiOrdersList = aiOrders || [];
 
     // Calculate order stats
     const todayStart = new Date();
@@ -145,8 +158,11 @@ serve(async (req) => {
     const todaysOrders = ordersList.filter(
       (o) => new Date(o.created_at) >= todayStart && new Date(o.created_at) <= todayEnd
     );
+    const todaysAiOrders = aiOrdersList.filter(
+      (o) => new Date(o.created_at) >= todayStart && new Date(o.created_at) <= todayEnd
+    );
 
-    // Calculate totals from items
+    // Calculate totals from items (regular orders)
     let totalSalesAmount = 0;
     let totalBuyCost = 0;
     
@@ -172,8 +188,15 @@ serve(async (req) => {
         .reduce((sum, o) => sum + Number(o.total || 0), 0);
     }
     
+    // Add AI orders revenue (delivered orders only)
+    const aiSalesAmount = aiOrdersList
+      .filter(o => o.order_status === 'delivered')
+      .reduce((sum, o) => sum + Number(o.total || 0), 0);
+    totalSalesAmount += aiSalesAmount;
+    
     const profit = totalSalesAmount - totalBuyCost;
 
+    // Combined stats for regular orders
     const totalRevenue = ordersList.reduce((sum, o) => sum + Number(o.total || 0), 0);
     const todaysSales = todaysOrders.reduce((sum, o) => sum + Number(o.total || 0), 0);
     const confirmedOrders = ordersList.filter((o) => o.status === "confirmed" || o.status === "delivered").length;
@@ -181,6 +204,13 @@ serve(async (req) => {
     const damagedOrLost = ordersList.filter((o) => 
       o.status === "damaged" || o.status === "expired" || o.status === "returned"
     ).length;
+    
+    // AI orders stats
+    const aiTotalRevenue = aiOrdersList.reduce((sum, o) => sum + Number(o.total || 0), 0);
+    const todaysAiSales = todaysAiOrders.reduce((sum, o) => sum + Number(o.total || 0), 0);
+    const aiConfirmedOrders = aiOrdersList.filter((o) => o.order_status === "confirmed" || o.order_status === "delivered").length;
+    const aiPendingOrders = aiOrdersList.filter((o) => o.order_status === "pending").length;
+    const aiCancelledOrders = aiOrdersList.filter((o) => o.order_status === "cancelled").length;
 
     // Get execution logs for messages handled
     const { data: logs, error: logsError } = await supabase
@@ -198,12 +228,13 @@ serve(async (req) => {
     const messagesHandled = logsList.length;
     const autoRepliesSent = logsList.filter((l) => l.status === "success").length;
 
-    // Build daily stats for chart
-    const dailyStatsMap = new Map<string, { sales: number; orders: number; cost: number }>();
+    // Build daily stats for chart (combined regular + AI orders)
+    const dailyStatsMap = new Map<string, { sales: number; orders: number; cost: number; aiSales: number; aiOrders: number }>();
     
+    // Add regular orders
     ordersList.forEach((order) => {
       const dateKey = new Date(order.created_at).toISOString().split("T")[0];
-      const existing = dailyStatsMap.get(dateKey) || { sales: 0, orders: 0, cost: 0 };
+      const existing = dailyStatsMap.get(dateKey) || { sales: 0, orders: 0, cost: 0, aiSales: 0, aiOrders: 0 };
       existing.sales += Number(order.total || 0);
       existing.orders += 1;
       
@@ -217,14 +248,27 @@ serve(async (req) => {
       
       dailyStatsMap.set(dateKey, existing);
     });
+    
+    // Add AI orders to daily stats
+    aiOrdersList.forEach((order) => {
+      const dateKey = new Date(order.created_at).toISOString().split("T")[0];
+      const existing = dailyStatsMap.get(dateKey) || { sales: 0, orders: 0, cost: 0, aiSales: 0, aiOrders: 0 };
+      existing.aiSales += Number(order.total || 0);
+      existing.aiOrders += 1;
+      dailyStatsMap.set(dateKey, existing);
+    });
 
     const dailyStats = Array.from(dailyStatsMap.entries())
       .map(([date, stats]) => ({
         date,
-        sales: stats.sales,
-        orders: stats.orders,
+        sales: stats.sales + stats.aiSales, // Combined sales
+        orders: stats.orders + stats.aiOrders, // Combined orders
         cost: stats.cost,
-        profit: stats.sales - stats.cost,
+        profit: (stats.sales + stats.aiSales) - stats.cost,
+        aiSales: stats.aiSales,
+        aiOrders: stats.aiOrders,
+        regularSales: stats.sales,
+        regularOrders: stats.orders,
       }))
       .sort((a, b) => a.date.localeCompare(b.date));
 
@@ -248,18 +292,27 @@ serve(async (req) => {
     });
 
     const stats = {
-      todaysSales,
-      todaysOrders: todaysOrders.length,
-      confirmedOrders,
-      pendingOrders,
-      totalRevenue,
-      totalOrders: ordersList.length,
+      // Combined stats (regular + AI)
+      todaysSales: todaysSales + todaysAiSales,
+      todaysOrders: todaysOrders.length + todaysAiOrders.length,
+      confirmedOrders: confirmedOrders + aiConfirmedOrders,
+      pendingOrders: pendingOrders + aiPendingOrders,
+      totalRevenue: totalRevenue + aiTotalRevenue,
+      totalOrders: ordersList.length + aiOrdersList.length,
       messagesHandled,
       autoRepliesSent,
       totalSalesAmount,
       totalBuyCost,
       profit,
       damagedOrLost,
+      // AI-specific stats
+      aiTotalOrders: aiOrdersList.length,
+      aiPendingOrders,
+      aiConfirmedOrders,
+      aiCancelledOrders,
+      aiTotalRevenue,
+      todaysAiOrders: todaysAiOrders.length,
+      todaysAiSales,
       // Product inventory stats
       totalProducts,
       lowStockCount: lowStockProducts.length,
@@ -279,7 +332,7 @@ serve(async (req) => {
 
     console.log(`Dashboard overview for user ${userId}:`, stats);
 
-    return new Response(JSON.stringify({ stats, dailyStats, orders: ordersList, lowStockProducts: lowStockList }), {
+    return new Response(JSON.stringify({ stats, dailyStats, orders: ordersList, aiOrders: aiOrdersList, lowStockProducts: lowStockList }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
