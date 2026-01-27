@@ -17,6 +17,7 @@ import {
   Sparkles,
   Eye,
   Info,
+  FileCode,
 } from "lucide-react";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -40,18 +41,21 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useProductType } from "@/contexts/ProductTypeContext";
 import { productMediaService, ProductMedia } from "@/services/productMediaService";
-// Products are now fetched via edge function instead of direct supabase query
+import { digitalProductService, DigitalProduct } from "@/services/digitalProductService";
 
 interface Product {
   id: string;
   name: string;
   image_url?: string;
+  product_type?: string; // For digital products
 }
 
 const AIMediaLibrary = () => {
   const { language } = useLanguage();
   const { toast } = useToast();
+  const { productType, isDigitalMode } = useProductType();
   
   const [media, setMedia] = useState<ProductMedia[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -85,34 +89,47 @@ const AIMediaLibrary = () => {
       const token = localStorage.getItem("autofloy_token");
       if (!token) return;
 
-      // Fetch products via edge function and media in parallel
-      const [mediaData, statsData, productsRes] = await Promise.all([
-        productMediaService.getAllMedia(),
-        productMediaService.getStats(),
-        fetch(`${import.meta.env.VITE_SUPABASE_URL || "https://klkrzfwvrmffqkmkyqrh.supabase.co"}/functions/v1/products`, {
-          headers: {
-            "Authorization": `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }).then(res => res.json()),
+      // Fetch media and stats (filtered by product type in service)
+      const [mediaData, statsData] = await Promise.all([
+        productMediaService.getAllMedia(isDigitalMode ? "digital" : "physical"),
+        productMediaService.getStats(isDigitalMode ? "digital" : "physical"),
       ]);
 
       setMedia(mediaData);
       setStats(statsData);
       
-      // Extract products from edge function response
-      const productsList = productsRes.products || [];
-      setProducts(productsList.filter((p: Product & { is_active?: boolean }) => p.is_active !== false).map((p: Product) => ({
-        id: p.id,
-        name: p.name,
-        image_url: p.image_url,
-      })));
+      // Fetch products based on mode
+      if (isDigitalMode) {
+        // Fetch digital products directly
+        const digitalProducts = await digitalProductService.getProducts();
+        setProducts(digitalProducts.filter(p => p.is_active).map(p => ({
+          id: p.id,
+          name: p.name,
+          image_url: undefined,
+          product_type: p.product_type,
+        })));
+      } else {
+        // Fetch physical products via edge function
+        const productsRes = await fetch(`${import.meta.env.VITE_SUPABASE_URL || "https://klkrzfwvrmffqkmkyqrh.supabase.co"}/functions/v1/products`, {
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }).then(res => res.json());
+        
+        const productsList = productsRes.products || [];
+        setProducts(productsList.filter((p: Product & { is_active?: boolean }) => p.is_active !== false).map((p: Product) => ({
+          id: p.id,
+          name: p.name,
+          image_url: p.image_url,
+        })));
+      }
     } catch (error) {
       console.error("Error loading data:", error);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isDigitalMode]);
 
   useEffect(() => {
     loadData();
@@ -173,6 +190,7 @@ const AIMediaLibrary = () => {
           const mediaType = file.type.startsWith("video/") ? "video" : "image";
           await productMediaService.createMedia({
             product_id: selectedProduct,
+            product_source: isDigitalMode ? "digital" : "physical",
             media_type: mediaType,
             file_url: uploadResult.url,
             file_path: uploadResult.path,
@@ -256,29 +274,52 @@ const AIMediaLibrary = () => {
   return (
     <DashboardLayout>
       <div className="space-y-6 p-4 md:p-6">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 text-white">
-                <Sparkles className="w-6 h-6" />
-              </div>
-              {language === "bn" ? "AI মিডিয়া লাইব্রেরি" : "AI Media Library"}
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              {language === "bn" 
-                ? "প্রোডাক্টের ফটো ও ভিডিও রাখুন যা AI কাস্টমারদের দেখাবে"
-                : "Store product photos & videos for AI to show customers"}
-            </p>
+        {/* Header with Mode Switcher */}
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-4 flex-wrap">
+              <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-3">
+                <div className={`p-2 rounded-xl text-white ${isDigitalMode 
+                  ? "bg-gradient-to-br from-violet-500 to-fuchsia-500" 
+                  : "bg-gradient-to-br from-purple-500 to-pink-500"}`}>
+                  {isDigitalMode ? <FileCode className="w-6 h-6" /> : <Sparkles className="w-6 h-6" />}
+                </div>
+                {language === "bn" ? "AI মিডিয়া লাইব্রেরি" : "AI Media Library"}
+              </h1>
+              
+              {/* Mode Badge */}
+              <Badge 
+                variant="outline" 
+                className={`text-sm px-3 py-1 ${isDigitalMode 
+                  ? "border-violet-500/50 bg-violet-500/10 text-violet-600 dark:text-violet-400" 
+                  : "border-blue-500/50 bg-blue-500/10 text-blue-600 dark:text-blue-400"}`}
+              >
+                {isDigitalMode 
+                  ? (language === "bn" ? "🎯 ডিজিটাল মোড" : "🎯 Digital Mode")
+                  : (language === "bn" ? "📦 ফিজিক্যাল মোড" : "📦 Physical Mode")}
+              </Badge>
+            </div>
+            
+            <Button
+              onClick={() => setShowUploadModal(true)}
+              className={`${isDigitalMode 
+                ? "bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600"
+                : "bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"}`}
+            >
+              <Upload className="w-4 h-4 mr-2" />
+              {language === "bn" ? "মিডিয়া আপলোড" : "Upload Media"}
+            </Button>
           </div>
           
-          <Button
-            onClick={() => setShowUploadModal(true)}
-            className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
-          >
-            <Upload className="w-4 h-4 mr-2" />
-            {language === "bn" ? "মিডিয়া আপলোড" : "Upload Media"}
-          </Button>
+          <p className="text-muted-foreground">
+            {isDigitalMode 
+              ? (language === "bn" 
+                  ? "ডিজিটাল প্রোডাক্টের (সাবস্ক্রিপশন, API, কোর্স, সফটওয়্যার) ফটো ও ভিডিও রাখুন"
+                  : "Store photos & videos for digital products (subscriptions, APIs, courses, software)")
+              : (language === "bn" 
+                  ? "ফিজিক্যাল প্রোডাক্টের ফটো ও ভিডিও রাখুন যা AI কাস্টমারদের দেখাবে"
+                  : "Store product photos & videos for AI to show customers")}
+          </p>
         </div>
 
         {/* Stats Cards */}
