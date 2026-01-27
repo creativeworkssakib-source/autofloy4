@@ -91,66 +91,76 @@ export const ExtensionBlockerDetector = () => {
       return;
     }
 
-    // If RPC fallback has worked before, don't show warning
-    // This means the app is working fine even if edge functions are blocked
-    if (hasRpcFallbackSucceeded()) {
-      console.log('[ExtensionBlockerDetector] RPC fallback working - skipping detection');
-      return;
-    }
-
-    // Check after a longer delay to allow fallbacks to work
+    // Check after a longer delay to allow all fallbacks to complete
     const checkTimer = setTimeout(() => {
-      // Re-check conditions
-      if (!isAuthenticated() || isDismissed() || hasRpcFallbackSucceeded()) {
+      // Re-check conditions - especially RPC fallback success
+      if (!isAuthenticated() || isDismissed()) {
         return;
       }
 
-      // Only show warning if both edge functions AND RPC fallbacks are failing
-      // Since the console shows RPC fallbacks working, this should not trigger
-      const checkBothFailing = async () => {
-        try {
-          // Try a simple RPC call to see if Supabase is accessible
-          const testUrl = 'https://klkrzfwvrmffqkmkyqrh.supabase.co/rest/v1/rpc/get_user_dashboard_stats';
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 10000);
-          
-          const response = await fetch(testUrl, {
-            method: 'POST',
-            headers: {
-              'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtsa3J6Znd2cm1mZnFrbWt5cXJoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU4OTE4MjcsImV4cCI6MjA4MTQ2NzgyN30.ZArRZTr6tGhhnptPXvq7Onn4OhMLxrF7FvKkYC26nXg',
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ p_user_id: 'test' }),
-            signal: controller.signal,
-            cache: 'no-store',
-          });
-          
-          clearTimeout(timeoutId);
-          
-          // If we get any response (even 4xx/5xx), Supabase is reachable
-          // Only "Failed to fetch" means completely blocked
-          console.log('[ExtensionBlockerDetector] RPC test response:', response.status);
-          markRpcFallbackSuccess();
-          return; // Don't show warning
-          
-        } catch (error) {
-          if (error instanceof TypeError && error.message === 'Failed to fetch') {
-            // Both edge functions AND direct Supabase calls are blocked
-            // This is a real block, show warning
-            console.log('[ExtensionBlockerDetector] All requests blocked - showing warning');
-            if (!isDismissed()) {
-              setShowWarning(true);
-            }
-          } else {
-            // Other errors (CORS, timeout, etc.) - Supabase is reachable
-            console.log('[ExtensionBlockerDetector] Other error (not blocked):', error);
-            markRpcFallbackSuccess();
-          }
-        }
-      };
+      // If RPC fallback has worked, don't show warning
+      // This is the most important check - if data loaded, don't warn
+      if (hasRpcFallbackSucceeded()) {
+        console.log('[ExtensionBlockerDetector] RPC fallback succeeded - skipping warning');
+        return;
+      }
 
-      checkBothFailing();
-    }, 8000); // Wait 8 seconds for fallbacks to complete
+      // Only run detection if RPC fallback hasn't been marked as successful yet
+      // This means we wait a bit more and check again
+      const secondCheck = setTimeout(() => {
+        // Final check - if RPC worked by now, don't show
+        if (hasRpcFallbackSucceeded() || isDismissed()) {
+          console.log('[ExtensionBlockerDetector] RPC fallback succeeded on second check');
+          return;
+        }
+
+        // Do a direct test to see if Supabase is reachable at all
+        const checkBothFailing = async () => {
+          try {
+            // Try the REST API directly (not RPC) since that's more reliable
+            const testUrl = `${window.location.protocol}//klkrzfwvrmffqkmkyqrh.supabase.co/rest/v1/`;
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 8000);
+            
+            const response = await fetch(testUrl, {
+              method: 'HEAD',
+              headers: {
+                'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtsa3J6Znd2cm1mZnFrbWt5cXJoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU4OTE4MjcsImV4cCI6MjA4MTQ2NzgyN30.ZArRZTr6tGhhnptPXvq7Onn4OhMLxrF7FvKkYC26nXg',
+              },
+              signal: controller.signal,
+              cache: 'no-store',
+            });
+            
+            clearTimeout(timeoutId);
+            
+            // Any response means Supabase is reachable
+            console.log('[ExtensionBlockerDetector] Supabase reachable:', response.status);
+            markRpcFallbackSuccess();
+            // Don't show warning
+            
+          } catch (error) {
+            // Only show warning if it's truly a "Failed to fetch" network error
+            // AND the RPC fallback hasn't worked
+            if (error instanceof TypeError && error.message === 'Failed to fetch') {
+              // Final check - maybe RPC succeeded while we were testing
+              if (hasRpcFallbackSucceeded() || isDismissed()) {
+                return;
+              }
+              console.log('[ExtensionBlockerDetector] All requests blocked - showing warning');
+              setShowWarning(true);
+            } else {
+              // Timeout or other error - Supabase might still be reachable
+              console.log('[ExtensionBlockerDetector] Non-blocking error:', error);
+              markRpcFallbackSuccess();
+            }
+          }
+        };
+
+        checkBothFailing();
+      }, 5000); // Wait another 5 seconds
+
+      return () => clearTimeout(secondCheck);
+    }, 10000); // Initial wait of 10 seconds for all page loads to complete
 
     return () => {
       clearTimeout(checkTimer);
