@@ -52,8 +52,24 @@ export interface DigitalProductSale {
   notes?: string;
   created_at: string;
   updated_at: string;
-  // Joined product info
-  product?: DigitalProduct;
+  // Joined product info - includes all digital product fields
+  product?: {
+    id: string;
+    name: string;
+    price: number;
+    sale_price?: number;
+    product_type: string;
+    description?: string;
+    credential_username?: string;
+    credential_password?: string;
+    credential_email?: string;
+    access_url?: string;
+    access_instructions?: string;
+    api_endpoint?: string;
+    api_key?: string;
+    file_url?: string;
+    file_name?: string;
+  };
 }
 
 export interface CreateDigitalProductInput {

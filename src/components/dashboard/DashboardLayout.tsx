@@ -22,6 +22,8 @@ import {
   MessageSquare,
   ShoppingBag,
   FileCode,
+  Key,
+  DollarSign,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -37,6 +39,7 @@ import { useNotificationContext } from "@/contexts/NotificationContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSiteSettings } from "@/contexts/SiteSettingsContext";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useProductType } from "@/contexts/ProductTypeContext";
 import { UserAvatar } from "@/components/UserAvatar";
 import { SubscriptionCard } from "./SubscriptionCard";
 import { BusinessModeSwitcher } from "./BusinessModeSwitcher";
@@ -60,6 +63,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const { settings } = useSiteSettings();
   const { syncEnabled } = useSyncSettings();
   const { t, language } = useLanguage();
+  const { isDigitalMode } = useProductType();
   const {
     notifications,
     unreadCount,
@@ -69,12 +73,12 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     clearAll,
   } = useNotificationContext();
 
-  const navItems = [
+  // Physical product menu items
+  const physicalNavItems = [
     { name: t("sidebar.dashboard"), href: "/dashboard", icon: LayoutDashboard, pageTitle: t("sidebar.dashboard"), subtitle: t("dashboard.overview") },
     { name: t("sidebar.automations"), href: "/dashboard/automations", icon: Bot, pageTitle: t("sidebar.automations"), subtitle: t("dashboard.automationsAnalytics") },
     { name: language === "bn" ? "AI অর্ডার" : "AI Orders", href: "/dashboard/orders", icon: ShoppingBag, pageTitle: language === "bn" ? "AI অর্ডার" : "AI Orders", subtitle: language === "bn" ? "AI থেকে অর্ডার" : "Orders from AI" },
     { name: t("sidebar.products"), href: "/dashboard/products", icon: Package, pageTitle: t("sidebar.products"), subtitle: t("dashboard.totalProducts") },
-    { name: language === "bn" ? "ডিজিটাল প্রোডাক্ট" : "Digital Products", href: "/dashboard/digital-products", icon: FileCode, pageTitle: language === "bn" ? "ডিজিটাল প্রোডাক্ট" : "Digital Products", subtitle: language === "bn" ? "সাবস্ক্রিপশন, API, কোর্স" : "Subscriptions, APIs, Courses" },
     { name: t("sidebar.businessOverview"), href: "/dashboard/business", icon: BarChart3, pageTitle: t("sidebar.businessOverview"), subtitle: t("dashboard.overview") },
     { name: t("sidebar.globalReports"), href: "/dashboard/reports", icon: BarChart3, pageTitle: t("sidebar.globalReports"), subtitle: t("dashboard.onlineOffline") },
     { name: t("sidebar.logs"), href: "/dashboard/logs", icon: FileText, pageTitle: t("sidebar.logs"), subtitle: t("dashboard.recentActivity") },
@@ -82,6 +86,20 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     { name: language === "bn" ? "মার্কেটিং" : "Marketing", href: "/dashboard/marketing", icon: MessageSquare, pageTitle: language === "bn" ? "মার্কেটিং টুলস" : "Marketing Tools", subtitle: language === "bn" ? "WhatsApp মার্কেটিং" : "WhatsApp Marketing" },
     { name: t("sidebar.settings"), href: "/dashboard/settings", icon: Settings, pageTitle: t("sidebar.settings"), subtitle: t("settings.profileDesc") },
   ];
+
+  // Digital product menu items
+  const digitalNavItems = [
+    { name: t("sidebar.dashboard"), href: "/dashboard", icon: LayoutDashboard, pageTitle: t("sidebar.dashboard"), subtitle: language === "bn" ? "ডিজিটাল বিজনেস ওভারভিউ" : "Digital Business Overview" },
+    { name: t("sidebar.automations"), href: "/dashboard/automations", icon: Bot, pageTitle: t("sidebar.automations"), subtitle: language === "bn" ? "AI অটোমেশন সেটআপ" : "AI Automation Setup" },
+    { name: language === "bn" ? "ডিজিটাল অর্ডার" : "Digital Orders", href: "/dashboard/orders", icon: ShoppingBag, pageTitle: language === "bn" ? "ডিজিটাল অর্ডার" : "Digital Orders", subtitle: language === "bn" ? "AI থেকে ডিজিটাল সেল" : "Digital sales from AI" },
+    { name: language === "bn" ? "ডিজিটাল প্রোডাক্ট" : "Digital Products", href: "/dashboard/digital-products", icon: FileCode, pageTitle: language === "bn" ? "ডিজিটাল প্রোডাক্ট" : "Digital Products", subtitle: language === "bn" ? "সাবস্ক্রিপশন, API, কোর্স" : "Subscriptions, APIs, Courses" },
+    { name: language === "bn" ? "সেলস রিপোর্ট" : "Sales Report", href: "/dashboard/reports", icon: DollarSign, pageTitle: language === "bn" ? "সেলস রিপোর্ট" : "Sales Report", subtitle: language === "bn" ? "ডিজিটাল সেলস এনালাইটিক্স" : "Digital Sales Analytics" },
+    { name: t("sidebar.logs"), href: "/dashboard/logs", icon: FileText, pageTitle: t("sidebar.logs"), subtitle: t("dashboard.recentActivity") },
+    { name: t("sidebar.settings"), href: "/dashboard/settings", icon: Settings, pageTitle: t("sidebar.settings"), subtitle: t("settings.profileDesc") },
+  ];
+
+  // Use the appropriate nav items based on mode
+  const navItems = isDigitalMode ? digitalNavItems : physicalNavItems;
 
   // Check if user is admin
   useEffect(() => {
