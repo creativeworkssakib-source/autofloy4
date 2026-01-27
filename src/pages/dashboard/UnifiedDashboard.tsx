@@ -23,6 +23,12 @@ import {
   Star,
   Link2,
   Store,
+  FileCode,
+  Key,
+  Globe,
+  BookOpen,
+  Download,
+  DollarSign,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -37,6 +43,8 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useSyncSettings } from "@/hooks/useSyncSettings";
 import { fetchDashboardStats, fetchConnectedAccounts, fetchExecutionLogs, DashboardStats, ConnectedAccount, ExecutionLog } from "@/services/apiService";
 import { ProductPerformanceSection } from "@/components/analytics/ProductPerformanceSection";
+import { useProductType } from "@/contexts/ProductTypeContext";
+import { digitalProductService, DigitalProduct } from "@/services/digitalProductService";
 
 import { offlineShopService } from "@/services/offlineShopService";
 import { formatDistanceToNow } from "date-fns";
@@ -63,8 +71,9 @@ const UnifiedDashboard = () => {
   // Component initialized
   const { user } = useAuth();
   const { syncEnabled, isLoading: syncLoading } = useSyncSettings();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const isMobile = useIsMobile();
+  const { isDigitalMode } = useProductType();
   
   // Online data
   const [onlineStats, setOnlineStats] = useState<DashboardStats | null>(null);
@@ -73,6 +82,10 @@ const UnifiedDashboard = () => {
   
   // Offline data (always loaded to show in both modes)
   const [offlineData, setOfflineData] = useState<any>(null);
+  
+  // Digital product data
+  const [digitalProducts, setDigitalProducts] = useState<DigitalProduct[]>([]);
+  const [digitalStats, setDigitalStats] = useState({ totalProducts: 0, totalSales: 0, totalRevenue: 0, pendingDeliveries: 0 });
   
   const [isLoading, setIsLoading] = useState(true);
   const [mobileTab, setMobileTab] = useState<"online" | "offline">("online");
@@ -85,7 +98,7 @@ const UnifiedDashboard = () => {
     }
     
     try {
-      const [statsData, pagesData, logsData, shopData] = await Promise.all([
+      const [statsData, pagesData, logsData, shopData, digitalProductsData, digitalStatsData] = await Promise.all([
         fetchDashboardStats().catch((e) => {
           console.error("[Dashboard] Stats fetch error:", e);
           return null;
@@ -93,6 +106,8 @@ const UnifiedDashboard = () => {
         fetchConnectedAccounts("facebook").catch(() => []),
         fetchExecutionLogs(5).catch(() => []),
         offlineShopService.getDashboard("today").catch(() => null),
+        digitalProductService.getProducts().catch(() => []),
+        digitalProductService.getStats().catch(() => ({ totalProducts: 0, totalSales: 0, totalRevenue: 0, pendingDeliveries: 0 })),
       ]);
       
       console.log("[Dashboard] Stats data received:", statsData);
@@ -105,6 +120,8 @@ const UnifiedDashboard = () => {
       setConnectedPages(pagesData?.filter(p => p.is_connected) || []);
       setRecentLogs(logsData || []);
       if (shopData) setOfflineData(shopData);
+      setDigitalProducts(digitalProductsData);
+      setDigitalStats(digitalStatsData);
     } catch (error) {
       // Silent failure - no user notification needed
       console.error("[Dashboard] Background sync failed:", error);
@@ -140,6 +157,38 @@ const UnifiedDashboard = () => {
       minimumFractionDigits: 0,
     }).format(amount);
   };
+
+  // Digital product KPIs
+  const digitalKPIs = [
+    {
+      title: language === "bn" ? "মোট প্রোডাক্ট" : "Total Products",
+      value: digitalStats.totalProducts.toString(),
+      subtitle: language === "bn" ? "ডিজিটাল আইটেম" : "Digital Items",
+      icon: Package,
+      color: "from-purple-500 to-pink-500",
+    },
+    {
+      title: language === "bn" ? "মোট বিক্রি" : "Total Sales",
+      value: digitalStats.totalSales.toString(),
+      subtitle: language === "bn" ? "সম্পন্ন" : "Completed",
+      icon: TrendingUp,
+      color: "from-blue-500 to-cyan-500",
+    },
+    {
+      title: language === "bn" ? "মোট আয়" : "Total Revenue",
+      value: formatCurrency(digitalStats.totalRevenue),
+      subtitle: language === "bn" ? "পরিশোধিত" : "Paid",
+      icon: DollarSign,
+      color: "from-emerald-500 to-green-500",
+    },
+    {
+      title: language === "bn" ? "পেন্ডিং ডেলিভারি" : "Pending Deliveries",
+      value: digitalStats.pendingDeliveries.toString(),
+      subtitle: language === "bn" ? "অপেক্ষমান" : "Awaiting",
+      icon: Users,
+      color: "from-orange-500 to-yellow-500",
+    },
+  ];
 
   // Online-only KPIs (when sync is disabled)
   const onlineOnlyKPIs = [
@@ -212,8 +261,24 @@ const UnifiedDashboard = () => {
     },
   ];
 
-  // Choose KPIs based on sync status
-  const displayKPIs = syncEnabled ? combinedKPIs : onlineOnlyKPIs;
+  // Choose KPIs based on mode and sync status
+  const displayKPIs = isDigitalMode ? digitalKPIs : (syncEnabled ? combinedKPIs : onlineOnlyKPIs);
+
+  const productTypeIcons: Record<string, typeof FileCode> = {
+    subscription: Key,
+    api: Globe,
+    course: BookOpen,
+    software: Download,
+    other: FileCode,
+  };
+
+  const productTypeLabels: Record<string, { en: string; bn: string }> = {
+    subscription: { en: "Subscription", bn: "সাবস্ক্রিপশন" },
+    api: { en: "API", bn: "এপিআই" },
+    course: { en: "Course", bn: "কোর্স" },
+    software: { en: "Software/APK", bn: "সফটওয়্যার/এপিকে" },
+    other: { en: "Other", bn: "অন্যান্য" },
+  };
 
   const OnlineSummary = () => (
     <Card className="border-primary/20">
@@ -440,6 +505,162 @@ const UnifiedDashboard = () => {
     </Card>
   );
 
+  // Digital Product Summary Component
+  const DigitalProductSummary = () => (
+    <Card className="border-purple-500/20">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center">
+              <FileCode className="w-4 h-4 text-purple-600" />
+            </div>
+            {language === "bn" ? "ডিজিটাল প্রোডাক্ট" : "Digital Products"}
+          </CardTitle>
+          <Badge className="bg-purple-500/10 text-purple-600 border-purple-500/20">
+            {digitalProducts.length} {language === "bn" ? "আইটেম" : "items"}
+          </Badge>
+        </div>
+        <CardDescription>
+          {language === "bn" 
+            ? "সাবস্ক্রিপশন, API, কোর্স, সফটওয়্যার বিক্রি করুন" 
+            : "Sell subscriptions, APIs, courses, software"}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Stats Grid */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="p-3 rounded-lg bg-purple-500/5">
+            <p className="text-xs text-muted-foreground">{language === "bn" ? "মোট প্রোডাক্ট" : "Total Products"}</p>
+            {isLoading ? <Skeleton className="h-6 w-16" /> : (
+              <p className="text-lg font-bold text-purple-600">{digitalStats.totalProducts}</p>
+            )}
+          </div>
+          <div className="p-3 rounded-lg bg-purple-500/5">
+            <p className="text-xs text-muted-foreground">{language === "bn" ? "মোট বিক্রি" : "Total Sales"}</p>
+            {isLoading ? <Skeleton className="h-6 w-16" /> : (
+              <p className="text-lg font-bold text-purple-600">{digitalStats.totalSales}</p>
+            )}
+          </div>
+          <div className="p-3 rounded-lg bg-purple-500/5">
+            <p className="text-xs text-muted-foreground">{language === "bn" ? "মোট আয়" : "Total Revenue"}</p>
+            {isLoading ? <Skeleton className="h-6 w-20" /> : (
+              <p className="text-lg font-bold text-purple-600">{formatCurrency(digitalStats.totalRevenue)}</p>
+            )}
+          </div>
+          <div className="p-3 rounded-lg bg-purple-500/5">
+            <p className="text-xs text-muted-foreground">{language === "bn" ? "পেন্ডিং" : "Pending"}</p>
+            {isLoading ? <Skeleton className="h-6 w-16" /> : (
+              <p className="text-lg font-bold text-purple-600">{digitalStats.pendingDeliveries}</p>
+            )}
+          </div>
+        </div>
+
+        {/* Recent Products */}
+        <Card className="border-0 shadow-none bg-muted/30">
+          <CardHeader className="p-3 pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Package className="w-4 h-4" />
+              {language === "bn" ? "সাম্প্রতিক প্রোডাক্ট" : "Recent Products"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-3 pt-0">
+            <div className="space-y-2">
+              {isLoading ? (
+                [...Array(3)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)
+              ) : digitalProducts.length > 0 ? (
+                digitalProducts.slice(0, 4).map((product) => {
+                  const TypeIcon = productTypeIcons[product.product_type] || FileCode;
+                  return (
+                    <Link 
+                      key={product.id}
+                      to="/dashboard/digital-products"
+                      className="flex items-center justify-between p-2 rounded-lg bg-background text-sm hover:bg-purple-500/5 transition-colors group"
+                    >
+                      <div className="flex items-center gap-2">
+                        <TypeIcon className="w-4 h-4 text-purple-500" />
+                        <span className="truncate">{product.name}</span>
+                      </div>
+                      <Badge variant="outline" className="text-xs">
+                        {productTypeLabels[product.product_type]?.[language] || product.product_type}
+                      </Badge>
+                    </Link>
+                  );
+                })
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  {language === "bn" ? "কোনো প্রোডাক্ট নেই" : "No products yet"}
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Button variant="outline" className="w-full bg-purple-500/5 border-purple-500/20 hover:bg-purple-500/10 text-purple-700 dark:text-purple-400" asChild>
+          <Link to="/dashboard/digital-products">
+            {language === "bn" ? "প্রোডাক্ট ম্যানেজ করুন" : "Manage Products"}
+            <ArrowUpRight className="w-4 h-4 ml-2" />
+          </Link>
+        </Button>
+      </CardContent>
+    </Card>
+  );
+
+  // Digital Sales Summary Component
+  const DigitalSalesSummary = () => (
+    <Card className="border-emerald-500/20">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+              <TrendingUp className="w-4 h-4 text-emerald-600" />
+            </div>
+            {language === "bn" ? "ডিজিটাল সেলস" : "Digital Sales"}
+          </CardTitle>
+        </div>
+        <CardDescription>
+          {language === "bn" 
+            ? "আপনার ডিজিটাল প্রোডাক্টের বিক্রি পরিসংখ্যান" 
+            : "Sales statistics for your digital products"}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Product Type Distribution */}
+        <div className="space-y-2">
+          <p className="text-sm font-medium">{language === "bn" ? "প্রোডাক্ট ধরন" : "Product Types"}</p>
+          {Object.entries(productTypeLabels).map(([type, labels]) => {
+            const count = digitalProducts.filter(p => p.product_type === type).length;
+            const TypeIcon = productTypeIcons[type] || FileCode;
+            return (
+              <div key={type} className="flex items-center justify-between p-2 rounded-lg bg-muted/50">
+                <div className="flex items-center gap-2">
+                  <TypeIcon className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-sm">{labels[language]}</span>
+                </div>
+                <Badge variant="secondary">{count}</Badge>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Quick Actions */}
+        <div className="grid grid-cols-2 gap-2">
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/dashboard/digital-products">
+              <Plus className="w-4 h-4 mr-1" />
+              {language === "bn" ? "নতুন" : "Add New"}
+            </Link>
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/dashboard/orders">
+              <ShoppingCart className="w-4 h-4 mr-1" />
+              {language === "bn" ? "অর্ডার" : "Orders"}
+            </Link>
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -477,22 +698,27 @@ const UnifiedDashboard = () => {
               )}
             </div>
             <p className="text-muted-foreground">
-              {syncEnabled 
-                ? t("dashboard.unifiedOverview")
-                : t("dashboard.onlineOverview")
+              {isDigitalMode 
+                ? (language === "bn" ? "আপনার ডিজিটাল প্রোডাক্ট ড্যাশবোর্ড" : "Your Digital Products Dashboard")
+                : (syncEnabled 
+                    ? t("dashboard.unifiedOverview")
+                    : t("dashboard.onlineOverview"))
               }
             </p>
           </div>
           <Button variant="gradient" asChild>
-            <Link to="/dashboard/automations">
+            <Link to={isDigitalMode ? "/dashboard/digital-products" : "/dashboard/automations"}>
               <Plus className="w-4 h-4 mr-2" />
-              {t("dashboard.newAutomation")}
+              {isDigitalMode 
+                ? (language === "bn" ? "নতুন প্রোডাক্ট" : "Add Product")
+                : t("dashboard.newAutomation")
+              }
             </Link>
           </Button>
         </motion.div>
 
         {/* KPIs */}
-        <div className={`grid gap-4 ${syncEnabled ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5' : 'grid-cols-2 sm:grid-cols-4'}`}>
+        <div className={`grid gap-4 ${isDigitalMode ? 'grid-cols-2 sm:grid-cols-4' : (syncEnabled ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5' : 'grid-cols-2 sm:grid-cols-4')}`}>
           {displayKPIs.map((kpi, index) => (
             <motion.div
               key={kpi.title}
@@ -522,56 +748,88 @@ const UnifiedDashboard = () => {
           ))}
         </div>
 
-        {/* Single Product Performance Section - Shows combined when synced, online when not */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.25 }}
-        >
-          <ProductPerformanceSection 
-            type={syncEnabled ? "combined" : "online"} 
-            shopId={offlineData?.shopId || null}
-            syncEnabled={syncEnabled}
-          />
-        </motion.div>
-
-        {/* Content Area - Business Summary Cards */}
-        {isMobile ? (
-          <Tabs value={mobileTab} onValueChange={(v) => setMobileTab(v as "online" | "offline")}>
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="online" className="gap-2">
-                <Zap className="w-4 h-4" />
-                {t("dashboard.online")}
-              </TabsTrigger>
-              <TabsTrigger value="offline" className="gap-2">
-                <Store className="w-4 h-4" />
-                {t("dashboard.offline")}
-              </TabsTrigger>
-            </TabsList>
-            <TabsContent value="online" className="mt-4">
-              <OnlineSummary />
-            </TabsContent>
-            <TabsContent value="offline" className="mt-4">
-              <OfflineSummary />
-            </TabsContent>
-          </Tabs>
+        {/* Conditional Content Based on Mode */}
+        {isDigitalMode ? (
+          <>
+            {/* Digital Products View */}
+            {isMobile ? (
+              <div className="space-y-4">
+                <DigitalProductSummary />
+                <DigitalSalesSummary />
+              </div>
+            ) : (
+              <div className="grid lg:grid-cols-2 gap-6">
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.3 }}
+                >
+                  <DigitalProductSummary />
+                </motion.div>
+                <motion.div
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.4 }}
+                >
+                  <DigitalSalesSummary />
+                </motion.div>
+              </div>
+            )}
+          </>
         ) : (
-          <div className="grid lg:grid-cols-2 gap-6">
+          <>
+            {/* Physical Products View - Original Content */}
             <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.3 }}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.25 }}
             >
-              <OnlineSummary />
+              <ProductPerformanceSection 
+                type={syncEnabled ? "combined" : "online"} 
+                shopId={offlineData?.shopId || null}
+                syncEnabled={syncEnabled}
+              />
             </motion.div>
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.4 }}
-            >
-              <OfflineSummary />
-            </motion.div>
-          </div>
+
+            {/* Content Area - Business Summary Cards */}
+            {isMobile ? (
+              <Tabs value={mobileTab} onValueChange={(v) => setMobileTab(v as "online" | "offline")}>
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="online" className="gap-2">
+                    <Zap className="w-4 h-4" />
+                    {t("dashboard.online")}
+                  </TabsTrigger>
+                  <TabsTrigger value="offline" className="gap-2">
+                    <Store className="w-4 h-4" />
+                    {t("dashboard.offline")}
+                  </TabsTrigger>
+                </TabsList>
+                <TabsContent value="online" className="mt-4">
+                  <OnlineSummary />
+                </TabsContent>
+                <TabsContent value="offline" className="mt-4">
+                  <OfflineSummary />
+                </TabsContent>
+              </Tabs>
+            ) : (
+              <div className="grid lg:grid-cols-2 gap-6">
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.3 }}
+                >
+                  <OnlineSummary />
+                </motion.div>
+                <motion.div
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.4 }}
+                >
+                  <OfflineSummary />
+                </motion.div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </DashboardLayout>
