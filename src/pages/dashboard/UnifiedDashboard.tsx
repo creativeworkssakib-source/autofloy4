@@ -80,19 +80,28 @@ const UnifiedDashboard = () => {
 
   // Load all dashboard data - runs silently in background
   const loadAllData = useCallback(async (showInitialLoading = true) => {
-    if (showInitialLoading && !onlineStats && !offlineData) {
+    if (showInitialLoading) {
       setIsLoading(true);
     }
     
     try {
       const [statsData, pagesData, logsData, shopData] = await Promise.all([
-        fetchDashboardStats().catch(() => null),
+        fetchDashboardStats().catch((e) => {
+          console.error("[Dashboard] Stats fetch error:", e);
+          return null;
+        }),
         fetchConnectedAccounts("facebook").catch(() => []),
         fetchExecutionLogs(5).catch(() => []),
         offlineShopService.getDashboard("today").catch(() => null),
       ]);
       
-      if (statsData) setOnlineStats(statsData);
+      console.log("[Dashboard] Stats data received:", statsData);
+      
+      // Always set the stats even if 0 values - this is valid data
+      if (statsData !== null && statsData !== undefined) {
+        setOnlineStats(statsData);
+        console.log("[Dashboard] OnlineStats set to:", statsData);
+      }
       setConnectedPages(pagesData?.filter(p => p.is_connected) || []);
       setRecentLogs(logsData || []);
       if (shopData) setOfflineData(shopData);
@@ -102,7 +111,7 @@ const UnifiedDashboard = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [onlineStats, offlineData]);
+  }, []); // Remove dependencies to prevent stale closure issues
 
   // Initial load and auto-refresh every 30 seconds
   useEffect(() => {
