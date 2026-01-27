@@ -682,7 +682,7 @@ export async function fetchExecutionLogs(limit: number = 5): Promise<ExecutionLo
     console.warn("[execution-logs] Edge Function failed, trying direct Supabase:", error);
   }
   
-  // Fallback: Direct Supabase query (bypasses blocked edge functions)
+  // Fallback: Use RPC function (bypasses RLS which blocks direct client access)
   try {
     const userId = await getUserIdFromStorage();
     if (!userId) {
@@ -690,31 +690,19 @@ export async function fetchExecutionLogs(limit: number = 5): Promise<ExecutionLo
       return [];
     }
     
-    console.log("[execution-logs] Using Supabase fallback for user:", userId);
+    console.log("[execution-logs] Using RPC fallback for user:", userId);
     
-    const { data, error } = await supabase
-      .from("execution_logs")
-      .select(`
-        id,
-        event_type,
-        status,
-        source_platform,
-        processing_time_ms,
-        created_at,
-        automation_id,
-        incoming_payload,
-        response_payload
-      `)
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(limit);
+    const { data, error } = await supabase.rpc('get_user_execution_logs', {
+      p_user_id: userId,
+      p_limit: limit
+    });
     
     if (error) {
-      console.error("[execution-logs] Supabase fallback error:", error);
+      console.error("[execution-logs] RPC fallback error:", error);
       return [];
     }
     
-    console.log("[execution-logs] Supabase fallback success:", data?.length || 0, "logs");
+    console.log("[execution-logs] RPC fallback success:", data?.length || 0, "logs");
     return (data || []) as ExecutionLog[];
   } catch (error) {
     console.error("[execution-logs] All fallbacks failed:", error);
