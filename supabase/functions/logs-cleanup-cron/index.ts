@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
         .select("id")
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
-        .range(500, 10000); // Get logs beyond position 500
+        .range(200, 10000); // Get logs beyond position 200
 
       if (excessLogs && excessLogs.length > 0) {
         const { error: deleteExcessError } = await supabase
