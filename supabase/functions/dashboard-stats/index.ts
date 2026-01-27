@@ -61,20 +61,20 @@ serve(async (req) => {
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
 
-    // Get today's execution logs (messages handled)
-    const { data: todayLogs, error: logsError } = await supabase
+    // Get ALL execution logs (total messages handled)
+    const { data: allLogs } = await supabase
       .from("execution_logs")
-      .select("id, status")
-      .eq("user_id", userId)
-      .gte("created_at", today.toISOString());
+      .select("id, status, created_at")
+      .eq("user_id", userId);
 
-    // Get yesterday's execution logs for comparison
-    const { data: yesterdayLogs } = await supabase
-      .from("execution_logs")
-      .select("id")
-      .eq("user_id", userId)
-      .gte("created_at", yesterday.toISOString())
-      .lt("created_at", today.toISOString());
+    // Filter for today's logs
+    const todayLogs = allLogs?.filter(l => new Date(l.created_at!) >= today) || [];
+    
+    // Filter for yesterday's logs for comparison
+    const yesterdayLogs = allLogs?.filter(l => {
+      const logDate = new Date(l.created_at!);
+      return logDate >= yesterday && logDate < today;
+    }) || [];
 
     // Get active automations count
     const { data: automations } = await supabase
@@ -116,22 +116,28 @@ serve(async (req) => {
     const confirmedAiOrders = aiOrders?.filter(o => o.order_status === "confirmed" || o.order_status === "delivered").length || 0;
     const totalAiRevenue = aiOrders?.filter(o => o.order_status === "delivered").reduce((sum, o) => sum + (Number(o.total) || 0), 0) || 0;
 
-    const messagesHandled = todayLogs?.length || 0;
-    const messagesYesterday = yesterdayLogs?.length || 0;
-    const messagesDiff = messagesHandled - messagesYesterday;
+    // Total messages handled (all time) and today's messages
+    const totalMessagesHandled = allLogs?.length || 0;
+    const todayMessagesHandled = todayLogs.length;
+    const messagesYesterday = yesterdayLogs.length;
+    const messagesDiff = todayMessagesHandled - messagesYesterday;
 
-    const successfulReplies = todayLogs?.filter(l => l.status === "success").length || 0;
-    const successRate = messagesHandled > 0 ? Math.round((successfulReplies / messagesHandled) * 100) : 0;
+    // Success rate based on all logs
+    const allSuccessfulReplies = allLogs?.filter(l => l.status === "success").length || 0;
+    const todaySuccessfulReplies = todayLogs.filter(l => l.status === "success").length;
+    const successRate = totalMessagesHandled > 0 ? Math.round((allSuccessfulReplies / totalMessagesHandled) * 100) : 0;
 
     const activeAutomations = automations?.filter(a => a.is_enabled).length || 0;
 
     // Estimate hours saved (assuming 2 minutes per message handled)
-    const hoursSaved = Math.round((messagesHandled * 2) / 60 * 10) / 10;
+    const hoursSaved = Math.round((totalMessagesHandled * 2) / 60 * 10) / 10;
 
     const stats = {
-      messagesHandled,
+      messagesHandled: totalMessagesHandled,
+      todayMessagesHandled,
       messagesDiff: messagesDiff > 0 ? `+${messagesDiff}` : messagesDiff.toString(),
-      autoRepliesSent: successfulReplies,
+      autoRepliesSent: allSuccessfulReplies,
+      todayAutoReplies: todaySuccessfulReplies,
       successRate: `${successRate}%`,
       activeAutomations,
       totalAutomations: automations?.length || 0,
