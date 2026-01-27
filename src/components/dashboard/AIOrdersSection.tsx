@@ -47,6 +47,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { authService } from "@/services/authService";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 
@@ -104,29 +105,42 @@ const AIOrdersSection = () => {
   });
 
   const fetchOrders = async () => {
-    if (!user?.id) return;
+    const token = authService.getToken();
+    if (!token) return;
     
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from("ai_orders")
-        .select("*")
-        .order("created_at", { ascending: false });
+      const response = await fetch(
+        `https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1/ai-orders`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
-      if (error) throw error;
+      if (!response.ok) {
+        throw new Error("Failed to fetch orders");
+      }
 
-      setOrders(data || []);
+      const result = await response.json();
+      setOrders(result.orders || []);
       
-      // Calculate stats
-      const newStats = {
-        total: data?.length || 0,
-        pending: data?.filter(o => o.order_status === "pending").length || 0,
-        confirmed: data?.filter(o => o.order_status === "confirmed").length || 0,
-        shipped: data?.filter(o => o.order_status === "shipped").length || 0,
-        delivered: data?.filter(o => o.order_status === "delivered").length || 0,
-        cancelled: data?.filter(o => o.order_status === "cancelled").length || 0,
-      };
-      setStats(newStats);
+      // Use stats from backend
+      if (result.stats) {
+        setStats({
+          total: result.stats.total || 0,
+          pending: result.stats.pending || 0,
+          confirmed: result.stats.confirmed || 0,
+          shipped: result.stats.shipped || 0,
+          delivered: result.stats.delivered || 0,
+          cancelled: result.stats.cancelled || 0,
+        });
+      }
+      
+      console.log(`Loaded ${result.orders?.length || 0} AI orders`);
     } catch (error) {
       console.error("Failed to fetch AI orders:", error);
       toast.error("Failed to load orders");
@@ -168,14 +182,26 @@ const AIOrdersSection = () => {
   );
 
   const updateOrderStatus = async (orderId: string, newStatus: string) => {
+    const token = authService.getToken();
+    if (!token) return;
+    
     setUpdatingStatus(orderId);
     try {
-      const { error } = await supabase
-        .from("ai_orders")
-        .update({ order_status: newStatus, updated_at: new Date().toISOString() })
-        .eq("id", orderId);
+      const response = await fetch(
+        `https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1/ai-orders`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ orderId, status: newStatus }),
+        }
+      );
 
-      if (error) throw error;
+      if (!response.ok) {
+        throw new Error("Failed to update order");
+      }
 
       toast.success(`Order status updated to ${newStatus}`);
       fetchOrders();
