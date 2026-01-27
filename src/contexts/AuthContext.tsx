@@ -194,7 +194,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loginWithGoogle = async () => {
     // Get the Google Client ID from window or use the edge function
     const GOOGLE_CLIENT_ID = "458754008519-d0feefkvq33klrlqtjplek3i9orogq8t.apps.googleusercontent.com";
-    const redirectUri = `${window.location.origin}/auth/google/callback`;
+    
+    // Always use production domain for OAuth redirect
+    const PRODUCTION_DOMAIN = "https://autofloy.online";
+    const redirectUri = `${PRODUCTION_DOMAIN}/auth/google/callback`;
+    
     const scope = encodeURIComponent("openid email profile");
     const state = crypto.randomUUID();
     
@@ -215,7 +219,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Handle Google OAuth callback
   const handleGoogleCallback = async (code: string): Promise<{ success: boolean; error?: string; isNewUser?: boolean }> => {
-    const redirectUri = `${window.location.origin}/auth/google/callback`;
+    // Always use production domain for OAuth redirect - must match what was used in loginWithGoogle
+    const PRODUCTION_DOMAIN = "https://autofloy.online";
+    const redirectUri = `${PRODUCTION_DOMAIN}/auth/google/callback`;
+    
     try {
       const { user: serviceUser, is_new_user } = await authService.handleGoogleCallback(code, redirectUri);
       const mappedUser = mapServiceUser(serviceUser);
