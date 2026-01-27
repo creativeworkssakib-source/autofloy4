@@ -20,12 +20,15 @@ import {
   DollarSign,
   Sparkles,
   Upload,
+  CheckSquare,
+  Square,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,6 +42,7 @@ import { toast } from "sonner";
 import { DigitalProductFormModal } from "@/components/digital-products/DigitalProductFormModal";
 import { DigitalProductDetailModal } from "@/components/digital-products/DigitalProductDetailModal";
 import { DigitalProductBulkUploadModal } from "@/components/digital-products/DigitalProductBulkUploadModal";
+import { DeleteConfirmDialog } from "@/components/offline-shop/DeleteConfirmDialog";
 
 const productTypeIcons: Record<string, typeof FileCode> = {
   subscription: Key,
@@ -65,6 +69,10 @@ const DigitalProducts = () => {
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<DigitalProduct | null>(null);
   const [stats, setStats] = useState({ totalProducts: 0, totalSales: 0, totalRevenue: 0, pendingDeliveries: 0 });
 
@@ -88,17 +96,56 @@ const DigitalProducts = () => {
     loadData();
   }, []);
 
-  const handleDelete = async (id: string) => {
-    if (!confirm(language === "bn" ? "আপনি কি এই প্রোডাক্ট মুছে ফেলতে চান?" : "Are you sure you want to delete this product?")) {
-      return;
-    }
-    const success = await digitalProductService.deleteProduct(id);
-    if (success) {
-      toast.success(language === "bn" ? "প্রোডাক্ট মুছে ফেলা হয়েছে" : "Product deleted");
-      loadData();
-    } else {
+  const handleDeleteSingle = (id: string) => {
+    setDeleteTargetId(id);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    setIsDeleting(true);
+    try {
+      const idsToDelete = deleteTargetId ? [deleteTargetId] : Array.from(selectedIds);
+      let successCount = 0;
+      
+      for (const id of idsToDelete) {
+        const success = await digitalProductService.deleteProduct(id);
+        if (success) successCount++;
+      }
+      
+      if (successCount > 0) {
+        toast.success(
+          language === "bn" 
+            ? `${successCount}টি প্রোডাক্ট মুছে ফেলা হয়েছে` 
+            : `${successCount} product(s) deleted`
+        );
+        setSelectedIds(new Set());
+        loadData();
+      }
+    } catch (error) {
       toast.error(language === "bn" ? "মুছে ফেলতে ব্যর্থ" : "Failed to delete");
+    } finally {
+      setIsDeleting(false);
+      setIsDeleteDialogOpen(false);
+      setDeleteTargetId(null);
     }
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredProducts.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredProducts.map(p => p.id)));
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedIds(newSelected);
   };
 
   const copyToClipboard = (text: string, label: string) => {
@@ -216,6 +263,45 @@ const DigitalProducts = () => {
           ))}
         </div>
 
+        {/* Bulk Actions Bar */}
+        {selectedIds.size > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center gap-4 p-3 bg-primary/10 rounded-lg border border-primary/20"
+          >
+            <div className="flex items-center gap-2">
+              <Checkbox
+                checked={selectedIds.size === filteredProducts.length}
+                onCheckedChange={toggleSelectAll}
+              />
+              <span className="text-sm font-medium">
+                {language === "bn" 
+                  ? `${selectedIds.size}টি সিলেক্ট করা হয়েছে` 
+                  : `${selectedIds.size} selected`}
+              </span>
+            </div>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => {
+                setDeleteTargetId(null);
+                setIsDeleteDialogOpen(true);
+              }}
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              {language === "bn" ? "ডিলিট" : "Delete"}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelectedIds(new Set())}
+            >
+              {language === "bn" ? "বাতিল" : "Cancel"}
+            </Button>
+          </motion.div>
+        )}
+
         {/* Filters */}
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="relative flex-1">
@@ -297,10 +383,15 @@ const DigitalProducts = () => {
                     exit={{ opacity: 0, scale: 0.95 }}
                     transition={{ delay: index * 0.03 }}
                   >
-                    <Card className="group hover:shadow-card transition-all hover:border-purple-500/30">
+                    <Card className={`group hover:shadow-card transition-all hover:border-purple-500/30 ${selectedIds.has(product.id) ? 'ring-2 ring-primary border-primary' : ''}`}>
                       <CardHeader className="pb-2">
                         <div className="flex items-start justify-between">
                           <div className="flex items-center gap-3">
+                            <Checkbox
+                              checked={selectedIds.has(product.id)}
+                              onCheckedChange={() => toggleSelect(product.id)}
+                              className="mt-1"
+                            />
                             <div className="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center">
                               <TypeIcon className="w-5 h-5 text-purple-600" />
                             </div>
@@ -337,7 +428,7 @@ const DigitalProducts = () => {
                                 {language === "bn" ? "এডিট করুন" : "Edit"}
                               </DropdownMenuItem>
                               <DropdownMenuItem
-                                onClick={() => handleDelete(product.id)}
+                                onClick={() => handleDeleteSingle(product.id)}
                                 className="text-destructive"
                               >
                                 <Trash2 className="w-4 h-4 mr-2" />
@@ -471,6 +562,16 @@ const DigitalProducts = () => {
           loadData();
           setIsBulkUploadOpen(false);
         }}
+      />
+
+      <DeleteConfirmDialog
+        open={isDeleteDialogOpen}
+        onOpenChange={setIsDeleteDialogOpen}
+        onConfirm={handleDeleteConfirm}
+        title={language === "bn" ? "ডিজিটাল প্রোডাক্ট" : "Digital Products"}
+        itemCount={deleteTargetId ? 1 : selectedIds.size}
+        isSoftDelete={false}
+        isLoading={isDeleting}
       />
     </DashboardLayout>
   );
