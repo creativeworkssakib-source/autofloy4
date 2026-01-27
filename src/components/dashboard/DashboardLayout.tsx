@@ -141,7 +141,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   return (
     <div className="min-h-screen bg-muted/30">
       {/* Mobile Header */}
-      <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-card border-b border-border">
+      <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-card/95 backdrop-blur-md border-b border-border shadow-sm">
         {/* Top row - Logo, notifications, menu */}
         <div className="h-14 flex items-center justify-between px-3">
           <Link to="/" className="flex items-center gap-2">
@@ -155,7 +155,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
             <span className="font-bold text-sm">{settings.company_name}</span>
           </Link>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1">
             <NotificationCenter
               notifications={notifications}
               unreadCount={unreadCount}
@@ -173,10 +173,18 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
           </div>
         </div>
         
-        {/* Bottom row - Mode switchers */}
-        <div className="h-12 flex items-center justify-center gap-2 px-3 border-t border-border/50 bg-muted/30">
-          <BusinessModeSwitcher syncEnabled={syncEnabled} />
-          <ProductTypeSwitcher />
+        {/* Bottom row - Unified Mode Switcher */}
+        <div className="px-3 pb-2">
+          <div className="flex items-center gap-1.5 p-1 rounded-xl bg-muted/50 border border-border/30">
+            {/* Business Mode */}
+            <BusinessModeSwitcher syncEnabled={syncEnabled} />
+            
+            {/* Divider */}
+            <div className="w-px h-6 bg-border/50" />
+            
+            {/* Product Type */}
+            <ProductTypeSwitcher />
+          </div>
         </div>
       </header>
 
