@@ -576,7 +576,7 @@ export async function fetchDashboardStats(): Promise<DashboardStats | null> {
   // FALLBACK: Use direct Supabase RPC (works even if Edge Functions are blocked)
   try {
     const { supabase } = await import("@/integrations/supabase/client");
-    const userId = getUserIdFromToken();
+    const userId = await getUserIdFromStorage();
     
     if (!userId) {
       console.error("[dashboard-stats] No user ID for RPC fallback");
@@ -602,17 +602,53 @@ export async function fetchDashboardStats(): Promise<DashboardStats | null> {
   }
 }
 
-// Helper to get user ID from stored token
-function getUserIdFromToken(): string | null {
+// Helper to get user ID from multiple sources
+async function getUserIdFromStorage(): Promise<string | null> {
+  // First try from auth_token
   const token = localStorage.getItem("auth_token");
-  if (!token) return null;
-  
-  try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    return payload.sub || null;
-  } catch {
-    return null;
+  if (token) {
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      if (payload.sub) {
+        console.log("[getUserId] Got user ID from auth_token:", payload.sub);
+        return payload.sub;
+      }
+    } catch (e) {
+      console.warn("[getUserId] Failed to parse auth_token:", e);
+    }
   }
+
+  // Fallback: try from user object in localStorage
+  const userStr = localStorage.getItem("user");
+  if (userStr) {
+    try {
+      const user = JSON.parse(userStr);
+      if (user?.id) {
+        console.log("[getUserId] Got user ID from user object:", user.id);
+        return user.id;
+      }
+    } catch (e) {
+      console.warn("[getUserId] Failed to parse user object:", e);
+    }
+  }
+
+  // Last fallback: try Supabase session (though might be blocked)
+  try {
+    const { supabase } = await import("@/integrations/supabase/client");
+    const storedSession = localStorage.getItem(`sb-klkrzfwvrmffqkmkyqrh-auth-token`);
+    if (storedSession) {
+      const session = JSON.parse(storedSession);
+      if (session?.user?.id) {
+        console.log("[getUserId] Got user ID from Supabase session:", session.user.id);
+        return session.user.id;
+      }
+    }
+  } catch (e) {
+    console.warn("[getUserId] Failed to get from Supabase session:", e);
+  }
+
+  console.error("[getUserId] Could not find user ID in any source");
+  return null;
 }
 
 // Execution Logs - with retry and timeout
