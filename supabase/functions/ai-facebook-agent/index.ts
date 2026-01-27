@@ -1581,6 +1581,20 @@ serve(async (req) => {
       });
     }
 
+    // Use userId from page_memory if not provided in request body
+    const effectiveUserId = userId || pageMemory.user_id;
+    
+    if (!effectiveUserId) {
+      console.error("[AI Agent] No userId available from request or page_memory");
+      return new Response(JSON.stringify({ 
+        error: "User not found",
+        reply: "দুঃখিত, ইউজার খুঁজে পাওয়া যায়নি।" 
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Check automation settings
     const settings = pageMemory.automation_settings || {};
     const orderTakingEnabled = settings.orderTaking !== false; // Default true for backwards compat
@@ -1603,7 +1617,7 @@ serve(async (req) => {
     let postContext: PostContext | null = null;
 
     if (isComment && postId) {
-      const postResult = await getProductFromPost(supabase, pageId, postId, userId);
+      const postResult = await getProductFromPost(supabase, pageId, postId, effectiveUserId);
       postContext = postResult.postContext;
       productContext = postResult.productContext;
     }
@@ -1617,14 +1631,14 @@ serve(async (req) => {
     }
 
     if (!productContext) {
-      productContext = await findProductByName(supabase, userId, messageText);
+      productContext = await findProductByName(supabase, effectiveUserId, messageText);
       if (!productContext && postContent) {
-        productContext = await findProductByName(supabase, userId, postContent);
+        productContext = await findProductByName(supabase, effectiveUserId, postContent);
       }
     }
 
     // *** FETCH ALL PRODUCTS FOR AI KNOWLEDGE ***
-    const allProducts = await getAllProducts(supabase, userId);
+    const allProducts = await getAllProducts(supabase, effectiveUserId);
     console.log(`[AI Agent] 📦 Loaded ${allProducts.length} products for AI knowledge`);
 
     // Get or create conversation
@@ -1639,7 +1653,7 @@ serve(async (req) => {
       const { data: newConv } = await supabase
         .from("ai_conversations")
         .insert({
-          user_id: userId,
+          user_id: effectiveUserId,
           page_id: pageId,
           sender_id: senderId,
           sender_name: senderName,
@@ -1851,7 +1865,7 @@ serve(async (req) => {
       const { data: order } = await supabase
         .from("ai_orders")
         .insert({
-          user_id: userId,
+          user_id: effectiveUserId,
           page_id: pageId,
           conversation_id: conversation.id,
           customer_fb_id: senderId,
