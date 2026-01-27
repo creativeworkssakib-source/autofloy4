@@ -573,7 +573,7 @@ export const DigitalProductBulkUploadModal = ({
               </div>
 
               {/* Products List */}
-              <ScrollArea className="flex-1 border rounded-lg">
+              <ScrollArea className="h-[250px] border rounded-lg">
                 <div className="p-2 space-y-2">
                   {parsedProducts.map((product, index) => (
                     <div
@@ -585,18 +585,18 @@ export const DigitalProductBulkUploadModal = ({
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
                           {product.isValid ? (
                             <CheckCircle className="w-4 h-4 text-primary flex-shrink-0" />
                           ) : (
                             <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0" />
                           )}
-                          <div>
+                          <div className="min-w-0">
                             <div className="flex items-center gap-2">
                               {getProductTypeIcon(product.data.product_type)}
-                              <span className="font-medium">{product.data.name || "(No Name)"}</span>
+                              <span className="font-medium truncate">{product.data.name || "(No Name)"}</span>
                             </div>
-                            <div className="text-xs text-muted-foreground">
+                            <div className="text-xs text-muted-foreground truncate">
                               {product.sheetName} • ৳{product.data.price}
                               {product.data.credential_username && (
                                 <span className="ml-2">• {product.data.credential_username}</span>
@@ -613,7 +613,7 @@ export const DigitalProductBulkUploadModal = ({
                             </div>
                           </div>
                         </div>
-                        <Badge variant="outline" className="text-xs">
+                        <Badge variant="outline" className="text-xs flex-shrink-0">
                           {product.data.product_type}
                         </Badge>
                       </div>
