@@ -10,6 +10,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { SiteSettingsProvider } from "@/contexts/SiteSettingsContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { ShopProvider } from "@/contexts/ShopContext";
+import { ProductTypeProvider } from "@/contexts/ProductTypeContext";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import AdminProtectedRoute from "@/components/admin/AdminProtectedRoute";
 import { CookieConsentBanner } from "@/components/CookieConsentBanner";
@@ -61,6 +62,7 @@ const AuthGoogleCallback = lazy(() => import("./pages/AuthGoogleCallback"));
 const AutomationStatus = lazy(() => import("./pages/dashboard/AutomationStatus"));
 const Marketing = lazy(() => import("./pages/dashboard/Marketing"));
 const Orders = lazy(() => import("./pages/dashboard/Orders"));
+const DigitalProducts = lazy(() => import("./pages/dashboard/DigitalProducts"));
 
 // Business Selector & Offline Shop pages
 const BusinessSelector = lazy(() => import("./pages/BusinessSelector"));
@@ -138,6 +140,7 @@ const App = () => (
           <LanguageProvider>
             <NotificationProvider>
               <ShopProvider>
+              <ProductTypeProvider>
               <TooltipProvider>
               <Toaster />
               <Sonner />
@@ -251,6 +254,11 @@ const App = () => (
                   <Route path="/dashboard/orders" element={
                     <ProtectedRoute>
                       <Orders />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/dashboard/digital-products" element={
+                    <ProtectedRoute>
+                      <DigitalProducts />
                     </ProtectedRoute>
                   } />
                   
@@ -454,6 +462,7 @@ const App = () => (
               </Suspense>
               </BrowserRouter>
               </TooltipProvider>
+              </ProductTypeProvider>
               </ShopProvider>
             </NotificationProvider>
           </LanguageProvider>

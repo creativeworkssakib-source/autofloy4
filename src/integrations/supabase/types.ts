@@ -572,6 +572,169 @@ export type Database = {
           },
         ]
       }
+      digital_product_sales: {
+        Row: {
+          created_at: string
+          customer_email: string | null
+          customer_fb_id: string | null
+          customer_name: string | null
+          customer_phone: string | null
+          delivered_at: string | null
+          delivery_status: string | null
+          id: string
+          notes: string | null
+          payment_method: string | null
+          payment_status: string | null
+          product_id: string
+          sale_price: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          customer_email?: string | null
+          customer_fb_id?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          delivered_at?: string | null
+          delivery_status?: string | null
+          id?: string
+          notes?: string | null
+          payment_method?: string | null
+          payment_status?: string | null
+          product_id: string
+          sale_price: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          customer_email?: string | null
+          customer_fb_id?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          delivered_at?: string | null
+          delivery_status?: string | null
+          id?: string
+          notes?: string | null
+          payment_method?: string | null
+          payment_status?: string | null
+          product_id?: string
+          sale_price?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "digital_product_sales_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "digital_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      digital_products: {
+        Row: {
+          access_instructions: string | null
+          access_url: string | null
+          api_documentation: string | null
+          api_endpoint: string | null
+          api_key: string | null
+          created_at: string
+          credential_email: string | null
+          credential_extra: Json | null
+          credential_password: string | null
+          credential_username: string | null
+          currency: string | null
+          description: string | null
+          file_name: string | null
+          file_size_bytes: number | null
+          file_type: string | null
+          file_url: string | null
+          id: string
+          is_active: boolean | null
+          is_unlimited_stock: boolean | null
+          name: string
+          price: number
+          product_type: string
+          sale_price: number | null
+          shop_id: string | null
+          stock_quantity: number | null
+          total_sold: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_instructions?: string | null
+          access_url?: string | null
+          api_documentation?: string | null
+          api_endpoint?: string | null
+          api_key?: string | null
+          created_at?: string
+          credential_email?: string | null
+          credential_extra?: Json | null
+          credential_password?: string | null
+          credential_username?: string | null
+          currency?: string | null
+          description?: string | null
+          file_name?: string | null
+          file_size_bytes?: number | null
+          file_type?: string | null
+          file_url?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_unlimited_stock?: boolean | null
+          name: string
+          price?: number
+          product_type?: string
+          sale_price?: number | null
+          shop_id?: string | null
+          stock_quantity?: number | null
+          total_sold?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_instructions?: string | null
+          access_url?: string | null
+          api_documentation?: string | null
+          api_endpoint?: string | null
+          api_key?: string | null
+          created_at?: string
+          credential_email?: string | null
+          credential_extra?: Json | null
+          credential_password?: string | null
+          credential_username?: string | null
+          currency?: string | null
+          description?: string | null
+          file_name?: string | null
+          file_size_bytes?: number | null
+          file_type?: string | null
+          file_url?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_unlimited_stock?: boolean | null
+          name?: string
+          price?: number
+          product_type?: string
+          sale_price?: number | null
+          shop_id?: string | null
+          stock_quantity?: number | null
+          total_sold?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "digital_products_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "shops"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_templates: {
         Row: {
           created_at: string | null
