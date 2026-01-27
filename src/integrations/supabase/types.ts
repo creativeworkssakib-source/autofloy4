@@ -4689,6 +4689,7 @@ export type Database = {
     }
     Functions: {
       can_email_use_trial: { Args: { p_email: string }; Returns: Json }
+      cleanup_old_execution_logs: { Args: never; Returns: undefined }
       delete_user_completely: {
         Args: { p_preserve_email_history?: boolean; p_user_id: string }
         Returns: Json
