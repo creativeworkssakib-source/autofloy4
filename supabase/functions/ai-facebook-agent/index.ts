@@ -97,6 +97,15 @@ interface DigitalProductContext {
   file_name?: string;
 }
 
+interface ProductMediaItem {
+  id: string;
+  product_id: string;
+  media_type: "image" | "video";
+  file_url: string;
+  thumbnail_url?: string;
+  description?: string;
+}
+
 interface PostContext {
   post_id: string;
   post_text?: string;
@@ -1132,7 +1141,8 @@ function buildSystemPrompt(
   senderName?: string,
   allProducts?: ProductContext[],
   orderTakingEnabled: boolean = true,
-  digitalProductContext?: DigitalProductContext // New parameter for rich digital product context
+  digitalProductContext?: DigitalProductContext, // Rich digital product context
+  productMedia?: ProductMediaItem[] // Product media for AI to use
 ): string {
   const tone = pageMemory.preferred_tone === "professional" ? "পেশাদার কিন্তু casual" : "বন্ধুর মতো";
   const language = pageMemory.detected_language === "english" ? "English" : 
@@ -1151,6 +1161,11 @@ function buildSystemPrompt(
   // Build product catalog
   const productCatalog = allProducts && allProducts.length > 0 
     ? buildProductCatalog(allProducts) 
+    : "";
+  
+  // Build media context
+  const mediaContext = productMedia && productMedia.length > 0
+    ? buildMediaContext(productMedia, productContext?.name)
     : "";
   
   // Get first name for personalization
@@ -1264,7 +1279,9 @@ ${conversationContext}
 ${pageMemory.business_description || ""}
 ${pageMemory.products_summary || ""}
 
-${productCatalog}`;
+${productCatalog}
+
+${mediaContext}`;
 
   // Returning customer
   if (isReturning && firstName) {
@@ -1884,6 +1901,85 @@ ${product.api_endpoint ? `- Endpoint: আছে` : ""}
   return context;
 }
 
+// *** FETCH PRODUCT MEDIA FOR AI TO USE ***
+async function getProductMedia(
+  supabase: any,
+  userId: string,
+  productId?: string
+): Promise<ProductMediaItem[]> {
+  try {
+    let query = supabase
+      .from("product_media")
+      .select("id, product_id, media_type, file_url, thumbnail_url, description")
+      .eq("user_id", userId)
+      .order("sort_order", { ascending: true });
+    
+    if (productId) {
+      query = query.eq("product_id", productId);
+    }
+    
+    const { data, error } = await query.limit(20);
+    
+    if (error) {
+      console.error("[AI Agent] Error fetching product media:", error);
+      return [];
+    }
+    
+    return (data || []) as ProductMediaItem[];
+  } catch (error) {
+    console.error("[AI Agent] Error in getProductMedia:", error);
+    return [];
+  }
+}
+
+// *** BUILD MEDIA CONTEXT FOR AI ***
+function buildMediaContext(media: ProductMediaItem[], productName?: string): string {
+  if (!media || media.length === 0) return "";
+  
+  const images = media.filter(m => m.media_type === "image");
+  const videos = media.filter(m => m.media_type === "video");
+  
+  let context = `
+
+## 📸 প্রোডাক্ট মিডিয়া (AI MEDIA LIBRARY):
+${productName ? `**${productName}** এর জন্য:` : ""}
+
+### ⚡ গুরুত্বপূর্ণ:
+- যখন কাস্টমার ছবি/ভিডিও দেখতে চাইবে, এই URL গুলো পাঠাতে পারবেন
+- "ছবি দেখাও", "দেখতে কেমন", "photo", "picture", "ভিডিও" এই কথা শুনলে মিডিয়া পাঠান
+
+`;
+
+  if (images.length > 0) {
+    context += `### 📷 ছবি (${images.length}টি):
+`;
+    images.slice(0, 5).forEach((img, i) => {
+      context += `${i + 1}. ${img.description || "Product image"}: ${img.file_url}
+`;
+    });
+  }
+  
+  if (videos.length > 0) {
+    context += `
+### 🎬 ভিডিও (${videos.length}টি):
+`;
+    videos.slice(0, 3).forEach((vid, i) => {
+      context += `${i + 1}. ${vid.description || "Product video"}: ${vid.file_url}
+`;
+    });
+  }
+
+  context += `
+### 💡 মিডিয়া পাঠানোর নিয়ম:
+- কাস্টমার জিজ্ঞেস করলে: "এইটা দেখুন ভাই [URL]"
+- একটা করে পাঠান, অনেকগুলো একসাথে না
+- ছবি পাঠানোর পর: "আরো ছবি দেখতে চাইলে বলবেন"
+- ভিডিও আছে জানান: "ভিডিও ও আছে, দেখতে চান?"
+`;
+
+  return context;
+}
+
 // *** FIND DIGITAL PRODUCT BY NAME ***
 async function findDigitalProductByName(
   supabase: any, 
@@ -2063,6 +2159,15 @@ serve(async (req) => {
     const allProducts = await getAllProducts(supabase, effectiveUserId);
     console.log(`[AI Agent] 📦 Loaded ${allProducts.length} products for AI knowledge (physical + digital)`);
 
+    // *** FETCH PRODUCT MEDIA FOR AI TO USE ***
+    const productMedia = await getProductMedia(
+      supabase, 
+      effectiveUserId, 
+      productContext?.id // Get media for specific product if available
+    );
+    console.log(`[AI Agent] 📸 Loaded ${productMedia.length} media items for AI`);
+
+
 
     // Get or create conversation
     let { data: conversation } = await supabase
@@ -2226,7 +2331,8 @@ serve(async (req) => {
       senderName || conversation.sender_name,
       allProducts, // Pass all products for AI knowledge
       orderTakingEnabled, // Pass order taking toggle
-      digitalProductContext || undefined // Pass rich digital product context
+      digitalProductContext || undefined, // Pass rich digital product context
+      productMedia // Pass product media for AI to use
     );
     
     // Build rich AI messages with context
