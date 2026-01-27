@@ -17,7 +17,7 @@ import { DynamicDocumentTitle } from "@/components/DynamicDocumentTitle";
 import { DynamicAppearance } from "@/components/DynamicAppearance";
 import BackToTopButton from "@/components/ui/BackToTopButton";
 import { OfflineReadyIndicator } from "@/components/OfflineIndicators";
-// ExtensionBlockerDetector removed - was causing false positives
+import { ExtensionBlockerDetector } from "@/components/ExtensionBlockerDetector";
 import { Loader2 } from "lucide-react";
 
 // Eagerly loaded routes (small, critical)
@@ -145,7 +145,7 @@ const App = () => (
               <CookieConsentBanner />
               <BackToTopButton />
               <OfflineReadyIndicator />
-              {/* ExtensionBlockerDetector removed - was causing false positives */}
+              <ExtensionBlockerDetector />
               <Suspense fallback={<PageLoader />}>
                 <Routes>
                   {/* Public routes */}
