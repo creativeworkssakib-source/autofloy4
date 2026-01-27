@@ -75,7 +75,7 @@ export const BusinessModeSwitcher = ({
       <DropdownMenuTrigger asChild>
         <button
           className={cn(
-            "flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors text-sm font-medium",
+            "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-colors text-xs sm:text-sm font-medium",
             currentMode === "online"
               ? "bg-primary/10 text-primary hover:bg-primary/20"
               : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20",
@@ -83,15 +83,20 @@ export const BusinessModeSwitcher = ({
           )}
         >
           {currentMode === "online" ? (
-            <Globe className="w-4 h-4" />
+            <Globe className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           ) : (
-            <Store className="w-4 h-4" />
+            <Store className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           )}
-          {currentMode === "online" ? "Online Business" : "Offline Shop"}
+          <span className="hidden xs:inline sm:inline">
+            {currentMode === "online" ? "Online" : "Offline"}
+          </span>
+          <span className="inline xs:hidden sm:hidden">
+            {currentMode === "online" ? "On" : "Off"}
+          </span>
           {syncEnabled && (
-            <Link2 className="w-3 h-3 text-success" />
+            <Link2 className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-success" />
           )}
-          <ChevronDown className="w-3 h-3" />
+          <ChevronDown className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-64">
