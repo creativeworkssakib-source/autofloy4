@@ -1918,6 +1918,62 @@ export type Database = {
         }
         Relationships: []
       }
+      product_media: {
+        Row: {
+          created_at: string
+          description: string | null
+          file_name: string | null
+          file_path: string | null
+          file_size_bytes: number | null
+          file_url: string
+          id: string
+          media_type: string
+          product_id: string
+          sort_order: number | null
+          thumbnail_url: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          file_name?: string | null
+          file_path?: string | null
+          file_size_bytes?: number | null
+          file_url: string
+          id?: string
+          media_type: string
+          product_id: string
+          sort_order?: number | null
+          thumbnail_url?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          file_name?: string | null
+          file_path?: string | null
+          file_size_bytes?: number | null
+          file_url?: string
+          id?: string
+          media_type?: string
+          product_id?: string
+          sort_order?: number | null
+          thumbnail_url?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_media_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_variants: {
         Row: {
           color: string | null

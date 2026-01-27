@@ -24,6 +24,7 @@ import {
   FileCode,
   Key,
   DollarSign,
+  ImageIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -79,6 +80,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     { name: t("sidebar.automations"), href: "/dashboard/automations", icon: Bot, pageTitle: t("sidebar.automations"), subtitle: t("dashboard.automationsAnalytics") },
     { name: language === "bn" ? "AI অর্ডার" : "AI Orders", href: "/dashboard/orders", icon: ShoppingBag, pageTitle: language === "bn" ? "AI অর্ডার" : "AI Orders", subtitle: language === "bn" ? "AI থেকে অর্ডার" : "Orders from AI" },
     { name: t("sidebar.products"), href: "/dashboard/products", icon: Package, pageTitle: t("sidebar.products"), subtitle: t("dashboard.totalProducts") },
+    { name: language === "bn" ? "AI মিডিয়া" : "AI Media", href: "/dashboard/ai-media", icon: ImageIcon, pageTitle: language === "bn" ? "AI মিডিয়া লাইব্রেরি" : "AI Media Library", subtitle: language === "bn" ? "প্রোডাক্টের ফটো/ভিডিও" : "Product Photos/Videos" },
     { name: t("sidebar.businessOverview"), href: "/dashboard/business", icon: BarChart3, pageTitle: t("sidebar.businessOverview"), subtitle: t("dashboard.overview") },
     { name: t("sidebar.globalReports"), href: "/dashboard/reports", icon: BarChart3, pageTitle: t("sidebar.globalReports"), subtitle: t("dashboard.onlineOffline") },
     { name: t("sidebar.logs"), href: "/dashboard/logs", icon: FileText, pageTitle: t("sidebar.logs"), subtitle: t("dashboard.recentActivity") },
@@ -93,6 +95,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     { name: t("sidebar.automations"), href: "/dashboard/automations", icon: Bot, pageTitle: t("sidebar.automations"), subtitle: language === "bn" ? "AI অটোমেশন সেটআপ" : "AI Automation Setup" },
     { name: language === "bn" ? "ডিজিটাল অর্ডার" : "Digital Orders", href: "/dashboard/orders", icon: ShoppingBag, pageTitle: language === "bn" ? "ডিজিটাল অর্ডার" : "Digital Orders", subtitle: language === "bn" ? "AI থেকে ডিজিটাল সেল" : "Digital sales from AI" },
     { name: language === "bn" ? "ডিজিটাল প্রোডাক্ট" : "Digital Products", href: "/dashboard/digital-products", icon: FileCode, pageTitle: language === "bn" ? "ডিজিটাল প্রোডাক্ট" : "Digital Products", subtitle: language === "bn" ? "সাবস্ক্রিপশন, API, কোর্স" : "Subscriptions, APIs, Courses" },
+    { name: language === "bn" ? "AI মিডিয়া" : "AI Media", href: "/dashboard/ai-media", icon: ImageIcon, pageTitle: language === "bn" ? "AI মিডিয়া লাইব্রেরি" : "AI Media Library", subtitle: language === "bn" ? "প্রোডাক্টের ফটো/ভিডিও" : "Product Photos/Videos" },
     { name: language === "bn" ? "সেলস রিপোর্ট" : "Sales Report", href: "/dashboard/reports", icon: DollarSign, pageTitle: language === "bn" ? "সেলস রিপোর্ট" : "Sales Report", subtitle: language === "bn" ? "ডিজিটাল সেলস এনালাইটিক্স" : "Digital Sales Analytics" },
     { name: t("sidebar.logs"), href: "/dashboard/logs", icon: FileText, pageTitle: t("sidebar.logs"), subtitle: t("dashboard.recentActivity") },
     { name: t("sidebar.settings"), href: "/dashboard/settings", icon: Settings, pageTitle: t("sidebar.settings"), subtitle: t("settings.profileDesc") },
