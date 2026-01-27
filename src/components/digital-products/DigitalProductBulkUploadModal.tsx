@@ -161,7 +161,7 @@ export const DigitalProductBulkUploadModal = ({
     ];
     XLSX.utils.book_append_sheet(wb, wsCourse, "Courses");
 
-    // Software sheet - for downloadable files
+    // Software sheet - for downloadable files/APKs
     const softwareData = [
       {
         name: "Premium APK",
@@ -181,6 +181,15 @@ export const DigitalProductBulkUploadModal = ({
         file_name: "app-v2.0.apk",
         is_active: "yes",
       },
+      {
+        name: "Windows Software Key",
+        price: 500,
+        sale_price: 400,
+        description: "Windows 11 Pro License",
+        file_url: "",
+        file_name: "",
+        is_active: "yes",
+      },
     ];
     const wsSoftware = XLSX.utils.json_to_sheet(softwareData);
     wsSoftware["!cols"] = [
@@ -189,8 +198,45 @@ export const DigitalProductBulkUploadModal = ({
     ];
     XLSX.utils.book_append_sheet(wb, wsSoftware, "Software");
 
+    // Other sheet - for any other digital products
+    const otherData = [
+      {
+        name: "Custom Digital Service",
+        price: 300,
+        sale_price: "",
+        description: "Custom digital service",
+        credential_username: "",
+        credential_password: "",
+        api_key: "",
+        access_url: "https://example.com/service",
+        file_url: "",
+        notes: "Any additional info here",
+        is_active: "yes",
+      },
+      {
+        name: "Game Account",
+        price: 1500,
+        sale_price: 1200,
+        description: "PUBG Account with skins",
+        credential_username: "gameuser@email.com",
+        credential_password: "gamepass123",
+        api_key: "",
+        access_url: "",
+        file_url: "",
+        notes: "Level 50 account",
+        is_active: "yes",
+      },
+    ];
+    const wsOther = XLSX.utils.json_to_sheet(otherData);
+    wsOther["!cols"] = [
+      { wch: 25 }, { wch: 10 }, { wch: 10 }, { wch: 30 },
+      { wch: 25 }, { wch: 20 }, { wch: 25 }, { wch: 35 },
+      { wch: 35 }, { wch: 30 }, { wch: 10 },
+    ];
+    XLSX.utils.book_append_sheet(wb, wsOther, "Other");
+
     XLSX.writeFile(wb, "digital_products_template.xlsx");
-    toast.success(language === "bn" ? "টেমপ্লেট ডাউনলোড হয়েছে" : "Template downloaded");
+    toast.success(language === "bn" ? "টেমপ্লেট ডাউনলোড হয়েছে (৫টি শীট)" : "Template downloaded (5 sheets)");
   };
 
   const parseExcelFile = (file: File) => {
@@ -212,6 +258,7 @@ export const DigitalProductBulkUploadModal = ({
           "APIs": "api",
           "Courses": "course",
           "Software": "software",
+          "Other": "other",
         };
 
         // Process each sheet
@@ -400,8 +447,8 @@ export const DigitalProductBulkUploadModal = ({
                   </p>
                   <p className="text-sm text-muted-foreground">
                     {language === "bn"
-                      ? "৪টি শীট: Subscriptions, APIs, Courses, Software"
-                      : "4 sheets: Subscriptions, APIs, Courses, Software"}
+                      ? "৫টি শীট: Subscriptions, APIs, Courses, Software, Other"
+                      : "5 sheets: Subscriptions, APIs, Courses, Software, Other"}
                   </p>
                 </div>
               </div>
