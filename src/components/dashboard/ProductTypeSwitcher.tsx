@@ -1,8 +1,7 @@
-import { Package, FileCode, Sparkles, Zap } from "lucide-react";
+import { Package, FileCode, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useProductType, ProductType } from "@/contexts/ProductTypeContext";
-import { useLanguage } from "@/contexts/LanguageContext";
 import {
   Tooltip,
   TooltipContent,
@@ -12,26 +11,25 @@ import {
 
 export const ProductTypeSwitcher = () => {
   const { productType, setProductType } = useProductType();
-  const { t } = useLanguage();
 
-  const types: { id: ProductType; label: string; labelBn: string; icon: typeof Package }[] = [
+  const types: { id: ProductType; label: string; shortLabel: string; icon: typeof Package }[] = [
     {
       id: "physical",
-      label: "Physical Product",
-      labelBn: "ফিজিক্যাল প্রোডাক্ট",
+      label: "Physical Products",
+      shortLabel: "Physical",
       icon: Package,
     },
     {
       id: "digital",
-      label: "Digital Product",
-      labelBn: "ডিজিটাল প্রোডাক্ট",
+      label: "Digital Products",
+      shortLabel: "Digital",
       icon: FileCode,
     },
   ];
 
   return (
     <TooltipProvider>
-      <div className="inline-flex items-center gap-0.5 p-0.5 rounded-lg bg-background/50 border border-border/30">
+      <div className="inline-flex items-center p-1 rounded-xl bg-muted/60 border border-border/40 shadow-inner">
         {types.map((type) => {
           const isActive = productType === type.id;
           const Icon = type.icon;
@@ -43,69 +41,57 @@ export const ProductTypeSwitcher = () => {
                 <button
                   onClick={() => setProductType(type.id)}
                   className={cn(
-                    "relative flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium transition-all duration-300 overflow-hidden",
+                    "relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-300",
                     isActive
-                      ? isDigital
-                        ? "text-white shadow-md"
-                        : "text-blue-700 dark:text-blue-300 shadow-sm"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                      ? "text-white shadow-lg"
+                      : "text-muted-foreground hover:text-foreground"
                   )}
                 >
-                  {/* Physical Active Background */}
-                  {isActive && !isDigital && (
+                  {/* Background */}
+                  {isActive && (
                     <motion.div
-                      layoutId="productTypeBg"
-                      className="absolute inset-0 rounded-md bg-gradient-to-r from-blue-100 to-cyan-100 dark:from-blue-900/40 dark:to-cyan-900/40 border border-blue-200/50 dark:border-blue-700/50"
+                      layoutId="productTypeBgMobile"
+                      className={cn(
+                        "absolute inset-0 rounded-lg",
+                        isDigital
+                          ? "bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-500 shadow-purple-500/30"
+                          : "bg-gradient-to-r from-blue-600 via-blue-500 to-cyan-500 shadow-blue-500/30"
+                      )}
                       initial={false}
-                      transition={{ type: "spring", bounce: 0.2, duration: 0.4 }}
+                      transition={{ type: "spring", bounce: 0.15, duration: 0.5 }}
                     />
                   )}
                   
-                  {/* Digital Active Background - Premium Gradient */}
-                  {isActive && isDigital && (
-                    <motion.div
-                      layoutId="productTypeBg"
-                      className="absolute inset-0 rounded-md"
-                      initial={false}
-                      transition={{ type: "spring", bounce: 0.2, duration: 0.4 }}
-                    >
-                      {/* Main gradient */}
-                      <div className="absolute inset-0 rounded-md bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-600" />
-                      
-                      {/* Shimmer overlay */}
-                      <div className="absolute inset-0 rounded-md bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer" />
-                    </motion.div>
-                  )}
-                  
-                  {/* Icon with animation for digital */}
+                  {/* Icon */}
                   <motion.div
                     className="relative z-10"
                     animate={isActive && isDigital ? { 
-                      scale: [1, 1.1, 1],
+                      rotate: [0, -5, 5, 0],
                     } : {}}
                     transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
                   >
                     <Icon className={cn(
-                      "w-3 h-3 sm:w-3.5 sm:h-3.5",
-                      isActive && isDigital && "drop-shadow-[0_0_4px_rgba(255,255,255,0.5)]"
+                      "w-3.5 h-3.5 transition-all",
+                      isActive && "drop-shadow-sm"
                     )} />
                   </motion.div>
                   
                   {/* Label */}
                   <span className="relative z-10">
-                    {isDigital ? "Digital" : "Physical"}
+                    {type.shortLabel}
                   </span>
                   
-                  {/* Sparkle for digital - simplified */}
+                  {/* Sparkle for digital */}
                   <AnimatePresence>
                     {isActive && isDigital && (
                       <motion.div
-                        initial={{ opacity: 0, scale: 0 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0 }}
+                        initial={{ opacity: 0, scale: 0, rotate: -30 }}
+                        animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                        exit={{ opacity: 0, scale: 0, rotate: 30 }}
+                        transition={{ type: "spring", bounce: 0.5 }}
                         className="relative z-10"
                       >
-                        <Sparkles className="w-2.5 h-2.5 text-yellow-300" />
+                        <Sparkles className="w-3 h-3 text-yellow-300 drop-shadow-[0_0_3px_rgba(253,224,71,0.8)]" />
                       </motion.div>
                     )}
                   </AnimatePresence>
@@ -114,13 +100,13 @@ export const ProductTypeSwitcher = () => {
               <TooltipContent 
                 side="bottom" 
                 className={cn(
-                  "border",
+                  "border font-medium",
                   isDigital 
                     ? "bg-gradient-to-r from-violet-600 to-purple-600 text-white border-purple-400/50" 
-                    : "bg-card"
+                    : "bg-gradient-to-r from-blue-600 to-cyan-600 text-white border-blue-400/50"
                 )}
               >
-                <p className="font-medium text-xs">{type.label}</p>
+                <p className="text-xs">{type.label}</p>
               </TooltipContent>
             </Tooltip>
           );

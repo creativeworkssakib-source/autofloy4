@@ -141,18 +141,21 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   return (
     <div className="min-h-screen bg-muted/30">
       {/* Mobile Header */}
-      <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-card/95 backdrop-blur-md border-b border-border shadow-sm">
+      <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-gradient-to-b from-card via-card to-card/95 backdrop-blur-xl border-b border-border/50 shadow-lg shadow-black/5">
         {/* Top row - Logo, notifications, menu */}
-        <div className="h-14 flex items-center justify-between px-3">
-          <Link to="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
+        <div className="h-14 flex items-center justify-between px-4">
+          <Link to="/" className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary via-primary to-secondary flex items-center justify-center shadow-lg shadow-primary/25">
               {settings.logo_url ? (
-                <img src={settings.logo_url} alt={settings.company_name} className="w-6 h-6 rounded object-contain" />
+                <img src={settings.logo_url} alt={settings.company_name} className="w-6 h-6 rounded-lg object-contain" />
               ) : (
-                <Zap className="w-4 h-4 text-primary-foreground" />
+                <Zap className="w-5 h-5 text-primary-foreground" />
               )}
             </div>
-            <span className="font-bold text-sm">{settings.company_name}</span>
+            <div className="flex flex-col">
+              <span className="font-bold text-sm leading-tight">{settings.company_name}</span>
+              <span className="text-[10px] text-muted-foreground leading-tight">Dashboard</span>
+            </div>
           </Link>
 
           <div className="flex items-center gap-1">
@@ -166,23 +169,23 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
             />
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-2 hover:bg-muted rounded-lg"
+              className="p-2.5 hover:bg-muted/80 rounded-xl transition-colors"
             >
               {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
           </div>
         </div>
         
-        {/* Bottom row - Unified Mode Switcher */}
-        <div className="px-3 pb-2">
-          <div className="flex items-center gap-1.5 p-1 rounded-xl bg-muted/50 border border-border/30">
-            {/* Business Mode */}
+        {/* Bottom row - Unified elegant switcher bar */}
+        <div className="px-4 pb-3">
+          <div className="flex items-center gap-2">
+            {/* Business Mode - Compact elegant button */}
             <BusinessModeSwitcher syncEnabled={syncEnabled} />
             
-            {/* Divider */}
-            <div className="w-px h-6 bg-border/50" />
+            {/* Separator dot */}
+            <div className="w-1 h-1 rounded-full bg-border/80" />
             
-            {/* Product Type */}
+            {/* Product Type - Compact elegant toggle */}
             <ProductTypeSwitcher />
           </div>
         </div>
