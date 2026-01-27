@@ -54,9 +54,11 @@ serve(async (req) => {
   }
 
   try {
+    console.log(`[execution-logs] Fetching logs for user: ${userId}`);
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const url = new URL(req.url);
     const limit = parseInt(url.searchParams.get("limit") || "5");
+    console.log(`[execution-logs] Limit: ${limit}`);
 
     // Fetch recent execution logs for this user
     const { data: logs, error } = await supabase
@@ -80,13 +82,15 @@ serve(async (req) => {
       .limit(limit);
 
     if (error) {
-      console.error("Error fetching logs:", error);
+      console.error("[execution-logs] Error fetching logs:", error);
       return new Response(JSON.stringify({ error: "Failed to fetch logs" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
+    console.log(`[execution-logs] Found ${logs?.length || 0} logs`);
+    
     return new Response(JSON.stringify({ logs: logs || [] }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

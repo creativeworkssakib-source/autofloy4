@@ -54,6 +54,7 @@ serve(async (req) => {
   }
 
   try {
+    console.log(`[dashboard-stats] Fetching stats for user: ${userId}`);
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const today = new Date();
@@ -62,10 +63,15 @@ serve(async (req) => {
     yesterday.setDate(yesterday.getDate() - 1);
 
     // Get ALL execution logs (total messages handled)
-    const { data: allLogs } = await supabase
+    const { data: allLogs, error: logsError } = await supabase
       .from("execution_logs")
       .select("id, status, created_at")
       .eq("user_id", userId);
+    
+    if (logsError) {
+      console.error("[dashboard-stats] Error fetching logs:", logsError);
+    }
+    console.log(`[dashboard-stats] Found ${allLogs?.length || 0} execution logs`);
 
     // Filter for today's logs
     const todayLogs = allLogs?.filter(l => new Date(l.created_at!) >= today) || [];
@@ -132,6 +138,8 @@ serve(async (req) => {
     // Estimate hours saved (assuming 2 minutes per message handled)
     const hoursSaved = Math.round((totalMessagesHandled * 2) / 60 * 10) / 10;
 
+    console.log(`[dashboard-stats] Final stats: messagesHandled=${totalMessagesHandled}, autoReplies=${allSuccessfulReplies}, aiOrders=${totalAiOrders}`);
+    
     const stats = {
       messagesHandled: totalMessagesHandled,
       todayMessagesHandled,
