@@ -41,7 +41,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { productMediaService, ProductMedia } from "@/services/productMediaService";
-import { supabase } from "@/integrations/supabase/client";
+// Products are now fetched via edge function instead of direct supabase query
 
 interface Product {
   id: string;
@@ -81,26 +81,32 @@ const AIMediaLibrary = () => {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      // Get user ID
-      const userStr = localStorage.getItem("autofloy_current_user");
-      if (!userStr) return;
-      const user = JSON.parse(userStr);
+      // Get token for API calls
+      const token = localStorage.getItem("autofloy_token");
+      if (!token) return;
 
-      // Fetch products and media in parallel
+      // Fetch products via edge function and media in parallel
       const [mediaData, statsData, productsRes] = await Promise.all([
         productMediaService.getAllMedia(),
         productMediaService.getStats(),
-        supabase
-          .from("products")
-          .select("id, name, image_url")
-          .eq("user_id", user.id)
-          .eq("is_active", true)
-          .order("name"),
+        fetch(`${import.meta.env.VITE_SUPABASE_URL || "https://klkrzfwvrmffqkmkyqrh.supabase.co"}/functions/v1/products`, {
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }).then(res => res.json()),
       ]);
 
       setMedia(mediaData);
       setStats(statsData);
-      setProducts((productsRes.data || []) as Product[]);
+      
+      // Extract products from edge function response
+      const productsList = productsRes.products || [];
+      setProducts(productsList.filter((p: Product & { is_active?: boolean }) => p.is_active !== false).map((p: Product) => ({
+        id: p.id,
+        name: p.name,
+        image_url: p.image_url,
+      })));
     } catch (error) {
       console.error("Error loading data:", error);
     } finally {
