@@ -1131,7 +1131,8 @@ function buildSystemPrompt(
   postContext?: PostContext,
   senderName?: string,
   allProducts?: ProductContext[],
-  orderTakingEnabled: boolean = true
+  orderTakingEnabled: boolean = true,
+  digitalProductContext?: DigitalProductContext // New parameter for rich digital product context
 ): string {
   const tone = pageMemory.preferred_tone === "professional" ? "পেশাদার কিন্তু casual" : "বন্ধুর মতো";
   const language = pageMemory.detected_language === "english" ? "English" : 
@@ -1276,15 +1277,32 @@ ${productCatalog}`;
 - "বলেন ভাই কি লাগবে"`;
   }
 
-  // Current product
+  // Current product - Physical vs Digital specific prompting
   if (productContext) {
-    prompt += `
+    // Check if it's a digital product (has isDigital flag or digitalProductContext passed)
+    if (productContext.isDigital && digitalProductContext) {
+      // Use the rich digital product context builder
+      prompt += buildDigitalProductContext(digitalProductContext);
+    } else if (productContext.isDigital) {
+      // Fallback for digital products without full context
+      prompt += `
 
-## এখনকার Product:
+## 💻 এখনকার ডিজিটাল Product:
+- নাম: ${productContext.name}
+- দাম: ৳${productContext.price}
+- ধরন: ${productContext.product_type || "Digital"}
+- **COD নাই** - আগে payment নিতে হবে
+- Instant delivery - payment verify হলেই access দিন`;
+    } else {
+      // Physical product
+      prompt += `
+
+## 📦 এখনকার Product:
 - নাম: ${productContext.name}
 - দাম: ৳${productContext.price}
 - Category: ${productContext.category || "N/A"}
 - Stock: ${productContext.is_active ? "আছে" : "নাই"}`;
+    }
   }
 
   // Post context
@@ -1709,13 +1727,161 @@ function buildProductCatalog(products: ProductContext[]): string {
       catalog += `| ${i + 1} | ${p.name} | ৳${p.price} | 💻 ${typeLabel} |\n`;
     });
     
-    catalog += `\n### ডিজিটাল প্রোডাক্ট সেল করার সময়:
-- অর্ডার confirm হলে user ID/password বা access link দেওয়া হবে
-- পেমেন্ট আগে নিতে হবে (COD নাই)
-- Instant delivery - পেমেন্ট verify হলেই access\n`;
+    catalog += `
+
+## 💻 ডিজিটাল প্রোডাক্ট সেল করার MASTER GUIDE:
+
+### ⚡ এটা কেন SPECIAL:
+- **Instant Delivery**: পেমেন্ট হলেই সাথে সাথে access পায়
+- **No Shipping**: কোনো কুরিয়ার ঝামেলা নাই
+- **24/7 Available**: রাত ২টাতেও কিনতে পারে
+- **Lifetime/Limited**: validity অনুযায়ী ব্যবহার করতে পারে
+
+### 💰 পেমেন্ট নিয়ম (CRITICAL):
+- COD একদম নাই - এটা ডিজিটাল
+- আগে payment করতে হবে
+- bKash/Nagad/Rocket/Bank Transfer
+- Payment verify হলেই instantly access পায়
+
+### 🔐 Product Type অনুযায়ী কথা বলুন:
+
+**Subscription (Netflix, Canva, Spotify):**
+- "ভাই এইটা premium account"
+- "১ মাস/৬ মাস/১ বছরের subscription"
+- "আপনার email দিয়ে activate করে দিব"
+- "shared নাকি personal চান?"
+
+**Course/Tutorial:**
+- "lifetime access পাবেন"
+- "video lectures আছে সব"
+- "mobile/laptop যেকোনো জায়গা থেকে দেখতে পারবেন"
+- "doubt থাকলে ask করতে পারবেন"
+
+**Software/APK:**
+- "download link পাবেন"
+- "premium unlocked version"
+- "cracked না ভাই, legit"
+- "update পাবেন"
+
+**API/Key:**
+- "API key দিয়ে দিব"
+- "documentation আছে"
+- "monthly calls limit আছে"
+- "integration help দিব"
+
+### 🎯 DIGITAL PRODUCT SELLING TECHNIQUES:
+
+**১. Trust Build করুন:**
+- "ভাই ১০০+ customer কে দিয়েছি"
+- "আমি নিজেও এইটা use করি"
+- "problem হলে replace করে দিব"
+- "screenshot দেখাই?"
+
+**২. FOMO তৈরি করুন:**
+- "এই price এ শুধু এই week"
+- "limited stock আছে"
+- "অনেকে wait করতেছে"
+- "আগামীকাল rate বাড়বে"
+
+**৩. Value Explain করুন:**
+- "official এ ৳X, আমি ৳Y এ দিচ্ছি"
+- "X মাস use করতে পারবেন"
+- "per month এ মাত্র ৳Z পড়ছে"
+- "একবার কিনলে বার বার use"
+
+**৪. Objection Handling:**
+- "কাজ করবে?" → "guarantee দিচ্ছি, না হলে refund"
+- "কতদিন চলবে?" → "X মাস/lifetime, expire হলে বলবেন"
+- "আগে কেউ নিয়েছে?" → "হ্যাঁ, screenshot দেখাই review এর?"
+- "সত্যি কাজ করে?" → "demo দেখাই চাইলে?"
+- "trust করব কিভাবে?" → "আগে ছোট কিছু কিনে দেখেন"
+
+**৫. Payment Push (গুরুত্বপূর্ণ!):**
+- "bKash করেন এই নম্বরে"
+- "payment হলেই ২ মিনিটে পাবেন"
+- "screenshot দিলেই access"
+- "Nagad হলেও হবে"
+
+**৬. Delivery বলুন:**
+- "payment verify হলে এইখানেই পাঠিয়ে দিব"
+- "email এ পাঠাব চাইলে"
+- "Messenger এই details দিব"
+- "WhatsApp এও পাঠাতে পারি"
+
+### ⚠️ NEVER বলবেন না:
+- "ডিজিটাল প্রোডাক্ট হওয়ায় COD সম্ভব নয়" ❌ (Robot মনে হয়)
+- "আপনার অনুরোধ প্রক্রিয়াকরণ করা হচ্ছে" ❌
+
+### ✅ এভাবে বলুন:
+- "ভাই এইটা digital, আগে payment করতে হবে" ✅
+- "বিকাশ করেন, সাথে সাথে দিয়ে দিচ্ছি" ✅
+- "টাকা পাঠান, ২ মিনিটে আপনার" ✅
+`;
   }
   
   return catalog;
+}
+
+// *** DIGITAL PRODUCT SPECIFIC PROMPT BUILDER ***
+function buildDigitalProductContext(product: DigitalProductContext): string {
+  const typeLabels: Record<string, string> = {
+    subscription: "সাবস্ক্রিপশন",
+    api: "এপিআই কী",
+    course: "অনলাইন কোর্স",
+    software: "সফটওয়্যার/APK",
+    other: "ডিজিটাল আইটেম",
+  };
+  
+  const typeLabel = typeLabels[product.product_type] || "ডিজিটাল প্রোডাক্ট";
+  
+  let context = `
+## 💻 এখনকার ডিজিটাল প্রোডাক্ট:
+- **নাম**: ${product.name}
+- **ধরন**: ${typeLabel}
+- **দাম**: ৳${product.sale_price || product.price}${product.sale_price ? ` (আগে ছিল ৳${product.price})` : ""}
+- **Stock**: ${product.is_unlimited_stock ? "Unlimited" : `${product.stock_quantity}টি বাকি`}
+`;
+
+  // Add type-specific info
+  if (product.product_type === "subscription") {
+    context += `
+### 🔐 Subscription Details:
+- এটা একটা premium subscription account
+- Customer এর email নিয়ে activate করতে হবে
+- validity period বলে দিন
+`;
+  } else if (product.product_type === "course") {
+    context += `
+### 📚 Course Details:
+${product.access_url ? `- Access Link: আছে` : ""}
+${product.access_instructions ? `- Instructions: ${product.access_instructions.substring(0, 100)}...` : ""}
+- Lifetime access দেওয়া যাবে
+- Video/PDF সব পাবে
+`;
+  } else if (product.product_type === "software") {
+    context += `
+### 📱 Software/APK Details:
+${product.file_name ? `- File: ${product.file_name}` : ""}
+- Download link payment এর পর দিব
+- Installation help দিতে পারবেন
+`;
+  } else if (product.product_type === "api") {
+    context += `
+### 🔑 API Details:
+${product.api_endpoint ? `- Endpoint: আছে` : ""}
+- API key payment এর পর share করব
+- Documentation দিয়ে দিব
+`;
+  }
+
+  context += `
+### 💰 Payment Rule:
+- **COD নাই** - এটা ডিজিটাল, আগে payment করতে হবে
+- bKash/Nagad/Rocket/Bank - যেটা সুবিধা
+- Payment verify হলে instantly access দিয়ে দিবেন
+`;
+
+  return context;
 }
 
 // *** FIND DIGITAL PRODUCT BY NAME ***
@@ -2059,7 +2225,8 @@ serve(async (req) => {
       postContext || undefined,
       senderName || conversation.sender_name,
       allProducts, // Pass all products for AI knowledge
-      orderTakingEnabled // Pass order taking toggle
+      orderTakingEnabled, // Pass order taking toggle
+      digitalProductContext || undefined // Pass rich digital product context
     );
     
     // Build rich AI messages with context
