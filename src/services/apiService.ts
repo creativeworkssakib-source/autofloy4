@@ -550,37 +550,69 @@ export async function deleteNotification(notificationId: string): Promise<boolea
   }
 }
 
-// Dashboard Stats - with retry and timeout
+// Dashboard Stats - with retry and FALLBACK to direct Supabase RPC
 export async function fetchDashboardStats(): Promise<DashboardStats | null> {
-  const maxRetries = 2;
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
-      
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/dashboard-stats`, {
-        headers: getAuthHeaders(),
-        signal: controller.signal,
-      });
-      
-      clearTimeout(timeoutId);
-      
-      if (!response.ok) {
-        console.warn(`[dashboard-stats] Response not ok: ${response.status}`);
-        if (attempt < maxRetries) continue;
-        return null;
-      }
+  // First try Edge Function
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+    
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/dashboard-stats`, {
+      headers: getAuthHeaders(),
+      signal: controller.signal,
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (response.ok) {
       const data = await response.json();
-      console.log("[dashboard-stats] Fetched successfully:", data.stats);
+      console.log("[dashboard-stats] Edge Function success:", data.stats);
       return data.stats;
-    } catch (error) {
-      console.error(`[dashboard-stats] Attempt ${attempt + 1} failed:`, error);
-      if (attempt >= maxRetries) return null;
-      // Wait before retry
-      await new Promise(resolve => setTimeout(resolve, 1000));
     }
+  } catch (error) {
+    console.warn("[dashboard-stats] Edge Function failed, trying RPC fallback:", error);
   }
-  return null;
+
+  // FALLBACK: Use direct Supabase RPC (works even if Edge Functions are blocked)
+  try {
+    const { supabase } = await import("@/integrations/supabase/client");
+    const userId = getUserIdFromToken();
+    
+    if (!userId) {
+      console.error("[dashboard-stats] No user ID for RPC fallback");
+      return null;
+    }
+
+    console.log("[dashboard-stats] Using RPC fallback for user:", userId);
+    
+    const { data, error } = await supabase.rpc('get_user_dashboard_stats', {
+      p_user_id: userId
+    });
+
+    if (error) {
+      console.error("[dashboard-stats] RPC fallback failed:", error);
+      return null;
+    }
+
+    console.log("[dashboard-stats] RPC fallback success:", data);
+    return data as unknown as DashboardStats;
+  } catch (fallbackError) {
+    console.error("[dashboard-stats] RPC fallback error:", fallbackError);
+    return null;
+  }
+}
+
+// Helper to get user ID from stored token
+function getUserIdFromToken(): string | null {
+  const token = localStorage.getItem("auth_token");
+  if (!token) return null;
+  
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.sub || null;
+  } catch {
+    return null;
+  }
 }
 
 // Execution Logs - with retry and timeout
