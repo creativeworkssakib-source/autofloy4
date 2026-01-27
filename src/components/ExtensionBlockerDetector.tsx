@@ -85,86 +85,86 @@ export const ExtensionBlockerDetector = () => {
   const [showWarning, setShowWarning] = useState(false);
   const isMobile = useIsMobile();
 
+  // Effect to hide warning if RPC succeeds at any time
+  useEffect(() => {
+    if (!showWarning) return;
+    
+    const hideIfRpcSucceeded = setInterval(() => {
+      if (hasRpcFallbackSucceeded() || isDismissed()) {
+        setShowWarning(false);
+      }
+    }, 1000);
+    
+    return () => clearInterval(hideIfRpcSucceeded);
+  }, [showWarning]);
+
   useEffect(() => {
     // Skip if already dismissed, not logged in, on mobile device, or in native app
     if (isDismissed() || !isAuthenticated() || isMobileDevice() || isNativeApp()) {
       return;
     }
 
-    // Check after a longer delay to allow all fallbacks to complete
+    // If RPC already succeeded, don't even start the detection
+    if (hasRpcFallbackSucceeded()) {
+      return;
+    }
+
+    // Check after a very long delay to allow ALL fallbacks to complete
     const checkTimer = setTimeout(() => {
-      // Re-check conditions - especially RPC fallback success
-      if (!isAuthenticated() || isDismissed()) {
+      // Re-check all conditions
+      if (!isAuthenticated() || isDismissed() || hasRpcFallbackSucceeded()) {
         return;
       }
 
-      // If RPC fallback has worked, don't show warning
-      // This is the most important check - if data loaded, don't warn
-      if (hasRpcFallbackSucceeded()) {
-        console.log('[ExtensionBlockerDetector] RPC fallback succeeded - skipping warning');
-        return;
-      }
-
-      // Only run detection if RPC fallback hasn't been marked as successful yet
-      // This means we wait a bit more and check again
-      const secondCheck = setTimeout(() => {
-        // Final check - if RPC worked by now, don't show
+      // Do a direct test to see if Supabase is reachable at all
+      const checkBothFailing = async () => {
+        // Triple check before even making the request
         if (hasRpcFallbackSucceeded() || isDismissed()) {
-          console.log('[ExtensionBlockerDetector] RPC fallback succeeded on second check');
           return;
         }
 
-        // Do a direct test to see if Supabase is reachable at all
-        const checkBothFailing = async () => {
-          try {
-            // Try the REST API directly (not RPC) since that's more reliable
-            const testUrl = `${window.location.protocol}//klkrzfwvrmffqkmkyqrh.supabase.co/rest/v1/`;
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 8000);
-            
-            const response = await fetch(testUrl, {
-              method: 'HEAD',
-              headers: {
-                'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtsa3J6Znd2cm1mZnFrbWt5cXJoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU4OTE4MjcsImV4cCI6MjA4MTQ2NzgyN30.ZArRZTr6tGhhnptPXvq7Onn4OhMLxrF7FvKkYC26nXg',
-              },
-              signal: controller.signal,
-              cache: 'no-store',
-            });
-            
-            clearTimeout(timeoutId);
-            
-            // Any response means Supabase is reachable
-            console.log('[ExtensionBlockerDetector] Supabase reachable:', response.status);
-            markRpcFallbackSuccess();
-            // Don't show warning
-            
-          } catch (error) {
-            // Only show warning if it's truly a "Failed to fetch" network error
-            // AND the RPC fallback hasn't worked
-            if (error instanceof TypeError && error.message === 'Failed to fetch') {
-              // Final check - maybe RPC succeeded while we were testing
-              if (hasRpcFallbackSucceeded() || isDismissed()) {
-                return;
-              }
-              console.log('[ExtensionBlockerDetector] All requests blocked - showing warning');
-              setShowWarning(true);
-            } else {
-              // Timeout or other error - Supabase might still be reachable
-              console.log('[ExtensionBlockerDetector] Non-blocking error:', error);
-              markRpcFallbackSuccess();
-            }
+        try {
+          const testUrl = `${window.location.protocol}//klkrzfwvrmffqkmkyqrh.supabase.co/rest/v1/`;
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 8000);
+          
+          const response = await fetch(testUrl, {
+            method: 'HEAD',
+            headers: {
+              'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtsa3J6Znd2cm1mZnFrbWt5cXJoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU4OTE4MjcsImV4cCI6MjA4MTQ2NzgyN30.ZArRZTr6tGhhnptPXvq7Onn4OhMLxrF7FvKkYC26nXg',
+            },
+            signal: controller.signal,
+            cache: 'no-store',
+          });
+          
+          clearTimeout(timeoutId);
+          markRpcFallbackSuccess();
+          
+        } catch (error) {
+          // Final check before showing warning
+          if (hasRpcFallbackSucceeded() || isDismissed()) {
+            return;
           }
-        };
+          
+          if (error instanceof TypeError && error.message === 'Failed to fetch') {
+            // Wait a bit more and check one more time
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            
+            if (hasRpcFallbackSucceeded() || isDismissed()) {
+              return;
+            }
+            
+            setShowWarning(true);
+          } else {
+            markRpcFallbackSuccess();
+          }
+        }
+      };
 
-        checkBothFailing();
-      }, 5000); // Wait another 5 seconds
+      checkBothFailing();
+    }, 20000); // Wait 20 seconds for all page loads to complete
 
-      return () => clearTimeout(secondCheck);
-    }, 10000); // Initial wait of 10 seconds for all page loads to complete
-
-    return () => {
-      clearTimeout(checkTimer);
-    };
+    return () => clearTimeout(checkTimer);
   }, []);
 
   const handleDismiss = useCallback(() => {
