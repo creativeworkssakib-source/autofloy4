@@ -604,37 +604,43 @@ export async function fetchDashboardStats(): Promise<DashboardStats | null> {
 
 // Helper to get user ID from multiple sources
 async function getUserIdFromStorage(): Promise<string | null> {
-  // First try from auth_token
-  const token = localStorage.getItem("auth_token");
+  // First try from autofloy_user_id (direct storage)
+  const storedUserId = localStorage.getItem("autofloy_user_id");
+  if (storedUserId) {
+    console.log("[getUserId] Got user ID from autofloy_user_id:", storedUserId);
+    return storedUserId;
+  }
+
+  // Second: try from autofloy_current_user object
+  const currentUserStr = localStorage.getItem("autofloy_current_user");
+  if (currentUserStr) {
+    try {
+      const user = JSON.parse(currentUserStr);
+      if (user?.id) {
+        console.log("[getUserId] Got user ID from autofloy_current_user:", user.id);
+        return user.id;
+      }
+    } catch (e) {
+      console.warn("[getUserId] Failed to parse autofloy_current_user:", e);
+    }
+  }
+
+  // Third: try from autofloy_token JWT
+  const token = localStorage.getItem("autofloy_token");
   if (token) {
     try {
       const payload = JSON.parse(atob(token.split('.')[1]));
       if (payload.sub) {
-        console.log("[getUserId] Got user ID from auth_token:", payload.sub);
+        console.log("[getUserId] Got user ID from autofloy_token:", payload.sub);
         return payload.sub;
       }
     } catch (e) {
-      console.warn("[getUserId] Failed to parse auth_token:", e);
+      console.warn("[getUserId] Failed to parse autofloy_token:", e);
     }
   }
 
-  // Fallback: try from user object in localStorage
-  const userStr = localStorage.getItem("user");
-  if (userStr) {
-    try {
-      const user = JSON.parse(userStr);
-      if (user?.id) {
-        console.log("[getUserId] Got user ID from user object:", user.id);
-        return user.id;
-      }
-    } catch (e) {
-      console.warn("[getUserId] Failed to parse user object:", e);
-    }
-  }
-
-  // Last fallback: try Supabase session (though might be blocked)
+  // Last fallback: try Supabase session
   try {
-    const { supabase } = await import("@/integrations/supabase/client");
     const storedSession = localStorage.getItem(`sb-klkrzfwvrmffqkmkyqrh-auth-token`);
     if (storedSession) {
       const session = JSON.parse(storedSession);
