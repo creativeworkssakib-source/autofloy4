@@ -73,6 +73,28 @@ interface ProductContext {
   sku?: string;
   is_active: boolean;
   variants?: any[];
+  isDigital?: boolean;
+  product_type?: string; // For digital: subscription, api, course, software, other
+}
+
+interface DigitalProductContext {
+  id: string;
+  name: string;
+  price: number;
+  sale_price?: number;
+  description?: string;
+  product_type: string;
+  is_active: boolean;
+  stock_quantity: number;
+  is_unlimited_stock: boolean;
+  credential_username?: string;
+  credential_password?: string;
+  credential_email?: string;
+  access_url?: string;
+  access_instructions?: string;
+  api_endpoint?: string;
+  file_url?: string;
+  file_name?: string;
 }
 
 interface PostContext {
@@ -1594,35 +1616,143 @@ async function findProductByName(
   return null;
 }
 
-// *** FETCH ALL PRODUCTS FOR AI KNOWLEDGE ***
+// *** FETCH ALL PRODUCTS FOR AI KNOWLEDGE (Physical + Digital) ***
 async function getAllProducts(supabase: any, userId: string): Promise<ProductContext[]> {
-  const { data: products } = await supabase
+  // Fetch physical products
+  const { data: physicalProducts } = await supabase
     .from("products")
     .select("id, name, price, description, category, sku, is_active, stock_quantity")
     .eq("user_id", userId)
     .eq("is_active", true)
-    .limit(50); // Limit to 50 products to avoid token overflow
+    .limit(30);
 
-  return (products || []) as ProductContext[];
+  // Fetch digital products
+  const { data: digitalProducts } = await supabase
+    .from("digital_products")
+    .select("id, name, price, sale_price, description, product_type, is_active, stock_quantity, is_unlimited_stock")
+    .eq("user_id", userId)
+    .eq("is_active", true)
+    .limit(20);
+
+  const allProducts: ProductContext[] = [];
+  
+  // Add physical products
+  if (physicalProducts) {
+    physicalProducts.forEach((p: any) => {
+      allProducts.push({
+        ...p,
+        isDigital: false,
+      });
+    });
+  }
+  
+  // Add digital products
+  if (digitalProducts) {
+    digitalProducts.forEach((p: any) => {
+      allProducts.push({
+        id: p.id,
+        name: p.name,
+        price: p.sale_price || p.price,
+        description: p.description,
+        category: p.product_type,
+        is_active: p.is_active,
+        isDigital: true,
+        product_type: p.product_type,
+      });
+    });
+  }
+
+  return allProducts;
 }
 
-// *** BUILD PRODUCT CATALOG FOR AI ***
+// *** BUILD PRODUCT CATALOG FOR AI (Physical + Digital) ***
 function buildProductCatalog(products: ProductContext[]): string {
   if (!products || products.length === 0) {
     return "কোনো প্রোডাক্ট পাওয়া যায়নি।";
   }
   
-  let catalog = `## 📦 উপলব্ধ প্রোডাক্ট তালিকা (${products.length}টি):\n`;
-  catalog += "| # | প্রোডাক্ট | দাম | ক্যাটাগরি | স্টক |\n";
-  catalog += "|---|----------|-----|----------|------|\n";
+  const physicalProducts = products.filter(p => !p.isDigital);
+  const digitalProducts = products.filter(p => p.isDigital);
   
-  products.forEach((p, i) => {
-    const stock = (p as any).stock_quantity;
-    const stockStatus = stock > 10 ? "✅ আছে" : stock > 0 ? `⚠️ ${stock}টি` : "❌ নেই";
-    catalog += `| ${i + 1} | ${p.name} | ৳${p.price} | ${p.category || "-"} | ${stockStatus} |\n`;
-  });
+  let catalog = "";
+  
+  // Physical products
+  if (physicalProducts.length > 0) {
+    catalog += `## 📦 ফিজিক্যাল প্রোডাক্ট (${physicalProducts.length}টি):\n`;
+    catalog += "| # | প্রোডাক্ট | দাম | ক্যাটাগরি | স্টক |\n";
+    catalog += "|---|----------|-----|----------|------|\n";
+    
+    physicalProducts.forEach((p, i) => {
+      const stock = (p as any).stock_quantity;
+      const stockStatus = stock > 10 ? "✅ আছে" : stock > 0 ? `⚠️ ${stock}টি` : "❌ নেই";
+      catalog += `| ${i + 1} | ${p.name} | ৳${p.price} | ${p.category || "-"} | ${stockStatus} |\n`;
+    });
+    catalog += "\n";
+  }
+  
+  // Digital products
+  if (digitalProducts.length > 0) {
+    catalog += `## 💻 ডিজিটাল প্রোডাক্ট (${digitalProducts.length}টি):\n`;
+    catalog += "| # | প্রোডাক্ট | দাম | ধরন |\n";
+    catalog += "|---|----------|-----|------|\n";
+    
+    const typeLabels: Record<string, string> = {
+      subscription: "সাবস্ক্রিপশন",
+      api: "এপিআই",
+      course: "কোর্স",
+      software: "সফটওয়্যার",
+      other: "অন্যান্য",
+    };
+    
+    digitalProducts.forEach((p, i) => {
+      const typeLabel = typeLabels[p.product_type || "other"] || "ডিজিটাল";
+      catalog += `| ${i + 1} | ${p.name} | ৳${p.price} | 💻 ${typeLabel} |\n`;
+    });
+    
+    catalog += `\n### ডিজিটাল প্রোডাক্ট সেল করার সময়:
+- অর্ডার confirm হলে user ID/password বা access link দেওয়া হবে
+- পেমেন্ট আগে নিতে হবে (COD নাই)
+- Instant delivery - পেমেন্ট verify হলেই access\n`;
+  }
   
   return catalog;
+}
+
+// *** FIND DIGITAL PRODUCT BY NAME ***
+async function findDigitalProductByName(
+  supabase: any, 
+  userId: string, 
+  messageText: string
+): Promise<DigitalProductContext | null> {
+  const { data: products } = await supabase
+    .from("digital_products")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("is_active", true);
+
+  if (!products || products.length === 0) return null;
+
+  const lowerMessage = messageText.toLowerCase();
+  for (const product of products) {
+    const productNameLower = product.name.toLowerCase();
+    if (lowerMessage.includes(productNameLower) || 
+        productNameLower.split(" ").some((word: string) => word.length > 3 && lowerMessage.includes(word))) {
+      return product as DigitalProductContext;
+    }
+    // Also check product type keywords
+    const typeKeywords: Record<string, string[]> = {
+      subscription: ["canva", "netflix", "spotify", "subscription", "সাবস্ক্রিপশন", "premium"],
+      api: ["api", "এপিআই", "key", "endpoint"],
+      course: ["course", "কোর্স", "tutorial", "class", "ক্লাস"],
+      software: ["software", "সফটওয়্যার", "apk", "app", "download"],
+    };
+    const keywords = typeKeywords[product.product_type] || [];
+    if (keywords.some(kw => lowerMessage.includes(kw))) {
+      return product as DigitalProductContext;
+    }
+  }
+
+  return null;
 }
 
 serve(async (req) => {
@@ -1727,16 +1857,46 @@ serve(async (req) => {
       };
     }
 
+    // Track if this is a digital product
+    let isDigitalProduct = false;
+    let digitalProductContext: DigitalProductContext | null = null;
+
     if (!productContext) {
+      // First try to find physical product
       productContext = await findProductByName(supabase, effectiveUserId, messageText);
       if (!productContext && postContent) {
         productContext = await findProductByName(supabase, effectiveUserId, postContent);
       }
+      
+      // If no physical product found, try digital products
+      if (!productContext) {
+        digitalProductContext = await findDigitalProductByName(supabase, effectiveUserId, messageText);
+        if (!digitalProductContext && postContent) {
+          digitalProductContext = await findDigitalProductByName(supabase, effectiveUserId, postContent);
+        }
+        
+        // Convert digital product to ProductContext for AI
+        if (digitalProductContext) {
+          isDigitalProduct = true;
+          productContext = {
+            id: digitalProductContext.id,
+            name: digitalProductContext.name,
+            price: digitalProductContext.sale_price || digitalProductContext.price,
+            description: digitalProductContext.description,
+            category: digitalProductContext.product_type,
+            is_active: digitalProductContext.is_active,
+            isDigital: true,
+            product_type: digitalProductContext.product_type,
+          };
+          console.log(`[AI Agent] 💻 Found digital product: ${digitalProductContext.name} (${digitalProductContext.product_type})`);
+        }
+      }
     }
 
-    // *** FETCH ALL PRODUCTS FOR AI KNOWLEDGE ***
+    // *** FETCH ALL PRODUCTS FOR AI KNOWLEDGE (Physical + Digital) ***
     const allProducts = await getAllProducts(supabase, effectiveUserId);
-    console.log(`[AI Agent] 📦 Loaded ${allProducts.length} products for AI knowledge`);
+    console.log(`[AI Agent] 📦 Loaded ${allProducts.length} products for AI knowledge (physical + digital)`);
+
 
     // Get or create conversation
     let { data: conversation } = await supabase
@@ -1957,35 +2117,79 @@ serve(async (req) => {
       const orderProduct = productContext || {
         name: updatedConversation.current_product_name,
         price: updatedConversation.current_product_price,
+        isDigital: false,
       };
 
-      const { data: order } = await supabase
-        .from("ai_orders")
-        .insert({
-          user_id: effectiveUserId,
-          page_id: pageId,
-          conversation_id: conversation.id,
-          customer_fb_id: senderId,
-          customer_name: updatedConversation.collected_name,
-          customer_phone: updatedConversation.collected_phone,
-          customer_address: updatedConversation.collected_address,
-          products: orderProduct.name ? [{
-            id: productContext?.id,
-            name: orderProduct.name,
-            price: orderProduct.price,
-            quantity: updatedConversation.current_quantity || 1,
-          }] : [],
-          subtotal: orderProduct.price || 0,
-          total: orderProduct.price || 0,
-          payment_method: pageMemory.payment_rules?.codAvailable ? "cod" : "advance",
-          fake_order_score: fakeScore,
-          invoice_number: invoiceNumber,
-          order_status: fakeScore > 50 ? "pending" : "confirmed",
-        })
-        .select()
-        .single();
+      // Check if this is a digital product sale
+      if (isDigitalProduct && digitalProductContext) {
+        console.log(`[AI Agent] 💻 Creating digital product sale for: ${digitalProductContext.name}`);
+        
+        // Create digital product sale
+        const { data: digitalSale } = await supabase
+          .from("digital_product_sales")
+          .insert({
+            user_id: effectiveUserId,
+            product_id: digitalProductContext.id,
+            customer_name: updatedConversation.collected_name,
+            customer_phone: updatedConversation.collected_phone,
+            customer_fb_id: senderId,
+            sale_price: digitalProductContext.sale_price || digitalProductContext.price,
+            payment_method: "advance", // Digital products require advance payment
+            payment_status: "pending",
+            delivery_status: "pending",
+            notes: `AI Sale - Invoice: ${invoiceNumber}`,
+          })
+          .select()
+          .single();
 
-      if (order) orderId = order.id;
+        if (digitalSale) {
+          orderId = digitalSale.id;
+          console.log(`[AI Agent] ✅ Digital sale created: ${orderId}`);
+          
+          // Update product sold count
+          const { data: product } = await supabase
+            .from("digital_products")
+            .select("total_sold")
+            .eq("id", digitalProductContext.id)
+            .single();
+          
+          if (product) {
+            await supabase
+              .from("digital_products")
+              .update({ total_sold: (product.total_sold || 0) + 1 })
+              .eq("id", digitalProductContext.id);
+          }
+        }
+      } else {
+        // Create physical product order (existing logic)
+        const { data: order } = await supabase
+          .from("ai_orders")
+          .insert({
+            user_id: effectiveUserId,
+            page_id: pageId,
+            conversation_id: conversation.id,
+            customer_fb_id: senderId,
+            customer_name: updatedConversation.collected_name,
+            customer_phone: updatedConversation.collected_phone,
+            customer_address: updatedConversation.collected_address,
+            products: orderProduct.name ? [{
+              id: productContext?.id,
+              name: orderProduct.name,
+              price: orderProduct.price,
+              quantity: updatedConversation.current_quantity || 1,
+            }] : [],
+            subtotal: orderProduct.price || 0,
+            total: orderProduct.price || 0,
+            payment_method: pageMemory.payment_rules?.codAvailable ? "cod" : "advance",
+            fake_order_score: fakeScore,
+            invoice_number: invoiceNumber,
+            order_status: fakeScore > 50 ? "pending" : "confirmed",
+          })
+          .select()
+          .single();
+
+        if (order) orderId = order.id;
+      }
       
       await supabase
         .from("ai_conversations")
