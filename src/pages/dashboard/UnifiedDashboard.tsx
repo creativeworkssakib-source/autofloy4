@@ -37,7 +37,6 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useSyncSettings } from "@/hooks/useSyncSettings";
 import { fetchDashboardStats, fetchConnectedAccounts, fetchExecutionLogs, DashboardStats, ConnectedAccount, ExecutionLog } from "@/services/apiService";
 import { ProductPerformanceSection } from "@/components/analytics/ProductPerformanceSection";
-import AIOrdersSection from "@/components/dashboard/AIOrdersSection";
 
 import { offlineShopService } from "@/services/offlineShopService";
 import { formatDistanceToNow } from "date-fns";
@@ -525,15 +524,6 @@ const UnifiedDashboard = () => {
             shopId={offlineData?.shopId || null}
             syncEnabled={syncEnabled}
           />
-        </motion.div>
-
-        {/* AI Orders Section */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-        >
-          <AIOrdersSection />
         </motion.div>
 
         {/* Content Area - Business Summary Cards */}
