@@ -550,34 +550,68 @@ export async function deleteNotification(notificationId: string): Promise<boolea
   }
 }
 
-// Dashboard Stats
+// Dashboard Stats - with retry and timeout
 export async function fetchDashboardStats(): Promise<DashboardStats | null> {
-  try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/dashboard-stats`, {
-      headers: getAuthHeaders(),
-    });
-    if (!response.ok) return null;
-    const data = await response.json();
-    return data.stats;
-  } catch (error) {
-    console.error("Failed to fetch dashboard stats:", error);
-    return null;
+  const maxRetries = 2;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+      
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/dashboard-stats`, {
+        headers: getAuthHeaders(),
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        console.warn(`[dashboard-stats] Response not ok: ${response.status}`);
+        if (attempt < maxRetries) continue;
+        return null;
+      }
+      const data = await response.json();
+      console.log("[dashboard-stats] Fetched successfully:", data.stats);
+      return data.stats;
+    } catch (error) {
+      console.error(`[dashboard-stats] Attempt ${attempt + 1} failed:`, error);
+      if (attempt >= maxRetries) return null;
+      // Wait before retry
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
   }
+  return null;
 }
 
-// Execution Logs
+// Execution Logs - with retry and timeout
 export async function fetchExecutionLogs(limit: number = 5): Promise<ExecutionLog[]> {
-  try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/execution-logs?limit=${limit}`, {
-      headers: getAuthHeaders(),
-    });
-    if (!response.ok) return [];
-    const data = await response.json();
-    return data.logs || [];
-  } catch (error) {
-    console.error("Failed to fetch execution logs:", error);
-    return [];
+  const maxRetries = 2;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/execution-logs?limit=${limit}`, {
+        headers: getAuthHeaders(),
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        if (attempt < maxRetries) continue;
+        return [];
+      }
+      const data = await response.json();
+      console.log("[execution-logs] Fetched successfully:", data.logs?.length || 0, "logs");
+      return data.logs || [];
+    } catch (error) {
+      console.error(`[execution-logs] Attempt ${attempt + 1} failed:`, error);
+      if (attempt >= maxRetries) return [];
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
   }
+  return [];
 }
 
 // Business Overview
