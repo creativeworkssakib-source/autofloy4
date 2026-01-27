@@ -1,3 +1,5 @@
+import { supabase } from "@/integrations/supabase/client";
+
 const SUPABASE_URL = "https://klkrzfwvrmffqkmkyqrh.supabase.co";
 
 function getAuthHeaders(): HeadersInit {
@@ -659,33 +661,65 @@ async function getUserIdFromStorage(): Promise<string | null> {
 
 // Execution Logs - with retry and timeout
 export async function fetchExecutionLogs(limit: number = 5): Promise<ExecutionLog[]> {
-  const maxRetries = 2;
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
-      
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/execution-logs?limit=${limit}`, {
-        headers: getAuthHeaders(),
-        signal: controller.signal,
-      });
-      
-      clearTimeout(timeoutId);
-      
-      if (!response.ok) {
-        if (attempt < maxRetries) continue;
-        return [];
-      }
+  // First try Edge Function
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/execution-logs?limit=${limit}`, {
+      headers: getAuthHeaders(),
+      signal: controller.signal,
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (response.ok) {
       const data = await response.json();
-      console.log("[execution-logs] Fetched successfully:", data.logs?.length || 0, "logs");
+      console.log("[execution-logs] Edge Function success:", data.logs?.length || 0, "logs");
       return data.logs || [];
-    } catch (error) {
-      console.error(`[execution-logs] Attempt ${attempt + 1} failed:`, error);
-      if (attempt >= maxRetries) return [];
-      await new Promise(resolve => setTimeout(resolve, 1000));
     }
+  } catch (error) {
+    console.warn("[execution-logs] Edge Function failed, trying direct Supabase:", error);
   }
-  return [];
+  
+  // Fallback: Direct Supabase query (bypasses blocked edge functions)
+  try {
+    const userId = await getUserIdFromStorage();
+    if (!userId) {
+      console.warn("[execution-logs] No user ID found for fallback");
+      return [];
+    }
+    
+    console.log("[execution-logs] Using Supabase fallback for user:", userId);
+    
+    const { data, error } = await supabase
+      .from("execution_logs")
+      .select(`
+        id,
+        event_type,
+        status,
+        source_platform,
+        processing_time_ms,
+        created_at,
+        automation_id,
+        incoming_payload,
+        response_payload
+      `)
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    
+    if (error) {
+      console.error("[execution-logs] Supabase fallback error:", error);
+      return [];
+    }
+    
+    console.log("[execution-logs] Supabase fallback success:", data?.length || 0, "logs");
+    return (data || []) as ExecutionLog[];
+  } catch (error) {
+    console.error("[execution-logs] All fallbacks failed:", error);
+    return [];
+  }
 }
 
 // Business Overview
