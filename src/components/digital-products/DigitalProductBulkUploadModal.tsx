@@ -47,6 +47,36 @@ interface ParsedProduct {
 
 const validProductTypes = ["subscription", "api", "course", "software", "other"];
 
+// Validation rules per product type
+const getProductTypeValidation = (productType: string, row: any, language: string): string[] => {
+  const errors: string[] = [];
+  
+  switch (productType) {
+    case "subscription":
+      if (!row.credential_username?.toString().trim() && !row.credential_password?.toString().trim()) {
+        errors.push(language === "bn" ? "ইউজারনেম বা পাসওয়ার্ড দরকার" : "Username or password required");
+      }
+      break;
+    case "api":
+      if (!row.api_key?.toString().trim()) {
+        errors.push(language === "bn" ? "API Key দরকার" : "API Key required");
+      }
+      break;
+    case "course":
+      if (!row.access_url?.toString().trim()) {
+        errors.push(language === "bn" ? "Access URL দরকার" : "Access URL required");
+      }
+      break;
+    case "software":
+      if (!row.file_url?.toString().trim() && !row.file_name?.toString().trim()) {
+        errors.push(language === "bn" ? "File URL বা File Name দরকার" : "File URL or File Name required");
+      }
+      break;
+  }
+  
+  return errors;
+};
+
 export const DigitalProductBulkUploadModal = ({
   isOpen,
   onClose,
@@ -70,9 +100,9 @@ export const DigitalProductBulkUploadModal = ({
         price: 150,
         sale_price: 120,
         description: "Premium Canva subscription",
-        credential_username: "user1@email.com",
-        credential_password: "password123",
-        credential_email: "recovery@email.com",
+        credential_username: "canva_user1@email.com",
+        credential_password: "canva_pass123",
+        credential_email: "recovery1@email.com",
         is_active: "yes",
       },
       {
@@ -80,18 +110,28 @@ export const DigitalProductBulkUploadModal = ({
         price: 150,
         sale_price: 120,
         description: "Premium Canva subscription",
-        credential_username: "user2@email.com",
-        credential_password: "pass456",
+        credential_username: "canva_user2@email.com",
+        credential_password: "canva_pass456",
         credential_email: "recovery2@email.com",
         is_active: "yes",
       },
       {
-        name: "Netflix Premium",
+        name: "Netflix Premium 1 Month",
         price: 200,
-        sale_price: "",
+        sale_price: 180,
         description: "Netflix Premium Account",
-        credential_username: "netflix@email.com",
-        credential_password: "netpass123",
+        credential_username: "netflix_user@email.com",
+        credential_password: "netflix_pass123",
+        credential_email: "netflix_recovery@email.com",
+        is_active: "yes",
+      },
+      {
+        name: "Spotify Premium 1 Month",
+        price: 120,
+        sale_price: "",
+        description: "Spotify Premium Individual",
+        credential_username: "spotify_user@email.com",
+        credential_password: "spotify_pass789",
         credential_email: "",
         is_active: "yes",
       },
@@ -106,23 +146,33 @@ export const DigitalProductBulkUploadModal = ({
     // API sheet - for API keys and endpoints
     const apiData = [
       {
-        name: "OpenAI API Credit",
+        name: "OpenAI GPT-4 API Key",
         price: 500,
         sale_price: "",
-        description: "GPT-4 API access",
+        description: "GPT-4 API access with $10 credit",
         api_endpoint: "https://api.openai.com/v1",
-        api_key: "sk-xxxxx1",
+        api_key: "sk-proj-abc123xyz...",
         api_documentation: "https://platform.openai.com/docs",
         is_active: "yes",
       },
       {
-        name: "OpenAI API Credit",
+        name: "OpenAI GPT-4 API Key",
         price: 500,
         sale_price: "",
-        description: "GPT-4 API access",
+        description: "GPT-4 API access with $10 credit",
         api_endpoint: "https://api.openai.com/v1",
-        api_key: "sk-xxxxx2",
+        api_key: "sk-proj-def456uvw...",
         api_documentation: "https://platform.openai.com/docs",
+        is_active: "yes",
+      },
+      {
+        name: "Midjourney API Access",
+        price: 800,
+        sale_price: 700,
+        description: "Midjourney image generation API",
+        api_endpoint: "https://api.midjourney.com",
+        api_key: "mj-api-key-12345",
+        api_documentation: "https://docs.midjourney.com",
         is_active: "yes",
       },
     ];
@@ -136,21 +186,30 @@ export const DigitalProductBulkUploadModal = ({
     // Course sheet - for online courses
     const courseData = [
       {
-        name: "Web Development Course",
+        name: "Complete Web Development Bootcamp",
         price: 2000,
         sale_price: 1500,
-        description: "Complete web dev bootcamp",
-        access_url: "https://course.example.com/abc123",
-        access_instructions: "Use the link to access course",
+        description: "Full stack web development course",
+        access_url: "https://course.example.com/webdev-acc123",
+        access_instructions: "Login with the provided URL. Valid for 1 year.",
         is_active: "yes",
       },
       {
-        name: "Web Development Course",
+        name: "Complete Web Development Bootcamp",
         price: 2000,
         sale_price: 1500,
-        description: "Complete web dev bootcamp",
-        access_url: "https://course.example.com/def456",
-        access_instructions: "Use the link to access course",
+        description: "Full stack web development course",
+        access_url: "https://course.example.com/webdev-acc456",
+        access_instructions: "Login with the provided URL. Valid for 1 year.",
+        is_active: "yes",
+      },
+      {
+        name: "Digital Marketing Masterclass",
+        price: 1500,
+        sale_price: 1200,
+        description: "Complete digital marketing training",
+        access_url: "https://course.example.com/dm-acc789",
+        access_instructions: "Access via the link. Lifetime access included.",
         is_active: "yes",
       },
     ];
@@ -282,6 +341,10 @@ export const DigitalProductBulkUploadModal = ({
             if (price < 0) {
               errors.push(language === "bn" ? "দাম ০ বা তার বেশি হতে হবে" : "Price must be 0 or greater");
             }
+            
+            // Product type specific validation
+            const typeErrors = getProductTypeValidation(productType, row, language);
+            errors.push(...typeErrors);
 
             const productData: CreateDigitalProductInput = {
               name: String(row.name || "").trim(),
@@ -492,7 +555,7 @@ export const DigitalProductBulkUploadModal = ({
             <>
               {/* Summary */}
               <div className="flex items-center gap-4 flex-wrap">
-                <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20">
+                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
                   <CheckCircle className="w-3 h-3 mr-1" />
                   {language === "bn" ? `${validCount}টি বৈধ` : `${validCount} valid`}
                 </Badge>
@@ -517,14 +580,14 @@ export const DigitalProductBulkUploadModal = ({
                       key={index}
                       className={`p-3 rounded-lg border ${
                         product.isValid
-                          ? "bg-green-500/5 border-green-500/20"
+                          ? "bg-primary/5 border-primary/20"
                           : "bg-destructive/5 border-destructive/20"
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2">
                           {product.isValid ? (
-                            <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
+                            <CheckCircle className="w-4 h-4 text-primary flex-shrink-0" />
                           ) : (
                             <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0" />
                           )}
