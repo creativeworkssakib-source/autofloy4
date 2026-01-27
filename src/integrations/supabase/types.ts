@@ -4696,6 +4696,20 @@ export type Database = {
       generate_invoice_number: { Args: never; Returns: string }
       generate_supplier_code: { Args: { p_user_id: string }; Returns: string }
       get_user_dashboard_stats: { Args: { p_user_id: string }; Returns: Json }
+      get_user_execution_logs: {
+        Args: { p_limit?: number; p_user_id: string }
+        Returns: {
+          automation_id: string
+          created_at: string
+          event_type: string
+          id: string
+          incoming_payload: Json
+          processing_time_ms: number
+          response_payload: Json
+          source_platform: string
+          status: string
+        }[]
+      }
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
