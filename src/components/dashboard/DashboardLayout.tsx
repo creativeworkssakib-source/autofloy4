@@ -20,6 +20,7 @@ import {
   Globe,
   Link2,
   MessageSquare,
+  ShoppingBag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -69,6 +70,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const navItems = [
     { name: t("sidebar.dashboard"), href: "/dashboard", icon: LayoutDashboard, pageTitle: t("sidebar.dashboard"), subtitle: t("dashboard.overview") },
     { name: t("sidebar.automations"), href: "/dashboard/automations", icon: Bot, pageTitle: t("sidebar.automations"), subtitle: t("dashboard.automationsAnalytics") },
+    { name: language === "bn" ? "AI অর্ডার" : "AI Orders", href: "/dashboard/orders", icon: ShoppingBag, pageTitle: language === "bn" ? "AI অর্ডার" : "AI Orders", subtitle: language === "bn" ? "AI থেকে অর্ডার" : "Orders from AI" },
     { name: t("sidebar.products"), href: "/dashboard/products", icon: Package, pageTitle: t("sidebar.products"), subtitle: t("dashboard.totalProducts") },
     { name: t("sidebar.businessOverview"), href: "/dashboard/business", icon: BarChart3, pageTitle: t("sidebar.businessOverview"), subtitle: t("dashboard.overview") },
     { name: t("sidebar.globalReports"), href: "/dashboard/reports", icon: BarChart3, pageTitle: t("sidebar.globalReports"), subtitle: t("dashboard.onlineOffline") },

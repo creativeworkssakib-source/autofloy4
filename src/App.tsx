@@ -60,6 +60,7 @@ const AuthGoogleCallback = lazy(() => import("./pages/AuthGoogleCallback"));
 // FacebookPageSettings removed - functionality moved to FacebookAutomationSection
 const AutomationStatus = lazy(() => import("./pages/dashboard/AutomationStatus"));
 const Marketing = lazy(() => import("./pages/dashboard/Marketing"));
+const Orders = lazy(() => import("./pages/dashboard/Orders"));
 
 // Business Selector & Offline Shop pages
 const BusinessSelector = lazy(() => import("./pages/BusinessSelector"));
@@ -245,6 +246,11 @@ const App = () => (
                   <Route path="/dashboard/marketing" element={
                     <ProtectedRoute>
                       <Marketing />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/dashboard/orders" element={
+                    <ProtectedRoute>
+                      <Orders />
                     </ProtectedRoute>
                   } />
                   
