@@ -35,6 +35,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { fetchDashboardStats, fetchConnectedAccounts, fetchExecutionLogs, DashboardStats, ConnectedAccount, ExecutionLog } from "@/services/apiService";
 import { offlineShopService } from "@/services/offlineShopService";
 import { formatDistanceToNow } from "date-fns";
+import AIOrdersSection from "@/components/dashboard/AIOrdersSection";
 
 const LOGS_PER_PAGE = 5;
 
@@ -495,6 +496,9 @@ const Dashboard = () => {
             ))}
           </div>
         </motion.div>
+
+        {/* AI Orders Section */}
+        <AIOrdersSection />
 
         {/* Connected Platforms */}
         <motion.div
