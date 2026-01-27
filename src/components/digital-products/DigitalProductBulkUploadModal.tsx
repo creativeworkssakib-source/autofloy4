@@ -42,6 +42,7 @@ interface ParsedProduct {
   data: CreateDigitalProductInput;
   isValid: boolean;
   errors: string[];
+  sheetName?: string;
 }
 
 const validProductTypes = ["subscription", "api", "course", "software", "other"];
@@ -60,114 +61,133 @@ export const DigitalProductBulkUploadModal = ({
   const [fileName, setFileName] = useState("");
 
   const downloadTemplate = () => {
-    const templateData = [
+    const wb = XLSX.utils.book_new();
+
+    // Subscription sheet - for accounts with username/password
+    const subscriptionData = [
       {
         name: "Canva Pro 1 Month",
-        product_type: "subscription",
         price: 150,
         sale_price: 120,
         description: "Premium Canva subscription",
-        credential_username: "user@email.com",
+        credential_username: "user1@email.com",
         credential_password: "password123",
         credential_email: "recovery@email.com",
-        api_endpoint: "",
-        api_key: "",
-        api_documentation: "",
-        access_url: "",
-        access_instructions: "",
-        file_url: "",
-        file_name: "",
-        stock_quantity: 10,
-        is_unlimited_stock: "no",
+        is_active: "yes",
+      },
+      {
+        name: "Canva Pro 1 Month",
+        price: 150,
+        sale_price: 120,
+        description: "Premium Canva subscription",
+        credential_username: "user2@email.com",
+        credential_password: "pass456",
+        credential_email: "recovery2@email.com",
+        is_active: "yes",
+      },
+      {
+        name: "Netflix Premium",
+        price: 200,
+        sale_price: "",
+        description: "Netflix Premium Account",
+        credential_username: "netflix@email.com",
+        credential_password: "netpass123",
+        credential_email: "",
+        is_active: "yes",
+      },
+    ];
+    const wsSubscription = XLSX.utils.json_to_sheet(subscriptionData);
+    wsSubscription["!cols"] = [
+      { wch: 25 }, { wch: 10 }, { wch: 10 }, { wch: 30 },
+      { wch: 25 }, { wch: 20 }, { wch: 25 }, { wch: 10 },
+    ];
+    XLSX.utils.book_append_sheet(wb, wsSubscription, "Subscriptions");
+
+    // API sheet - for API keys and endpoints
+    const apiData = [
+      {
+        name: "OpenAI API Credit",
+        price: 500,
+        sale_price: "",
+        description: "GPT-4 API access",
+        api_endpoint: "https://api.openai.com/v1",
+        api_key: "sk-xxxxx1",
+        api_documentation: "https://platform.openai.com/docs",
         is_active: "yes",
       },
       {
         name: "OpenAI API Credit",
-        product_type: "api",
         price: 500,
         sale_price: "",
         description: "GPT-4 API access",
-        credential_username: "",
-        credential_password: "",
-        credential_email: "",
         api_endpoint: "https://api.openai.com/v1",
-        api_key: "sk-xxxxx",
+        api_key: "sk-xxxxx2",
         api_documentation: "https://platform.openai.com/docs",
-        access_url: "",
-        access_instructions: "",
-        file_url: "",
-        file_name: "",
-        stock_quantity: 5,
-        is_unlimited_stock: "no",
+        is_active: "yes",
+      },
+    ];
+    const wsApi = XLSX.utils.json_to_sheet(apiData);
+    wsApi["!cols"] = [
+      { wch: 25 }, { wch: 10 }, { wch: 10 }, { wch: 30 },
+      { wch: 35 }, { wch: 30 }, { wch: 35 }, { wch: 10 },
+    ];
+    XLSX.utils.book_append_sheet(wb, wsApi, "APIs");
+
+    // Course sheet - for online courses
+    const courseData = [
+      {
+        name: "Web Development Course",
+        price: 2000,
+        sale_price: 1500,
+        description: "Complete web dev bootcamp",
+        access_url: "https://course.example.com/abc123",
+        access_instructions: "Use the link to access course",
         is_active: "yes",
       },
       {
         name: "Web Development Course",
-        product_type: "course",
         price: 2000,
         sale_price: 1500,
         description: "Complete web dev bootcamp",
-        credential_username: "",
-        credential_password: "",
-        credential_email: "",
-        api_endpoint: "",
-        api_key: "",
-        api_documentation: "",
-        access_url: "https://course.example.com",
+        access_url: "https://course.example.com/def456",
         access_instructions: "Use the link to access course",
-        file_url: "",
-        file_name: "",
-        stock_quantity: 1,
-        is_unlimited_stock: "yes",
+        is_active: "yes",
+      },
+    ];
+    const wsCourse = XLSX.utils.json_to_sheet(courseData);
+    wsCourse["!cols"] = [
+      { wch: 25 }, { wch: 10 }, { wch: 10 }, { wch: 30 },
+      { wch: 40 }, { wch: 35 }, { wch: 10 },
+    ];
+    XLSX.utils.book_append_sheet(wb, wsCourse, "Courses");
+
+    // Software sheet - for downloadable files
+    const softwareData = [
+      {
+        name: "Premium APK",
+        price: 100,
+        sale_price: "",
+        description: "Modded app v2.0",
+        file_url: "https://drive.google.com/file/xxx1",
+        file_name: "app-v2.0.apk",
         is_active: "yes",
       },
       {
         name: "Premium APK",
-        product_type: "software",
         price: 100,
         sale_price: "",
-        description: "Modded app",
-        credential_username: "",
-        credential_password: "",
-        credential_email: "",
-        api_endpoint: "",
-        api_key: "",
-        api_documentation: "",
-        access_url: "",
-        access_instructions: "",
-        file_url: "https://drive.google.com/file/xxx",
+        description: "Modded app v2.0",
+        file_url: "https://drive.google.com/file/xxx2",
         file_name: "app-v2.0.apk",
-        stock_quantity: 1,
-        is_unlimited_stock: "yes",
         is_active: "yes",
       },
     ];
-
-    const ws = XLSX.utils.json_to_sheet(templateData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Digital Products");
-    
-    // Set column widths
-    ws["!cols"] = [
-      { wch: 25 }, // name
-      { wch: 15 }, // product_type
-      { wch: 10 }, // price
-      { wch: 10 }, // sale_price
-      { wch: 30 }, // description
-      { wch: 25 }, // credential_username
-      { wch: 20 }, // credential_password
-      { wch: 25 }, // credential_email
-      { wch: 30 }, // api_endpoint
-      { wch: 25 }, // api_key
-      { wch: 30 }, // api_documentation
-      { wch: 30 }, // access_url
-      { wch: 30 }, // access_instructions
-      { wch: 40 }, // file_url
-      { wch: 20 }, // file_name
-      { wch: 15 }, // stock_quantity
-      { wch: 18 }, // is_unlimited_stock
-      { wch: 12 }, // is_active
+    const wsSoftware = XLSX.utils.json_to_sheet(softwareData);
+    wsSoftware["!cols"] = [
+      { wch: 25 }, { wch: 10 }, { wch: 10 }, { wch: 30 },
+      { wch: 45 }, { wch: 25 }, { wch: 10 },
     ];
+    XLSX.utils.book_append_sheet(wb, wsSoftware, "Software");
 
     XLSX.writeFile(wb, "digital_products_template.xlsx");
     toast.success(language === "bn" ? "টেমপ্লেট ডাউনলোড হয়েছে" : "Template downloaded");
@@ -182,63 +202,83 @@ export const DigitalProductBulkUploadModal = ({
       try {
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: "array" });
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+        
+        const allParsed: ParsedProduct[] = [];
+        let rowCounter = 1;
 
-        if (jsonData.length === 0) {
+        // Map sheet names to product types
+        const sheetTypeMap: Record<string, string> = {
+          "Subscriptions": "subscription",
+          "APIs": "api",
+          "Courses": "course",
+          "Software": "software",
+        };
+
+        // Process each sheet
+        workbook.SheetNames.forEach((sheetName) => {
+          const worksheet = workbook.Sheets[sheetName];
+          const jsonData = XLSX.utils.sheet_to_json(worksheet);
+          
+          // Determine product type from sheet name
+          const productType = sheetTypeMap[sheetName] || "other";
+
+          jsonData.forEach((row: any) => {
+            rowCounter++;
+            const errors: string[] = [];
+            
+            // Validate required fields
+            if (!row.name || String(row.name).trim() === "") {
+              errors.push(language === "bn" ? "নাম আবশ্যক" : "Name is required");
+            }
+
+            const price = parseFloat(row.price) || 0;
+            if (price < 0) {
+              errors.push(language === "bn" ? "দাম ০ বা তার বেশি হতে হবে" : "Price must be 0 or greater");
+            }
+
+            const productData: CreateDigitalProductInput = {
+              name: String(row.name || "").trim(),
+              description: String(row.description || "").trim(),
+              product_type: productType as any,
+              price: price,
+              sale_price: row.sale_price ? parseFloat(row.sale_price) : undefined,
+              // Subscription fields
+              credential_username: String(row.credential_username || "").trim(),
+              credential_password: String(row.credential_password || "").trim(),
+              credential_email: String(row.credential_email || "").trim(),
+              // API fields
+              api_endpoint: String(row.api_endpoint || "").trim(),
+              api_key: String(row.api_key || "").trim(),
+              api_documentation: String(row.api_documentation || "").trim(),
+              // Course fields
+              access_url: String(row.access_url || "").trim(),
+              access_instructions: String(row.access_instructions || "").trim(),
+              // Software fields
+              file_url: String(row.file_url || "").trim(),
+              file_name: String(row.file_name || "").trim(),
+              // Stock - each row is 1 item
+              stock_quantity: 1,
+              is_unlimited_stock: false,
+              is_active: String(row.is_active || "yes").toLowerCase() !== "no",
+            };
+
+            allParsed.push({
+              rowNumber: rowCounter,
+              data: productData,
+              isValid: errors.length === 0,
+              errors,
+              sheetName,
+            });
+          });
+        });
+
+        if (allParsed.length === 0) {
           toast.error(language === "bn" ? "ফাইলে কোনো ডাটা নেই" : "No data found in file");
           setIsProcessing(false);
           return;
         }
 
-        const parsed: ParsedProduct[] = jsonData.map((row: any, index) => {
-          const errors: string[] = [];
-          
-          // Validate required fields
-          if (!row.name || String(row.name).trim() === "") {
-            errors.push(language === "bn" ? "নাম আবশ্যক" : "Name is required");
-          }
-          
-          if (!row.product_type || !validProductTypes.includes(String(row.product_type).toLowerCase())) {
-            errors.push(language === "bn" ? "সঠিক প্রোডাক্ট টাইপ দিন (subscription/api/course/software/other)" : "Invalid product type");
-          }
-
-          const price = parseFloat(row.price) || 0;
-          if (price < 0) {
-            errors.push(language === "bn" ? "দাম ০ বা তার বেশি হতে হবে" : "Price must be 0 or greater");
-          }
-
-          const productData: CreateDigitalProductInput = {
-            name: String(row.name || "").trim(),
-            description: String(row.description || "").trim(),
-            product_type: String(row.product_type || "other").toLowerCase() as any,
-            price: price,
-            sale_price: row.sale_price ? parseFloat(row.sale_price) : undefined,
-            credential_username: String(row.credential_username || "").trim(),
-            credential_password: String(row.credential_password || "").trim(),
-            credential_email: String(row.credential_email || "").trim(),
-            api_endpoint: String(row.api_endpoint || "").trim(),
-            api_key: String(row.api_key || "").trim(),
-            api_documentation: String(row.api_documentation || "").trim(),
-            access_url: String(row.access_url || "").trim(),
-            access_instructions: String(row.access_instructions || "").trim(),
-            file_url: String(row.file_url || "").trim(),
-            file_name: String(row.file_name || "").trim(),
-            stock_quantity: parseInt(row.stock_quantity) || 1,
-            is_unlimited_stock: String(row.is_unlimited_stock || "").toLowerCase() === "yes",
-            is_active: String(row.is_active || "yes").toLowerCase() !== "no",
-          };
-
-          return {
-            rowNumber: index + 2, // Excel row number (1-indexed + header)
-            data: productData,
-            isValid: errors.length === 0,
-            errors,
-          };
-        });
-
-        setParsedProducts(parsed);
+        setParsedProducts(allParsed);
         setIsProcessing(false);
       } catch (error) {
         console.error("Error parsing file:", error);
@@ -338,30 +378,30 @@ export const DigitalProductBulkUploadModal = ({
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Upload className="w-5 h-5 text-purple-600" />
+            <Upload className="w-5 h-5 text-primary" />
             {language === "bn" ? "বাল্ক প্রোডাক্ট আপলোড" : "Bulk Product Upload"}
           </DialogTitle>
           <DialogDescription>
             {language === "bn"
-              ? "Excel/CSV ফাইল থেকে একসাথে অনেক ডিজিটাল প্রোডাক্ট যোগ করুন"
-              : "Add multiple digital products at once from Excel/CSV file"}
+              ? "Excel ফাইল থেকে একসাথে অনেক ডিজিটাল প্রোডাক্ট যোগ করুন। প্রতিটা শীটে আলাদা প্রোডাক্ট টাইপ।"
+              : "Add multiple digital products from Excel. Each sheet represents a different product type."}
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex-1 overflow-hidden flex flex-col gap-4">
           {/* Template Download */}
-          <div className="p-4 rounded-lg bg-purple-500/5 border border-purple-500/20">
+          <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <FileSpreadsheet className="w-8 h-8 text-purple-600" />
+                <FileSpreadsheet className="w-8 h-8 text-primary" />
                 <div>
                   <p className="font-medium">
                     {language === "bn" ? "টেমপ্লেট ডাউনলোড করুন" : "Download Template"}
                   </p>
                   <p className="text-sm text-muted-foreground">
                     {language === "bn"
-                      ? "সঠিক ফরম্যাটে ডাটা দিতে টেমপ্লেট ব্যবহার করুন"
-                      : "Use the template to format your data correctly"}
+                      ? "৪টি শীট: Subscriptions, APIs, Courses, Software"
+                      : "4 sheets: Subscriptions, APIs, Courses, Software"}
                   </p>
                 </div>
               </div>
@@ -374,12 +414,12 @@ export const DigitalProductBulkUploadModal = ({
 
           {/* File Upload */}
           <div className="space-y-2">
-            <Label>{language === "bn" ? "Excel/CSV ফাইল আপলোড করুন" : "Upload Excel/CSV File"}</Label>
+            <Label>{language === "bn" ? "Excel ফাইল আপলোড করুন" : "Upload Excel File"}</Label>
             <div className="flex gap-2">
               <Input
                 ref={fileInputRef}
                 type="file"
-                accept=".xlsx,.xls,.csv"
+                accept=".xlsx,.xls"
                 onChange={handleFileChange}
                 disabled={isProcessing || isUploading}
               />
@@ -395,7 +435,7 @@ export const DigitalProductBulkUploadModal = ({
           {/* Processing State */}
           {isProcessing && (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="w-6 h-6 animate-spin text-purple-600 mr-2" />
+              <Loader2 className="w-6 h-6 animate-spin text-primary mr-2" />
               <span>{language === "bn" ? "ফাইল প্রসেস হচ্ছে..." : "Processing file..."}</span>
             </div>
           )}
@@ -404,17 +444,22 @@ export const DigitalProductBulkUploadModal = ({
           {parsedProducts.length > 0 && !isProcessing && (
             <>
               {/* Summary */}
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-4 flex-wrap">
                 <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20">
                   <CheckCircle className="w-3 h-3 mr-1" />
                   {language === "bn" ? `${validCount}টি বৈধ` : `${validCount} valid`}
                 </Badge>
                 {invalidCount > 0 && (
-                  <Badge variant="outline" className="bg-red-500/10 text-red-600 border-red-500/20">
+                  <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20">
                     <XCircle className="w-3 h-3 mr-1" />
                     {language === "bn" ? `${invalidCount}টি ত্রুটিপূর্ণ` : `${invalidCount} invalid`}
                   </Badge>
                 )}
+                <span className="text-xs text-muted-foreground">
+                  {language === "bn" 
+                    ? `${new Set(parsedProducts.map(p => p.sheetName)).size}টি শীট থেকে`
+                    : `from ${new Set(parsedProducts.map(p => p.sheetName)).size} sheets`}
+                </span>
               </div>
 
               {/* Products List */}
@@ -426,7 +471,7 @@ export const DigitalProductBulkUploadModal = ({
                       className={`p-3 rounded-lg border ${
                         product.isValid
                           ? "bg-green-500/5 border-green-500/20"
-                          : "bg-red-500/5 border-red-500/20"
+                          : "bg-destructive/5 border-destructive/20"
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">
@@ -434,7 +479,7 @@ export const DigitalProductBulkUploadModal = ({
                           {product.isValid ? (
                             <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
                           ) : (
-                            <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
+                            <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0" />
                           )}
                           <div>
                             <div className="flex items-center gap-2">
@@ -442,9 +487,18 @@ export const DigitalProductBulkUploadModal = ({
                               <span className="font-medium">{product.data.name || "(No Name)"}</span>
                             </div>
                             <div className="text-xs text-muted-foreground">
-                              Row {product.rowNumber} • ৳{product.data.price}
+                              {product.sheetName} • ৳{product.data.price}
                               {product.data.credential_username && (
                                 <span className="ml-2">• {product.data.credential_username}</span>
+                              )}
+                              {product.data.api_key && (
+                                <span className="ml-2">• {product.data.api_key.substring(0, 10)}...</span>
+                              )}
+                              {product.data.access_url && (
+                                <span className="ml-2">• URL added</span>
+                              )}
+                              {product.data.file_url && (
+                                <span className="ml-2">• File: {product.data.file_name || "added"}</span>
                               )}
                             </div>
                           </div>
@@ -454,7 +508,7 @@ export const DigitalProductBulkUploadModal = ({
                         </Badge>
                       </div>
                       {!product.isValid && (
-                        <div className="mt-2 text-xs text-red-600">
+                        <div className="mt-2 text-xs text-destructive">
                           {product.errors.join(", ")}
                         </div>
                       )}
@@ -486,7 +540,6 @@ export const DigitalProductBulkUploadModal = ({
             <Button
               onClick={handleUpload}
               disabled={isUploading || validCount === 0}
-              className="bg-purple-600 hover:bg-purple-700"
             >
               {isUploading ? (
                 <>
