@@ -1122,6 +1122,8 @@ export interface PageMemory {
     advanceRequiredAbove: number;
     advancePercentage: number;
   } | null;
+  // Support WhatsApp number for customers who need call/urgent help
+  support_whatsapp_number: string | null;
   created_at: string;
   updated_at: string;
 }

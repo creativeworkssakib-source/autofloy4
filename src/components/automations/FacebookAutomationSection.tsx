@@ -30,7 +30,8 @@ import {
   CheckCircle2,
   CreditCard,
   Banknote,
-  AlertTriangle
+  AlertTriangle,
+  Phone
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import RecentActivityLog from "./RecentActivityLog";
@@ -130,6 +131,9 @@ const FacebookAutomationSection = ({
     advancePercentage: 50,
   });
 
+  // Support WhatsApp number for urgent customer calls
+  const [supportWhatsappNumber, setSupportWhatsappNumber] = useState("");
+
   // Load page memory from backend
   useEffect(() => {
     const loadPageMemory = async () => {
@@ -186,6 +190,9 @@ const FacebookAutomationSection = ({
               advancePercentage: memory.payment_rules.advancePercentage ?? 50,
             });
           }
+
+          // Load support WhatsApp number
+          setSupportWhatsappNumber(memory.support_whatsapp_number || "");
         }
       } catch (error) {
         console.error("Failed to load page memory:", error);
@@ -212,6 +219,7 @@ const FacebookAutomationSection = ({
         selling_rules: sellingRules,
         ai_behavior_rules: aiBehaviorRules,
         payment_rules: paymentRules,
+        support_whatsapp_number: supportWhatsappNumber || null,
       });
 
       if (memory) {
@@ -255,6 +263,7 @@ const FacebookAutomationSection = ({
         selling_rules: sellingRules,
         ai_behavior_rules: aiBehaviorRules,
         payment_rules: paymentRules,
+        support_whatsapp_number: supportWhatsappNumber || null,
       });
       toast({
         title: newFeatures[feature] ? "Enabled" : "Disabled",
@@ -738,6 +747,33 @@ const FacebookAutomationSection = ({
                     />
                     <span className="text-sm text-muted-foreground">%</span>
                   </div>
+                </div>
+
+                <Separator />
+
+                {/* Support WhatsApp Number */}
+                <div className="space-y-3 pt-2">
+                  <div className="space-y-0.5">
+                    <Label className="text-sm font-medium flex items-center gap-2">
+                      <Phone className="h-4 w-4 text-success" />
+                      Support WhatsApp Number
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      AI will share this number when customers ask to call or need urgent help
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="tel"
+                      placeholder="+880 1XXX XXXXXX"
+                      value={supportWhatsappNumber}
+                      onChange={(e) => setSupportWhatsappNumber(e.target.value)}
+                      className="max-w-[220px]"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground italic">
+                    যখন customer কল করতে চাইবে বা urgent help লাগবে, AI এই নম্বরটি দিয়ে দিবে।
+                  </p>
                 </div>
               </div>
             </div>
