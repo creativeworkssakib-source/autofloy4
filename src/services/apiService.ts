@@ -1158,6 +1158,11 @@ export interface PageMemory {
     allowDiscount: boolean;
     maxDiscountPercent: number;
     allowLowProfitSale: boolean;
+    // Bargaining Power
+    bargainingEnabled?: boolean;
+    bargainingLevel?: "low" | "medium" | "high" | "aggressive";
+    minAcceptableDiscount?: number;
+    maxBargainingRounds?: number;
   } | null;
   ai_behavior_rules: {
     neverHallucinate: boolean;

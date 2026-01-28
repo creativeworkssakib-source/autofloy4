@@ -36,6 +36,11 @@ interface PageMemory {
     allowDiscount: boolean;
     maxDiscountPercent: number;
     allowLowProfitSale: boolean;
+    // Bargaining Power
+    bargainingEnabled?: boolean;
+    bargainingLevel?: "low" | "medium" | "high" | "aggressive";
+    minAcceptableDiscount?: number;
+    maxBargainingRounds?: number;
   };
   ai_behavior_rules?: {
     neverHallucinate: boolean;
@@ -1397,6 +1402,99 @@ ${mediaContext}`;
     if (pageMemory.selling_rules.allowDiscount) {
       prompt += `
 - discount দিতে পারবেন max ${pageMemory.selling_rules.maxDiscountPercent || 10}%`;
+    }
+    
+    // Bargaining Power - SMART NEGOTIATION SYSTEM
+    if (pageMemory.selling_rules.bargainingEnabled) {
+      const bargainingLevel = pageMemory.selling_rules.bargainingLevel || "medium";
+      const minDiscount = pageMemory.selling_rules.minAcceptableDiscount || 5;
+      const maxDiscount = pageMemory.selling_rules.maxDiscountPercent || 10;
+      const maxRounds = pageMemory.selling_rules.maxBargainingRounds || 3;
+      
+      prompt += `
+
+## 🤝 BARGAINING POWER - দর কষাকষি করার ক্ষমতা (MUST FOLLOW)
+
+আপনি customer এর সাথে দাম নিয়ে SMART negotiation করতে পারবেন!
+
+### Bargaining Style: ${bargainingLevel === "low" ? "😊 SOFT - সহজে ছাড় দিন" : 
+                         bargainingLevel === "medium" ? "💪 MEDIUM - কিছুটা negotiate করুন" : 
+                         bargainingLevel === "high" ? "🔥 STRONG - ভালোভাবে দর কষাকষি করুন" : 
+                         "⚔️ AGGRESSIVE - শক্তভাবে দাম ধরে রাখুন"}
+
+### Discount Range:
+- প্রথমে অফার: ${minDiscount}% (minimum)
+- সর্বোচ্চ: ${maxDiscount}% (maximum)
+- Max ${maxRounds} বার negotiate করবেন, তারপর final offer
+
+### BARGAINING TECHNIQUES:
+
+**১. Customer "দাম কমাও" বললে (Round 1):**
+${bargainingLevel === "low" ? 
+`- "ভাই আপনার জন্য ${minDiscount}% off দিচ্ছি, ৳X হবে"
+- সাথে সাথে ছাড় দিন` :
+bargainingLevel === "medium" ?
+`- "ভাই দাম তো already best, তবে regular customer হলে কিছু করা যায়"
+- প্রথমে একটু resist করুন` :
+bargainingLevel === "high" ?
+`- "ভাই এই দাম fixed, quality দেখলে বুঝবেন"
+- Value highlight করুন, ছাড়ের কথা এখনই বলবেন না` :
+`- "ভাই এই দামেই best, অন্য কোথাও পাবেন না এই quality"
+- প্রথম round এ ছাড় দেবেন না`}
+
+**২. Customer আবার চাপ দিলে (Round 2):**
+${bargainingLevel === "low" ? 
+`- "আচ্ছা ভাই, ${Math.min(minDiscount + 2, maxDiscount)}% দিচ্ছি, final"` :
+bargainingLevel === "medium" ?
+`- "দেখেন ভাই, ${minDiscount}% দিতে পারি maximum"
+- এখন প্রথম offer দিন` :
+bargainingLevel === "high" ?
+`- "আচ্ছা দেখি... ভাই ${minDiscount}% দিতে পারি, কিন্তু এটাই শেষ"
+- অনিচ্ছায় দিচ্ছেন এমন act করুন` :
+`- "ভাই সত্যি বলছি, margin নাই... তবে আপনার জন্য ${minDiscount}% last offer"
+- খুব কষ্টে দিচ্ছেন এমন বলুন`}
+
+**৩. Customer still চায় (Round 3+):**
+${bargainingLevel === "low" ? 
+`- "ওকে ভাই ${Math.min(minDiscount + 5, maxDiscount)}% final, নিয়ে নেন"` :
+bargainingLevel === "medium" ?
+`- "ভাই আর সম্ভব না, ${Math.floor((minDiscount + maxDiscount) / 2)}% last, নিলে নেন"` :
+bargainingLevel === "high" ?
+`- "ভাই আমার loss হবে... তবে আপনি regular হবেন ভেবে ${maxDiscount}% দিলাম, আর হবে না"` :
+`- "একদম শেষ offer ভাই, ${maxDiscount}% - হ্যাঁ বলেন নাহলে এই দামেই"`}
+
+**৪. Final Round (${maxRounds} বার পর):**
+- "ভাই এটাই last, ${maxDiscount}% - take it or leave it"
+- "আর possible না ভাই, boss এ allow করবে না"
+- "okay ভাই, ভেবে জানাবেন" (walking away technique)
+
+### BARGAINING PHRASES (Level: ${bargainingLevel}):
+
+**Resisting:**
+- "ভাই দাম কমানো কঠিন হবে..."
+- "এই দামে profit নাই প্রায়"
+- "quality বুঝলে দাম fair মনে হবে"
+
+**Giving Discount:**
+- "আচ্ছা আপনার জন্য special করছি"
+- "regular customer মনে করে X% দিচ্ছি"
+- "একদম last price বলছি"
+
+**Urgency Create করুন:**
+- "আজকে নিলে এই offer, কাল থাকবে না"
+- "stock কম, wait করলে শেষ হয়ে যাবে"
+
+**Walking Away (Power Move):**
+- "ঠিক আছে ভাই, ভেবে দেখেন"
+- "অন্য customer ও interested আছে"
+- (বেশিরভাগ সময় customer ফিরে আসে)
+
+### IMPORTANT RULES:
+1. সরাসরি max discount বলবেন না - ধীরে ধীরে বাড়ান
+2. প্রতিটা discount কে "special favor" এর মতো present করুন
+3. Customer এর tone বুঝে react করুন
+4. Angry/rude customer কে calm করুন, তারপর negotiate
+5. ${maxRounds} round পর final offer, আর negotiate নয়`;
     }
   }
 
