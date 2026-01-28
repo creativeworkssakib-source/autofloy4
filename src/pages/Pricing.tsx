@@ -24,6 +24,8 @@ interface DbPricingPlan {
   description?: string;
   description_bn?: string;
   features: string[];
+  online_features?: string[];
+  offline_features?: string[];
   cta_text?: string;
   cta_variant?: string;
   is_popular: boolean;
@@ -86,6 +88,9 @@ const Pricing = () => {
                 period: p.id === 'lifetime' ? '' : (p.period || '/month'),
                 description: p.description || '',
                 features: p.features || [],
+                // Separate feature lists for online/offline
+                onlineFeatures: p.online_features || p.features || [],
+                offlineFeatures: p.offline_features || [],
                 cta: p.cta_text || `Choose ${p.name}`,
                 ctaVariant: (p.cta_variant as "default" | "gradient" | "success") || "default",
                 note: p.id === 'free-trial' ? 'No credit card required' : undefined,

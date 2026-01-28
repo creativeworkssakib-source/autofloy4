@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Edit, Trash2, Loader2, Search, DollarSign, Plus, GripVertical, Check, Store } from 'lucide-react';
+import { Edit, Trash2, Loader2, Search, DollarSign, Plus, GripVertical, Check, Store, Globe } from 'lucide-react';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,6 +23,8 @@ interface ExtendedPricingPlan extends PricingPlan {
   offline_shop_price_numeric?: number;
   offline_shop_bundle_price_numeric?: number;
   has_offline_shop_option?: boolean;
+  online_features?: string[];
+  offline_features?: string[];
 }
 
 const AdminPricingPlans = () => {
@@ -34,6 +36,8 @@ const AdminPricingPlans = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState<Partial<ExtendedPricingPlan>>({});
   const [featuresText, setFeaturesText] = useState('');
+  const [onlineFeaturesText, setOnlineFeaturesText] = useState('');
+  const [offlineFeaturesText, setOfflineFeaturesText] = useState('');
 
   const loadPlans = async () => {
     try {
@@ -65,6 +69,8 @@ const AdminPricingPlans = () => {
       has_offline_shop_option: true,
     });
     setFeaturesText('');
+    setOnlineFeaturesText('');
+    setOfflineFeaturesText('');
     setIsModalOpen(true);
   };
 
@@ -72,6 +78,8 @@ const AdminPricingPlans = () => {
     setEditingPlan(plan);
     setFormData(plan);
     setFeaturesText(Array.isArray(plan.features) ? plan.features.join('\n') : '');
+    setOnlineFeaturesText(Array.isArray(plan.online_features) ? plan.online_features.join('\n') : '');
+    setOfflineFeaturesText(Array.isArray(plan.offline_features) ? plan.offline_features.join('\n') : '');
     setIsModalOpen(true);
   };
 
@@ -95,7 +103,9 @@ const AdminPricingPlans = () => {
     try {
       setIsSaving(true);
       const features = featuresText.split('\n').filter(f => f.trim());
-      const dataToSave = { ...formData, features };
+      const online_features = onlineFeaturesText.split('\n').filter(f => f.trim());
+      const offline_features = offlineFeaturesText.split('\n').filter(f => f.trim());
+      const dataToSave = { ...formData, features, online_features, offline_features };
 
       if (editingPlan) {
         await updatePricingPlan(editingPlan.id, dataToSave);
@@ -346,14 +356,53 @@ const AdminPricingPlans = () => {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label>Features (one per line)</Label>
-                <Textarea
-                  value={featuresText}
-                  onChange={(e) => setFeaturesText(e.target.value)}
-                  placeholder="Feature 1&#10;Feature 2&#10;Feature 3"
-                  rows={8}
-                />
+              {/* Features Section */}
+              <div className="border-t pt-4 mt-4">
+                <h3 className="font-semibold mb-3 flex items-center gap-2">
+                  📝 Features Configuration
+                </h3>
+                
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                      🌐 Online Business Features (one per line)
+                    </Label>
+                    <Textarea
+                      value={onlineFeaturesText}
+                      onChange={(e) => setOnlineFeaturesText(e.target.value)}
+                      placeholder="1 Facebook Page automation&#10;AI auto-reply (Bengali & English)&#10;Auto reply to comments"
+                      rows={6}
+                    />
+                    <p className="text-xs text-muted-foreground">Features shown when user selects "Online" mode</p>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                      🏪 Offline Shop Features (one per line)
+                    </Label>
+                    <Textarea
+                      value={offlineFeaturesText}
+                      onChange={(e) => setOfflineFeaturesText(e.target.value)}
+                      placeholder="Complete POS system&#10;Barcode scanning & generation&#10;Inventory management"
+                      rows={6}
+                    />
+                    <p className="text-xs text-muted-foreground">Features shown when user selects "Offline" mode</p>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2 text-muted-foreground">
+                      Legacy Features (fallback - one per line)
+                    </Label>
+                    <Textarea
+                      value={featuresText}
+                      onChange={(e) => setFeaturesText(e.target.value)}
+                      placeholder="Feature 1&#10;Feature 2&#10;Feature 3"
+                      rows={4}
+                      className="opacity-60"
+                    />
+                    <p className="text-xs text-muted-foreground">Used as fallback if Online/Offline features are empty</p>
+                  </div>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">

@@ -1950,8 +1950,10 @@ export type Database = {
           max_shops: number | null
           name: string
           name_bn: string | null
+          offline_features: Json | null
           offline_shop_bundle_price_numeric: number | null
           offline_shop_price_numeric: number | null
+          online_features: Json | null
           original_price_numeric: number | null
           period: string | null
           price_numeric: number | null
@@ -1977,8 +1979,10 @@ export type Database = {
           max_shops?: number | null
           name: string
           name_bn?: string | null
+          offline_features?: Json | null
           offline_shop_bundle_price_numeric?: number | null
           offline_shop_price_numeric?: number | null
+          online_features?: Json | null
           original_price_numeric?: number | null
           period?: string | null
           price_numeric?: number | null
@@ -2004,8 +2008,10 @@ export type Database = {
           max_shops?: number | null
           name?: string
           name_bn?: string | null
+          offline_features?: Json | null
           offline_shop_bundle_price_numeric?: number | null
           offline_shop_price_numeric?: number | null
+          online_features?: Json | null
           original_price_numeric?: number | null
           period?: string | null
           price_numeric?: number | null

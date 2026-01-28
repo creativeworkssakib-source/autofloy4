@@ -1,14 +1,9 @@
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
-import { Check, Sparkles, Crown, Zap, Star, ArrowRight, Gift, Store, Globe, Layers } from "lucide-react";
+import { Check, Crown, Zap, Star, ArrowRight, Gift, Store, Globe, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import BusinessTypeSelector, { BusinessType } from "./BusinessTypeSelector";
-
-interface PlanFeatures {
-  online: string[];
-  offline: string[];
-}
 
 export interface PricingPlan {
   id: string;
@@ -19,7 +14,7 @@ export interface PricingPlan {
   priceNumeric: number;
   period: string;
   description: string;
-  features: string[];
+  features: string[]; // Legacy - used as fallback
   cta: string;
   ctaVariant: "default" | "gradient" | "success";
   note?: string;
@@ -32,6 +27,8 @@ export interface PricingPlan {
   offlineShopPrice?: number;
   offlineShopBundlePrice?: number;
   hasOfflineShopOption?: boolean;
+  // Separate feature lists for each business type
+  onlineFeatures?: string[];
   offlineFeatures?: string[];
 }
 
@@ -46,18 +43,6 @@ interface PricingCardProps {
   onContactClick?: () => void;
   isMobile?: boolean;
 }
-
-// Offline shop features
-const OFFLINE_FEATURES = [
-  "Complete POS system",
-  "Barcode scanning",
-  "Inventory management",
-  "Sales tracking",
-  "Professional invoicing",
-  "Customer management",
-  "Expense tracking",
-  "Daily cash register",
-];
 
 export const PricingCard = ({
   plan,
@@ -129,15 +114,20 @@ export const PricingCard = ({
 
   // Get features based on business type
   const getFeatures = () => {
+    // Use separate feature lists from database
+    const onlineFeats = plan.onlineFeatures || plan.features || [];
+    const offlineFeats = plan.offlineFeatures || [];
+    
     if (businessType === "offline") {
-      return plan.offlineFeatures || OFFLINE_FEATURES;
+      return offlineFeats.length > 0 ? offlineFeats : plan.features;
     }
     if (businessType === "both") {
-      // Combine online features + key offline features
-      const offlineHighlights = ["+ Complete POS system", "+ Inventory management", "+ Sales tracking"];
-      return [...plan.features.slice(0, 5), ...offlineHighlights];
+      // Combine online features + offline highlights
+      const offlineHighlights = offlineFeats.slice(0, 3).map(f => `+ ${f}`);
+      return [...onlineFeats.slice(0, 5), ...offlineHighlights];
     }
-    return plan.features;
+    // Online mode - show only online features
+    return onlineFeats.length > 0 ? onlineFeats : plan.features;
   };
 
   // Get checkout URL with business type
