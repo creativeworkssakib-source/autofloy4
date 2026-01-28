@@ -126,10 +126,18 @@ const UnifiedDashboard = () => {
       
       console.log("[Dashboard] Stats data received:", statsData);
       
-      // Always set the stats even if 0 values - this is valid data
+      // Set the stats - prefer new data but keep cached data if new data seems empty incorrectly
       if (statsData !== null && statsData !== undefined) {
-        setOnlineStats(statsData);
-        console.log("[Dashboard] OnlineStats set to:", statsData);
+        // Check if the new data has meaningful values
+        const hasData = statsData.messagesHandled > 0 || statsData.autoRepliesSent > 0 || statsData.connectedPages > 0;
+        
+        // If new data has values OR we don't have cached data, use new data
+        if (hasData || !onlineStats) {
+          setOnlineStats(statsData);
+          console.log("[Dashboard] OnlineStats set to:", statsData);
+        } else {
+          console.log("[Dashboard] Keeping existing stats as new data appears empty:", statsData);
+        }
       }
       setConnectedPages(pagesData?.filter(p => p.is_connected) || []);
       setRecentLogs(logsData || []);
