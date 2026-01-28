@@ -104,10 +104,16 @@ export default defineConfig(({ mode }) => ({
               cacheableResponse: { statuses: [0, 200] },
             },
           },
-          // API calls - ALWAYS Network Only (never cache)
+          // API calls - ALWAYS Network Only (NEVER cache)
           {
             urlPattern: /^https:\/\/.*\.supabase\.co\/functions\/.*/i,
             handler: 'NetworkOnly',
+            options: {
+              backgroundSync: {
+                name: 'supabase-functions-queue',
+                options: { maxRetentionTime: 60 }
+              }
+            }
           },
           {
             urlPattern: /^https:\/\/.*\.supabase\.co\/rest\/.*/i,
@@ -115,6 +121,11 @@ export default defineConfig(({ mode }) => ({
           },
           {
             urlPattern: /^https:\/\/.*\.supabase\.co\/auth\/.*/i,
+            handler: 'NetworkOnly',
+          },
+          // App version check - CRITICAL: Never cache
+          {
+            urlPattern: /app-version/i,
             handler: 'NetworkOnly',
           },
           // Static images - cache with shorter expiration
