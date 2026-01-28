@@ -23,11 +23,8 @@ import {
   ShoppingCart,
   ScanLine,
   Calculator,
-  CreditCard,
   Undo2,
-  Target,
-  Bell,
-  Smartphone
+  Rocket
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 
@@ -123,157 +120,157 @@ const FeaturesSection = memo(() => {
   const sectionRef = useRef(null);
   const isInView = useInView(sectionRef, { once: true, margin: "-100px" });
 
-  // Complete Online Business Features - 9 Features
+  // Complete Online Business Features - 9 Features with unique colors
   const onlineFeatures = useMemo(() => [
     {
       icon: MessageSquare,
       title: "AI Auto-Reply (Inbox & Comments)",
       description: "AI responds to customer messages in Bengali instantly with natural human-like conversation. Never miss a sale - even at 3 AM. Handles inquiries, shares prices, and guides customers to purchase.",
-      gradient: "from-primary to-primary-glow",
+      gradient: "from-[#3B82F6] to-[#1D4ED8]", // Blue - Communication
       slug: "message-auto-reply",
     },
     {
       icon: Image,
       title: "Smart Image Recognition",
       description: "Customers send product images? AI identifies and prices them automatically from your catalog. No manual lookup needed - instant product matching with 95%+ accuracy.",
-      gradient: "from-secondary to-primary",
+      gradient: "from-[#8B5CF6] to-[#6D28D9]", // Purple - AI/Vision
       slug: "image-recognition",
     },
     {
       icon: Mic,
       title: "Voice Message Processing",
       description: "We transcribe and respond to voice messages automatically in seconds. Bengali voice messages converted to text, understood, and answered - saving hours of listening time.",
-      gradient: "from-accent to-secondary",
+      gradient: "from-[#EC4899] to-[#BE185D]", // Pink - Audio
       slug: "voice-support",
     },
     {
       icon: Shield,
       title: "Comment Moderation & Auto-Reply",
       description: "Spam detection, auto-delete bad comments, ban abusive users instantly. Plus auto-reply to product inquiries in comments to convert browsers into buyers.",
-      gradient: "from-success to-primary",
+      gradient: "from-[#10B981] to-[#047857]", // Green - Security
       slug: "comment-management",
     },
     {
       icon: FileText,
       title: "Auto-Invoice Generation",
       description: "Generate professional invoices automatically after every order confirmation. Branded templates, sequential numbering, instant delivery via Messenger - zero manual work.",
-      gradient: "from-primary to-accent",
+      gradient: "from-[#F59E0B] to-[#D97706]", // Amber - Documents
       slug: "auto-invoice",
     },
     {
       icon: Clock,
       title: "24/7 AI Customer Support",
       description: "Your shop never sleeps. AI responds to customers anytime - day or night. Handle multiple conversations simultaneously while you focus on growing your business.",
-      gradient: "from-secondary to-success",
+      gradient: "from-[#6366F1] to-[#4338CA]", // Indigo - Time
       slug: "247-support",
     },
     {
       icon: Bot,
       title: "AI Sales Agent",
       description: "Not just auto-reply - a complete AI sales representative. Uses 10+ persuasion techniques, handles objections, creates urgency, and closes deals like your best salesperson.",
-      gradient: "from-primary to-secondary",
+      gradient: "from-[#14B8A6] to-[#0D9488]", // Teal - AI
       slug: "message-auto-reply",
     },
     {
       icon: Handshake,
       title: "AI Bargaining Power",
       description: "Let AI negotiate prices intelligently! Set your minimum acceptable discount and watch AI handle price negotiations professionally - protecting your margins while closing more deals.",
-      gradient: "from-accent to-primary",
+      gradient: "from-[#F97316] to-[#EA580C]", // Orange - Negotiation
       slug: "message-auto-reply",
     },
     {
       icon: ShoppingCart,
       title: "Automatic Order Taking",
       description: "AI collects customer details (name, phone, address) conversationally and creates orders automatically. Complete order management without lifting a finger.",
-      gradient: "from-success to-secondary",
+      gradient: "from-[#22C55E] to-[#16A34A]", // Green - Orders
       slug: "auto-invoice",
     },
   ], []);
 
-  // Complete Offline Shop Features - 12 Features
+  // Complete Offline Shop Features - 12 Features with unique colors
   const offlineFeatures = useMemo(() => [
     {
       icon: Store,
       title: "Complete POS System",
       description: "Full Point of Sale with inventory, sales, and expense tracking. Works offline - sync when connected.",
-      gradient: "from-primary to-secondary",
+      gradient: "from-[#3B82F6] to-[#1D4ED8]", // Blue - Main POS
       slug: "offline-shop-management",
     },
     {
       icon: Package,
       title: "Inventory Control",
       description: "Track stock levels, expiry dates, batch numbers, and get automatic low stock alerts. Never run out of bestsellers.",
-      gradient: "from-accent to-primary",
+      gradient: "from-[#8B5CF6] to-[#6D28D9]", // Purple - Inventory
       slug: "inventory-management",
     },
     {
       icon: Users,
       title: "Customer Management",
       description: "Build customer relationships with due tracking, purchase history, and SMS reminders for collections.",
-      gradient: "from-success to-secondary",
+      gradient: "from-[#06B6D4] to-[#0891B2]", // Cyan - Customers
       slug: "customer-management",
     },
     {
       icon: BarChart3,
       title: "Reports & Analytics",
       description: "Sales, profit, expense reports with charts. Export to Excel. Make data-driven business decisions.",
-      gradient: "from-primary to-success",
+      gradient: "from-[#10B981] to-[#047857]", // Emerald - Analytics
       slug: "reports-analytics",
     },
     {
       icon: Wallet,
       title: "Expense & Cash Register",
       description: "Track expenses by category, manage cash flow, daily closing reports. Know where every taka goes.",
-      gradient: "from-secondary to-accent",
+      gradient: "from-[#F59E0B] to-[#D97706]", // Amber - Money
       slug: "expense-cash-management",
     },
     {
       icon: RefreshCw,
       title: "Online-Offline Sync",
       description: "Unify inventory across online and offline sales. Prevent overselling with real-time stock sync.",
-      gradient: "from-success to-primary",
+      gradient: "from-[#14B8A6] to-[#0D9488]", // Teal - Sync
       slug: "online-offline-sync",
     },
     {
       icon: Truck,
       title: "Supplier & Purchase",
       description: "Track supplier purchases, dues, and payment history. Manage credit relationships professionally.",
-      gradient: "from-accent to-success",
+      gradient: "from-[#F97316] to-[#EA580C]", // Orange - Delivery
       slug: "supplier-management",
     },
     {
       icon: Landmark,
       title: "Loan Management",
       description: "Track business loans with installments and payment reminders. Never miss a payment deadline.",
-      gradient: "from-primary to-accent",
+      gradient: "from-[#EF4444] to-[#DC2626]", // Red - Finance
       slug: "loan-management",
     },
     {
       icon: ScanLine,
       title: "Barcode Scanner",
       description: "Scan product barcodes for instant checkout. Print custom barcodes for your products.",
-      gradient: "from-secondary to-primary",
+      gradient: "from-[#6366F1] to-[#4338CA]", // Indigo - Scanner
       slug: "offline-shop-management",
     },
     {
       icon: Calculator,
       title: "Price Calculator",
       description: "Calculate selling prices with profit margins. Set markup percentages for consistent pricing.",
-      gradient: "from-success to-accent",
+      gradient: "from-[#84CC16] to-[#65A30D]", // Lime - Calculator
       slug: "offline-shop-management",
     },
     {
       icon: Undo2,
       title: "Returns & Adjustments",
       description: "Handle customer returns, damaged stock, and inventory adjustments with full audit trail.",
-      gradient: "from-primary to-success",
+      gradient: "from-[#EC4899] to-[#BE185D]", // Pink - Returns
       slug: "offline-shop-management",
     },
     {
       icon: Receipt,
       title: "Thermal Printing",
       description: "Print professional receipts on thermal printers. Customizable templates with your shop branding.",
-      gradient: "from-accent to-secondary",
+      gradient: "from-[#78716C] to-[#57534E]", // Stone - Print
       slug: "offline-shop-management",
     },
   ], []);
@@ -317,10 +314,15 @@ const FeaturesSection = memo(() => {
           animate={isInView ? "visible" : "hidden"}
         >
           <motion.span 
-            className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-gradient-to-r from-primary/15 to-secondary/10 text-primary-accessible text-sm font-semibold mb-4 border border-primary/20 shadow-sm"
+            className="inline-flex items-center gap-2.5 px-5 py-2.5 rounded-full bg-gradient-to-r from-primary/15 to-secondary/10 text-primary-accessible text-sm font-semibold mb-4 border border-primary/20 shadow-lg"
             whileHover={{ scale: 1.05 }}
           >
-            <span className="text-lg">🚀</span> Complete Business Solution
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#F97316] to-[#EA580C] flex items-center justify-center shadow-md relative overflow-hidden">
+              <div className="premium-icon-shine" />
+              <div className="absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-white/30 to-transparent rounded-t-lg pointer-events-none" />
+              <Rocket className="w-4 h-4 text-white relative z-10" />
+            </div>
+            Complete Business Solution
           </motion.span>
           <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-6">
             Every Feature You Need{" "}
