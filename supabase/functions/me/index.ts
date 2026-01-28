@@ -133,11 +133,34 @@ serve(async (req) => {
     }
   }
 
-  // PUT /me - Update user profile
-  if (req.method === "PUT") {
+  // PUT or POST /me - Update user profile
+  // Note: supabase.functions.invoke() always uses POST, so we accept both
+  if (req.method === "PUT" || req.method === "POST") {
     try {
       const body = await req.json();
       const { display_name, phone, support_whatsapp_number } = body;
+
+      // Check if this is just a data fetch (empty body) - used for refresh
+      if (Object.keys(body).length === 0) {
+        const { data: user, error } = await supabase
+          .from("users")
+          .select("id, display_name, email, phone, subscription_plan, trial_end_date, is_trial_active, subscription_started_at, subscription_ends_at, email_verified, phone_verified, avatar_url, created_at, support_whatsapp_number")
+          .eq("id", userId)
+          .single();
+
+        if (error || !user) {
+          console.error("User fetch error:", error);
+          return new Response(JSON.stringify({ error: "User not found" }), {
+            status: 404,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        return new Response(JSON.stringify({ user }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
 
       const updateData: Record<string, any> = {};
       if (display_name !== undefined) updateData.display_name = display_name;
@@ -150,6 +173,8 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+
+      console.log(`Updating user ${userId} with:`, updateData);
 
       const { data: user, error } = await supabase
         .from("users")
@@ -166,12 +191,14 @@ serve(async (req) => {
         });
       }
 
+      console.log(`User ${userId} updated successfully:`, user.support_whatsapp_number);
+
       return new Response(JSON.stringify({ user }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     } catch (error) {
-      console.error("PUT /me error:", error);
+      console.error("PUT/POST /me error:", error);
       return new Response(JSON.stringify({ error: "Failed to update profile" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

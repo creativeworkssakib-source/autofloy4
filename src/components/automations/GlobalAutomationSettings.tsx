@@ -49,19 +49,31 @@ const GlobalAutomationSettings = ({ className }: GlobalAutomationSettingsProps) 
       const token = localStorage.getItem("auth_token");
       if (!token) throw new Error("Not authenticated");
 
-      const response = await supabase.functions.invoke("me", {
-        method: "PUT",
-        headers: { Authorization: `Bearer ${token}` },
-        body: { support_whatsapp_number: supportWhatsappNumber || null },
-      });
+      // Use direct fetch with PUT method instead of supabase.functions.invoke
+      // because invoke() always uses POST
+      const response = await fetch(
+        `https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1/me`,
+        {
+          method: "PUT",
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ support_whatsapp_number: supportWhatsappNumber || null }),
+        }
+      );
 
-      if (response.error) throw response.error;
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to save");
+      }
 
       toast({
         title: "Settings Saved",
         description: "Your global automation settings have been updated.",
       });
     } catch (error) {
+      console.error("Save error:", error);
       toast({
         title: "Save Failed",
         description: "Could not save settings. Please try again.",
