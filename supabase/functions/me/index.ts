@@ -55,7 +55,7 @@ serve(async (req) => {
     try {
       const { data: user, error } = await supabase
         .from("users")
-        .select("id, display_name, email, phone, subscription_plan, trial_end_date, is_trial_active, subscription_started_at, subscription_ends_at, email_verified, phone_verified, avatar_url, created_at, support_whatsapp_number")
+        .select("id, display_name, email, phone, subscription_plan, subscription_type, trial_end_date, is_trial_active, subscription_started_at, subscription_ends_at, email_verified, phone_verified, avatar_url, created_at, support_whatsapp_number")
         .eq("id", userId)
         .single();
 

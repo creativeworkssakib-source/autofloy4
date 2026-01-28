@@ -7,20 +7,28 @@ import {
   planDisplayNames 
 } from "@/data/planCapabilities";
 
+export type SubscriptionType = 'online' | 'offline' | 'both';
+
 export interface PlanLimitsResult {
   // Current plan info
   planId: PlanId;
   planName: string;
+  subscriptionType: SubscriptionType;
   capabilities: PlanCapabilities;
   
   // Access checks
   isTrialExpired: boolean;
   hasActiveSubscription: boolean;
   
+  // Subscription type checks
+  hasOnlineAccess: boolean;  // Can access Facebook/WhatsApp automation
+  hasOfflineAccess: boolean; // Can access Offline Shop POS
+  
   // Limit checking functions
   canConnectFacebookPage: (currentCount: number) => { allowed: boolean; message?: string };
   canConnectWhatsapp: (currentCount: number) => { allowed: boolean; message?: string };
   canRunAutomation: (runsThisMonth: number) => { allowed: boolean; message?: string };
+  canAccessOfflineShop: () => { allowed: boolean; message?: string };
   hasFeature: (feature: keyof PlanCapabilities["features"]) => boolean;
   
   // Upgrade info
@@ -36,9 +44,11 @@ export function usePlanLimits(): PlanLimitsResult {
   let planId: PlanId = "none";
   let isTrialExpired = false;
   let hasActiveSubscription = false;
+  let subscriptionType: SubscriptionType = 'online';
   
   if (user) {
     const subPlan = user.subscriptionPlan?.toLowerCase() as PlanId;
+    subscriptionType = user.subscriptionType || 'online';
     
     // Check if trial is still active
     if (subPlan === "trial") {
@@ -47,6 +57,7 @@ export function usePlanLimits(): PlanLimitsResult {
         if (trialEnd > new Date()) {
           planId = "trial";
           hasActiveSubscription = true;
+          subscriptionType = 'both'; // Trial gets access to both
         } else {
           isTrialExpired = true;
         }
@@ -69,13 +80,25 @@ export function usePlanLimits(): PlanLimitsResult {
     }
   }
   
+  // Determine access based on subscription type
+  const hasOnlineAccess = subscriptionType === 'online' || subscriptionType === 'both';
+  const hasOfflineAccess = subscriptionType === 'offline' || subscriptionType === 'both';
+  
   const capabilities = getPlanCapabilities(planId);
   const planName = planDisplayNames[planId];
   const nextUpgradePlan = getNextUpgradePlan(planId);
   const nextUpgradePlanName = nextUpgradePlan ? planDisplayNames[nextUpgradePlan] : null;
   
-  // Facebook page limit check
+  // Facebook page limit check - requires online access
   const canConnectFacebookPage = (currentCount: number): { allowed: boolean; message?: string } => {
+    // Check if user has online access
+    if (!hasOnlineAccess) {
+      return { 
+        allowed: false, 
+        message: "আপনার শুধু Offline Shop subscription আছে। Facebook automation ব্যবহার করতে Online plan upgrade করুন।" 
+      };
+    }
+    
     if (!hasActiveSubscription && !isTrialExpired) {
       return { 
         allowed: false, 
@@ -86,7 +109,7 @@ export function usePlanLimits(): PlanLimitsResult {
     if (isTrialExpired) {
       return { 
         allowed: false, 
-        message: "Your 24-hour free trial has ended. Please upgrade to connect pages." 
+        message: "Your free trial has ended. Please upgrade to connect pages." 
       };
     }
     
@@ -100,8 +123,16 @@ export function usePlanLimits(): PlanLimitsResult {
     return { allowed: true };
   };
   
-  // WhatsApp limit check
+  // WhatsApp limit check - requires online access
   const canConnectWhatsapp = (currentCount: number): { allowed: boolean; message?: string } => {
+    // Check if user has online access
+    if (!hasOnlineAccess) {
+      return { 
+        allowed: false, 
+        message: "আপনার শুধু Offline Shop subscription আছে। WhatsApp automation ব্যবহার করতে Online plan upgrade করুন।" 
+      };
+    }
+    
     if (!capabilities.features.whatsappEnabled || capabilities.maxWhatsappAccounts === 0) {
       return { 
         allowed: false, 
@@ -126,8 +157,16 @@ export function usePlanLimits(): PlanLimitsResult {
     return { allowed: true };
   };
   
-  // Automation run limit check
+  // Automation run limit check - requires online access
   const canRunAutomation = (runsThisMonth: number): { allowed: boolean; message?: string } => {
+    // Check if user has online access
+    if (!hasOnlineAccess) {
+      return { 
+        allowed: false, 
+        message: "আপনার শুধু Offline Shop subscription আছে। Automation ব্যবহার করতে Online plan upgrade করুন।" 
+      };
+    }
+    
     if (!hasActiveSubscription && planId !== "trial") {
       return { 
         allowed: false, 
@@ -138,7 +177,7 @@ export function usePlanLimits(): PlanLimitsResult {
     if (isTrialExpired) {
       return { 
         allowed: false, 
-        message: "Your 24-hour free trial has ended. Please upgrade to continue using automations." 
+        message: "Your free trial has ended. Please upgrade to continue using automations." 
       };
     }
     
@@ -157,7 +196,33 @@ export function usePlanLimits(): PlanLimitsResult {
     return { allowed: true };
   };
   
-  // Feature check
+  // Offline shop access check
+  const canAccessOfflineShop = (): { allowed: boolean; message?: string } => {
+    if (!hasOfflineAccess) {
+      return { 
+        allowed: false, 
+        message: "আপনার শুধু Online Business subscription আছে। Offline Shop ব্যবহার করতে Offline plan কিনুন।" 
+      };
+    }
+    
+    if (!hasActiveSubscription && planId !== "trial") {
+      return { 
+        allowed: false, 
+        message: "Please subscribe to access the Offline Shop." 
+      };
+    }
+    
+    if (isTrialExpired) {
+      return { 
+        allowed: false, 
+        message: "Your free trial has ended. Please upgrade to access the Offline Shop." 
+      };
+    }
+    
+    return { allowed: true };
+  };
+  
+  // Feature check - considers subscription type
   const hasFeature = (feature: keyof PlanCapabilities["features"]): boolean => {
     if (!hasActiveSubscription && planId !== "trial") {
       return false;
@@ -165,6 +230,18 @@ export function usePlanLimits(): PlanLimitsResult {
     if (isTrialExpired) {
       return false;
     }
+    
+    // Online-specific features require online access
+    const onlineFeatures: (keyof PlanCapabilities["features"])[] = [
+      'messageAutoReply', 'commentAutoReply', 'imageAutoReply', 'voiceAutoReply',
+      'deleteNegativeComments', 'whatsappEnabled', 'instagramAutomation', 
+      'tiktokAutomation', 'emailAutomation', 'ecommerceIntegration'
+    ];
+    
+    if (onlineFeatures.includes(feature) && !hasOnlineAccess) {
+      return false;
+    }
+    
     return capabilities.features[feature];
   };
   
@@ -179,12 +256,16 @@ export function usePlanLimits(): PlanLimitsResult {
   return {
     planId,
     planName,
+    subscriptionType,
     capabilities,
     isTrialExpired,
     hasActiveSubscription,
+    hasOnlineAccess,
+    hasOfflineAccess,
     canConnectFacebookPage,
     canConnectWhatsapp,
     canRunAutomation,
+    canAccessOfflineShop,
     hasFeature,
     nextUpgradePlan,
     nextUpgradePlanName,

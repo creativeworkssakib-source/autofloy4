@@ -2309,11 +2309,13 @@ Deno.serve(async (req) => {
           endDate.setMonth(endDate.getMonth() + 1); // Monthly plans
         }
 
-        // Update user subscription
+        // Update user subscription with subscription_type
+        const subscriptionType = request.subscription_type || 'online';
         const { error: userUpdateError } = await supabase
           .from("users")
           .update({
             subscription_plan: normalizedPlanName,
+            subscription_type: subscriptionType, // online, offline, or both
             is_trial_active: false,
             updated_at: new Date().toISOString(),
           })
@@ -2322,7 +2324,7 @@ Deno.serve(async (req) => {
         if (userUpdateError) {
           console.error("[Admin] Failed to update user subscription_plan:", userUpdateError);
         } else {
-          console.log(`[Admin] Successfully updated user ${request.user_id} to plan: ${normalizedPlanName}`);
+          console.log(`[Admin] Successfully updated user ${request.user_id} to plan: ${normalizedPlanName}, type: ${subscriptionType}`);
         }
 
         // Create/update subscription record

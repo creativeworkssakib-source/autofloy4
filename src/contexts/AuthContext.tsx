@@ -9,6 +9,7 @@ interface User {
   emailVerified: boolean;
   phoneVerified?: boolean;
   subscriptionPlan: string;
+  subscriptionType: 'online' | 'offline' | 'both'; // What type of subscription they bought
   trialEndDate?: string;
   isTrialActive?: boolean;
   subscriptionStartedAt?: string;
@@ -41,6 +42,7 @@ const mapServiceUser = (serviceUser: ServiceUser): User => ({
   emailVerified: serviceUser.email_verified,
   phoneVerified: serviceUser.phone_verified,
   subscriptionPlan: serviceUser.subscription_plan,
+  subscriptionType: serviceUser.subscription_type || 'online', // Default to online if not set
   trialEndDate: serviceUser.trial_end_date || undefined,
   isTrialActive: serviceUser.is_trial_active,
   subscriptionStartedAt: serviceUser.subscription_started_at || undefined,

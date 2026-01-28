@@ -65,6 +65,7 @@ const Checkout = () => {
   const { settings } = useSiteSettings();
   const { user } = useAuth();
   const planId = searchParams.get("plan") || "starter";
+  const subscriptionType = (searchParams.get("type") || "online") as 'online' | 'offline' | 'both';
   const plan = getPlanById(planId);
 
   const [paymentMethods, setPaymentMethods] = useState<DbPaymentMethod[]>([]);
@@ -212,7 +213,7 @@ const Checkout = () => {
     setIsSubmitting(true);
 
     try {
-      // Create payment request in database
+      // Create payment request in database with subscription type
       const { error } = await supabase
         .from("payment_requests")
         .insert({
@@ -226,6 +227,7 @@ const Checkout = () => {
           transaction_id: formData.transactionId || null,
           screenshot_url: screenshotUrl,
           status: "pending",
+          subscription_type: subscriptionType, // online, offline, or both
         });
 
       if (error) throw error;

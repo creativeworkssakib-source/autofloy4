@@ -7,6 +7,7 @@ export interface User {
   display_name: string | null;
   avatar_url: string | null;
   subscription_plan: string;
+  subscription_type: 'online' | 'offline' | 'both'; // What type of subscription they bought
   trial_end_date: string | null;
   is_trial_active: boolean;
   subscription_started_at: string | null;
