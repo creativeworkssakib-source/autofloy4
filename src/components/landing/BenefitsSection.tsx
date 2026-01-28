@@ -53,10 +53,10 @@ const Counter = memo(({ from, to, suffix = "", prefix = "", duration = 2 }: Coun
 Counter.displayName = "Counter";
 
 const benefits = [
-  { icon: TrendingUp, value: 10, suffix: "x", label: "Faster Responses", description: "AI replies to customers instantly", gradient: "from-primary to-primary-glow" },
-  { icon: Clock, value: 85, suffix: "%", label: "Time Saved", description: "Automate messages & shop tasks", gradient: "from-secondary to-primary" },
-  { icon: Users, value: 24, suffix: "/7", label: "Always Available", description: "Online & offline business support", gradient: "from-accent to-secondary" },
-  { icon: Wallet, value: 80000, prefix: "৳", suffix: "+", label: "Monthly Savings", description: "Staff, inventory & management costs saved", gradient: "from-success to-primary" },
+  { icon: TrendingUp, value: 10, suffix: "x", label: "Faster Responses", description: "AI replies instantly in Bengali - no customer waits", gradient: "from-primary to-primary-glow" },
+  { icon: Clock, value: 50, suffix: "+", label: "Hours Saved/Month", description: "Auto-reply, order taking & inventory automated", gradient: "from-secondary to-primary" },
+  { icon: Users, value: 24, suffix: "/7", label: "Always Available", description: "AI handles messages + POS works offline", gradient: "from-accent to-secondary" },
+  { icon: Wallet, value: 80000, prefix: "৳", suffix: "+", label: "Monthly Savings", description: "No extra staff needed for messages & tracking", gradient: "from-success to-primary" },
 ];
 
 const isPaidPlan = (plan?: string) => {
@@ -275,14 +275,15 @@ const BenefitsSection = forwardRef<HTMLElement, Record<string, never>>((_props, 
             className="inline-block px-4 py-1.5 rounded-full bg-success/10 text-success text-sm font-medium mb-4"
             whileHover={{ scale: 1.05 }}
           >
-            Real Results
+            ✅ Real Results from Real Businesses
           </motion.span>
           <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-6">
-            Why Thousands of Businesses{" "}
+            Why 500+ Businesses{" "}
             <span className="gradient-text">Choose {settings.company_name}</span>
           </h2>
           <p className="text-lg text-muted-foreground">
-            Join the revolution - automate online sales AND manage offline shops from one platform.
+            One platform for everything: AI handles your Facebook messages while you run your offline shop. 
+            Save 50+ hours monthly and ৳80,000+ in staff costs.
           </p>
         </motion.div>
 

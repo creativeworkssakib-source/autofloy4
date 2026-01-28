@@ -1,4 +1,4 @@
-import { Zap, MessageSquare, Settings, Shield } from "lucide-react";
+import { Zap, MessageSquare, Settings, Shield, Store, BarChart3, Package, Smartphone } from "lucide-react";
 
 export interface HelpArticle {
   slug: string;
@@ -32,33 +32,75 @@ export const helpCategories: HelpCategory[] = [
         content: `
 ## Welcome to AutoFloy
 
-This guide will help you get started with AutoFloy in just a few minutes.
+AutoFloy is a complete business automation platform that handles both your **Online Business** (Facebook/WhatsApp automation) and **Offline Shop** (POS and inventory management).
 
-### Step 1: Create Your Account
+### What You Get
 
-1. Visit the signup page and enter your email address
-2. Choose a strong password
-3. Verify your email address through the confirmation link
+**Online Business Features (9 Features):**
+- AI Auto-Reply for Inbox & Comments
+- Smart Image Recognition
+- Voice Message Processing
+- Comment Moderation
+- Auto-Invoice Generation
+- 24/7 AI Support
+- AI Sales Agent with Persuasion Techniques
+- AI Bargaining Power for Price Negotiation
+- Automatic Order Taking
 
-### Step 2: Connect Your First Page
+**Offline Shop Features (12 Features):**
+- Complete POS System
+- Inventory Control with Expiry Tracking
+- Customer & Due Management
+- Reports & Analytics
+- Expense & Cash Register
+- Online-Offline Sync
+- Supplier Management
+- Loan Tracking
+- Barcode Scanner
+- Price Calculator
+- Returns & Adjustments
+- Thermal Receipt Printing
 
-After logging in, navigate to the Dashboard and click "Connect Page" to link your Facebook Page or WhatsApp Business account.
+### Step 1: Choose Your Business Type
 
-### Step 3: Create Your First Automation
+After signup, select whether you run:
+1. **Online Only** - Facebook Page automation
+2. **Offline Only** - Physical shop management
+3. **Both** - Get the complete package
 
-1. Go to the Automations section
-2. Click "Create New Automation"
-3. Select a trigger type (message, comment, etc.)
-4. Define your keywords and response template
-5. Save and enable your automation
+### Step 2: For Online Business
+
+1. Go to **Dashboard > Connect Page**
+2. Click **Connect with Facebook**
+3. Select your Facebook Pages
+4. Enable automations in **Automation Settings**
+5. Configure AI responses and bargaining limits
+
+### Step 3: For Offline Shop
+
+1. Go to **Shop Dashboard**
+2. Add your shop details and logo
+3. Add products with prices and stock
+4. Start making sales!
+
+### Time & Money You Save
+
+| Manual Work | AutoFloy Saves |
+|-------------|----------------|
+| Replying to 100+ messages daily | 4+ hours/day |
+| Stock counting and tracking | 2+ hours/day |
+| Invoice creation | 1+ hour/day |
+| Report generation | 3+ hours/week |
+| **Total Monthly Savings** | **50+ hours & ৳80,000+** |
 
 ### What's Next?
 
-- Explore different automation types
-- Set up response templates
-- Monitor your automation performance in the dashboard
+- Set up your AI automation settings
+- Add your product catalog
+- Configure your invoice templates
+- Invite team members if needed
         `,
-        relatedArticles: ["account-setup", "connecting-first-page", "creating-first-automation"]
+        relatedArticles: ["account-setup", "connecting-first-page", "offline-shop-setup"]
       },
       {
         slug: "account-setup",
@@ -79,13 +121,23 @@ Navigate to **Settings > Profile** to configure:
 - **Phone Number**: For account recovery and notifications
 - **Avatar**: Upload a profile picture
 
+### Business Information
+
+Set up your business details:
+
+- **Business Name**: Shown on invoices and communications
+- **Business Type**: Online, Offline, or Both
+- **Business Address**: For invoices and reports
+- **Logo**: Upload for branded invoices
+
 ### Notification Preferences
 
 Control how and when you receive notifications:
 
 - **Email Notifications**: Receive updates via email
 - **In-App Notifications**: See alerts within the dashboard
-- **Daily Digest**: Get a summary of activity
+- **SMS Alerts**: Get critical alerts via SMS
+- **Order Notifications**: Alerts for new AI orders
 
 ### Security Settings
 
@@ -94,409 +146,42 @@ Keep your account secure:
 - Enable two-factor authentication (2FA)
 - Review connected devices
 - Set up backup recovery options
+- Change password regularly
 
-### Billing Information
+### Subscription & Plans
 
-Manage your subscription:
-
-- View current plan details
-- Update payment methods
-- Download invoices
+- **Starter Plan**: Online OR Offline features
+- **Professional Plan**: Both Online + Offline
+- **Business Plan**: Everything + Priority Support
         `,
-        relatedArticles: ["quick-start-guide", "data-security", "access-management"]
+        relatedArticles: ["quick-start-guide", "data-security", "offline-shop-setup"]
       },
       {
         slug: "connecting-first-page",
-        title: "Connecting Your First Page",
-        description: "Learn how to connect Facebook Pages and WhatsApp Business",
+        title: "Connecting Your Facebook Page",
+        description: "Learn how to connect Facebook Pages for automation",
         category: "Getting Started",
         content: `
-## Connecting Your First Page
+## Connecting Your Facebook Page
 
-AutoFloy supports Facebook Pages and WhatsApp Business accounts.
+AutoFloy connects to your Facebook Page to automate messages and comments.
 
 ### Prerequisites
 
 Before connecting, ensure you have:
 
 - Admin access to the Facebook Page
-- A WhatsApp Business account (for WhatsApp integration)
-- Facebook Business Manager set up (recommended)
-
-### Connecting a Facebook Page
-
-1. Click **"Connect Page"** in your dashboard
-2. Click **"Connect with Facebook"**
-3. Log in to your Facebook account
-4. Select the page(s) you want to connect
-5. Grant the required permissions
-6. Click **"Done"** to complete
-
-### Connecting WhatsApp Business
-
-1. Navigate to **Integrations > WhatsApp**
-2. Click **"Connect WhatsApp Business"**
-3. Follow the WhatsApp Business API setup wizard
-4. Verify your business phone number
-5. Complete the connection
-
-### Managing Connected Pages
-
-- View all connected pages in **Dashboard > Connected Accounts**
-- Disconnect or reconnect pages as needed
-- Monitor page-specific analytics
-        `,
-        relatedArticles: ["facebook-integration", "whatsapp-business", "managing-connected-pages"]
-      },
-      {
-        slug: "creating-first-automation",
-        title: "Creating Your First Automation",
-        description: "Step-by-step guide to create automated responses",
-        category: "Getting Started",
-        content: `
-## Creating Your First Automation
-
-Automations are the core feature of AutoFloy. Here's how to create one.
-
-### Understanding Automation Components
-
-Every automation has three parts:
-
-1. **Trigger**: What initiates the automation (keywords, events)
-2. **Conditions**: Optional filters to refine when it runs
-3. **Response**: What action to take (send message, reply, etc.)
-
-### Step-by-Step Creation
-
-#### 1. Access the Automation Builder
-
-- Go to **Dashboard > Automations**
-- Click **"Create New Automation"**
-
-#### 2. Choose a Trigger Type
-
-- **Message Trigger**: Responds to direct messages
-- **Comment Trigger**: Responds to post comments
-- **Keyword Trigger**: Responds to specific words
-
-#### 3. Define Keywords
-
-Enter the keywords that will trigger this automation:
-
-\`\`\`
-price, pricing, cost, how much
-\`\`\`
-
-#### 4. Create Your Response
-
-Write the message template:
-
-\`\`\`
-Hi! Thanks for your interest. Our pricing starts at $29/month. 
-Visit our pricing page for more details: {{pricing_link}}
-\`\`\`
-
-#### 5. Test and Enable
-
-- Use the preview feature to test
-- Enable the automation when ready
-
-### Best Practices
-
-- Start with simple automations
-- Use clear, helpful response messages
-- Monitor performance and adjust keywords
-        `,
-        relatedArticles: ["automation-types", "trigger-keywords", "response-templates"]
-      }
-    ]
-  },
-  {
-    id: "automations",
-    icon: MessageSquare,
-    title: "Automations",
-    description: "Create and manage automated responses",
-    articles: [
-      {
-        slug: "automation-types",
-        title: "Automation Types",
-        description: "Understanding different automation types in AutoFloy",
-        category: "Automations",
-        content: `
-## Automation Types
-
-AutoFloy offers several automation types to handle different scenarios.
-
-### Message Automations
-
-Respond to direct messages automatically.
-
-**Use cases:**
-- Answer frequently asked questions
-- Provide business hours information
-- Send welcome messages
-
-### Comment Automations
-
-Automatically respond to comments on your posts.
-
-**Use cases:**
-- Thank users for engagement
-- Answer product questions
-- Direct users to DMs for support
-
-### Image Automations
-
-Handle messages that contain images.
-
-**Use cases:**
-- Acknowledge receipt of photos
-- Request additional information
-- Route to appropriate team members
-
-### Voice Message Automations
-
-Process and respond to voice messages.
-
-**Use cases:**
-- Acknowledge voice messages
-- Request text follow-up
-- Transcribe and respond
-
-### Mixed Automations
-
-Combine multiple trigger types in one automation.
-
-**Use cases:**
-- Complex customer service flows
-- Multi-step conversations
-- Conditional responses based on content type
-        `,
-        relatedArticles: ["trigger-keywords", "response-templates", "advanced-configurations"]
-      },
-      {
-        slug: "trigger-keywords",
-        title: "Trigger Keywords",
-        description: "How to set up and optimize trigger keywords",
-        category: "Automations",
-        content: `
-## Trigger Keywords
-
-Keywords determine when your automations activate.
-
-### Setting Up Keywords
-
-Enter keywords in the automation builder:
-
-\`\`\`
-hello, hi, hey, greetings
-\`\`\`
-
-### Keyword Matching Options
-
-#### Exact Match
-Triggers only on exact keyword matches.
-
-#### Contains Match
-Triggers if the message contains the keyword anywhere.
-
-#### Starts With
-Triggers if the message starts with the keyword.
-
-### Keyword Best Practices
-
-1. **Be Specific**: Avoid overly common words
-2. **Use Variations**: Include common misspellings
-3. **Group Related Keywords**: Combine synonyms in one automation
-4. **Test Thoroughly**: Verify keywords work as expected
-
-### Advanced Keyword Patterns
-
-Use patterns for more control:
-
-\`\`\`
-price*         → matches "price", "pricing", "prices"
-[0-9]+         → matches any number
-order #*       → matches "order #123", "order #abc"
-\`\`\`
-
-### Excluding Keywords
-
-Prevent triggers on certain keywords:
-
-\`\`\`
-Trigger: support
-Exclude: already resolved, thank you
-\`\`\`
-        `,
-        relatedArticles: ["automation-types", "response-templates", "advanced-configurations"]
-      },
-      {
-        slug: "response-templates",
-        title: "Response Templates",
-        description: "Create effective automated response messages",
-        category: "Automations",
-        content: `
-## Response Templates
-
-Create professional, helpful automated responses.
-
-### Template Basics
-
-A response template is the message sent when an automation triggers.
-
-### Using Variables
-
-Personalize responses with variables:
-
-| Variable | Description |
-|----------|-------------|
-| {{name}} | User's name |
-| {{page_name}} | Your page name |
-| {{time}} | Current time |
-| {{date}} | Current date |
-
-### Example Templates
-
-#### Welcome Message
-\`\`\`
-Hi {{name}}! 👋 
-
-Welcome to {{page_name}}. How can we help you today?
-
-Our team typically responds within 1 hour during business hours.
-\`\`\`
-
-#### FAQ Response
-\`\`\`
-Thanks for your question about pricing!
-
-Our plans start at $29/month. Here's a quick overview:
-• Starter: $29/month - Up to 1,000 messages
-• Professional: $79/month - Up to 10,000 messages
-• Business: $149/month - Unlimited messages
-
-Visit our pricing page for full details: {{pricing_link}}
-\`\`\`
-
-### Formatting Tips
-
-- Keep messages concise
-- Use emojis sparingly
-- Include clear calls to action
-- Provide helpful next steps
-        `,
-        relatedArticles: ["automation-types", "trigger-keywords", "advanced-configurations"]
-      },
-      {
-        slug: "advanced-configurations",
-        title: "Advanced Configurations",
-        description: "Power user features for complex automations",
-        category: "Automations",
-        content: `
-## Advanced Configurations
-
-Take your automations to the next level with advanced features.
-
-### Conditional Logic
-
-Add conditions to control when automations run:
-
-\`\`\`javascript
-IF message.contains("urgent")
-  → Send priority response
-ELSE IF message.time.isWeekend()
-  → Send weekend response
-ELSE
-  → Send standard response
-\`\`\`
-
-### Delay & Scheduling
-
-Control response timing:
-
-- **Immediate**: Respond instantly
-- **Delayed**: Wait X seconds/minutes before responding
-- **Scheduled**: Only active during specific hours
-
-### Response Chains
-
-Create multi-message sequences:
-
-1. Initial greeting
-2. Wait 5 seconds
-3. Send follow-up question
-4. Wait for response
-5. Provide relevant information
-
-### Webhooks
-
-Connect to external services:
-
-\`\`\`json
-{
-  "url": "https://your-api.com/webhook",
-  "method": "POST",
-  "headers": {
-    "Authorization": "Bearer {{api_key}}"
-  },
-  "body": {
-    "message": "{{message}}",
-    "sender": "{{sender_id}}"
-  }
-}
-\`\`\`
-
-### A/B Testing
-
-Test different response variations:
-
-- Create multiple response versions
-- AutoFloy randomly selects one
-- Track performance metrics
-- Optimize based on results
-
-### Best Practices
-
-1. Start simple, add complexity gradually
-2. Test thoroughly before enabling
-3. Monitor performance metrics
-4. Document your automation logic
-        `,
-        relatedArticles: ["automation-types", "trigger-keywords", "response-templates"]
-      }
-    ]
-  },
-  {
-    id: "integrations",
-    icon: Settings,
-    title: "Integrations",
-    description: "Connect with Facebook and WhatsApp",
-    articles: [
-      {
-        slug: "facebook-integration",
-        title: "Facebook Integration",
-        description: "Complete guide to Facebook Page integration",
-        category: "Integrations",
-        content: `
-## Facebook Integration
-
-Connect your Facebook Pages to AutoFloy for automated messaging.
-
-### Requirements
-
-- Facebook account with admin access to the Page
-- Business Manager account (recommended)
+- A Facebook Business account
 - Page published and active
 
 ### Connection Steps
 
-1. **Navigate to Integrations**
-   - Go to Dashboard > Integrations > Facebook
+1. **Navigate to Dashboard**
+   - Click **"Connect Page"** button
 
-2. **Initiate Connection**
-   - Click "Connect Facebook Page"
-   - Log in to Facebook if prompted
+2. **Facebook Login**
+   - Click **"Connect with Facebook"**
+   - Log in if prompted
 
 3. **Select Pages**
    - Choose which pages to connect
@@ -511,22 +196,23 @@ Connect your Facebook Pages to AutoFloy for automated messaging.
    - Check the connection status
    - Test with a sample message
 
-### Managing Facebook Integration
+### What Permissions Are Needed?
 
-#### Viewing Connected Pages
-See all connected pages in the Integrations dashboard.
+| Permission | Why It's Needed |
+|------------|-----------------|
+| pages_messaging | Send/receive inbox messages |
+| pages_read_engagement | Read and reply to comments |
+| pages_manage_metadata | Access page settings |
 
-#### Refreshing Tokens
-Tokens may need refreshing periodically:
-- Click "Refresh" next to the page name
-- Re-authenticate if required
+### After Connection
 
-#### Disconnecting
-To disconnect a page:
-1. Go to Integrations > Facebook
-2. Find the page
-3. Click "Disconnect"
-4. Confirm the action
+Once connected, you can:
+
+1. Enable **AI Auto-Reply** for messages
+2. Enable **Comment Auto-Reply**
+3. Configure **AI Sales Agent** settings
+4. Set up **Bargaining Power** limits
+5. View all conversations in dashboard
 
 ### Troubleshooting
 
@@ -534,219 +220,1268 @@ To disconnect a page:
 - Verify you have admin access
 - Check Facebook permissions
 - Try clearing browser cache
+- Disconnect and reconnect
+
+**Token Expired?**
+- Click "Refresh" next to page name
+- Re-authenticate if required
         `,
-        relatedArticles: ["connecting-first-page", "permissions-scopes", "managing-connected-pages"]
+        relatedArticles: ["facebook-automation-setup", "ai-auto-reply", "comment-management"]
       },
       {
-        slug: "whatsapp-business",
-        title: "WhatsApp Business",
-        description: "Setting up WhatsApp Business integration",
-        category: "Integrations",
+        slug: "offline-shop-setup",
+        title: "Setting Up Your Offline Shop",
+        description: "Complete guide to set up POS and inventory system",
+        category: "Getting Started",
         content: `
-## WhatsApp Business Integration
+## Setting Up Your Offline Shop
 
-Connect WhatsApp Business to automate customer conversations.
+AutoFloy's Offline Shop is a complete POS (Point of Sale) system for physical stores.
 
-### Prerequisites
+### Initial Setup
 
-- WhatsApp Business account
-- Verified business phone number
-- Facebook Business Manager
-- WhatsApp Business API access
+1. **Go to Shop Dashboard**
+   - Click on "Offline Shop" in navigation
 
-### Setup Process
+2. **Add Shop Details**
+   - Shop name
+   - Address
+   - Phone number
+   - Logo (for invoices)
 
-#### 1. Create WhatsApp Business Account
+3. **Configure Invoice Template**
+   - Choose layout style
+   - Add terms & conditions
+   - Set payment methods
 
-If you don't have one:
-- Download WhatsApp Business app
-- Register your business phone number
-- Complete business profile
+### Adding Products
 
-#### 2. Connect to Facebook Business Manager
+**Single Product:**
+1. Go to **Shop Products**
+2. Click **Add Product**
+3. Enter details:
+   - Product name
+   - Purchase price (your cost)
+   - Selling price
+   - Stock quantity
+   - Barcode (optional)
 
-- Link your WhatsApp Business to Business Manager
-- This enables API access
+**Bulk Import:**
+1. Click **Import from Excel**
+2. Download template
+3. Fill in your products
+4. Upload and import
 
-#### 3. Connect to AutoFloy
+### Product Categories
 
-1. Go to **Integrations > WhatsApp**
-2. Click **"Connect WhatsApp Business"**
-3. Follow the authentication flow
-4. Select the WhatsApp Business account
-5. Complete verification
+Organize products by category:
+- Create custom categories
+- Filter products by category
+- Better reporting by category
 
-### Message Templates
+### Stock Management
 
-WhatsApp requires pre-approved templates for outbound messages:
+- **Add Stock**: When you purchase from supplier
+- **Low Stock Alerts**: Get notified when stock is low
+- **Expiry Tracking**: Track expiry dates
+- **Batch Numbers**: Track product batches
 
-\`\`\`
-Template Name: order_confirmation
-Category: Transactional
-Content: "Hi {{1}}, your order #{{2}} has been confirmed. 
-Expected delivery: {{3}}."
-\`\`\`
+### Making Sales
 
-### Best Practices
+1. **Quick Sale**: Search or scan products
+2. **Add to Cart**: Adjust quantities
+3. **Apply Discounts**: Item or cart level
+4. **Select Customer**: For due tracking
+5. **Choose Payment**: Cash, bKash, Card
+6. **Print Invoice**: Thermal or A4
 
-- Respond within 24-hour window for free-form messages
-- Use templates for proactive outreach
-- Keep messages concise and helpful
-- Follow WhatsApp Business policies
+### Features Available
+
+| Feature | Description |
+|---------|-------------|
+| POS System | Quick sales with barcode scanning |
+| Inventory | Stock tracking with alerts |
+| Customers | Due management & history |
+| Expenses | Track all business expenses |
+| Reports | Sales, profit, stock reports |
+| Cash Register | Daily opening/closing |
+| Suppliers | Purchase management |
+| Loans | Business loan tracking |
         `,
-        relatedArticles: ["facebook-integration", "managing-connected-pages", "permissions-scopes"]
-      },
-      {
-        slug: "managing-connected-pages",
-        title: "Managing Connected Pages",
-        description: "Organize and manage your connected accounts",
-        category: "Integrations",
-        content: `
-## Managing Connected Pages
-
-Keep your connected accounts organized and running smoothly.
-
-### Viewing All Connections
-
-Navigate to **Dashboard > Connected Accounts** to see:
-
-- All connected Facebook Pages
-- All connected WhatsApp accounts
-- Connection status for each
-- Last activity timestamp
-
-### Connection Health
-
-#### Status Indicators
-
-| Status | Meaning |
-|--------|---------|
-| 🟢 Active | Working normally |
-| 🟡 Warning | Needs attention |
-| 🔴 Error | Connection broken |
-
-#### Common Issues
-
-**Token Expired**
-- Click "Refresh" to renew
-- May require re-authentication
-
-**Permission Revoked**
-- Reconnect the page
-- Grant required permissions again
-
-### Organizing Pages
-
-#### Labels
-Add labels to group pages:
-- By business unit
-- By region
-- By purpose
-
-#### Notes
-Add notes to remember:
-- Page purpose
-- Special configurations
-- Team assignments
-
-### Bulk Operations
-
-Select multiple pages to:
-- Enable/disable all automations
-- Export configuration
-- Disconnect in bulk
-
-### Analytics by Page
-
-View performance metrics per page:
-- Messages received/sent
-- Automation triggers
-- Response rate
-- Average response time
-        `,
-        relatedArticles: ["facebook-integration", "whatsapp-business", "permissions-scopes"]
-      },
-      {
-        slug: "permissions-scopes",
-        title: "Permissions & Scopes",
-        description: "Understanding required permissions for integrations",
-        category: "Integrations",
-        content: `
-## Permissions & Scopes
-
-Understand what permissions AutoFloy needs and why.
-
-### Facebook Permissions
-
-#### Required Permissions
-
-| Permission | Purpose |
-|------------|---------|
-| pages_messaging | Send and receive messages |
-| pages_read_engagement | Read comments and reactions |
-| pages_manage_metadata | Access page information |
-| pages_read_user_content | Read user posts and comments |
-
-#### Why We Need These
-
-**pages_messaging**
-Required to send automated responses to messages.
-
-**pages_read_engagement**
-Required to monitor and respond to comments.
-
-**pages_manage_metadata**
-Required to access page settings and configuration.
-
-### WhatsApp Permissions
-
-| Permission | Purpose |
-|------------|---------|
-| whatsapp_business_messaging | Send/receive messages |
-| whatsapp_business_management | Manage business settings |
-
-### Data We Access
-
-AutoFloy only accesses:
-- Messages sent to your page
-- Comments on your posts
-- Basic sender information (name, ID)
-
-We **never** access:
-- Personal user data beyond conversations
-- Private posts or photos
-- User friend lists
-
-### Revoking Permissions
-
-To revoke permissions:
-
-1. **Facebook Settings**
-   - Settings > Business Integrations
-   - Find AutoFloy
-   - Remove access
-
-2. **In AutoFloy**
-   - Go to Integrations
-   - Disconnect the page
-
-### Security Assurance
-
-- All data encrypted in transit (TLS 1.3)
-- Tokens stored encrypted at rest
-- Regular security audits
-- GDPR compliant data handling
-        `,
-        relatedArticles: ["facebook-integration", "whatsapp-business", "data-security"]
+        relatedArticles: ["inventory-management", "customer-due-management", "pos-sales"]
       }
     ]
   },
   {
-    id: "security-privacy",
-    icon: Shield,
-    title: "Security & Privacy",
-    description: "Keep your data safe and secure",
+    id: "online-automation",
+    icon: MessageSquare,
+    title: "Online Business Automation",
+    description: "AI-powered Facebook and WhatsApp automation",
     articles: [
+      {
+        slug: "ai-auto-reply",
+        title: "AI Auto-Reply System",
+        description: "How AI responds to customer messages automatically",
+        category: "Online Automation",
+        content: `
+## AI Auto-Reply System
+
+AutoFloy's AI doesn't just send template messages - it understands customer intent and responds naturally in Bengali.
+
+### How It Works
+
+1. Customer sends message to your page
+2. AI analyzes the message content
+3. Checks your product catalog for matches
+4. Generates a natural Bengali response
+5. Sends reply within seconds
+
+### Capabilities
+
+**Understands Customer Intent:**
+- Product inquiries → Shares product details & prices
+- Price questions → Provides pricing information
+- Stock availability → Checks and confirms stock
+- General questions → Answers from your FAQ
+
+**Multi-Language Support:**
+- Bengali (বাংলা) - Primary
+- Banglish (Bengali in English)
+- English
+
+### AI Sales Agent Features
+
+The AI acts like your best salesperson:
+
+1. **Greeting & Welcome**: Warm, professional welcome
+2. **Product Recommendations**: Based on customer interest
+3. **Objection Handling**: Addresses concerns professionally
+4. **Urgency Creation**: Limited stock, special offers
+5. **Order Taking**: Collects name, phone, address
+
+### Configuration
+
+Navigate to **Automation Settings** to configure:
+
+- **Enable/Disable** AI Reply
+- **Business Hours**: When to use "Away" messages
+- **Response Style**: Formal or friendly
+- **Product Catalog**: What AI can sell
+- **Escalation Rules**: When to notify you
+
+### Best Practices
+
+✅ Keep product catalog updated
+✅ Add FAQs for common questions
+✅ Set business hours correctly
+✅ Monitor conversations regularly
+✅ Let AI handle routine, intervene for complex
+
+### Performance
+
+| Metric | Typical Results |
+|--------|-----------------|
+| Response Time | < 5 seconds |
+| Accuracy | 90%+ correct responses |
+| Order Conversion | 3-5x improvement |
+| Time Saved | 4+ hours daily |
+        `,
+        relatedArticles: ["ai-bargaining", "order-taking", "facebook-automation-setup"]
+      },
+      {
+        slug: "ai-bargaining",
+        title: "AI Bargaining Power",
+        description: "Let AI negotiate prices with customers intelligently",
+        category: "Online Automation",
+        content: `
+## AI Bargaining Power
+
+Customers love to bargain - and now AI can handle it professionally while protecting your margins.
+
+### How It Works
+
+1. Customer asks for discount
+2. AI uses negotiation strategies based on your settings
+3. Gradually offers discounts within your limits
+4. Closes the deal at best possible price
+
+### Bargaining Levels
+
+| Level | Behavior |
+|-------|----------|
+| **Soft** | Quick discounts, customer-friendly |
+| **Medium** | Balanced negotiation |
+| **Strong** | Holds price, strategic discounts |
+| **Aggressive** | Maximum resistance, final offers only |
+
+### Configuration
+
+In **Automation Settings > Bargaining Power**:
+
+1. **Enable Bargaining**: Turn on/off
+2. **Select Level**: Soft to Aggressive
+3. **Minimum Discount**: Starting discount AI can offer
+4. **Maximum Rounds**: How many back-and-forth before final offer
+
+### AI Negotiation Strategies
+
+The AI uses professional techniques:
+
+**Round 1**: Acknowledges request, highlights value
+> "ভাই, এই দামে এই quality পাবেন না। আর ১০০ টাকা কমাই দিচ্ছি।"
+
+**Round 2**: Small concession with urgency
+> "আচ্ছা ভাই, বিশেষ কাস্টমার হিসেবে আরও একটু কমালাম।"
+
+**Final Round**: Last offer with finality
+> "এইটাই শেষ দাম ভাই, এর কম possible না।"
+
+### Techniques Used
+
+1. **Value Highlighting**: Emphasizes product benefits
+2. **Scarcity**: "Stock কম আছে"
+3. **Social Proof**: "অনেকে নিচ্ছে এই দামে"
+4. **Reciprocity**: "আপনার জন্য বিশেষ করছি"
+5. **Authority**: Product expertise and confidence
+
+### Example Conversation
+
+**Customer**: দাম কমাও ভাই
+**AI**: ভাই, ১০০০ টাকার product ১০% discount দিয়ে ৯০০ টাকায় দিচ্ছি।
+
+**Customer**: ৮০০ করো
+**AI**: ভাই ৮৫০ করলাম, এর কম possible না really।
+
+**Customer**: ঠিক আছে নিব
+**AI**: বাহ! অর্ডার confirm করছি। Name, Phone, Address দেন ভাই।
+
+### Benefits
+
+- **Protects Margins**: Never goes below your minimum
+- **Professional Image**: Consistent negotiation
+- **Saves Time**: No manual bargaining
+- **Closes More Deals**: Better than ignoring requests
+        `,
+        relatedArticles: ["ai-auto-reply", "order-taking", "facebook-automation-setup"]
+      },
+      {
+        slug: "order-taking",
+        title: "Automatic Order Taking",
+        description: "AI collects customer details and creates orders",
+        category: "Online Automation",
+        content: `
+## Automatic Order Taking
+
+AI doesn't just answer questions - it takes complete orders conversationally.
+
+### Order Flow
+
+1. **Product Selection**: Customer shows interest
+2. **Price Confirmation**: AI confirms price
+3. **Name Collection**: Asks for customer name
+4. **Phone Collection**: Gets phone number
+5. **Address Collection**: Delivery address
+6. **Order Confirmation**: Summarizes and confirms
+
+### What AI Collects
+
+| Field | How AI Asks (Bengali) |
+|-------|----------------------|
+| Name | "ভাই নাম কি বলবেন?" |
+| Phone | "একটা মোবাইল নাম্বার দেন" |
+| Address | "কোথায় পাঠাব? এড্রেস দেন" |
+| Quantity | "কয়টা লাগবে ভাই?" |
+
+### Order Confirmation Message
+
+After collecting details, AI sends confirmation:
+
+\`\`\`
+✅ অর্ডার Confirmed!
+
+📦 Product: Samsung Galaxy S21
+💰 Price: ৳45,000
+📍 Address: Mirpur 10, Dhaka
+📱 Phone: 01712345678
+
+ডেলিভারি হবে 2-3 দিনের মধ্যে।
+ধন্যবাদ!
+\`\`\`
+
+### Where Orders Go
+
+All AI orders are saved to:
+- **AI Orders** section in dashboard
+- Includes customer details
+- Product information
+- Order status tracking
+- Invoice generation ready
+
+### Order Management
+
+From the AI Orders page you can:
+- View all AI-generated orders
+- Update order status
+- Generate invoices
+- Track delivery
+- Contact customers
+
+### Fraud Detection
+
+AI automatically calculates **Fake Order Score** based on:
+- Customer history
+- Order patterns
+- Response behavior
+- Address validation
+
+High-risk orders are flagged for manual review.
+        `,
+        relatedArticles: ["ai-auto-reply", "ai-bargaining", "invoice-generation"]
+      },
+      {
+        slug: "image-recognition",
+        title: "Smart Image Recognition",
+        description: "AI identifies products from customer photos",
+        category: "Online Automation",
+        content: `
+## Smart Image Recognition
+
+When customers send product images, AI identifies them and provides pricing instantly.
+
+### How It Works
+
+1. Customer sends product image
+2. AI analyzes the image
+3. Matches with your product catalog
+4. Responds with product details and price
+
+### Supported Image Types
+
+- Product photos
+- Screenshots from other pages
+- Catalog images
+- Multiple products in one image
+
+### Response Format
+
+When AI recognizes a product:
+
+\`\`\`
+আচ্ছা! এটা তো [Product Name]!
+
+📦 Product: Samsung Galaxy S21
+💰 Price: ৳45,000
+✅ Stock: Available
+
+অর্ডার করবেন? নাম আর এড্রেস দেন।
+\`\`\`
+
+### When AI Can't Identify
+
+If no match found:
+
+\`\`\`
+ভাই, এই product টা আমাদের কাছে নেই।
+তবে কি খুঁজছেন বলেন, similar কিছু দেখাতে পারি।
+\`\`\`
+
+### Improving Recognition
+
+For better accuracy:
+- Upload clear product images to catalog
+- Add multiple angles per product
+- Use consistent image backgrounds
+- Include product SKU/codes
+
+### Use Cases
+
+1. **"এটার দাম কত?"** + image → AI identifies and quotes
+2. **"এটা আছে?"** + image → AI checks stock and responds
+3. **Multiple images** → AI identifies each product
+        `,
+        relatedArticles: ["ai-auto-reply", "product-catalog", "order-taking"]
+      },
+      {
+        slug: "voice-message-support",
+        title: "Voice Message Processing",
+        description: "AI transcribes and responds to voice messages",
+        category: "Online Automation",
+        content: `
+## Voice Message Processing
+
+Many customers prefer sending voice messages. AI transcribes and responds automatically.
+
+### How It Works
+
+1. Customer sends voice message
+2. AI transcribes audio to text
+3. Understands the content/intent
+4. Generates appropriate text response
+
+### Supported Languages
+
+- Bengali (বাংলা)
+- English
+- Mixed Bengali-English
+
+### Processing Speed
+
+- **Transcription**: 2-5 seconds
+- **Response Generation**: 2-3 seconds
+- **Total Time**: Under 10 seconds
+
+### What AI Can Handle
+
+✅ Product inquiries via voice
+✅ Price questions
+✅ Order details
+✅ General questions
+✅ Complaints/feedback
+
+### Response Format
+
+AI always responds with text (not voice):
+
+\`\`\`
+[Voice message transcription shown internally]
+
+ভাই, আপনার message শুনলাম।
+Samsung S21 এর দাম ৳45,000।
+Order করতে চাইলে নাম, ফোন আর এড্রেস দেন।
+\`\`\`
+
+### Benefits
+
+- **No Manual Listening**: AI handles all voice messages
+- **Faster Responses**: Instant vs listening one by one
+- **Nothing Missed**: Every voice message gets answered
+- **Time Saved**: 2+ hours daily for busy pages
+        `,
+        relatedArticles: ["ai-auto-reply", "facebook-automation-setup", "order-taking"]
+      },
+      {
+        slug: "comment-management",
+        title: "Comment Management & Auto-Reply",
+        description: "Moderate comments and reply automatically",
+        category: "Online Automation",
+        content: `
+## Comment Management
+
+Keep your Facebook posts clean and convert comments into sales.
+
+### Features
+
+1. **Spam Detection**: Auto-identify spam comments
+2. **Auto-Delete**: Remove bad comments instantly
+3. **User Banning**: Ban abusive users
+4. **Auto-Reply**: Reply to product inquiries
+5. **Hide Comments**: Hide instead of delete
+
+### Spam Detection
+
+AI detects and removes:
+- Promotional links
+- Competitor mentions
+- Abusive language
+- Repetitive spam
+- Scam attempts
+
+### Auto-Reply to Comments
+
+When someone comments asking about price or product:
+
+**Customer Comment**: "দাম কত?"
+
+**AI Reply**:
+\`\`\`
+ভাই, inbox করুন details জানাচ্ছি! ✨
+\`\`\`
+
+### Configuration
+
+In **Automation Settings**:
+
+- **Enable Comment Auto-Reply**: On/Off
+- **Reply Keywords**: "দাম", "price", "কত"
+- **Reply Template**: Customize your reply
+- **Hide After Reply**: Optional
+
+### Comment to Inbox Flow
+
+1. Customer comments on post
+2. AI replies asking to inbox
+3. Customer messages inbox
+4. AI takes over with full sales conversation
+
+### Benefits
+
+| Without AutoFloy | With AutoFloy |
+|------------------|---------------|
+| Spam floods comments | Clean comments |
+| Miss comment inquiries | Auto-reply to all |
+| Manual moderation | Automatic 24/7 |
+| Lost sales | Converted to inbox |
+        `,
+        relatedArticles: ["ai-auto-reply", "facebook-automation-setup", "order-taking"]
+      },
+      {
+        slug: "invoice-generation",
+        title: "Auto-Invoice Generation",
+        description: "Generate and send invoices automatically",
+        category: "Online Automation",
+        content: `
+## Auto-Invoice Generation
+
+Professional invoices generated and sent automatically after order confirmation.
+
+### How It Works
+
+1. Order is confirmed (by AI or manually)
+2. Invoice generated with all details
+3. Sent to customer via Messenger
+4. Saved in your records
+
+### Invoice Contents
+
+Every invoice includes:
+
+- **Your Business**: Name, logo, address
+- **Customer**: Name, phone, address
+- **Products**: Name, quantity, price
+- **Totals**: Subtotal, delivery, discount, total
+- **Invoice Number**: Auto-sequential
+- **Date & Time**: Order timestamp
+
+### Customization
+
+Configure your invoice template:
+
+- **Logo**: Upload your business logo
+- **Colors**: Match your brand
+- **Terms**: Payment terms, return policy
+- **Footer**: Thank you message, social links
+
+### Delivery Options
+
+Invoices can be sent via:
+- Facebook Messenger (automatic)
+- WhatsApp (if connected)
+- Email (if customer provides)
+- Print for delivery
+
+### Invoice Types
+
+| Type | Use Case |
+|------|----------|
+| Online Invoice | AI orders from Facebook |
+| POS Invoice | Offline shop sales |
+| Thermal Receipt | Quick POS printing |
+| Full A4 Invoice | Formal business invoice |
+
+### Record Keeping
+
+All invoices are saved with:
+- Invoice number for reference
+- Customer details
+- Order history
+- Export to Excel
+        `,
+        relatedArticles: ["order-taking", "offline-shop-setup", "pos-sales"]
+      }
+    ]
+  },
+  {
+    id: "offline-shop",
+    icon: Store,
+    title: "Offline Shop Management",
+    description: "POS, inventory, and complete shop management",
+    articles: [
+      {
+        slug: "pos-sales",
+        title: "POS Sales System",
+        description: "Quick sales with the Point of Sale system",
+        category: "Offline Shop",
+        content: `
+## POS Sales System
+
+Make sales quickly with the intuitive Point of Sale interface.
+
+### Making a Sale
+
+1. **Search Products**: Type name or scan barcode
+2. **Add to Cart**: Click or scan to add
+3. **Adjust Quantities**: +/- buttons or type
+4. **Apply Discounts**: Item or cart level
+5. **Select Customer**: For due tracking (optional)
+6. **Choose Payment**: Cash, bKash, Card, Due
+7. **Complete Sale**: Generate invoice
+
+### Barcode Scanning
+
+- **USB Scanner**: Plug and play
+- **Mobile Camera**: Use phone as scanner
+- **Manual Entry**: Type barcode if needed
+
+### Payment Methods
+
+| Method | Description |
+|--------|-------------|
+| Cash | Physical cash payment |
+| bKash | Mobile money |
+| Nagad | Mobile money |
+| Card | Debit/Credit card |
+| Due | Credit sale |
+
+### Discounts
+
+**Item Level Discount:**
+- Percentage off specific item
+- Fixed amount off
+
+**Cart Level Discount:**
+- Percentage off total
+- Fixed amount off total
+
+### Due Sales
+
+For credit sales:
+1. Select existing customer (or create new)
+2. Enter amount paid (can be 0)
+3. Remaining becomes "due"
+4. Track and collect later
+
+### Quick Actions
+
+- **Hold Sale**: Pause and resume later
+- **Recent Sales**: View last 10 sales
+- **Quick Customer**: Add new customer inline
+- **Calculator**: Built-in calculator
+
+### Printing
+
+- **Thermal Receipt**: 58mm/80mm printers
+- **A4 Invoice**: Full page invoice
+- **No Print**: Digital only
+        `,
+        relatedArticles: ["inventory-management", "customer-due-management", "thermal-printing"]
+      },
+      {
+        slug: "inventory-management",
+        title: "Inventory Control",
+        description: "Track stock levels, expiry, and get alerts",
+        category: "Offline Shop",
+        content: `
+## Inventory Control
+
+Never run out of stock or let products expire with smart inventory tracking.
+
+### Stock Tracking
+
+Every product tracks:
+- **Current Stock**: Real-time quantity
+- **Low Stock Alert**: Threshold-based alerts
+- **Expiry Date**: For perishables
+- **Batch Number**: Track product batches
+- **Purchase Price**: Your cost
+- **Selling Price**: Customer price
+
+### Adding Stock
+
+When you purchase inventory:
+
+1. Go to **Products > Add Stock**
+2. Select product
+3. Enter quantity
+4. Enter purchase price (if different)
+5. Add batch/expiry if applicable
+6. Link to supplier (optional)
+
+### Low Stock Alerts
+
+Configure alerts:
+- Set minimum threshold per product
+- Get notifications when stock falls below
+- See all low-stock items in one view
+
+### Expiry Tracking
+
+For products with expiry dates:
+- Enter expiry when adding stock
+- Get alerts before expiry
+- Track by batch number
+- Generate expiring-soon reports
+
+### Stock Adjustments
+
+Record stock changes:
+
+| Adjustment Type | Use Case |
+|-----------------|----------|
+| Damage | Product damaged/broken |
+| Return | Customer return |
+| Theft/Loss | Missing stock |
+| Correction | Counting error |
+
+### Stock Reports
+
+Generate reports for:
+- Current stock valuation
+- Stock movement history
+- Low stock items
+- Expiring soon
+- Dead stock (not selling)
+
+### Offline-First
+
+All inventory works offline:
+- Make sales without internet
+- Update stock offline
+- Sync when connected
+        `,
+        relatedArticles: ["pos-sales", "supplier-management", "online-offline-sync"]
+      },
+      {
+        slug: "customer-due-management",
+        title: "Customer & Due Management",
+        description: "Track customer dues and purchase history",
+        category: "Offline Shop",
+        content: `
+## Customer & Due Management
+
+Build customer relationships and manage credit sales professionally.
+
+### Customer Database
+
+Store customer information:
+- Name and phone number
+- Address
+- Opening balance (if any)
+- Purchase history
+- Total due amount
+
+### Due Tracking
+
+When a customer buys on credit:
+
+1. Sale is linked to customer
+2. Unpaid amount becomes "due"
+3. Track in customer profile
+4. Collect payments over time
+
+### Collecting Payments
+
+Record due collections:
+
+1. Go to **Customers > Due Customers**
+2. Select customer
+3. Click **Collect Due**
+4. Enter amount paid
+5. Due automatically updated
+
+### Payment History
+
+Full history shows:
+- Date and amount of each payment
+- Payment method used
+- Remaining balance after each payment
+- Complete transparency
+
+### Due Reminders
+
+Send SMS reminders:
+- Manual send for specific customers
+- Bulk send to all due customers
+- Template customization
+- Delivery tracking
+
+### Customer Reports
+
+Generate reports:
+- All customers with dues
+- High-value customers
+- Customer-wise sales
+- Collection history
+
+### Opening Balance
+
+For existing customers:
+- Set opening due amount
+- Track from before AutoFloy
+- Include in total calculations
+
+### Benefits
+
+| Manual Tracking | With AutoFloy |
+|-----------------|---------------|
+| Paper ledger gets lost | Digital, always accessible |
+| Calculation errors | Automatic calculations |
+| Forget to collect | Reminder system |
+| No history | Complete history |
+        `,
+        relatedArticles: ["pos-sales", "sms-reminders", "reports-analytics"]
+      },
+      {
+        slug: "expense-tracking",
+        title: "Expense & Cash Register",
+        description: "Track expenses and manage daily cash",
+        category: "Offline Shop",
+        content: `
+## Expense & Cash Register
+
+Know exactly where every taka goes with complete expense and cash tracking.
+
+### Expense Categories
+
+Pre-built categories:
+- Rent
+- Electricity/Utilities
+- Staff Salary
+- Transport
+- Marketing
+- Shop Supplies
+- Maintenance
+- Other
+
+You can add custom categories too.
+
+### Recording Expenses
+
+1. Go to **Shop > Expenses**
+2. Click **Add Expense**
+3. Select category
+4. Enter amount
+5. Add description (optional)
+6. Choose payment method
+
+### Cash Register
+
+Daily cash management:
+
+**Opening:**
+- Enter opening cash balance
+- Start of day cash count
+
+**During Day:**
+- Cash sales automatically added
+- Expenses automatically deducted
+- Due collections added
+
+**Closing:**
+- View expected cash
+- Enter actual cash count
+- Record any discrepancy
+
+### Cash Flow Report
+
+Track all money movement:
+
+| In | Out |
+|----|-----|
+| Cash sales | Expenses |
+| Due collections | Owner withdrawals |
+| Owner deposits | Supplier payments |
+
+### Owner Drawings
+
+Track personal withdrawals:
+- Record as "Owner Withdrawal"
+- Separate from business expenses
+- Appears in reports clearly
+
+### Daily Summary
+
+End of day shows:
+- Total sales (cash + other)
+- Total expenses
+- Due collected
+- Expected cash balance
+- Actual cash (you enter)
+- Variance (if any)
+
+### Benefits
+
+- **No Missing Money**: Every taka tracked
+- **Tax Ready**: All expenses recorded
+- **Business Health**: Know your profitability
+- **Staff Accountability**: Track register differences
+        `,
+        relatedArticles: ["pos-sales", "reports-analytics", "supplier-management"]
+      },
+      {
+        slug: "reports-analytics",
+        title: "Reports & Analytics",
+        description: "Comprehensive business reports and insights",
+        category: "Offline Shop",
+        content: `
+## Reports & Analytics
+
+Make data-driven decisions with comprehensive business reports.
+
+### Available Reports
+
+**Sales Reports:**
+- Daily / Weekly / Monthly sales
+- Sales by product
+- Sales by category
+- Sales by payment method
+- Sales by customer
+
+**Profit Reports:**
+- Gross profit per product
+- Daily / Monthly profit
+- Profit margins
+- Loss-making items
+
+**Inventory Reports:**
+- Current stock valuation
+- Low stock items
+- Expiring soon
+- Dead stock
+- Stock movement
+
+**Financial Reports:**
+- Expense breakdown
+- Cash flow
+- Dues receivable
+- Supplier dues payable
+
+### Filtering Options
+
+All reports can be filtered by:
+- Date range (custom or preset)
+- Product / Category
+- Customer / Supplier
+- Payment method
+
+### Charts & Visualizations
+
+Visual representations:
+- Sales trend line charts
+- Category pie charts
+- Payment method breakdown
+- Profit vs Expense comparison
+
+### Export Options
+
+Export reports as:
+- Excel (.xlsx) - detailed data
+- PDF - printable format
+- CSV - for analysis
+
+### Insights
+
+AutoFloy provides insights:
+- Best selling products
+- Peak sales times
+- Slow-moving inventory
+- High-value customers
+- Expense patterns
+
+### Combined Reports
+
+With sync enabled, see:
+- Online + Offline sales together
+- Unified inventory
+- Complete business picture
+        `,
+        relatedArticles: ["expense-tracking", "pos-sales", "inventory-management"]
+      },
+      {
+        slug: "supplier-management",
+        title: "Supplier & Purchase Management",
+        description: "Track suppliers, purchases, and dues",
+        category: "Offline Shop",
+        content: `
+## Supplier & Purchase Management
+
+Manage all your suppliers and purchase records in one place.
+
+### Supplier Database
+
+Store supplier information:
+- Name and contact details
+- Phone and address
+- Opening balance
+- Payment terms
+- Purchase history
+
+### Recording Purchases
+
+When you buy inventory:
+
+1. Go to **Suppliers**
+2. Select supplier (or add new)
+3. Click **Add Purchase**
+4. Enter products and quantities
+5. Enter prices
+6. Record payment amount
+
+### Supplier Dues
+
+Track what you owe:
+- Purchase creates due
+- Payments reduce due
+- Track by supplier
+- Payment history
+
+### Payment Recording
+
+1. Go to **Suppliers > [Supplier Name]**
+2. Click **Make Payment**
+3. Enter amount
+4. Choose method (Cash/bKash/Bank)
+5. Due automatically updated
+
+### Purchase History
+
+For each supplier, see:
+- All past purchases
+- Products bought
+- Prices paid
+- Payments made
+- Current balance
+
+### Supplier Reports
+
+Generate reports:
+- All suppliers with dues
+- Purchase history
+- Payment history
+- Top suppliers by value
+
+### Benefits
+
+| Manual | With AutoFloy |
+|--------|---------------|
+| Forget payments | Track all dues |
+| No purchase history | Complete records |
+| Price confusion | Historical prices |
+| Relationship issues | Professional tracking |
+        `,
+        relatedArticles: ["inventory-management", "expense-tracking", "reports-analytics"]
+      },
+      {
+        slug: "loan-tracking",
+        title: "Business Loan Management",
+        description: "Track loans, installments, and payments",
+        category: "Offline Shop",
+        content: `
+## Business Loan Management
+
+Keep track of all business loans with installment scheduling and reminders.
+
+### Adding a Loan
+
+1. Go to **Shop > Loans**
+2. Click **Add Loan**
+3. Enter details:
+   - Loan amount
+   - Interest rate
+   - Lender name
+   - Start date
+   - Installment amount
+   - Installment frequency
+
+### Loan Types
+
+Track any type of loan:
+- Bank loans
+- Microfinance (Grameen, BRAC, etc.)
+- Personal loans
+- Supplier credit
+
+### Installment Tracking
+
+For each loan:
+- Total amount
+- Paid amount
+- Remaining balance
+- Next installment date
+- Installment amount
+
+### Recording Payments
+
+1. Select loan
+2. Click **Record Payment**
+3. Enter amount paid
+4. Date automatically recorded
+5. Remaining balance updated
+
+### Payment Reminders
+
+Get notified before due dates:
+- In-app notifications
+- SMS reminders (optional)
+- Email alerts
+
+### Loan Reports
+
+See at a glance:
+- All active loans
+- Total debt
+- Upcoming payments
+- Payment history
+- Completed loans
+
+### Benefits
+
+- **Never Miss Payments**: Reminders before due
+- **Clear Overview**: All loans in one place
+- **Interest Tracking**: Know total cost
+- **Payment History**: Complete records
+        `,
+        relatedArticles: ["expense-tracking", "reports-analytics", "supplier-management"]
+      },
+      {
+        slug: "online-offline-sync",
+        title: "Online-Offline Sync",
+        description: "Unify inventory across all sales channels",
+        category: "Offline Shop",
+        content: `
+## Online-Offline Sync
+
+Bridge your Facebook sales with your physical store for unified inventory.
+
+### How It Works
+
+1. **Link Products**: Match online products to offline inventory
+2. **Enable Sync**: Turn on automatic synchronization
+3. **Unified Stock**: One stock pool for all channels
+4. **Real-Time Updates**: Stock updates instantly
+
+### Benefits
+
+| Without Sync | With Sync |
+|--------------|-----------|
+| Overselling risk | Prevents overselling |
+| Manual stock updates | Automatic updates |
+| Separate reports | Unified reports |
+| Double work | Single source of truth |
+
+### Setting Up Sync
+
+1. Go to **Settings > Sync Settings**
+2. Enable Online-Offline Sync
+3. Link products by SKU or manually
+4. Configure sync rules
+
+### Product Linking
+
+Match products automatically:
+- By SKU/Barcode
+- By product name
+- Manual linking
+
+### Sync Rules
+
+Configure how orders affect stock:
+- Online order → Reduce offline stock
+- Offline sale → Update online availability
+- Stock added → Reflect everywhere
+
+### Unified Reports
+
+See combined data:
+- Total sales (online + offline)
+- Combined revenue
+- Stock across channels
+- Profit by channel
+
+### Offline-First Design
+
+Even without internet:
+- Make offline sales
+- Track inventory locally
+- Sync when connected
+- Never lose data
+        `,
+        relatedArticles: ["inventory-management", "facebook-automation-setup", "reports-analytics"]
+      }
+    ]
+  },
+  {
+    id: "settings-security",
+    icon: Settings,
+    title: "Settings & Configuration",
+    description: "Account settings, security, and customization",
+    articles: [
+      {
+        slug: "facebook-automation-setup",
+        title: "Automation Settings Guide",
+        description: "Complete guide to configure all automation features",
+        category: "Settings",
+        content: `
+## Automation Settings Guide
+
+Configure all your AI automation features in one place.
+
+### Accessing Settings
+
+Go to **Dashboard > Automations > Settings**
+
+### Core Toggles
+
+| Feature | What It Does |
+|---------|--------------|
+| AI Auto-Reply | Reply to inbox messages |
+| Comment Reply | Reply to post comments |
+| Order Taking | Collect customer details |
+| Voice Processing | Handle voice messages |
+| Image Recognition | Identify products from images |
+
+### AI Behavior Settings
+
+**Response Style:**
+- Formal (আপনি ব্যবহার করে)
+- Friendly (ভাই, আপা ব্যবহার করে)
+- Mix (situation-based)
+
+**Business Hours:**
+- Set operating hours
+- Away message for off-hours
+
+### Bargaining Power Settings
+
+Configure AI negotiation:
+- Enable/Disable bargaining
+- Select level (Soft to Aggressive)
+- Set minimum discount AI can start with
+- Maximum negotiation rounds
+
+### Product Knowledge
+
+AI learns from:
+- Your product catalog
+- FAQs you provide
+- Business description
+- Common responses
+
+### Updating AI Knowledge
+
+1. Go to **Automations > AI Memory**
+2. Add/update business description
+3. Add FAQ questions and answers
+4. Sync products from catalog
+5. Set business hours
+
+### Testing Automations
+
+Before going live:
+1. Use the **Simulator** to test
+2. Send test message from another account
+3. Review AI responses
+4. Adjust settings as needed
+
+### Best Practices
+
+✅ Start with friendly style for Bangladesh
+✅ Add common Bengali questions to FAQ
+✅ Set realistic bargaining limits
+✅ Monitor first few days closely
+✅ Adjust based on customer feedback
+        `,
+        relatedArticles: ["ai-auto-reply", "ai-bargaining", "order-taking"]
+      },
       {
         slug: "data-security",
         title: "Data Security",
@@ -759,190 +1494,181 @@ AutoFloy takes security seriously. Here's how we protect your data.
 
 ### Encryption
 
-#### In Transit
+**In Transit:**
 - All connections use TLS 1.3
-- Certificate pinning for API calls
-- Secure WebSocket connections
+- Secure API endpoints
+- Encrypted WebSocket connections
 
-#### At Rest
+**At Rest:**
 - AES-256 encryption for stored data
 - Encrypted database backups
 - Secure key management
 
-### Infrastructure Security
+### Access Security
 
-- Hosted on enterprise-grade cloud infrastructure
-- Regular security patches and updates
-- DDoS protection
-- Web Application Firewall (WAF)
+- Role-based access control
+- Secure password requirements
+- Session management
+- Device tracking
 
-### Access Controls
-
-- Role-based access control (RBAC)
-- Multi-factor authentication (MFA)
-- Session management and timeout
-- IP allowlisting available
-
-### Token Security
+### Facebook Token Security
 
 - OAuth tokens encrypted before storage
-- Automatic token rotation
+- Automatic token refresh
 - Minimal permission scopes
-- Secure token refresh process
+- Secure connection process
 
-### Monitoring & Alerting
+### Offline Data Security
 
-- 24/7 security monitoring
-- Anomaly detection
-- Automated threat response
-- Security incident alerts
+- Data stored locally on your device
+- Encrypted local storage
+- Secure sync when online
 
-### Compliance
+### Your Rights
 
-- GDPR compliant
-- Regular security audits
-- Penetration testing
-- SOC 2 Type II (in progress)
+You can always:
+- Export your data
+- Delete your account
+- Revoke Facebook permissions
+- Clear local data
 
-### Reporting Issues
+### Best Practices
 
-Found a security vulnerability?
-- Email: security@autofloy.com
-- We have a responsible disclosure program
+For maximum security:
+- Use strong passwords
+- Don't share login credentials
+- Log out from shared devices
+- Review connected devices regularly
         `,
-        relatedArticles: ["privacy-best-practices", "access-management", "compliance-gdpr"]
+        relatedArticles: ["account-setup", "facebook-automation-setup"]
       },
+      {
+        slug: "thermal-printing",
+        title: "Thermal Printer Setup",
+        description: "Configure thermal printers for receipts",
+        category: "Settings",
+        content: `
+## Thermal Printer Setup
+
+Print professional receipts with thermal printers.
+
+### Supported Printers
+
+Most USB thermal printers work:
+- 58mm width (standard)
+- 80mm width (wide)
+- USB connection
+- Bluetooth (mobile)
+
+### Setup Steps
+
+**Desktop/Laptop:**
+1. Connect printer via USB
+2. Install printer drivers
+3. Set as default printer
+4. Enable printing in AutoFloy
+
+**Mobile:**
+1. Pair Bluetooth printer
+2. Enable Bluetooth in app
+3. Select printer in settings
+
+### Receipt Customization
+
+Configure your receipt:
+- Shop name and logo
+- Address and phone
+- Thank you message
+- Terms and conditions
+- QR code (optional)
+
+### Print Settings
+
+- **Auto-Print**: Print on every sale
+- **Manual**: Click to print
+- **Duplicate**: Print customer copy
+
+### Troubleshooting
+
+**Printer Not Found:**
+- Check USB connection
+- Reinstall drivers
+- Restart browser
+
+**Print Quality Issues:**
+- Check paper roll
+- Clean print head
+- Adjust print density
+        `,
+        relatedArticles: ["pos-sales", "invoice-generation", "offline-shop-setup"]
+      }
+    ]
+  },
+  {
+    id: "security-privacy",
+    icon: Shield,
+    title: "Security & Privacy",
+    description: "Keep your data safe and secure",
+    articles: [
       {
         slug: "privacy-best-practices",
         title: "Privacy Best Practices",
-        description: "Recommendations for protecting user privacy",
+        description: "Protect customer privacy while using automation",
         category: "Security & Privacy",
         content: `
 ## Privacy Best Practices
 
 Protect your customers' privacy while using AutoFloy.
 
-### Data Minimization
+### Data Collection
 
 Only collect what you need:
+- Name for personalization
+- Phone for order delivery
+- Address for shipping
+- Avoid unnecessary data
 
-- Don't ask for unnecessary information
-- Delete data when no longer needed
-- Avoid storing sensitive data in automations
+### Customer Consent
 
-### Consent & Transparency
+Be transparent about AI:
+- Mention automated responses
+- Provide opt-out options
+- Link to privacy policy
 
-#### Inform Users
-Let users know about automation:
-- Mention automated responses in your page description
-- Provide clear opt-out instructions
-- Link to your privacy policy
+### Data Handling
 
-#### Get Consent
-When required:
-- Ask before collecting additional data
-- Provide easy opt-out mechanisms
-- Honor opt-out requests promptly
+**Do:**
+✅ Store data securely
+✅ Delete when not needed
+✅ Honor data requests
 
-### Secure Response Design
+**Don't:**
+❌ Share data with third parties
+❌ Use for unauthorized purposes
+❌ Store sensitive data unnecessarily
 
-#### Do's
-✅ Use generic greetings when name unavailable
-✅ Keep responses professional
-✅ Provide clear next steps
+### AI Conversations
 
-#### Don'ts
-❌ Include sensitive data in responses
-❌ Ask for passwords or payment info via message
-❌ Share user data with unauthorized parties
+- Conversations stored for service
+- Used to improve AI responses
+- You can delete history anytime
 
-### Regular Audits
+### Customer Rights
 
-- Review automation responses monthly
-- Check for outdated information
-- Update privacy notices as needed
-- Remove unused automations
+Customers can request:
+- View their data
+- Delete their data
+- Export their data
+- Stop automation for them
 
-### Team Training
+### Best Practices
 
-Ensure your team understands:
-- Data protection responsibilities
-- How to handle user data requests
-- Privacy incident reporting procedures
+1. Add privacy policy to page
+2. Inform about AI responses
+3. Handle data requests promptly
+4. Regular data cleanup
         `,
-        relatedArticles: ["data-security", "access-management", "compliance-gdpr"]
-      },
-      {
-        slug: "access-management",
-        title: "Access Management",
-        description: "Control who has access to your account",
-        category: "Security & Privacy",
-        content: `
-## Access Management
-
-Control and monitor access to your AutoFloy account.
-
-### User Roles
-
-#### Administrator
-- Full access to all features
-- Can manage team members
-- Can modify billing
-- Can delete account
-
-#### Manager
-- Can create/edit automations
-- Can view analytics
-- Cannot manage billing
-- Cannot delete account
-
-#### Viewer
-- Read-only access
-- Can view dashboards
-- Cannot modify settings
-- Cannot create automations
-
-### Adding Team Members
-
-1. Go to **Settings > Team**
-2. Click **"Invite Member"**
-3. Enter email address
-4. Select role
-5. Send invitation
-
-### Managing Permissions
-
-#### Modify Roles
-- Click on team member
-- Select new role
-- Save changes
-
-#### Remove Access
-- Click on team member
-- Select "Remove from team"
-- Confirm removal
-
-### Security Features
-
-#### Two-Factor Authentication
-Enable 2FA for added security:
-1. Go to Settings > Security
-2. Enable 2FA
-3. Scan QR code with authenticator app
-4. Enter verification code
-
-#### Session Management
-- View active sessions
-- Logout from specific devices
-- Set session timeout duration
-
-#### Activity Logs
-Monitor account activity:
-- Login attempts
-- Configuration changes
-- Team member actions
-        `,
-        relatedArticles: ["data-security", "privacy-best-practices", "compliance-gdpr"]
+        relatedArticles: ["data-security", "compliance-gdpr"]
       },
       {
         slug: "compliance-gdpr",
@@ -952,65 +1678,55 @@ Monitor account activity:
         content: `
 ## GDPR Compliance
 
-AutoFloy helps you maintain GDPR compliance.
+AutoFloy helps you maintain GDPR compliance for European customers.
 
-### Your Rights Under GDPR
+### Your Rights
 
-As a data subject, you have the right to:
+As a data subject, you can:
+- Access your data
+- Correct inaccurate data
+- Request deletion
+- Export your data
+- Restrict processing
 
-| Right | Description |
-|-------|-------------|
-| Access | Request a copy of your data |
-| Rectification | Correct inaccurate data |
-| Erasure | Request data deletion |
-| Portability | Export your data |
-| Restriction | Limit data processing |
-| Object | Object to data processing |
+### Data Export
 
-### How to Exercise Your Rights
-
-#### Request Data Export
-1. Go to Settings > Privacy
-2. Click "Export My Data"
+1. Go to **Settings > Privacy**
+2. Click **Export My Data**
 3. Choose format (JSON/CSV)
 4. Download within 48 hours
 
-#### Request Data Deletion
-1. Go to Settings > Privacy
-2. Click "Delete My Data"
-3. Confirm your identity
-4. Data deleted within 30 days
+### Data Deletion
 
-### Data Processing
+1. Go to **Settings > Privacy**
+2. Click **Delete My Data**
+3. Confirm deletion
+4. Data removed within 30 days
 
-#### Lawful Basis
-We process data based on:
-- Contract fulfillment (providing service)
-- Legitimate interest (improving service)
-- Consent (marketing communications)
+### Data Retention
 
-#### Data Retention
-- Account data: Until account deletion
-- Message logs: 90 days
-- Analytics: 12 months
-- Backups: 30 days after deletion
+| Data Type | Retention |
+|-----------|-----------|
+| Account data | Until deletion |
+| Conversations | 90 days |
+| Analytics | 12 months |
+| Backups | 30 days after deletion |
 
 ### For Your Customers
 
-Help your customers exercise their rights:
-
-- Provide clear privacy notices
-- Honor data requests promptly
-- Maintain data processing records
-- Report breaches within 72 hours
+Help customers exercise rights:
+- Provide privacy notices
+- Honor data requests
+- Maintain records
+- Report breaches promptly
 
 ### Resources
 
-- [Full Privacy Policy](/privacy)
-- [GDPR Information Page](/gdpr)
-- [Data Processing Agreement](/contact)
+- [Privacy Policy](/privacy)
+- [GDPR Page](/gdpr)
+- [Contact Support](/contact)
         `,
-        relatedArticles: ["data-security", "privacy-best-practices", "access-management"]
+        relatedArticles: ["data-security", "privacy-best-practices"]
       }
     ]
   }
