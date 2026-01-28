@@ -479,7 +479,7 @@ Deno.serve(async (req) => {
 
       let query = supabase
         .from("users")
-        .select("id, display_name, email, status, created_at, subscription_plan, trial_end_date, is_trial_active, phone, avatar_url", { count: "exact" });
+        .select("id, display_name, email, status, created_at, subscription_plan, subscription_type, trial_end_date, is_trial_active, phone, avatar_url", { count: "exact" });
 
       if (search) {
         const sanitizedSearch = escapeILikePattern(search);
@@ -685,7 +685,7 @@ Deno.serve(async (req) => {
     if (req.method === "PUT" && path.match(/^[0-9a-f-]{36}$/) && !subPath) {
       const userId = path;
       const body = await req.json();
-      const { display_name, subscription_plan, status, trial_end_date, is_trial_active, email, subscription_started_at, subscription_ends_at } = body;
+      const { display_name, subscription_plan, subscription_type, status, trial_end_date, is_trial_active, email, subscription_started_at, subscription_ends_at } = body;
 
       // Get current user data before update (for notification)
       const { data: currentUser } = await supabase
@@ -723,6 +723,7 @@ Deno.serve(async (req) => {
       if (status !== undefined) updateData.status = status;
       if (trial_end_date !== undefined) updateData.trial_end_date = trial_end_date;
       if (is_trial_active !== undefined) updateData.is_trial_active = is_trial_active;
+      if (subscription_type !== undefined) updateData.subscription_type = subscription_type;
       
       // Handle subscription plan change with automatic date setting
       let newEndDate: Date | null = null;
@@ -790,7 +791,7 @@ Deno.serve(async (req) => {
         .from("users")
         .update(updateData)
         .eq("id", userId)
-        .select("id, display_name, email, status, created_at, subscription_plan, trial_end_date, is_trial_active, phone, avatar_url, subscription_started_at, subscription_ends_at")
+        .select("id, display_name, email, status, created_at, subscription_plan, subscription_type, trial_end_date, is_trial_active, phone, avatar_url, subscription_started_at, subscription_ends_at")
         .single();
 
       if (error) {

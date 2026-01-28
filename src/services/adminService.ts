@@ -16,6 +16,7 @@ export interface AdminUser {
   role: string;
   created_at: string;
   subscription_plan: string;
+  subscription_type?: 'online' | 'offline' | 'both';
   trial_end_date: string | null;
   is_trial_active: boolean;
   phone: string | null;
@@ -116,6 +117,7 @@ export interface CreateUserData {
 export interface UpdateUserData {
   display_name?: string;
   subscription_plan?: string;
+  subscription_type?: 'online' | 'offline' | 'both';
   status?: "active" | "suspended";
   trial_end_date?: string | null;
   is_trial_active?: boolean;
