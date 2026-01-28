@@ -52,6 +52,9 @@ import { UpdateNotification } from "./UpdateNotification";
 import { appUpdateService } from "@/services/appUpdateService";
 import { useShop } from "@/contexts/ShopContext";
 import { usePlanLimits } from "@/hooks/usePlanLimits";
+import { SyncStatusIndicator, FloatingSyncStatus } from "./SyncStatusIndicator";
+import { syncManager } from "@/lib/syncManager";
+import { offlineDb } from "@/lib/offlineDatabase";
 
 interface ShopLayoutProps {
   children: ReactNode;
@@ -78,7 +81,7 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
   const offlineAccessCheck = canAccessOfflineShop();
   const noOfflineAccess = !hasOfflineAccess;
 
-  // Initialize app update service
+  // Initialize app update service and offline sync
   useEffect(() => {
     // Start auto update check (every 30 minutes)
     // This ensures APK/EXE/PWA gets latest settings when admin makes changes
@@ -88,6 +91,27 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
       appUpdateService.stopAutoCheck();
     };
   }, [user?.id, currentShop?.id]);
+
+  // Perform initial data sync when shop changes
+  useEffect(() => {
+    const performInitialSync = async () => {
+      if (!currentShop?.id) return;
+      
+      try {
+        // Check if we already have data for this shop
+        const hasLocalData = await offlineDb.hasData(currentShop.id);
+        
+        if (!hasLocalData && navigator.onLine) {
+          console.log('[ShopLayout] Performing initial sync for shop:', currentShop.id);
+          await syncManager.performInitialSync(currentShop.id);
+        }
+      } catch (error) {
+        console.error('[ShopLayout] Initial sync error:', error);
+      }
+    };
+
+    performInitialSync();
+  }, [currentShop?.id]);
 
   // Show offline expired modal when needed
   useEffect(() => {
@@ -166,7 +190,7 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
                   <p className="text-xs text-muted-foreground">{t("shop.youAreIn")}</p>
                   <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400">{t("shop.offlineShopBusiness")}</p>
                 </div>
-                <SyncStatusBadge syncEnabled={syncEnabled} mode="offline" />
+                <SyncStatusIndicator compact />
               </div>
             </div>
 
@@ -193,7 +217,7 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
             {/* Business Mode Switcher - Desktop */}
             <div className="hidden lg:flex items-center gap-3">
               <BusinessModeSwitcher syncEnabled={syncEnabled} />
-              <SyncStatusBadge syncEnabled={syncEnabled} mode="offline" />
+              <SyncStatusIndicator />
             </div>
               <SheetContent side="left" className="w-72 p-0">
                 <SheetTitle className="sr-only">{t("shop.offlineShop")} Menu</SheetTitle>
@@ -304,6 +328,9 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
             {children}
           </main>
         </div>
+        
+        {/* Floating Sync Status for Mobile */}
+        <FloatingSyncStatus />
         
         {/* Update Notification */}
         <UpdateNotification />
