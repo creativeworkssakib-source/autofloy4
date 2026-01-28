@@ -8,11 +8,14 @@ interface FeatureDisabledOverlayProps {
   featureName: string;
   /** Type of feature that is disabled */
   featureType: "online" | "offline";
+  /** Custom message to show instead of default */
+  customMessage?: string;
 }
 
 export const FeatureDisabledOverlay = ({ 
   featureName, 
-  featureType
+  featureType,
+  customMessage
 }: FeatureDisabledOverlayProps) => {
   const { language } = useLanguage();
   const { settings } = useSiteSettings();
@@ -48,9 +51,9 @@ export const FeatureDisabledOverlay = ({
               {featureName}
             </h2>
             <p className="text-lg sm:text-xl text-muted-foreground/40 max-w-md">
-              {language === "bn" 
+              {customMessage || (language === "bn" 
                 ? "এই ফিচারটি বর্তমানে অনুপলব্ধ"
-                : "This feature is currently unavailable"}
+                : "This feature is currently unavailable")}
             </p>
           </div>
           

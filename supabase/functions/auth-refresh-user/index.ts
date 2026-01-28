@@ -152,6 +152,7 @@ serve(async (req) => {
       display_name: user.display_name,
       avatar_url: user.avatar_url,
       subscription_plan: user.subscription_plan,
+      subscription_type: user.subscription_type || 'online', // IMPORTANT: Include subscription_type for access control
       trial_end_date: user.trial_end_date,
       is_trial_active: user.is_trial_active,
       subscription_started_at: user.subscription_started_at,

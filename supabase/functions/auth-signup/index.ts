@@ -341,10 +341,15 @@ serve(async (req) => {
       email: newUser.email,
       phone: newUser.phone,
       display_name: newUser.display_name,
+      avatar_url: newUser.avatar_url,
       subscription_plan: newUser.subscription_plan,
+      subscription_type: newUser.subscription_type || 'both', // New users (trial) get both access
       trial_end_date: newUser.trial_end_date,
       is_trial_active: newUser.is_trial_active,
+      subscription_started_at: newUser.subscription_started_at,
+      subscription_ends_at: newUser.subscription_ends_at,
       email_verified: newUser.email_verified,
+      phone_verified: newUser.phone_verified,
     };
 
     console.log(`User created: ${newUser.id.substring(0, 8)}...`);
