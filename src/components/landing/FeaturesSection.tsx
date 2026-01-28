@@ -54,7 +54,7 @@ const FeatureCard = memo(({
         ease: [0.25, 0.46, 0.45, 0.94]
       }}
       whileHover={{ y: -8 }}
-      className={`group relative bg-card/80 backdrop-blur-sm rounded-2xl border border-border/50 overflow-hidden ${
+      className={`group relative bg-card/80 backdrop-blur-sm rounded-2xl border border-border/50 overflow-hidden card-professional ${
         variant === "compact" ? "p-5" : "p-6"
       }`}
     >
@@ -68,19 +68,20 @@ const FeatureCard = memo(({
         <div className="absolute inset-0 animate-shimmer" />
       </div>
       
-      {/* Icon */}
+      {/* Premium Icon Container */}
       <motion.div 
-        className={`${variant === "compact" ? "w-10 h-10 mb-3" : "w-12 h-12 mb-4"} rounded-xl bg-gradient-to-br ${feature.gradient} flex items-center justify-center relative overflow-hidden`}
-        whileHover={{ scale: 1.1, rotate: 5 }}
-        transition={{ type: "spring", stiffness: 300 }}
+        className={`${variant === "compact" ? "w-11 h-11 mb-3" : "w-14 h-14 mb-4"} rounded-xl bg-gradient-to-br ${feature.gradient} flex items-center justify-center relative overflow-hidden shadow-lg icon-container-premium`}
+        whileHover={{ scale: 1.1, rotate: 5, y: -2 }}
+        transition={{ type: "spring", stiffness: 400, damping: 15 }}
       >
-        <feature.icon className={`${variant === "compact" ? "w-5 h-5" : "w-6 h-6"} text-primary-foreground relative z-10`} />
-        <motion.div 
-          className="absolute inset-0 bg-white/20"
-          initial={{ x: "-100%" }}
-          whileHover={{ x: "100%" }}
-          transition={{ duration: 0.5 }}
-        />
+        {/* Inner shine */}
+        <div className="premium-icon-shine" />
+        {/* Top highlight */}
+        <div className="absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-white/30 to-transparent rounded-t-xl pointer-events-none" />
+        {/* Bottom shadow */}
+        <div className="absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-black/15 to-transparent rounded-b-xl pointer-events-none" />
+        
+        <feature.icon className={`${variant === "compact" ? "w-5 h-5" : "w-6 h-6"} text-white relative z-10 drop-shadow-sm`} />
       </motion.div>
       
       {/* Content */}
@@ -316,10 +317,10 @@ const FeaturesSection = memo(() => {
           animate={isInView ? "visible" : "hidden"}
         >
           <motion.span 
-            className="inline-block px-4 py-1.5 rounded-full bg-primary/10 text-primary-accessible text-sm font-medium mb-4"
+            className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-gradient-to-r from-primary/15 to-secondary/10 text-primary-accessible text-sm font-semibold mb-4 border border-primary/20 shadow-sm"
             whileHover={{ scale: 1.05 }}
           >
-            🚀 Complete Business Solution
+            <span className="text-lg">🚀</span> Complete Business Solution
           </motion.span>
           <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-6">
             Every Feature You Need{" "}
@@ -340,11 +341,14 @@ const FeaturesSection = memo(() => {
             transition={{ delay: 0.2 }}
           >
             <motion.span 
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-secondary/10 text-secondary"
+              className="inline-flex items-center gap-2.5 px-5 py-2.5 rounded-full bg-gradient-to-r from-secondary/15 to-primary/10 text-secondary border border-secondary/20 shadow-sm"
               whileHover={{ scale: 1.05 }}
             >
-              <MessageSquare className="w-5 h-5" />
-              Online Business Automation (9 Features)
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-secondary to-primary flex items-center justify-center shadow-md relative overflow-hidden">
+                <div className="absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-white/30 to-transparent rounded-t-lg pointer-events-none" />
+                <MessageSquare className="w-4 h-4 text-white relative z-10" />
+              </div>
+              <span className="font-semibold">Online Business Automation (9 Features)</span>
             </motion.span>
           </motion.h3>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5 lg:gap-6">
@@ -363,11 +367,14 @@ const FeaturesSection = memo(() => {
             transition={{ delay: 0.4 }}
           >
             <motion.span 
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-success/10 text-success-accessible"
+              className="inline-flex items-center gap-2.5 px-5 py-2.5 rounded-full bg-gradient-to-r from-success/15 to-primary/10 text-success-accessible border border-success/20 shadow-sm"
               whileHover={{ scale: 1.05 }}
             >
-              <Store className="w-5 h-5" />
-              Offline Shop Management (12 Features)
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-success to-primary flex items-center justify-center shadow-md relative overflow-hidden">
+                <div className="absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-white/30 to-transparent rounded-t-lg pointer-events-none" />
+                <Store className="w-4 h-4 text-white relative z-10" />
+              </div>
+              <span className="font-semibold">Offline Shop Management (12 Features)</span>
             </motion.span>
           </motion.h3>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-5">

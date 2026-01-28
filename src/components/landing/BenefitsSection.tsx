@@ -79,7 +79,7 @@ const BenefitCard = memo(({ benefit, index }: { benefit: typeof benefits[0]; ind
         ease: [0.25, 0.46, 0.45, 0.94]
       }}
       whileHover={{ y: -8, scale: 1.02 }}
-      className="relative bg-card/80 backdrop-blur-sm rounded-2xl p-6 border border-border/50 text-center overflow-hidden group"
+      className="relative bg-card/80 backdrop-blur-sm rounded-2xl p-6 border border-border/50 text-center overflow-hidden group card-professional"
     >
       {/* Hover Effect */}
       <motion.div 
@@ -91,13 +91,20 @@ const BenefitCard = memo(({ benefit, index }: { benefit: typeof benefits[0]; ind
         <div className="absolute inset-0 animate-shimmer" />
       </div>
       
-      {/* Icon */}
+      {/* Premium Icon Container */}
       <motion.div 
-        className={`w-14 h-14 rounded-xl bg-gradient-to-br ${benefit.gradient} flex items-center justify-center mx-auto mb-4 relative z-10`}
-        whileHover={{ rotate: 10, scale: 1.1 }}
-        transition={{ type: "spring", stiffness: 300 }}
+        className={`w-16 h-16 rounded-xl bg-gradient-to-br ${benefit.gradient} flex items-center justify-center mx-auto mb-4 relative z-10 overflow-hidden shadow-lg`}
+        whileHover={{ rotate: 10, scale: 1.1, y: -2 }}
+        transition={{ type: "spring", stiffness: 400, damping: 15 }}
       >
-        <benefit.icon className="w-7 h-7 text-primary-foreground" />
+        {/* Shine effect */}
+        <div className="premium-icon-shine" />
+        {/* Top highlight */}
+        <div className="absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-white/30 to-transparent rounded-t-xl pointer-events-none" />
+        {/* Bottom shadow */}
+        <div className="absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-black/15 to-transparent rounded-b-xl pointer-events-none" />
+        
+        <benefit.icon className="w-8 h-8 text-white relative z-10 drop-shadow-sm" />
       </motion.div>
       
       {/* Counter */}
@@ -273,10 +280,10 @@ const BenefitsSection = forwardRef<HTMLElement, Record<string, never>>((_props, 
           transition={{ duration: 0.6 }}
         >
           <motion.span 
-            className="inline-block px-4 py-1.5 rounded-full bg-success/10 text-success text-sm font-medium mb-4"
+            className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-gradient-to-r from-success/15 to-primary/10 text-success text-sm font-semibold mb-4 border border-success/20 shadow-sm"
             whileHover={{ scale: 1.05 }}
           >
-            ✅ Real Results from Real Businesses
+            <span className="text-lg">✅</span> Real Results from Real Businesses
           </motion.span>
           <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-6">
             Why Thousands of Businesses{" "}
@@ -304,12 +311,14 @@ const BenefitsSection = forwardRef<HTMLElement, Record<string, never>>((_props, 
           transition={{ delay: 0.4, duration: 0.6 }}
         >
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-xl font-bold flex items-center gap-2">
+            <h3 className="text-xl font-bold flex items-center gap-2.5">
               <motion.div
                 animate={{ rotate: [0, 10, -10, 0] }}
                 transition={{ duration: 2, repeat: Infinity }}
+                className="w-8 h-8 rounded-lg bg-gradient-to-br from-warning to-accent flex items-center justify-center shadow-md relative overflow-hidden"
               >
-                <Star className="w-5 h-5 text-amber-500 fill-current" />
+                <div className="absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-white/30 to-transparent rounded-t-lg pointer-events-none" />
+                <Star className="w-4 h-4 text-white fill-current relative z-10" />
               </motion.div>
               Customer Reviews ({reviews.length}+)
             </h3>
@@ -413,7 +422,7 @@ const BenefitsSection = forwardRef<HTMLElement, Record<string, never>>((_props, 
                   transition={{ delay: index * 0.1 }}
                   whileHover={{ y: -2 }}
                 >
-                  <div className="flex gap-0.5 text-amber-500 mb-2">
+                  <div className="flex gap-0.5 text-warning mb-2">
                     {[1, 2, 3, 4, 5].map((i) => (
                       <Star key={i} className={`w-4 h-4 ${i <= review.rating ? "fill-current" : "text-muted-foreground"}`} />
                     ))}

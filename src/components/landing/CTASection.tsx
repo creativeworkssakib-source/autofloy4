@@ -81,8 +81,9 @@ const CTASection = memo(() => {
               <motion.div
                 animate={{ rotate: [0, 360] }}
                 transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+                className="w-6 h-6 rounded-lg bg-white/20 flex items-center justify-center shadow-inner"
               >
-                <Sparkles className="w-4 h-4" />
+                <Sparkles className="w-3.5 h-3.5 text-white" />
               </motion.div>
               Limited Time Offer
             </motion.div>
@@ -165,8 +166,9 @@ const CTASection = memo(() => {
                   <motion.div
                     animate={{ scale: [1, 1.2, 1] }}
                     transition={{ duration: 2, repeat: Infinity, delay: index * 0.3 }}
+                    className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center shadow-inner"
                   >
-                    <CheckCircle2 className="w-5 h-5 text-white" />
+                    <CheckCircle2 className="w-4 h-4 text-white" />
                   </motion.div>
                   {feature}
                 </motion.span>
