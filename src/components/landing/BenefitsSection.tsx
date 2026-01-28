@@ -52,6 +52,7 @@ const Counter = memo(({ from, to, suffix = "", prefix = "", duration = 2 }: Coun
 
 Counter.displayName = "Counter";
 
+// Updated benefits with correct values
 const benefits = [
   { icon: TrendingUp, value: 100, suffix: "+", label: "Hours Saved/Month", description: "AI auto-reply + POS + inventory + reports - all automated, no manual work needed", gradient: "from-primary to-primary-glow" },
   { icon: Clock, value: 10, suffix: "x", label: "Faster Operations", description: "Instant AI responses, barcode scanning, one-click invoices - 10x faster than manual", gradient: "from-secondary to-primary" },
