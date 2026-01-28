@@ -272,6 +272,9 @@ serve(async (req) => {
     }
 
     // Insert user with appropriate trial status
+    // Trial users get 'both' access (online + offline) to test all features
+    const subscriptionType = canUseTrial ? 'both' : 'online';
+    
     const { data: newUser, error: insertError } = await supabase
       .from("users")
       .insert({
@@ -280,6 +283,7 @@ serve(async (req) => {
         display_name: display_name || null,
         password_hash: passwordHash,
         subscription_plan: subscriptionPlan,
+        subscription_type: subscriptionType, // IMPORTANT: Set subscription_type for access control
         is_trial_active: isTrialActive,
         trial_started_at: canUseTrial ? trialStartedAt : null,
         trial_end_date: userTrialEndDate,

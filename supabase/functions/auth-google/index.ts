@@ -224,6 +224,9 @@ serve(async (req) => {
           console.log(`Returning Google user ${googleUser.email}: expired trial assigned`);
         }
 
+        // Trial users get 'both' access (online + offline) to test all features
+        const subscriptionType = canUseTrial ? 'both' : 'online';
+        
         const { data: newUser, error: insertError } = await supabase
           .from("users")
           .insert({
@@ -234,6 +237,7 @@ serve(async (req) => {
             email_verified: true, // Google emails are verified
             is_active: true,
             subscription_plan: subscriptionPlan,
+            subscription_type: subscriptionType, // IMPORTANT: Set subscription_type for access control
             is_trial_active: isTrialActive,
             trial_end_date: userTrialEndDate,
             trial_started_at: canUseTrial ? now.toISOString() : null,
