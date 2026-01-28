@@ -53,10 +53,10 @@ const Counter = memo(({ from, to, suffix = "", prefix = "", duration = 2 }: Coun
 Counter.displayName = "Counter";
 
 const benefits = [
-  { icon: TrendingUp, value: 10, suffix: "x", label: "Faster Responses", description: "AI replies instantly in Bengali - no customer waits", gradient: "from-primary to-primary-glow" },
-  { icon: Clock, value: 50, suffix: "+", label: "Hours Saved/Month", description: "Auto-reply, order taking & inventory automated", gradient: "from-secondary to-primary" },
-  { icon: Users, value: 24, suffix: "/7", label: "Always Available", description: "AI handles messages + POS works offline", gradient: "from-accent to-secondary" },
-  { icon: Wallet, value: 80000, prefix: "৳", suffix: "+", label: "Monthly Savings", description: "No extra staff needed for messages & tracking", gradient: "from-success to-primary" },
+  { icon: TrendingUp, value: 100, suffix: "+", label: "Hours Saved/Month", description: "AI auto-reply + POS + inventory + reports - all automated, no manual work needed", gradient: "from-primary to-primary-glow" },
+  { icon: Clock, value: 10, suffix: "x", label: "Faster Operations", description: "Instant AI responses, barcode scanning, one-click invoices - 10x faster than manual", gradient: "from-secondary to-primary" },
+  { icon: Users, value: 24, suffix: "/7", label: "Non-Stop Business", description: "AI Sales Agent works 24/7 + Offline POS works without internet - never lose a sale", gradient: "from-accent to-secondary" },
+  { icon: Wallet, value: 150000, prefix: "৳", suffix: "+", label: "Monthly Savings", description: "Replace 2 staff salaries: 1 for messages + 1 for shop accounting - AI does both", gradient: "from-success to-primary" },
 ];
 
 const isPaidPlan = (plan?: string) => {
@@ -282,8 +282,9 @@ const BenefitsSection = forwardRef<HTMLElement, Record<string, never>>((_props, 
             <span className="gradient-text">Choose {settings.company_name}</span>
           </h2>
           <p className="text-lg text-muted-foreground">
-            One platform for everything: AI handles your Facebook messages while you run your offline shop. 
-            Save 50+ hours monthly and ৳80,000+ in staff costs.
+            21+ features in one platform: AI Sales Agent handles Facebook messages, takes orders & negotiates prices 
+            while Complete POS manages your shop inventory, sales, expenses & reports - even offline. 
+            Save 100+ hours monthly and ৳1,50,000+ in staff costs.
           </p>
         </motion.div>
 
