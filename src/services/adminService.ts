@@ -111,6 +111,7 @@ export interface CreateUserData {
   display_name?: string;
   role?: "admin" | "user";
   subscription_plan?: string;
+  subscription_type?: 'online' | 'offline' | 'both';
   status?: "active" | "suspended";
 }
 

@@ -88,13 +88,14 @@ const AdminUsers = () => {
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
 
   // Form states
-  const [createForm, setCreateForm] = useState<CreateUserData>({
+  const [createForm, setCreateForm] = useState<CreateUserData & { subscription_type?: 'online' | 'offline' | 'both' }>({
     email: "",
     password: "",
     display_name: "",
     role: "user",
     subscription_plan: "trial",
     status: "active",
+    subscription_type: "online",
   });
   const [editForm, setEditForm] = useState<UpdateUserData & { email?: string }>({});
   const [newPassword, setNewPassword] = useState("");
@@ -150,6 +151,7 @@ const AdminUsers = () => {
         role: "user",
         subscription_plan: "trial",
         status: "active",
+        subscription_type: "online",
       });
     },
     onError: (error: Error) => {
@@ -203,6 +205,7 @@ const AdminUsers = () => {
       display_name: user.display_name || "",
       email: user.email,
       subscription_plan: user.subscription_plan,
+      subscription_type: user.subscription_type || "online",
       status: user.status as "active" | "suspended",
       trial_end_date: user.trial_end_date,
       is_trial_active: user.is_trial_active,
@@ -246,6 +249,21 @@ const AdminUsers = () => {
       lifetime: "bg-primary/10 text-primary border-primary/20",
     };
     return <Badge className={colors[plan] || ""}>{plan}</Badge>;
+  };
+
+  const getAccessBadge = (accessType?: string) => {
+    const colors: Record<string, string> = {
+      online: "bg-blue-500/10 text-blue-500 border-blue-500/20",
+      offline: "bg-orange-500/10 text-orange-500 border-orange-500/20",
+      both: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20",
+    };
+    const labels: Record<string, string> = {
+      online: "Online",
+      offline: "Offline",
+      both: "Both",
+    };
+    const type = accessType || "online";
+    return <Badge className={colors[type] || colors.online}>{labels[type] || "Online"}</Badge>;
   };
 
   if (error) {
@@ -300,6 +318,7 @@ const AdminUsers = () => {
                   <TableHead>Role</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Plan</TableHead>
+                  <TableHead>Access</TableHead>
                   <TableHead>Created</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -316,6 +335,7 @@ const AdminUsers = () => {
                     <TableCell>{getRoleBadge(user.role)}</TableCell>
                     <TableCell>{getStatusBadge(user.status)}</TableCell>
                     <TableCell>{getPlanBadge(user.subscription_plan)}</TableCell>
+                    <TableCell>{getAccessBadge(user.subscription_type)}</TableCell>
                     <TableCell>
                       {format(new Date(user.created_at), "MMM d, yyyy")}
                     </TableCell>
@@ -391,7 +411,7 @@ const AdminUsers = () => {
                 ))}
                 {data?.users.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                       No users found
                     </TableCell>
                   </TableRow>
@@ -500,24 +520,42 @@ const AdminUsers = () => {
                 </Select>
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>Subscription Plan</Label>
-              <Select
-                value={createForm.subscription_plan}
-                onValueChange={(v) => setCreateForm({ ...createForm, subscription_plan: v })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  <SelectItem value="trial">Trial</SelectItem>
-                  <SelectItem value="starter">Starter</SelectItem>
-                  <SelectItem value="professional">Professional</SelectItem>
-                  <SelectItem value="business">Business</SelectItem>
-                  <SelectItem value="lifetime">Lifetime</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Subscription Plan</Label>
+                <Select
+                  value={createForm.subscription_plan}
+                  onValueChange={(v) => setCreateForm({ ...createForm, subscription_plan: v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    <SelectItem value="trial">Trial</SelectItem>
+                    <SelectItem value="starter">Starter</SelectItem>
+                    <SelectItem value="professional">Professional</SelectItem>
+                    <SelectItem value="business">Business</SelectItem>
+                    <SelectItem value="lifetime">Lifetime</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Access Type</Label>
+                <Select
+                  value={createForm.subscription_type || "online"}
+                  onValueChange={(v) => setCreateForm({ ...createForm, subscription_type: v as 'online' | 'offline' | 'both' })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="online">Online (Facebook/WhatsApp)</SelectItem>
+                    <SelectItem value="offline">Offline (POS/Shop)</SelectItem>
+                    <SelectItem value="both">Both (Full Access)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
           <DialogFooter>
@@ -666,6 +704,30 @@ const AdminUsers = () => {
               </div>
             </div>
 
+            {/* Access Control Section */}
+            <div className="space-y-4 pt-2 border-t border-border">
+              <h4 className="text-sm font-medium text-muted-foreground pt-2">Access Control</h4>
+              <div className="space-y-2">
+                <Label>Feature Access</Label>
+                <Select
+                  value={editForm.subscription_type || "online"}
+                  onValueChange={(v) => setEditForm({ ...editForm, subscription_type: v as 'online' | 'offline' | 'both' })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="online">Online (Facebook/WhatsApp Automation)</SelectItem>
+                    <SelectItem value="offline">Offline (POS/Shop Management)</SelectItem>
+                    <SelectItem value="both">Both (Full Access)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Controls which features the user can access based on their subscription type.
+                </p>
+              </div>
+            </div>
+
             {/* Password Reset Section */}
             <div className="space-y-4 pt-2 border-t border-border">
               <h4 className="text-sm font-medium text-muted-foreground pt-2">Reset Password</h4>
@@ -719,6 +781,7 @@ const AdminUsers = () => {
                   display_name: editForm.display_name,
                   status: editForm.status,
                   subscription_plan: editForm.subscription_plan,
+                  subscription_type: editForm.subscription_type,
                   is_trial_active: editForm.is_trial_active,
                   trial_end_date: editForm.trial_end_date,
                 };

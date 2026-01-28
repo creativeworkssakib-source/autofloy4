@@ -595,7 +595,7 @@ Deno.serve(async (req) => {
     // POST /admin/users - Create new user
     if (req.method === "POST" && path === "users") {
       const body = await req.json();
-      const { email, display_name, role, subscription_plan, status, password } = body;
+      const { email, display_name, role, subscription_plan, subscription_type, status, password } = body;
 
       if (!email || !password) {
         return new Response(
@@ -644,7 +644,7 @@ Deno.serve(async (req) => {
       combined.set(hashArray, salt.length);
       const passwordHash = btoa(String.fromCharCode(...combined));
 
-      // Create user
+      // Create user with subscription_type
       const { data: newUser, error: createError } = await supabase
         .from("users")
         .insert({
@@ -652,6 +652,7 @@ Deno.serve(async (req) => {
           display_name: display_name || null,
           password_hash: passwordHash,
           subscription_plan: subscription_plan || "trial",
+          subscription_type: subscription_type || "online",
           status: status || "active",
           email_verified: true, // Admin-created users are pre-verified
         })
