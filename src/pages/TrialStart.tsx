@@ -5,7 +5,6 @@ import {
   Check, 
   Facebook, 
   Play, 
-  Zap, 
   ArrowRight, 
   Clock,
   Sparkles,
@@ -14,6 +13,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import confetti from "canvas-confetti";
+import Logo from "@/components/ui/Logo";
 
 const TrialStart = () => {
   const [timeLeft, setTimeLeft] = useState({
@@ -104,9 +104,7 @@ const TrialStart = () => {
           className="flex items-center justify-between mb-12"
         >
           <Link to="/" className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
-              <Zap className="w-5 h-5 text-primary-foreground" />
-            </div>
+            <Logo size="lg" />
             <span className="text-xl font-bold">
               Auto<span className="gradient-text">Floy</span>
             </span>

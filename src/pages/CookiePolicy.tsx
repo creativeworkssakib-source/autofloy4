@@ -1,7 +1,8 @@
 import { Link } from "react-router-dom";
-import { Zap, ArrowLeft, Cookie, Shield, BarChart3, Megaphone, Settings, Info } from "lucide-react";
+import { ArrowLeft, Cookie, Shield, BarChart3, Megaphone, Settings, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useSiteSettings } from "@/contexts/SiteSettingsContext";
+import Logo from "@/components/ui/Logo";
 
 const CookiePolicy = () => {
   const { settings } = useSiteSettings();
@@ -58,13 +59,7 @@ const CookiePolicy = () => {
       <header className="border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
-            {settings.logo_url ? (
-              <img src={settings.logo_url} alt={settings.company_name} className="w-10 h-10 rounded-xl object-contain" />
-            ) : (
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
-                <Zap className="w-5 h-5 text-primary-foreground" />
-              </div>
-            )}
+            <Logo size="lg" />
             <span className="text-xl font-bold">
               {settings.company_name.split(/(?=[A-Z])/).map((part, i) => 
                 i === 1 ? <span key={i} className="gradient-text">{part}</span> : part

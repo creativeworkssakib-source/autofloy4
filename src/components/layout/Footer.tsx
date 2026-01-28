@@ -1,7 +1,8 @@
 import { Link } from "react-router-dom";
-import { Zap, Facebook, Twitter, Linkedin, Instagram, Youtube, Mail, Phone, MapPin } from "lucide-react";
+import { Facebook, Twitter, Linkedin, Instagram, Youtube, Mail, Phone, MapPin } from "lucide-react";
 import { useSiteSettings } from "@/contexts/SiteSettingsContext";
 import { useLanguage } from "@/contexts/LanguageContext";
+import Logo from "@/components/ui/Logo";
 
 const Footer = () => {
   const { settings } = useSiteSettings();
@@ -66,17 +67,7 @@ const Footer = () => {
           {/* Brand Column */}
           <div className="col-span-2">
             <Link to="/" className="flex items-center gap-2 mb-3">
-              {settings.logo_url ? (
-                <img 
-                  src={settings.logo_url} 
-                  alt={settings.company_name} 
-                  className="h-6 w-6 rounded-md object-contain"
-                />
-              ) : (
-                <div className="w-6 h-6 rounded-md bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
-                  <Zap className="w-3 h-3 text-primary-foreground" />
-                </div>
-              )}
+              <Logo size="xs" />
               <span className="text-sm font-bold text-slate-800 dark:text-slate-100">
                 {secondPart ? (
                   <>

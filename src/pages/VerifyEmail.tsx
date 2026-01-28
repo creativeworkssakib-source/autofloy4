@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Mail, ArrowRight, RefreshCw, Shield, CheckCircle2, Sparkles, Zap, Clock, Lock } from "lucide-react";
+import { Mail, ArrowRight, RefreshCw, Shield, CheckCircle2, Sparkles, Clock, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { useToast } from "@/hooks/use-toast";
@@ -9,6 +9,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { authService } from "@/services/authService";
 import { useSiteSettings } from "@/contexts/SiteSettingsContext";
 import confetti from "canvas-confetti";
+import Logo from "@/components/ui/Logo";
 
 const VerifyEmail = () => {
   const [otp, setOtp] = useState("");
@@ -202,11 +203,7 @@ const VerifyEmail = () => {
         <div className="relative z-10 flex flex-col justify-center px-12 lg:px-16 text-primary-foreground">
           <Link to="/" className="flex items-center gap-2 mb-12">
             <div className="w-12 h-12 rounded-xl bg-primary-foreground/20 backdrop-blur-sm flex items-center justify-center">
-              {settings.logo_url ? (
-                <img src={settings.logo_url} alt={settings.company_name} className="w-8 h-8 rounded object-contain" />
-              ) : (
-                <Zap className="w-6 h-6 text-primary-foreground" />
-              )}
+              <Logo size="sm" />
             </div>
             <span className="text-2xl font-bold">{settings.company_name}</span>
           </Link>
@@ -262,9 +259,7 @@ const VerifyEmail = () => {
         >
           {/* Mobile Logo */}
           <Link to="/" className="lg:hidden flex items-center gap-2 mb-8">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
-              <Zap className="w-5 h-5 text-primary-foreground" />
-            </div>
+            <Logo size="lg" />
             <span className="text-xl font-bold">
               {settings.company_name}
             </span>
