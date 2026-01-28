@@ -3,6 +3,16 @@ import App from "./App.tsx";
 import "./index.css";
 import { register as registerSW } from "./lib/serviceWorkerRegistration";
 
+// CLEANUP: Remove old extension blocker warning state that caused false positives
+// This runs once on app load to ensure clean slate
+try {
+  localStorage.removeItem('extension-warning-dismissed');
+  localStorage.removeItem('rpc-fallback-success');
+  localStorage.removeItem('extension-blocker-detected');
+} catch {
+  // Ignore storage errors
+}
+
 // Register service worker for offline support
 // Updates are handled by GlobalUpdateNotification component
 registerSW({
