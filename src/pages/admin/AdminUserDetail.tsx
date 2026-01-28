@@ -20,6 +20,9 @@ import {
   XCircle,
   Unlock,
   Link2,
+  Globe,
+  Store,
+  Layers,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -28,7 +31,7 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import AdminLayout from "@/components/admin/AdminLayout";
-import { fetchUserDetails, updateUserRole, updateUserStatus, unlockUser, updateUserSyncPermission } from "@/services/adminService";
+import { fetchUserDetails, updateUserRole, updateUserStatus, unlockUser, updateUserSyncPermission, updateUser } from "@/services/adminService";
 
 const AdminUserDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -82,6 +85,19 @@ const AdminUserDetail = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-user", id] });
       toast.success("Sync permission updated successfully");
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+
+  const subscriptionTypeMutation = useMutation({
+    mutationFn: ({ subscriptionType }: { subscriptionType: 'online' | 'offline' | 'both' }) =>
+      updateUser(id!, { subscription_type: subscriptionType }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-user", id] });
+      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+      toast.success("Subscription type updated successfully");
     },
     onError: (error: Error) => {
       toast.error(error.message);
@@ -364,7 +380,7 @@ const AdminUserDetail = () => {
                     <Badge
                       className={
                         subscription.status === "active"
-                          ? "bg-emerald-500/10 text-emerald-500 mt-1"
+                          ? "bg-success/10 text-success mt-1"
                           : "mt-1"
                       }
                     >
@@ -379,6 +395,72 @@ const AdminUserDetail = () => {
                   )}
                 </>
               )}
+            </CardContent>
+          </Card>
+
+          {/* Subscription Type / Access Control */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Layers className="w-5 h-5" />
+                Access Control
+              </CardTitle>
+              <CardDescription>
+                Control which features this user can access
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <p className="text-sm text-muted-foreground mb-2">Subscription Type</p>
+                <div className="grid grid-cols-3 gap-2">
+                  <Button
+                    variant={(user as any).subscription_type === 'online' ? 'default' : 'outline'}
+                    size="sm"
+                    className="gap-1"
+                    onClick={() => subscriptionTypeMutation.mutate({ subscriptionType: 'online' })}
+                    disabled={subscriptionTypeMutation.isPending}
+                  >
+                    <Globe className="w-3 h-3" />
+                    Online
+                  </Button>
+                  <Button
+                    variant={(user as any).subscription_type === 'offline' ? 'default' : 'outline'}
+                    size="sm"
+                    className="gap-1"
+                    onClick={() => subscriptionTypeMutation.mutate({ subscriptionType: 'offline' })}
+                    disabled={subscriptionTypeMutation.isPending}
+                  >
+                    <Store className="w-3 h-3" />
+                    Offline
+                  </Button>
+                  <Button
+                    variant={(user as any).subscription_type === 'both' ? 'default' : 'outline'}
+                    size="sm"
+                    className="gap-1"
+                    onClick={() => subscriptionTypeMutation.mutate({ subscriptionType: 'both' })}
+                    disabled={subscriptionTypeMutation.isPending}
+                  >
+                    <Layers className="w-3 h-3" />
+                    Both
+                  </Button>
+                </div>
+              </div>
+              <Separator />
+              <div className="space-y-2 text-xs">
+                <p className="font-medium">Access Summary:</p>
+                <div className="flex items-center gap-2">
+                  <Globe className="w-3 h-3" />
+                  <span className={(user as any).subscription_type === 'online' || (user as any).subscription_type === 'both' ? 'text-success' : 'text-muted-foreground line-through'}>
+                    Facebook/WhatsApp Automation
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Store className="w-3 h-3" />
+                  <span className={(user as any).subscription_type === 'offline' || (user as any).subscription_type === 'both' ? 'text-success' : 'text-muted-foreground line-through'}>
+                    Offline Shop POS
+                  </span>
+                </div>
+              </div>
             </CardContent>
           </Card>
 
