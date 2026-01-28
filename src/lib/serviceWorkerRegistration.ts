@@ -15,8 +15,35 @@ type Config = {
 const UPDATE_CHECK_INTERVAL = 30 * 1000;
 
 // Version key to detect app updates and force cache clear
-const APP_CACHE_VERSION = 'v2.0.1-enhanced-update';
+// CRITICAL: Update this on EVERY deployment to force cache clear on existing PWAs!
+const APP_CACHE_VERSION = 'v2.0.3-api-update-20250128';
 const CACHE_VERSION_KEY = 'autofloy_cache_version';
+
+// Expose forceUpdate globally for emergency use
+if (typeof window !== 'undefined') {
+  (window as any).forceAppUpdate = async () => {
+    console.log('[SW] Global forceAppUpdate called');
+    try {
+      if ('caches' in window) {
+        const cacheNames = await caches.keys();
+        await Promise.all(cacheNames.map(name => caches.delete(name)));
+        console.log('[SW] Cleared', cacheNames.length, 'caches');
+      }
+      if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map(reg => reg.unregister()));
+        console.log('[SW] Unregistered', registrations.length, 'service workers');
+      }
+      localStorage.removeItem(CACHE_VERSION_KEY);
+      localStorage.removeItem('autofloy_app_version');
+      localStorage.removeItem('autofloy_update_available');
+      window.location.href = window.location.pathname + '?_force=' + Date.now();
+    } catch (e) {
+      console.error('[SW] Force update failed:', e);
+      window.location.reload();
+    }
+  };
+}
 
 // Force service worker update on version change
 async function clearOldCachesIfNeeded(): Promise<boolean> {
