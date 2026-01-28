@@ -185,13 +185,19 @@ export const PricingCard = ({
       >
         <div className="p-4 flex flex-col h-full">
           {/* Badge */}
-          <div className="mb-2 flex items-center gap-2 flex-wrap">
-            <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold", plan.badgeColor)}>
-              {plan.name === "Lifetime" && <Crown className="w-2.5 h-2.5" />}
-              {plan.name === "Business" && <Star className="w-2.5 h-2.5" />}
-              {plan.badge}
-            </span>
-            {getBusinessTypeBadge()}
+          <div className="mb-2 flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold", plan.badgeColor)}>
+                {plan.name === "Lifetime" && <Crown className="w-2.5 h-2.5" />}
+                {plan.name === "Business" && <Star className="w-2.5 h-2.5" />}
+                {plan.badge}
+              </span>
+            </div>
+            {getBusinessTypeBadge() && (
+              <div className="flex items-center">
+                {getBusinessTypeBadge()}
+              </div>
+            )}
           </div>
 
           <h3 className="text-base font-bold mb-0.5">{plan.name}</h3>
@@ -305,13 +311,19 @@ export const PricingCard = ({
     >
       <div className="p-6 flex flex-col h-full">
         {/* Badge */}
-        <div className="h-7 mb-2 flex items-center gap-2 flex-wrap">
-          <span className={cn("inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold", plan.badgeColor)}>
-            {plan.name === "Lifetime" && <Crown className="w-3 h-3" />}
-            {plan.name === "Business" && <Star className="w-3 h-3" />}
-            {plan.badge}
-          </span>
-          {getBusinessTypeBadge()}
+        <div className="min-h-[28px] mb-2 flex flex-col gap-1.5">
+          <div className="flex items-center gap-2">
+            <span className={cn("inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold", plan.badgeColor)}>
+              {plan.name === "Lifetime" && <Crown className="w-3 h-3" />}
+              {plan.name === "Business" && <Star className="w-3 h-3" />}
+              {plan.badge}
+            </span>
+          </div>
+          {getBusinessTypeBadge() && (
+            <div className="flex items-center">
+              {getBusinessTypeBadge()}
+            </div>
+          )}
         </div>
 
         {/* Plan Name */}
