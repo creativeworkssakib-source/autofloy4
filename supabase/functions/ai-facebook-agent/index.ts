@@ -11,9 +11,6 @@ const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
 const AI_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 
-// Platform types - supports Facebook, Instagram, WhatsApp
-type PlatformType = "facebook" | "instagram" | "whatsapp";
-
 interface MessageContext {
   pageId: string;
   senderId: string;
@@ -26,7 +23,6 @@ interface MessageContext {
   postId?: string;
   parentCommentId?: string;
   isReplyToPageComment?: boolean;
-  platform?: PlatformType; // Which platform the message came from
 }
 
 interface PageMemory {
@@ -1135,7 +1131,6 @@ ${analysis.importantPoints.map(p => `- ${p}`).join("\n")}
 }
 
 // Build system prompt - 100% HUMAN CONVERSATIONAL AI - বাস্তব মানুষের মতো (NO ROBOT!)
-// Works for ALL PLATFORMS: Facebook, Instagram, WhatsApp
 function buildSystemPrompt(
   pageMemory: PageMemory, 
   conversationState: ConversationState & { 
@@ -1150,8 +1145,7 @@ function buildSystemPrompt(
   allProducts?: ProductContext[],
   orderTakingEnabled: boolean = true,
   digitalProductContext?: DigitalProductContext, // Rich digital product context
-  productMedia?: ProductMediaItem[], // Product media for AI to use
-  platform: PlatformType = "facebook" // Which platform (Facebook, Instagram, WhatsApp)
+  productMedia?: ProductMediaItem[] // Product media for AI to use
 ): string {
   const tone = pageMemory.preferred_tone === "professional" ? "পেশাদার কিন্তু casual" : "বন্ধুর মতো";
   const language = pageMemory.detected_language === "english" ? "English" : 
@@ -1181,18 +1175,7 @@ function buildSystemPrompt(
   const firstName = senderName?.split(" ")[0] || "";
   const isReturning = (conversationState.total_messages_count || 0) > 1 || conversationState.has_ordered_before;
 
-  // Platform-specific labels
-  const platformLabels: Record<PlatformType, { name: string; icon: string; messagingApp: string }> = {
-    facebook: { name: "Facebook Messenger", icon: "📘", messagingApp: "Messenger" },
-    instagram: { name: "Instagram DM", icon: "📸", messagingApp: "Instagram" },
-    whatsapp: { name: "WhatsApp", icon: "💬", messagingApp: "WhatsApp" },
-  };
-  const currentPlatform = platformLabels[platform] || platformLabels.facebook;
-
   let prompt = `# আপনি একজন REAL বাংলাদেশি মানুষ - AI/Bot একদম না!
-
-## 🌐 PLATFORM: ${currentPlatform.icon} ${currentPlatform.name}
-এই message ${currentPlatform.messagingApp} থেকে এসেছে। Platform অনুযায়ী behave করুন।
 
 আপনি "${pageMemory.business_description || "একটি ব্যবসা"}" এর সেলস পার্সন। নাম ধরুন রাজিব অথবা রুমানা - ঢাকার ছেলে/মেয়ে, ২৫-৩০ বছর বয়স।
 
@@ -1499,54 +1482,37 @@ ${mediaContext}`;
 6. গালি দিলে শান্ত থাকুন: "ঠিক আছে ভাই"
 7. **Customer ছাড়বেন না - sell করেই ছাড়বেন!**
 
-## 📞 CALL & SUPPORT HANDLING - কল/জরুরি সাপোর্ট হ্যান্ডলিং (ALL PLATFORMS):
+## 📞 CALL & SUPPORT HANDLING - কল/জরুরি সাপোর্ট হ্যান্ডলিং:
 
-### ⚠️ গুরুত্বপূর্ণ: AI কল করতে বা রিসিভ করতে পারে না! (Facebook, Instagram, WhatsApp সব জায়গায়)
-
-### 🌐 PLATFORM-AWARE SUPPORT:
-**আপনি এখন ${currentPlatform.messagingApp} এ আছেন।**
-${platform === "whatsapp" ? `
-- এটা WhatsApp, তাই customer already WhatsApp এ আছে
-- Voice note request হলে text এ reply করুন (AI voice note পাঠাতে পারে না)
-` : `
-- Customer ${currentPlatform.messagingApp} থেকে message করছে
-- Support WhatsApp number দিতে পারেন যদি থাকে
-`}
+### ⚠️ গুরুত্বপূর্ণ: AI কল করতে বা রিসিভ করতে পারে না!
 
 ### যখন customer কল করতে চায় বা কলব্যাক চায়:
 ${pageMemory.support_whatsapp_number ? `
 **Support Number আছে: ${pageMemory.support_whatsapp_number}**
-${platform === "whatsapp" ? `
-- "ভাই আমি text এ reply দিচ্ছি, call করতে চাইলে আমাদের business number এ করেন: ${pageMemory.support_whatsapp_number}"
-- "voice note এর চেয়ে text এ বলেন ভাই, আমি ভালো help করতে পারব"
-` : `
-- "ভাই ${currentPlatform.messagingApp} এ আমি message এ আছি, কথা বলতে চাইলে WhatsApp করেন: ${pageMemory.support_whatsapp_number}"
+- "ভাই আমি message এই আছি, কিন্তু কথা বলতে চাইলে এই নম্বরে WhatsApp করতে পারেন: ${pageMemory.support_whatsapp_number}"
 - "call করতে চাইলে এই নম্বরে করেন: ${pageMemory.support_whatsapp_number}"
-`}
 - "urgent কিছু হলে ${pageMemory.support_whatsapp_number} এ knock দেন"
 - "কথা বলে বুঝতে চাইলে এই নম্বরে যোগাযোগ করতে পারেন: ${pageMemory.support_whatsapp_number}"
 ` : `
 **Support Number নাই - gracefully handle করুন:**
-- "ভাই আমি এখানে ${currentPlatform.messagingApp} এ আছি, যা জানতে চান বলেন, আমি help করি"
+- "ভাই আমি এখানে message এ আছি, আপনি যা জানতে চান বলেন, আমি help করি"
 - "call এর option নাই এখন, কিন্তু আমি এখানে আছি - কি help লাগবে বলেন?"
 - "আমি message এই available, যা জানতে চান জিজ্ঞেস করেন"
 - "এই chat এই আমি সব ধরনের help করতে পারব, বলেন কি দরকার"
 `}
 
-### Call/Voice চাওয়ার Pattern গুলো (ALL PLATFORMS):
+### Call চাওয়ার Pattern গুলো:
 - "call করেন", "কল দেন", "ফোন দেন", "কথা বলতে চাই"
 - "callback দেন", "ফোন করব", "call back"
 - "number দেন", "নম্বর দেন"
 - "কথা বলে বুঝতে চাই", "voice এ বলেন"
-- "voice note", "audio message", "voice call"
-- "video call", "ভিডিও কল"
 
 ### Urgent/Critical Situation এ:
 ${pageMemory.support_whatsapp_number ? `
 - "ভাই urgent হলে ${pageMemory.support_whatsapp_number} এ call/WhatsApp করেন, তারা help করবে"
 - "problem বড় হলে আমাদের support এ যোগাযোগ করেন: ${pageMemory.support_whatsapp_number}"
 ` : `
-- "আমি এখানে ${currentPlatform.messagingApp} এ আছি ভাই, কি problem বলেন details এ, solve করার চেষ্টা করি"
+- "আমি এখানে আছি ভাই, কি problem বলেন details এ, solve করার চেষ্টা করি"
 - "যত details দেন তত ভালো help করতে পারব"
 `}
 
@@ -1561,20 +1527,7 @@ ${pageMemory.support_whatsapp_number ? `
 1. Normal product inquiry - message এই solve করেন
 2. Price জিজ্ঞেস করলে - দাম বলে দেন
 3. Order নিতে - chat এই নেন
-4. General questions - answer দেন
-
-### 🌐 CROSS-PLATFORM REDIRECT (যদি দরকার হয়):
-${platform !== "whatsapp" && pageMemory.support_whatsapp_number ? `
-- "ভাই WhatsApp এ আসতে পারলে better - ${pageMemory.support_whatsapp_number}"
-- "আমরা WhatsApp এও available - ${pageMemory.support_whatsapp_number}"
-` : ""}
-${platform === "instagram" ? `
-- "ভাই Facebook page এও message করতে পারেন"
-- "আমরা সব platform এ available"
-` : ""}
-${platform === "facebook" ? `
-- "Instagram এও আমাদের পাবেন"
-` : ""}`;
+4. General questions - answer দেন`;
 
   return prompt;
 }
@@ -2143,8 +2096,7 @@ serve(async (req) => {
       postMediaType,
       parentCommentId,
       isReplyToPageComment,
-      userId,
-      platform = "facebook" // Default to Facebook, but can be instagram, whatsapp
+      userId 
     } = body as MessageContext & { 
       userId: string; 
       postContent?: string; 
@@ -2153,12 +2105,6 @@ serve(async (req) => {
       isReplyToPageComment?: boolean;
     };
 
-    // Detect platform from various sources if not explicitly provided
-    const detectedPlatform: PlatformType = platform || 
-      (body.source === "instagram" || body.igUserId ? "instagram" : 
-       body.source === "whatsapp" || body.waId ? "whatsapp" : "facebook");
-
-    console.log(`[AI Agent] 🌐 Platform: ${detectedPlatform.toUpperCase()}`);
     console.log(`[AI Agent] Processing ${isComment ? "comment" : "message"} for page ${pageId}`);
     console.log(`[AI Agent] Message type: ${messageType}, Text: "${messageText?.substring(0, 50)}"`);
     console.log(`[AI Agent] Is reply to page: ${isReplyToPageComment}, Parent: ${parentCommentId}`);
@@ -2442,8 +2388,7 @@ serve(async (req) => {
       allProducts, // Pass all products for AI knowledge
       orderTakingEnabled, // Pass order taking toggle
       digitalProductContext || undefined, // Pass rich digital product context
-      productMedia, // Pass product media for AI to use
-      detectedPlatform // Pass detected platform (facebook, instagram, whatsapp)
+      productMedia // Pass product media for AI to use
     );
     
     // Build rich AI messages with context
