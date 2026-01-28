@@ -16,23 +16,17 @@ const options = [
   { 
     id: "online" as const, 
     label: "Online", 
-    labelBn: "অনলাইন",
     icon: Globe,
-    description: "Facebook/Instagram automation"
   },
   { 
     id: "offline" as const, 
-    label: "Offline Shop", 
-    labelBn: "অফলাইন শপ",
+    label: "Offline", 
     icon: Store,
-    description: "POS & inventory system"
   },
   { 
     id: "both" as const, 
     label: "Both", 
-    labelBn: "দুটোই",
     icon: Layers,
-    description: "Complete solution"
   },
 ];
 
@@ -44,8 +38,7 @@ export const BusinessTypeSelector = ({
 }: BusinessTypeSelectorProps) => {
   return (
     <div className={cn(
-      "flex rounded-lg p-0.5 bg-muted/50 border border-border/50",
-      compact ? "gap-0.5" : "gap-1",
+      "grid grid-cols-3 rounded-lg p-0.5 bg-muted/50 border border-border/50 gap-0.5",
       className
     )}>
       {options.map((option) => {
@@ -57,15 +50,15 @@ export const BusinessTypeSelector = ({
             key={option.id}
             onClick={() => onChange(option.id)}
             className={cn(
-              "relative flex-1 flex items-center justify-center gap-1 rounded-md transition-all duration-200",
-              compact ? "px-2 py-1.5 text-[10px]" : "px-3 py-2 text-xs",
+              "relative flex items-center justify-center gap-1 rounded-md transition-all duration-200 whitespace-nowrap overflow-hidden",
+              compact ? "px-1.5 py-1.5 text-[9px]" : "px-2 py-1.5 text-[10px]",
               isActive 
                 ? "bg-primary text-primary-foreground shadow-sm" 
                 : "text-muted-foreground hover:text-foreground hover:bg-muted"
             )}
           >
-            <Icon className={cn(compact ? "w-3 h-3" : "w-3.5 h-3.5")} />
-            <span className="font-medium">{option.label}</span>
+            <Icon className="w-3 h-3 shrink-0" />
+            <span className="font-medium truncate">{option.label}</span>
           </button>
         );
       })}

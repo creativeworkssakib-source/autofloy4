@@ -150,6 +150,10 @@ export interface PricingPlan {
   original_price_numeric?: number;
   discount_percent?: number;
   display_order: number;
+  // Offline shop pricing
+  offline_shop_price_numeric?: number;
+  offline_shop_bundle_price_numeric?: number;
+  has_offline_shop_option?: boolean;
   created_at: string;
   updated_at: string;
 }

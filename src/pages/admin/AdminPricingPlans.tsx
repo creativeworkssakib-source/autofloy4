@@ -20,6 +20,9 @@ import {
 
 interface ExtendedPricingPlan extends PricingPlan {
   max_shops?: number;
+  offline_shop_price_numeric?: number;
+  offline_shop_bundle_price_numeric?: number;
+  has_offline_shop_option?: boolean;
 }
 
 const AdminPricingPlans = () => {
@@ -57,6 +60,9 @@ const AdminPricingPlans = () => {
       cta_variant: 'default',
       display_order: plans.length + 1,
       max_shops: 1,
+      offline_shop_price_numeric: 999,
+      offline_shop_bundle_price_numeric: 500,
+      has_offline_shop_option: true,
     });
     setFeaturesText('');
     setIsModalOpen(true);
@@ -173,6 +179,12 @@ const AdminPricingPlans = () => {
                         {plan.max_shops === -1 ? 'Unlimited shops' : `Max ${plan.max_shops || 1} shop(s)`}
                       </span>
                     </div>
+                    {/* Show offline shop pricing */}
+                    {plan.has_offline_shop_option !== false && (
+                      <div className="text-xs text-muted-foreground mt-1">
+                        Offline: ৳{plan.offline_shop_price_numeric || 999} | Bundle: +৳{plan.offline_shop_bundle_price_numeric || 500}
+                      </div>
+                    )}
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -362,6 +374,43 @@ const AdminPricingPlans = () => {
                     placeholder="1 = 1 shop, -1 = unlimited"
                   />
                   <p className="text-xs text-muted-foreground">-1 for unlimited shops</p>
+                </div>
+              </div>
+
+              {/* Offline Shop Pricing Section */}
+              <div className="border-t pt-4 mt-4">
+                <h3 className="font-semibold mb-3 flex items-center gap-2">
+                  <Store className="w-4 h-4" />
+                  Offline Shop Pricing
+                </h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Standalone Price (৳)</Label>
+                    <Input
+                      type="number"
+                      value={formData.offline_shop_price_numeric ?? 999}
+                      onChange={(e) => setFormData({ ...formData, offline_shop_price_numeric: parseInt(e.target.value) || 999 })}
+                      placeholder="999"
+                    />
+                    <p className="text-xs text-muted-foreground">Price when user buys only Offline Shop</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Bundle Add-on Price (৳)</Label>
+                    <Input
+                      type="number"
+                      value={formData.offline_shop_bundle_price_numeric ?? 500}
+                      onChange={(e) => setFormData({ ...formData, offline_shop_bundle_price_numeric: parseInt(e.target.value) || 500 })}
+                      placeholder="500"
+                    />
+                    <p className="text-xs text-muted-foreground">Extra price when added to Online plan</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 mt-3">
+                  <Switch
+                    checked={formData.has_offline_shop_option !== false}
+                    onCheckedChange={(checked) => setFormData({ ...formData, has_offline_shop_option: checked })}
+                  />
+                  <Label>Show Offline Shop Option</Label>
                 </div>
               </div>
 
