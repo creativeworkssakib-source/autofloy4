@@ -2,11 +2,10 @@
  * Global Update Notification Component
  * 
  * Shows update notification across ALL pages (not just offline shop).
- * Uses multiple strategies to detect new deployments:
- * 1. Service Worker update events
- * 2. HTML/JS hash comparison
- * 3. App version comparison
- * 4. Periodic checks with aggressive cache-busting
+ * Uses API-based version checking for reliable PWA updates.
+ * 
+ * KEY FIX: Uses Supabase Edge Function for version check instead of
+ * fetching HTML (which gets cached by service worker).
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -14,127 +13,71 @@ import { RefreshCw, X, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { supabase } from '@/integrations/supabase/client';
 
-// App version - MUST be updated with each deployment
-// This is the most reliable way to detect updates
-const APP_VERSION = '2.0.1';
+// Current app version - MUST match the edge function version
+const APP_VERSION = '2.0.2';
 const VERSION_KEY = 'autofloy_app_version';
-const BUILD_HASH_KEY = 'autofloy_build_hash';
 const VERSION_CHECK_INTERVAL = 30 * 1000; // Check every 30 seconds
-const LAST_CHECK_KEY = 'autofloy_last_version_check';
 
 export const GlobalUpdateNotification = () => {
   const { language } = useLanguage();
   const [hasUpdate, setHasUpdate] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [dismissed, setDismissed] = useState(false);
-  const hasCheckedRef = useRef(false);
+  const [forceUpdate, setForceUpdate] = useState(false);
   const isCheckingRef = useRef(false);
+  const hasInitializedRef = useRef(false);
 
-  // Extract build hash from current page's script tags
-  const getCurrentBuildHash = useCallback((): string | null => {
-    try {
-      // Look for main JS file hash in the page
-      const scripts = document.querySelectorAll('script[src*="/assets/"]');
-      for (const script of scripts) {
-        const src = script.getAttribute('src');
-        // Match patterns like index-abc123.js or main-xyz789.js
-        const match = src?.match(/\/assets\/(?:index|main)-([a-zA-Z0-9]+)\.js/);
-        if (match) {
-          return match[1];
-        }
-      }
-      
-      // Also check CSS files for hash
-      const links = document.querySelectorAll('link[rel="stylesheet"][href*="/assets/"]');
-      for (const link of links) {
-        const href = link.getAttribute('href');
-        const match = href?.match(/\/assets\/index-([a-zA-Z0-9]+)\.css/);
-        if (match) {
-          return match[1];
-        }
-      }
-    } catch (e) {
-      console.debug('[UpdateCheck] Error getting current hash:', e);
-    }
-    return null;
-  }, []);
-
-  // Check for new version using multiple strategies
+  // Check for new version via API (never cached!)
   const checkForNewVersion = useCallback(async () => {
     if (isCheckingRef.current || dismissed) return;
     isCheckingRef.current = true;
     
     try {
-      // Strategy 1: Check APP_VERSION constant (most reliable)
-      const storedVersion = localStorage.getItem(VERSION_KEY);
-      if (storedVersion && storedVersion !== APP_VERSION) {
-        console.log('[UpdateCheck] Version mismatch:', { stored: storedVersion, current: APP_VERSION });
-        setHasUpdate(true);
-        isCheckingRef.current = false;
-        return;
-      }
-      
-      // Store current version if not set
-      if (!storedVersion) {
-        localStorage.setItem(VERSION_KEY, APP_VERSION);
-      }
-
-      // Strategy 2: Fetch fresh HTML and compare build hashes
-      const timestamp = Date.now();
-      const randomStr = Math.random().toString(36).substring(7);
-      const response = await fetch(`/?_v=${timestamp}&_r=${randomStr}`, {
+      // Call the app-version edge function - this is NEVER cached
+      const { data, error } = await supabase.functions.invoke('app-version', {
         method: 'GET',
-        cache: 'no-store',
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
-          'Pragma': 'no-cache',
-          'Expires': '0'
-        }
       });
       
-      if (!response.ok) {
+      if (error) {
+        console.debug('[UpdateCheck] API error:', error);
         isCheckingRef.current = false;
         return;
       }
       
-      const html = await response.text();
-      
-      // Look for build hash in fetched HTML
-      const scriptMatch = html.match(/\/assets\/(?:index|main)-([a-zA-Z0-9]+)\.js/);
-      const cssMatch = html.match(/\/assets\/index-([a-zA-Z0-9]+)\.css/);
-      const newHash = scriptMatch?.[1] || cssMatch?.[1];
-      
-      if (newHash) {
-        const currentHash = getCurrentBuildHash();
-        const storedHash = localStorage.getItem(BUILD_HASH_KEY);
+      if (data?.version) {
+        const serverVersion = data.version;
+        const serverBuildNumber = data.buildNumber || 0;
         
-        // If we have a stored hash and it's different from new hash
-        if (storedHash && storedHash !== newHash) {
-          console.log('[UpdateCheck] Build hash mismatch:', { stored: storedHash, fetched: newHash, current: currentHash });
+        console.log('[UpdateCheck] Version check:', { 
+          current: APP_VERSION, 
+          server: serverVersion,
+          buildNumber: serverBuildNumber 
+        });
+        
+        // Compare versions
+        if (serverVersion !== APP_VERSION) {
+          console.log('[UpdateCheck] Update available!', { current: APP_VERSION, server: serverVersion });
           setHasUpdate(true);
+          setForceUpdate(data.forceUpdate === true);
+          
+          // Store that we detected an update
+          localStorage.setItem('autofloy_update_available', 'true');
         }
-        // If current page hash is different from fetched hash
-        else if (currentHash && currentHash !== newHash) {
-          console.log('[UpdateCheck] Current vs fetched hash mismatch:', { current: currentHash, fetched: newHash });
-          setHasUpdate(true);
-        }
-        // Store the hash for next comparison
-        else if (!storedHash) {
-          localStorage.setItem(BUILD_HASH_KEY, newHash);
-        }
+        
+        // Store current version
+        localStorage.setItem(VERSION_KEY, APP_VERSION);
       }
-      
-      localStorage.setItem(LAST_CHECK_KEY, timestamp.toString());
       
     } catch (error) {
       console.debug('[UpdateCheck] Check failed:', error);
     } finally {
       isCheckingRef.current = false;
     }
-  }, [dismissed, getCurrentBuildHash]);
+  }, [dismissed]);
 
-  // Listen for service worker updates
+  // Listen for service worker updates (backup detection)
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return;
     
@@ -147,7 +90,7 @@ export const GlobalUpdateNotification = () => {
     
     navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange);
     
-    // Also check for waiting service worker
+    // Check for waiting service worker
     navigator.serviceWorker.ready.then(registration => {
       if (registration.waiting) {
         console.log('[UpdateCheck] Service worker waiting to activate');
@@ -178,51 +121,59 @@ export const GlobalUpdateNotification = () => {
 
   // Initial setup and periodic checks
   useEffect(() => {
-    // Initial hash storage
-    if (!hasCheckedRef.current) {
-      hasCheckedRef.current = true;
-      const currentHash = getCurrentBuildHash();
-      if (currentHash && !localStorage.getItem(BUILD_HASH_KEY)) {
-        localStorage.setItem(BUILD_HASH_KEY, currentHash);
-      }
-      if (!localStorage.getItem(VERSION_KEY)) {
-        localStorage.setItem(VERSION_KEY, APP_VERSION);
-      }
+    if (hasInitializedRef.current) return;
+    hasInitializedRef.current = true;
+    
+    // Check if we already detected an update
+    if (localStorage.getItem('autofloy_update_available') === 'true') {
+      setHasUpdate(true);
     }
-
+    
+    // Store current version on first load
+    localStorage.setItem(VERSION_KEY, APP_VERSION);
+    
+    // Initial check after 3 seconds
+    const initialTimeout = setTimeout(checkForNewVersion, 3000);
+    
     // Periodic version check
     const interval = setInterval(checkForNewVersion, VERSION_CHECK_INTERVAL);
     
     // Check on tab visibility change
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        // Small delay to avoid immediate check
-        setTimeout(checkForNewVersion, 2000);
+        setTimeout(checkForNewVersion, 1000);
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    // Initial check after 5 seconds
-    const initialTimeout = setTimeout(checkForNewVersion, 5000);
+    
+    // Check on online event (reconnect)
+    const handleOnline = () => {
+      setTimeout(checkForNewVersion, 2000);
+    };
+    window.addEventListener('online', handleOnline);
 
     return () => {
       clearInterval(interval);
       clearTimeout(initialTimeout);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('online', handleOnline);
     };
-  }, [checkForNewVersion, getCurrentBuildHash]);
+  }, [checkForNewVersion]);
 
   // Check for dismissed state
   useEffect(() => {
-    if (sessionStorage.getItem('update_dismissed') === 'true') {
+    if (sessionStorage.getItem('update_dismissed') === 'true' && !forceUpdate) {
       setDismissed(true);
     }
-  }, []);
+  }, [forceUpdate]);
 
   const handleUpdate = async () => {
     setIsUpdating(true);
     
     try {
+      // Clear update available flag
+      localStorage.removeItem('autofloy_update_available');
+      
       // Clear ALL caches
       if ('caches' in window) {
         const cacheNames = await caches.keys();
@@ -237,20 +188,16 @@ export const GlobalUpdateNotification = () => {
         await Promise.all(registrations.map(reg => reg.unregister()));
       }
       
-      // Clear version storage to force fresh check after reload
+      // Clear version storage
       localStorage.removeItem(VERSION_KEY);
-      localStorage.removeItem(BUILD_HASH_KEY);
-      localStorage.removeItem(LAST_CHECK_KEY);
+      localStorage.removeItem('autofloy_build_hash');
       localStorage.removeItem('autofloy_cache_version');
-      
-      // Clear any cached data
-      localStorage.removeItem('autofloy_dashboard_cache');
-      localStorage.removeItem('autofloy_offline_shop_data');
+      localStorage.removeItem('autofloy_last_version_check');
       
       // Small delay to ensure everything is cleared
-      await new Promise(resolve => setTimeout(resolve, 200));
+      await new Promise(resolve => setTimeout(resolve, 300));
       
-      // Force hard reload
+      // Force hard reload with cache busting
       window.location.href = window.location.pathname + '?_refresh=' + Date.now();
     } catch (error) {
       console.error('[UpdateCheck] Update failed:', error);
@@ -260,6 +207,7 @@ export const GlobalUpdateNotification = () => {
   };
 
   const handleDismiss = () => {
+    if (forceUpdate) return; // Can't dismiss forced updates
     setDismissed(true);
     setHasUpdate(false);
     sessionStorage.setItem('update_dismissed', 'true');
@@ -299,15 +247,17 @@ export const GlobalUpdateNotification = () => {
               </>
             )}
           </Button>
-          <Button 
-            size="sm" 
-            variant="ghost" 
-            onClick={handleDismiss}
-            disabled={isUpdating}
-            className="px-2"
-          >
-            <X className="h-4 w-4" />
-          </Button>
+          {!forceUpdate && (
+            <Button 
+              size="sm" 
+              variant="ghost" 
+              onClick={handleDismiss}
+              disabled={isUpdating}
+              className="px-2"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </AlertDescription>
     </Alert>
