@@ -84,16 +84,6 @@ export const plans: Plan[] = [
     originalPriceNumeric: 1996,
     savings: "Save ৳1,497",
     discountPercent: 75,
-    valueComparison: {
-      title: "Smart Investment",
-      titleBn: "স্মার্ট বিনিয়োগ",
-      items: [
-        { icon: "👨‍💼", text: "1 Staff Hour", textBn: "১ ঘণ্টার বেতন" },
-        { icon: "🤖", text: "Full Month AI", textBn: "পুরো মাসের AI" },
-      ],
-      highlight: "1 hour salary = 30 days automation!",
-      highlightBn: "১ ঘণ্টার বেতনে ৩০ দিনের automation!",
-    },
   },
   {
     id: "professional",
@@ -122,16 +112,6 @@ export const plans: Plan[] = [
     originalPriceNumeric: 9999,
     savings: "Save ৳3,000",
     discountPercent: 30,
-    valueComparison: {
-      title: "Smart Investment",
-      titleBn: "স্মার্ট বিনিয়োগ",
-      items: [
-        { icon: "👨‍💼", text: "1 Staff Salary", textBn: "১জন Staff বেতন" },
-        { icon: "🤖", text: "24/7 AI Assistant", textBn: "২৪/৭ AI Assistant" },
-      ],
-      highlight: "AI never sleeps, never takes leave!",
-      highlightBn: "AI ঘুমায় না, ছুটি নেয় না!",
-    },
   },
   {
     id: "business",
@@ -162,16 +142,6 @@ export const plans: Plan[] = [
     originalPriceNumeric: 39998,
     savings: "Save ৳19,999",
     discountPercent: 50,
-    valueComparison: {
-      title: "Smart Investment",
-      titleBn: "স্মার্ট বিনিয়োগ",
-      items: [
-        { icon: "👥", text: "2 Staff Salary", textBn: "২জন Staff বেতন" },
-        { icon: "🚀", text: "Unlimited AI", textBn: "Unlimited AI" },
-      ],
-      highlight: "2 staff = Unlimited automation power!",
-      highlightBn: "২জন Staff-এর বেতনে Unlimited automation!",
-    },
   },
   {
     id: "lifetime",
@@ -196,16 +166,6 @@ export const plans: Plan[] = [
     cta: "Contact Us",
     ctaVariant: "gradient",
     popular: false,
-    valueComparison: {
-      title: "One-time Investment",
-      titleBn: "একবারের বিনিয়োগ",
-      items: [
-        { icon: "💻", text: "1 Laptop", textBn: "১টা Laptop" },
-        { icon: "♾️", text: "Forever Free", textBn: "চিরকাল ফ্রি" },
-      ],
-      highlight: "One laptop price = Lifetime access!",
-      highlightBn: "একটা Laptop-এর দামে সারাজীবন!",
-    },
   },
 ];
 
