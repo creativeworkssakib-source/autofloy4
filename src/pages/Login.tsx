@@ -1,14 +1,13 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Eye, EyeOff, Mail, Lock, ArrowRight, Zap } from "lucide-react";
+import { Eye, EyeOff, Mail, Lock, Zap, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSiteSettings } from "@/contexts/SiteSettingsContext";
-import Logo from "@/components/ui/Logo";
 
 const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -81,7 +80,11 @@ const Login = () => {
         <div className="relative z-10 flex flex-col justify-center px-12 lg:px-16 text-primary-foreground">
           <Link to="/" className="flex items-center gap-2 mb-12">
             <div className="w-12 h-12 rounded-xl bg-primary-foreground/20 backdrop-blur-sm flex items-center justify-center">
-              <Logo size="sm" showCustomLogo={true} />
+              {settings.logo_url ? (
+                <img src={settings.logo_url} alt={settings.company_name} className="w-8 h-8 rounded object-contain" />
+              ) : (
+                <Zap className="w-6 h-6 text-primary-foreground" />
+              )}
             </div>
             <span className="text-2xl font-bold">{settings.company_name}</span>
           </Link>
@@ -100,7 +103,7 @@ const Login = () => {
             
             <div className="flex items-center gap-4 p-4 rounded-xl bg-primary-foreground/10 backdrop-blur-sm">
               <div className="w-12 h-12 rounded-full bg-success/20 flex items-center justify-center">
-                <Logo size="sm" />
+                <Zap className="w-6 h-6 text-success" />
               </div>
               <div>
                 <p className="font-semibold">Your shop is running 24/7</p>
@@ -125,7 +128,13 @@ const Login = () => {
         >
           {/* Mobile Logo */}
           <Link to="/" className="lg:hidden flex items-center gap-2 mb-8">
-            <Logo size="lg" />
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
+              {settings.logo_url ? (
+                <img src={settings.logo_url} alt={settings.company_name} className="w-6 h-6 rounded object-contain" />
+              ) : (
+                <Zap className="w-5 h-5 text-primary-foreground" />
+              )}
+            </div>
             <span className="text-xl font-bold">{settings.company_name}</span>
           </Link>
 

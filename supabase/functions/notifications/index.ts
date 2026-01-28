@@ -92,45 +92,19 @@ serve(async (req) => {
   // GET - Fetch notifications with retry
   if (req.method === "GET") {
     try {
-      let notifications: unknown[] = [];
-      let fetchError: unknown = null;
-      
-      // Retry logic with better error handling for transient network issues
-      for (let attempt = 0; attempt < 3; attempt++) {
-        try {
-          const { data, error } = await supabase
-            .from("notifications")
-            .select("id, title, body, is_read, created_at, notification_type, metadata")
-            .eq("user_id", userId)
-            .order("created_at", { ascending: false })
-            .limit(50);
-          
-          if (error) {
-            fetchError = error;
-            console.log(`Attempt ${attempt + 1}/3 failed:`, error.message || error);
-            if (attempt < 2) {
-              await new Promise(resolve => setTimeout(resolve, 200 * (attempt + 1)));
-              continue;
-            }
-          } else {
-            notifications = data || [];
-            fetchError = null;
-            break;
-          }
-        } catch (e) {
-          fetchError = e;
-          console.log(`Attempt ${attempt + 1}/3 threw error:`, e instanceof Error ? e.message : String(e));
-          if (attempt < 2) {
-            await new Promise(resolve => setTimeout(resolve, 200 * (attempt + 1)));
-          }
-        }
-      }
+      const { data: notifications, error } = await withRetry(async () => {
+        return await supabase
+          .from("notifications")
+          .select("id, title, body, is_read, created_at, notification_type, metadata")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false })
+          .limit(50);
+      });
 
-      if (fetchError) {
-        console.error("Fetch notifications error after retries:", fetchError);
-        // Return empty array instead of error for transient issues
-        return new Response(JSON.stringify({ notifications: [] }), {
-          status: 200,
+      if (error) {
+        console.error("Fetch notifications error:", error);
+        return new Response(JSON.stringify({ error: "Failed to fetch notifications" }), {
+          status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
@@ -141,9 +115,8 @@ serve(async (req) => {
       });
     } catch (error) {
       console.error("GET notifications error:", error);
-      // Graceful fallback - return empty notifications instead of 500
-      return new Response(JSON.stringify({ notifications: [] }), {
-        status: 200,
+      return new Response(JSON.stringify({ error: "Internal server error" }), {
+        status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }

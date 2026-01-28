@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Menu, X, LayoutDashboard, Settings, LogOut } from "lucide-react";
+import { Menu, X, Zap, LayoutDashboard, Settings, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { LanguageToggle } from "@/components/LanguageToggle";
@@ -15,7 +15,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { UserAvatar } from "@/components/UserAvatar";
-import Logo from "@/components/ui/Logo";
 
 const Header = () => {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -93,10 +92,10 @@ const Header = () => {
         <div className="flex items-center justify-between h-16 md:h-20">
           {/* Logo - redirects to dashboard if logged in */}
           <Link to={user ? "/dashboard" : "/"} className="flex items-center gap-2 group">
-            <div className="transition-transform duration-500 group-hover:rotate-[360deg]">
-              <Logo size="md" />
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-lg transition-transform duration-500 group-hover:rotate-[360deg]">
+              <Zap className="w-5 h-5 text-primary-foreground" />
             </div>
-            <span className="text-xl font-bold">
+            <span className="text-2xl font-bold">
               Auto<span className="gradient-text">Floy</span>
             </span>
           </Link>
