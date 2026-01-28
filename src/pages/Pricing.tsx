@@ -1,17 +1,15 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Check, Sparkles, Crown, Zap, Star, ArrowRight, Gift, Loader2, TrendingUp } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Check, Crown, Zap, Loader2 } from "lucide-react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { useRef } from "react";
 import { plans as staticPlans, Plan } from "@/data/plans";
-import ValueComparisonBox from "@/components/pricing/ValueComparisonBox";
 import { useSiteSettings } from "@/contexts/SiteSettingsContext";
 import { useAuth } from "@/contexts/AuthContext";
 import ContactLifetimeModal from "@/components/pricing/ContactLifetimeModal";
-import TrialCountdown from "@/components/pricing/TrialCountdown";
+import PricingCard, { PricingPlan } from "@/components/pricing/PricingCard";
+import { BusinessType } from "@/components/pricing/BusinessTypeSelector";
 import { supabase } from "@/integrations/supabase/client";
 
 interface DbPricingPlan {
@@ -33,6 +31,9 @@ interface DbPricingPlan {
   original_price_numeric?: number;
   discount_percent?: number;
   display_order: number;
+  offline_shop_price_numeric?: number;
+  offline_shop_bundle_price_numeric?: number;
+  has_offline_shop_option?: boolean;
 }
 
 const Pricing = () => {
@@ -41,9 +42,15 @@ const Pricing = () => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(1);
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
-  const [plans, setPlans] = useState<Plan[]>(staticPlans);
+  const [plans, setPlans] = useState<PricingPlan[]>([]);
   const [loading, setLoading] = useState(true);
   
+  // Track business type selection per plan
+  const [businessTypes, setBusinessTypes] = useState<Record<string, BusinessType>>({});
+  
+  // Check if user has active trial
+  const hasActiveTrial = user?.isTrialActive && user?.trialEndDate;
+
   // Fetch plans from database
   useEffect(() => {
     const fetchPlans = async () => {
@@ -56,43 +63,65 @@ const Pricing = () => {
 
         if (error) {
           console.warn('Could not fetch pricing plans:', error);
-          setPlans(staticPlans);
+          // Transform static plans
+          const transformed = staticPlans.map(p => ({
+            ...p,
+            offlineShopPrice: 999,
+            offlineShopBundlePrice: 500,
+            hasOfflineShopOption: p.id !== 'free-trial' && p.id !== 'lifetime',
+          }));
+          setPlans(transformed);
         } else if (data && data.length > 0) {
-          // Transform database plans to match Plan interface
-          const dbPlans: Plan[] = (data as unknown as DbPricingPlan[]).map((p) => {
-            // Get valueComparison from static plans
-            const staticPlan = staticPlans.find(sp => sp.id === p.id);
-            
-            return {
-              id: p.id,
-              name: p.name,
-              badge: p.badge || p.name.toUpperCase(),
-              badgeColor: p.badge_color || "bg-primary/10 text-primary",
-              price: p.price_numeric === 0 ? (p.id === 'lifetime' ? '' : '৳0') : `${p.currency}${p.price_numeric.toLocaleString()}`,
-              priceNumeric: p.price_numeric,
-              // Lifetime plan should have no period
-              period: p.id === 'lifetime' ? '' : (p.period || '/month'),
-              description: p.description || '',
-              features: p.features || [],
-              cta: p.cta_text || `Choose ${p.name}`,
-              ctaVariant: (p.cta_variant as "default" | "gradient" | "success") || "default",
-              note: p.id === 'free-trial' ? 'No credit card required' : undefined,
-              popular: p.is_popular,
-              originalPrice: p.original_price_numeric ? `${p.currency}${p.original_price_numeric.toLocaleString()}` : undefined,
-              originalPriceNumeric: p.original_price_numeric || undefined,
-              savings: p.original_price_numeric && p.price_numeric 
-                ? `Save ${p.currency}${(p.original_price_numeric - p.price_numeric).toLocaleString()}`
-                : undefined,
-              discountPercent: p.discount_percent || undefined,
-              // Merge valueComparison from static plans
-              valueComparison: staticPlan?.valueComparison,
-            };
-          });
+          // Transform database plans to match PricingPlan interface
+          const dbPlans: PricingPlan[] = (data as unknown as DbPricingPlan[])
+            .filter(p => p.id !== 'offline-shop-standalone') // Don't show standalone as separate card
+            .map((p) => {
+              return {
+                id: p.id,
+                name: p.name,
+                badge: p.badge || p.name.toUpperCase(),
+                badgeColor: p.badge_color || "bg-primary/10 text-primary",
+                price: p.price_numeric === 0 ? (p.id === 'lifetime' ? '' : '৳0') : `${p.currency}${p.price_numeric.toLocaleString()}`,
+                priceNumeric: p.price_numeric,
+                period: p.id === 'lifetime' ? '' : (p.period || '/month'),
+                description: p.description || '',
+                features: p.features || [],
+                cta: p.cta_text || `Choose ${p.name}`,
+                ctaVariant: (p.cta_variant as "default" | "gradient" | "success") || "default",
+                note: p.id === 'free-trial' ? 'No credit card required' : undefined,
+                popular: p.is_popular,
+                originalPrice: p.original_price_numeric ? `${p.currency}${p.original_price_numeric.toLocaleString()}` : undefined,
+                originalPriceNumeric: p.original_price_numeric || undefined,
+                savings: p.original_price_numeric && p.price_numeric 
+                  ? `Save ${p.currency}${(p.original_price_numeric - p.price_numeric).toLocaleString()}`
+                  : undefined,
+                discountPercent: p.discount_percent || undefined,
+                // Offline shop pricing
+                offlineShopPrice: p.offline_shop_price_numeric || 999,
+                offlineShopBundlePrice: p.offline_shop_bundle_price_numeric || 500,
+                hasOfflineShopOption: p.has_offline_shop_option !== false,
+              };
+            });
           setPlans(dbPlans);
+        } else {
+          // Fallback to static plans
+          const transformed = staticPlans.map(p => ({
+            ...p,
+            offlineShopPrice: 999,
+            offlineShopBundlePrice: 500,
+            hasOfflineShopOption: p.id !== 'free-trial' && p.id !== 'lifetime',
+          }));
+          setPlans(transformed);
         }
       } catch (err) {
         console.warn('Error fetching plans:', err);
-        setPlans(staticPlans);
+        const transformed = staticPlans.map(p => ({
+          ...p,
+          offlineShopPrice: 999,
+          offlineShopBundlePrice: 500,
+          hasOfflineShopOption: p.id !== 'free-trial' && p.id !== 'lifetime',
+        }));
+        setPlans(transformed);
       } finally {
         setLoading(false);
       }
@@ -100,9 +129,6 @@ const Pricing = () => {
 
     fetchPlans();
   }, []);
-  
-  // Check if user has active trial
-  const hasActiveTrial = user?.isTrialActive && user?.trialEndDate;
 
   const handleScroll = () => {
     if (scrollRef.current) {
@@ -123,8 +149,12 @@ const Pricing = () => {
     }
   };
 
+  const handleBusinessTypeChange = (planId: string, type: BusinessType) => {
+    setBusinessTypes(prev => ({ ...prev, [planId]: type }));
+  };
+
   // Find max features count for equal height
-  const maxFeatures = Math.max(...plans.map(p => p.features.length));
+  const maxFeatures = Math.max(...plans.map(p => p.features.length), 8);
 
   if (loading) {
     return (
@@ -154,10 +184,6 @@ const Pricing = () => {
               transition={{ duration: 0.5 }}
               className="text-center max-w-3xl mx-auto"
             >
-              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium mb-3">
-                <Sparkles className="w-4 h-4" />
-                Simple, Transparent Pricing
-              </span>
               <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold mb-3">
                 Choose Your{" "}
                 <span className="gradient-text">Perfect Plan</span>
@@ -181,103 +207,18 @@ const Pricing = () => {
                 style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
               >
                 {plans.map((plan, index) => (
-                  <motion.div
+                  <PricingCard
                     key={plan.id}
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 0.3, delay: index * 0.05 }}
-                    className={`relative flex-shrink-0 w-[280px] snap-center bg-card rounded-xl border transition-all duration-300 flex flex-col ${
-                      plan.popular
-                        ? "border-primary shadow-[0_0_30px_-10px_hsl(var(--primary))]"
-                        : "border-border/50"
-                    }`}
-                  >
-                    <div className="p-4 flex flex-col h-full">
-                      {/* Badge */}
-                      <div className="mb-3">
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${plan.badgeColor}`}>
-                          {plan.name === "Lifetime" && <Crown className="w-2.5 h-2.5" />}
-                          {plan.name === "Business" && <Star className="w-2.5 h-2.5" />}
-                          {plan.badge}
-                        </span>
-                      </div>
-
-                      <h3 className="text-base font-bold mb-0.5">{plan.name}</h3>
-                      <p className="text-xs text-muted-foreground mb-3">{plan.description}</p>
-
-                      {/* Price */}
-                      <div className="mb-4 min-h-[70px]">
-                        {plan.id === "free-trial" && hasActiveTrial ? (
-                          <TrialCountdown trialEndDate={user.trialEndDate!} />
-                        ) : (
-                          <>
-                            {plan.originalPrice && (
-                              <div className="flex items-center gap-1.5 mb-0.5">
-                                <span className="text-xs text-muted-foreground line-through">{plan.originalPrice}</span>
-                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-destructive/10 text-destructive">
-                                  <Gift className="w-2.5 h-2.5" />{plan.discountPercent}% OFF
-                                </span>
-                              </div>
-                            )}
-                            <div className="flex items-baseline gap-0.5">
-                              <span className="text-2xl font-extrabold text-primary">{plan.price}</span>
-                              <span className="text-xs text-muted-foreground">{plan.period}</span>
-                            </div>
-                            {plan.savings && (
-                              <p className="text-xs font-medium text-success mt-0.5">{plan.savings}</p>
-                            )}
-                          </>
-                        )}
-                      </div>
-
-                      {/* Value Comparison - Mobile */}
-                      {plan.valueComparison && (
-                        <ValueComparisonBox comparison={plan.valueComparison} compact />
-                      )}
-
-                      {/* Features */}
-                      <ul className="space-y-1.5 flex-1 mb-4 mt-3">
-                        {plan.features.map((feature) => (
-                          <li key={feature} className="flex items-start gap-1.5 text-xs">
-                            <Check className="w-3.5 h-3.5 text-success shrink-0 mt-0.5" />
-                            <span className="text-muted-foreground">{feature}</span>
-                          </li>
-                        ))}
-                      </ul>
-
-                      {/* CTA */}
-                      <div className="mt-auto pt-3 border-t border-border/30">
-                        {plan.id === "lifetime" ? (
-                          <Button
-                            variant={plan.ctaVariant}
-                            className="w-full h-9 text-xs"
-                            onClick={() => setIsContactModalOpen(true)}
-                          >
-                            {plan.cta}
-                            <ArrowRight className="w-3.5 h-3.5 ml-1" />
-                          </Button>
-                        ) : (
-                          <Button variant={plan.ctaVariant} className="w-full h-9 text-xs" asChild>
-                            <Link to={plan.id === "free-trial" ? "/trial-start" : `/checkout?plan=${plan.id}`}>
-                              {plan.cta}
-                              <ArrowRight className="w-3.5 h-3.5 ml-1" />
-                            </Link>
-                          </Button>
-                        )}
-                        {plan.note && (
-                          <p className="text-[10px] text-muted-foreground text-center mt-1.5">{plan.note}</p>
-                        )}
-                      </div>
-                    </div>
-
-                    {plan.popular && (
-                      <div className="absolute -top-2.5 left-1/2 -translate-x-1/2">
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-primary text-primary-foreground shadow-md">
-                          <Zap className="w-2.5 h-2.5" />Most Popular
-                        </span>
-                      </div>
-                    )}
-                  </motion.div>
+                    plan={plan}
+                    index={index}
+                    businessType={businessTypes[plan.id] || "online"}
+                    onBusinessTypeChange={(type) => handleBusinessTypeChange(plan.id, type)}
+                    maxFeatures={maxFeatures}
+                    hasActiveTrial={!!hasActiveTrial}
+                    trialEndDate={user?.trialEndDate}
+                    onContactClick={() => setIsContactModalOpen(true)}
+                    isMobile
+                  />
                 ))}
               </div>
 
@@ -303,113 +244,17 @@ const Pricing = () => {
             {/* Desktop Grid - Balanced Cards */}
             <div className="hidden lg:grid lg:grid-cols-5 gap-5 pt-2">
               {plans.map((plan, index) => (
-                <motion.div
+                <PricingCard
                   key={plan.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.4, delay: index * 0.06 }}
-                  className={`relative bg-card rounded-xl border transition-all duration-300 hover:shadow-lg flex flex-col ${
-                    plan.popular
-                      ? "border-primary shadow-[0_2px_30px_-8px_hsl(var(--primary))] scale-[1.02] z-10"
-                      : "border-border/50 hover:border-primary/30"
-                  }`}
-                >
-                  <div className="p-6 flex flex-col h-full">
-                    {/* Badge */}
-                    <div className="h-7 mb-2">
-                      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${plan.badgeColor}`}>
-                        {plan.name === "Lifetime" && <Crown className="w-3 h-3" />}
-                        {plan.name === "Business" && <Star className="w-3 h-3" />}
-                        {plan.badge}
-                      </span>
-                    </div>
-
-                    {/* Plan Name */}
-                    <h3 className="text-lg font-bold mb-0.5">{plan.name}</h3>
-                    <p className="text-[13px] text-muted-foreground mb-3 h-9 line-clamp-2">{plan.description}</p>
-
-                    {/* Price - Fixed height */}
-                    <div className="mb-5 h-[85px]">
-                      {plan.id === "free-trial" && hasActiveTrial ? (
-                        <div className="pt-2">
-                          <TrialCountdown trialEndDate={user.trialEndDate!} />
-                        </div>
-                      ) : plan.originalPrice ? (
-                        <>
-                          <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                            <span className="text-sm text-muted-foreground line-through">{plan.originalPrice}</span>
-                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-destructive/10 text-destructive">
-                              <Gift className="w-2.5 h-2.5" />{plan.discountPercent}% OFF
-                            </span>
-                          </div>
-                          <div className="flex items-baseline gap-1">
-                            <span className="text-[26px] font-extrabold text-primary">{plan.price}</span>
-                            <span className="text-sm text-muted-foreground">{plan.period}</span>
-                          </div>
-                          <p className="text-[13px] font-medium text-success mt-1">{plan.savings}</p>
-                        </>
-                      ) : (
-                        <>
-                          <div className="h-5" />
-                          <div className="flex items-baseline gap-1">
-                            <span className="text-[26px] font-extrabold text-primary">{plan.price}</span>
-                            <span className="text-sm text-muted-foreground">{plan.period}</span>
-                          </div>
-                          <div className="h-5" />
-                        </>
-                      )}
-                    </div>
-
-                    {/* Value Comparison - Desktop */}
-                    {plan.valueComparison && (
-                      <ValueComparisonBox comparison={plan.valueComparison} />
-                    )}
-
-                    {/* Features - Minimum height for alignment */}
-                    <ul className="space-y-2.5 flex-1 mb-5 mt-4" style={{ minHeight: `${maxFeatures * 26}px` }}>
-                      {plan.features.map((feature) => (
-                        <li key={feature} className="flex items-start gap-2">
-                          <Check className="w-4 h-4 text-success shrink-0 mt-0.5" />
-                          <span className="text-[13px] text-muted-foreground leading-tight">{feature}</span>
-                        </li>
-                      ))}
-                    </ul>
-
-                    {/* CTA - Always at bottom */}
-                    <div className="mt-auto pt-4 border-t border-border/30">
-                      {plan.id === "lifetime" ? (
-                        <Button
-                          variant={plan.ctaVariant}
-                          className="w-full h-11 text-sm"
-                          onClick={() => setIsContactModalOpen(true)}
-                        >
-                          {plan.cta}
-                          <ArrowRight className="w-4 h-4 ml-1.5" />
-                        </Button>
-                      ) : (
-                        <Button variant={plan.ctaVariant} className="w-full h-11 text-sm" asChild>
-                          <Link to={plan.id === "free-trial" ? "/trial-start" : `/checkout?plan=${plan.id}`}>
-                            {plan.cta}
-                            <ArrowRight className="w-4 h-4 ml-1.5" />
-                          </Link>
-                        </Button>
-                      )}
-                      <div className="h-5 mt-2 flex items-center justify-center">
-                        {plan.note && (
-                          <p className="text-[11px] text-muted-foreground text-center">{plan.note}</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {plan.popular && (
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-20">
-                      <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-primary text-primary-foreground shadow-md whitespace-nowrap">
-                        <Zap className="w-3.5 h-3.5" />Most Popular
-                      </span>
-                    </div>
-                  )}
-                </motion.div>
+                  plan={plan}
+                  index={index}
+                  businessType={businessTypes[plan.id] || "online"}
+                  onBusinessTypeChange={(type) => handleBusinessTypeChange(plan.id, type)}
+                  maxFeatures={maxFeatures}
+                  hasActiveTrial={!!hasActiveTrial}
+                  trialEndDate={user?.trialEndDate}
+                  onContactClick={() => setIsContactModalOpen(true)}
+                />
               ))}
             </div>
           </div>
