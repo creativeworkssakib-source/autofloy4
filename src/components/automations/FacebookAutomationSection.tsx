@@ -65,6 +65,11 @@ interface SellingRules {
   allowDiscount: boolean;
   maxDiscountPercent: number;
   allowLowProfitSale: boolean;
+  // Bargaining Power - AI can negotiate with customers
+  bargainingEnabled: boolean;
+  bargainingLevel: "low" | "medium" | "high" | "aggressive"; // How aggressively AI can bargain
+  minAcceptableDiscount: number; // Minimum discount AI can accept from customer's bargaining
+  maxBargainingRounds: number; // Max back-and-forth before final offer
 }
 
 interface AIBehaviorRules {
@@ -114,6 +119,10 @@ const FacebookAutomationSection = ({
     allowDiscount: false,
     maxDiscountPercent: 10,
     allowLowProfitSale: false,
+    bargainingEnabled: false,
+    bargainingLevel: "medium",
+    minAcceptableDiscount: 5,
+    maxBargainingRounds: 3,
   });
 
   // AI behavior rules
@@ -169,6 +178,10 @@ const FacebookAutomationSection = ({
               allowDiscount: memory.selling_rules.allowDiscount ?? false,
               maxDiscountPercent: memory.selling_rules.maxDiscountPercent ?? 10,
               allowLowProfitSale: memory.selling_rules.allowLowProfitSale ?? false,
+              bargainingEnabled: memory.selling_rules.bargainingEnabled ?? false,
+              bargainingLevel: memory.selling_rules.bargainingLevel ?? "medium",
+              minAcceptableDiscount: memory.selling_rules.minAcceptableDiscount ?? 5,
+              maxBargainingRounds: memory.selling_rules.maxBargainingRounds ?? 3,
             });
           }
 
@@ -616,6 +629,118 @@ const FacebookAutomationSection = ({
                     onCheckedChange={(checked) => setSellingRules(prev => ({ ...prev, allowLowProfitSale: checked }))}
                   />
                 </div>
+
+                <Separator />
+
+                {/* Bargaining Power Section */}
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label className="text-sm flex items-center gap-1">
+                      🤝 AI Bargaining Power
+                    </Label>
+                    <p className="text-xs text-muted-foreground">AI can negotiate prices with customers to close sales</p>
+                  </div>
+                  <Switch
+                    checked={sellingRules.bargainingEnabled}
+                    onCheckedChange={(checked) => setSellingRules(prev => ({ ...prev, bargainingEnabled: checked }))}
+                  />
+                </div>
+
+                {sellingRules.bargainingEnabled && (
+                  <div className="space-y-4 pl-4 p-4 rounded-lg bg-muted/30 border border-border/30">
+                    <p className="text-xs text-muted-foreground mb-3">
+                      ⚡ যখন customer দাম কমাতে চায়, AI বুদ্ধিমত্তার সাথে negotiate করে sale close করতে পারবে
+                    </p>
+                    
+                    {/* Bargaining Level */}
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Bargaining Style</Label>
+                      <Select
+                        value={sellingRules.bargainingLevel}
+                        onValueChange={(value: "low" | "medium" | "high" | "aggressive") => 
+                          setSellingRules(prev => ({ ...prev, bargainingLevel: value }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select bargaining style" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="low">
+                            😊 Soft - সহজেই ছাড় দিবে (Quick sale)
+                          </SelectItem>
+                          <SelectItem value="medium">
+                            💪 Medium - কিছুটা negotiate করবে
+                          </SelectItem>
+                          <SelectItem value="high">
+                            🔥 Strong - ভালোভাবে দর কষাকষি করবে
+                          </SelectItem>
+                          <SelectItem value="aggressive">
+                            ⚔️ Aggressive - শেষ পর্যন্ত দাম ধরে রাখবে
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Min Acceptable Discount */}
+                    <div className="space-y-2">
+                      <Label className="text-sm flex items-center gap-2">
+                        <Percent className="h-3 w-3" />
+                        Minimum Acceptable Discount
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        Customer চাইলে AI সর্বনিম্ন যে পরিমাণ ছাড় দিতে পারবে
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          min={0}
+                          max={sellingRules.maxDiscountPercent || 50}
+                          value={sellingRules.minAcceptableDiscount}
+                          onChange={(e) => setSellingRules(prev => ({ 
+                            ...prev, 
+                            minAcceptableDiscount: Math.min(
+                              parseInt(e.target.value) || 0, 
+                              prev.maxDiscountPercent || 50
+                            )
+                          }))}
+                          className="w-24"
+                        />
+                        <span className="text-sm text-muted-foreground">% (min ছাড়)</span>
+                      </div>
+                    </div>
+
+                    {/* Max Bargaining Rounds */}
+                    <div className="space-y-2">
+                      <Label className="text-sm">Max Negotiation Rounds</Label>
+                      <p className="text-xs text-muted-foreground">
+                        কতবার পর্যন্ত AI দর কষাকষি করবে, তারপর final offer দিবে
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          min={1}
+                          max={10}
+                          value={sellingRules.maxBargainingRounds}
+                          onChange={(e) => setSellingRules(prev => ({ 
+                            ...prev, 
+                            maxBargainingRounds: Math.max(1, Math.min(10, parseInt(e.target.value) || 3))
+                          }))}
+                          className="w-24"
+                        />
+                        <span className="text-sm text-muted-foreground">বার</span>
+                      </div>
+                    </div>
+
+                    {/* Preview Box */}
+                    <div className="p-3 rounded-md bg-primary/5 border border-primary/20">
+                      <p className="text-xs font-medium text-primary mb-1">📋 AI এভাবে কাজ করবে:</p>
+                      <p className="text-xs text-muted-foreground">
+                        Customer দাম কমাতে চাইলে AI {sellingRules.bargainingLevel === "low" ? "সহজে" : sellingRules.bargainingLevel === "medium" ? "কিছুটা চেষ্টার পর" : sellingRules.bargainingLevel === "high" ? "ভালোভাবে negotiate করে" : "শক্তভাবে দাম ধরে রেখে"} সর্বোচ্চ {sellingRules.maxDiscountPercent || 10}% পর্যন্ত ছাড় দিতে পারবে। 
+                        প্রথমে {sellingRules.minAcceptableDiscount || 5}% অফার করবে এবং সর্বোচ্চ {sellingRules.maxBargainingRounds || 3} বার negotiate করার পর final offer দিবে।
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
