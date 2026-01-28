@@ -71,8 +71,6 @@ const FeatureCard = memo(({
         whileHover={{ scale: 1.1, rotate: 5, y: -2 }}
         transition={{ type: "spring", stiffness: 400, damping: 15 }}
       >
-        {/* Inner shine */}
-        <div className="premium-icon-shine" />
         {/* Top highlight */}
         <div className="absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-white/30 to-transparent rounded-t-xl pointer-events-none" />
         {/* Bottom shadow */}
@@ -318,7 +316,6 @@ const FeaturesSection = memo(() => {
             whileHover={{ scale: 1.05 }}
           >
             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#F97316] to-[#EA580C] flex items-center justify-center shadow-md relative overflow-hidden">
-              <div className="premium-icon-shine" />
               <div className="absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-white/30 to-transparent rounded-t-lg pointer-events-none" />
               <Rocket className="w-4 h-4 text-white relative z-10" />
             </div>
@@ -346,9 +343,8 @@ const FeaturesSection = memo(() => {
               className="inline-flex items-center gap-2.5 px-5 py-2.5 rounded-full bg-gradient-to-r from-secondary/15 to-primary/10 text-secondary border border-secondary/20 shadow-sm"
               whileHover={{ scale: 1.05 }}
             >
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-secondary to-primary flex items-center justify-center shadow-md relative overflow-hidden">
-                <div className="absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-white/30 to-transparent rounded-t-lg pointer-events-none" />
-                <MessageSquare className="w-4 h-4 text-white relative z-10" />
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-secondary to-primary flex items-center justify-center shadow-md">
+                <MessageSquare className="w-4 h-4 text-white" />
               </div>
               <span className="font-semibold">Online Business Automation (9 Features)</span>
             </motion.span>
@@ -372,9 +368,8 @@ const FeaturesSection = memo(() => {
               className="inline-flex items-center gap-2.5 px-5 py-2.5 rounded-full bg-gradient-to-r from-success/15 to-primary/10 text-success-accessible border border-success/20 shadow-sm"
               whileHover={{ scale: 1.05 }}
             >
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-success to-primary flex items-center justify-center shadow-md relative overflow-hidden">
-                <div className="absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-white/30 to-transparent rounded-t-lg pointer-events-none" />
-                <Store className="w-4 h-4 text-white relative z-10" />
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-success to-primary flex items-center justify-center shadow-md">
+                <Store className="w-4 h-4 text-white" />
               </div>
               <span className="font-semibold">Offline Shop Management (12 Features)</span>
             </motion.span>
