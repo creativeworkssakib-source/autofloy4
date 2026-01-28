@@ -55,7 +55,7 @@ serve(async (req) => {
     try {
       const { data: user, error } = await supabase
         .from("users")
-        .select("id, display_name, email, phone, subscription_plan, trial_end_date, is_trial_active, subscription_started_at, subscription_ends_at, email_verified, phone_verified, avatar_url, created_at")
+        .select("id, display_name, email, phone, subscription_plan, trial_end_date, is_trial_active, subscription_started_at, subscription_ends_at, email_verified, phone_verified, avatar_url, created_at, support_whatsapp_number")
         .eq("id", userId)
         .single();
 
@@ -137,11 +137,12 @@ serve(async (req) => {
   if (req.method === "PUT") {
     try {
       const body = await req.json();
-      const { display_name, phone } = body;
+      const { display_name, phone, support_whatsapp_number } = body;
 
       const updateData: Record<string, any> = {};
       if (display_name !== undefined) updateData.display_name = display_name;
       if (phone !== undefined) updateData.phone = phone;
+      if (support_whatsapp_number !== undefined) updateData.support_whatsapp_number = support_whatsapp_number;
 
       if (Object.keys(updateData).length === 0) {
         return new Response(JSON.stringify({ error: "No fields to update" }), {
@@ -154,7 +155,7 @@ serve(async (req) => {
         .from("users")
         .update(updateData)
         .eq("id", userId)
-        .select("id, display_name, email, phone, subscription_plan, trial_end_date, is_trial_active, subscription_started_at, subscription_ends_at, email_verified, phone_verified, avatar_url, created_at")
+        .select("id, display_name, email, phone, subscription_plan, trial_end_date, is_trial_active, subscription_started_at, subscription_ends_at, email_verified, phone_verified, avatar_url, created_at, support_whatsapp_number")
         .single();
 
       if (error) {

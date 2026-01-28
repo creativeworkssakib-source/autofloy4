@@ -2140,6 +2140,19 @@ serve(async (req) => {
       });
     }
 
+    // Fetch user's global support WhatsApp number (used for all platforms)
+    const { data: userData } = await supabase
+      .from("users")
+      .select("support_whatsapp_number")
+      .eq("id", effectiveUserId)
+      .single();
+    
+    // Use global user support number (priority) or fall back to page-specific (legacy)
+    const globalSupportNumber = userData?.support_whatsapp_number || pageMemory.support_whatsapp_number;
+    if (globalSupportNumber) {
+      pageMemory.support_whatsapp_number = globalSupportNumber;
+    }
+
     // Check automation settings
     const settings = pageMemory.automation_settings || {};
     const orderTakingEnabled = settings.orderTaking !== false; // Default true for backwards compat
