@@ -58,6 +58,36 @@ async function syncCustomersFromConversations(supabase: any, userId: string, inc
     console.error("Error fetching orders:", orderError);
   }
 
+  // Get customer names from execution logs (Facebook sends name in incoming_payload.from.name)
+  const { data: executionLogs, error: logError } = await supabase
+    .from("execution_logs")
+    .select("incoming_payload")
+    .eq("user_id", userId)
+    .not("incoming_payload", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(500);
+
+  // Build a map of sender_id -> name from execution logs
+  const senderNameMap = new Map<string, string>();
+  if (!logError && executionLogs) {
+    for (const log of executionLogs) {
+      const payload = log.incoming_payload;
+      if (payload?.from?.id && payload?.from?.name) {
+        // Only set if not already set (we want the most recent name)
+        if (!senderNameMap.has(payload.from.id)) {
+          senderNameMap.set(payload.from.id, payload.from.name);
+        }
+      }
+      // Also check sender_id directly
+      if (payload?.sender_id && payload?.sender_name) {
+        if (!senderNameMap.has(payload.sender_id)) {
+          senderNameMap.set(payload.sender_id, payload.sender_name);
+        }
+      }
+    }
+  }
+  console.log("[customer-followups] Found names from logs:", Object.fromEntries(senderNameMap));
+
   interface OrderRecord {
     customer_fb_id: string;
     customer_name: string | null;
@@ -87,13 +117,23 @@ async function syncCustomersFromConversations(supabase: any, userId: string, inc
     const hasPurchased = purchasedCustomers.has(conv.sender_id);
     const orderData = customerOrderData.get(conv.sender_id);
     
-    // Determine customer name - prefer collected, then sender_name, then order data, then FB ID
-    let customerName = conv.collected_name || conv.sender_name || orderData?.customer_name;
+    // Get name from execution logs (Facebook incoming payload)
+    const nameFromLogs = senderNameMap.get(conv.sender_id);
+    
+    // Determine customer name priority:
+    // 1. collected_name (customer explicitly provided)
+    // 2. nameFromLogs (from Facebook/IG/WA incoming data)
+    // 3. sender_name (from ai_conversations)
+    // 4. order data customer_name
+    // 5. Formatted ID as fallback
+    let customerName = conv.collected_name || nameFromLogs || conv.sender_name || orderData?.customer_name;
     
     // If still no name, use a formatted version of the FB ID for real customers
     if (!customerName && !isTestData) {
       customerName = `Customer #${conv.sender_id.substring(0, 8)}`;
     }
+    
+    console.log(`[customer-followups] Customer ${conv.sender_id}: name=${customerName}, source=${conv.collected_name ? 'collected' : nameFromLogs ? 'logs' : conv.sender_name ? 'sender_name' : 'fallback'}`);
     
     // Upsert customer followup record
     const { error: upsertError } = await supabase
