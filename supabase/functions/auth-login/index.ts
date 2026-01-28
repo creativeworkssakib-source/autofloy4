@@ -242,10 +242,15 @@ serve(async (req) => {
       email: user.email,
       phone: user.phone,
       display_name: user.display_name,
+      avatar_url: user.avatar_url,
       subscription_plan: user.subscription_plan,
+      subscription_type: user.subscription_type || 'online', // IMPORTANT: Include subscription_type
       trial_end_date: user.trial_end_date,
       is_trial_active: user.is_trial_active,
+      subscription_started_at: user.subscription_started_at,
+      subscription_ends_at: user.subscription_ends_at,
       email_verified: user.email_verified,
+      phone_verified: user.phone_verified,
     };
 
     console.log(`User logged in: ${user.id.substring(0, 8)}...`);

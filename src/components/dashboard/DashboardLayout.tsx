@@ -51,6 +51,7 @@ import { useSyncSettings } from "@/hooks/useSyncSettings";
 import { checkAdminRole } from "@/services/adminService";
 import Footer from "@/components/layout/Footer";
 import { FeatureDisabledOverlay } from "@/components/FeatureDisabledOverlay";
+import { usePlanLimits } from "@/hooks/usePlanLimits";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -66,6 +67,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const { syncEnabled } = useSyncSettings();
   const { t, language } = useLanguage();
   const { isDigitalMode } = useProductType();
+  const { hasOnlineAccess, canRunAutomation } = usePlanLimits();
   const {
     notifications,
     unreadCount,
@@ -134,15 +136,22 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     return location.pathname.startsWith(path);
   };
 
-  // Check if online business is disabled
+  // Check if online business is disabled by admin
   const isOnlineBusinessDisabled = settings.online_business_enabled === false;
+  
+  // Check if user has online access based on subscription_type
+  const onlineAccessCheck = canRunAutomation(0); // Check automation access as proxy for online access
+  const noOnlineAccess = !hasOnlineAccess;
   
   // Routes that should still work when online business is disabled (shared with offline shop)
   const allowedRoutesWhenOnlineDisabled = ['/dashboard/sync', '/dashboard/settings'];
   const isAllowedRoute = allowedRoutesWhenOnlineDisabled.some(route => location.pathname.startsWith(route));
   
-  // Only show overlay for online business features, not for shared features like sync/settings
-  const shouldShowDisabledOverlay = isOnlineBusinessDisabled && !isAllowedRoute;
+  // Show overlay for users without online access (except for sync/settings pages)
+  const shouldShowNoAccessOverlay = noOnlineAccess && !isAllowedRoute;
+  
+  // Only show admin-disabled overlay for online business features, not for shared features like sync/settings
+  const shouldShowDisabledOverlay = !noOnlineAccess && isOnlineBusinessDisabled && !isAllowedRoute;
 
   return (
     <div className="min-h-screen bg-muted/30">
@@ -393,6 +402,18 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
 
         {/* Page Content */}
         <div className="flex-1 p-4 sm:p-6 lg:p-8 relative">
+          {/* Show frozen overlay if user doesn't have online access (except for sync/settings pages) */}
+          {shouldShowNoAccessOverlay && (
+            <FeatureDisabledOverlay 
+              featureName={language === "bn" ? "অনলাইন বিজনেস" : "Online Business"} 
+              featureType="online"
+              customMessage={language === "bn" 
+                ? "আপনার শুধু Offline Shop subscription আছে। Online Business ফিচার ব্যবহার করতে Online plan upgrade করুন।"
+                : "You have an Offline Shop subscription only. Please upgrade to an Online plan to use Online Business features."
+              }
+            />
+          )}
+          
           {/* Show frozen overlay if feature is disabled by admin (except for sync/settings pages) */}
           {shouldShowDisabledOverlay && (
             <FeatureDisabledOverlay featureName={language === "bn" ? "অনলাইন বিজনেস" : "Online Business"} featureType="online" />

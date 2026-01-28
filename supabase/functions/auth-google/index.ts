@@ -353,6 +353,7 @@ serve(async (req) => {
             display_name: userData.display_name,
             avatar_url: userData.avatar_url,
             subscription_plan: userData.subscription_plan,
+            subscription_type: userData.subscription_type || (userData.subscription_plan === 'trial' ? 'both' : 'online'), // Include subscription_type
             trial_end_date: userData.trial_end_date,
             is_trial_active: userData.is_trial_active,
             subscription_started_at: userData.subscription_started_at,
