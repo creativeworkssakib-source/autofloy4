@@ -377,32 +377,6 @@ const FeaturesSection = memo(() => {
           </div>
         </div>
 
-        {/* Bottom Stats */}
-        <motion.div 
-          className="mt-16 p-6 rounded-2xl bg-gradient-to-r from-primary/5 via-secondary/5 to-success/5 border border-border/50"
-          initial={{ opacity: 0, y: 30 }}
-          animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
-          transition={{ delay: 0.6 }}
-        >
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
-            <div>
-              <div className="text-3xl font-bold text-primary">21+</div>
-              <div className="text-sm text-muted-foreground">Total Features</div>
-            </div>
-            <div>
-              <div className="text-3xl font-bold text-secondary">50+</div>
-              <div className="text-sm text-muted-foreground">Hours Saved/Month</div>
-            </div>
-            <div>
-              <div className="text-3xl font-bold text-success">৳80,000+</div>
-              <div className="text-sm text-muted-foreground">Monthly Savings</div>
-            </div>
-            <div>
-              <div className="text-3xl font-bold text-accent">24/7</div>
-              <div className="text-sm text-muted-foreground">AI Support</div>
-            </div>
-          </div>
-        </motion.div>
       </div>
     </section>
   );
