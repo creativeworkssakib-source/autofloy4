@@ -143,6 +143,8 @@ export interface PricingPlan {
   description?: string;
   description_bn?: string;
   features: string[];
+  online_features?: string[];
+  offline_features?: string[];
   cta_text?: string;
   cta_variant?: string;
   is_popular: boolean;
