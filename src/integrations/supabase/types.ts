@@ -1735,6 +1735,7 @@ export type Database = {
           preferred_tone: string | null
           products_summary: string | null
           selling_rules: Json | null
+          support_whatsapp_number: string | null
           updated_at: string
           user_id: string
           webhook_subscribed: boolean | null
@@ -1758,6 +1759,7 @@ export type Database = {
           preferred_tone?: string | null
           products_summary?: string | null
           selling_rules?: Json | null
+          support_whatsapp_number?: string | null
           updated_at?: string
           user_id: string
           webhook_subscribed?: boolean | null
@@ -1781,6 +1783,7 @@ export type Database = {
           preferred_tone?: string | null
           products_summary?: string | null
           selling_rules?: Json | null
+          support_whatsapp_number?: string | null
           updated_at?: string
           user_id?: string
           webhook_subscribed?: boolean | null
