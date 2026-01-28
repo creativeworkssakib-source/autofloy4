@@ -493,8 +493,15 @@ export default function CustomerFollowups() {
     return matchesSearch && matchesPurchase && matchesPlatform;
   });
 
-  // Platform stats
+  // Platform stats - count from filtered customers to match visible list
   const platformStats = {
+    facebook: filteredCustomers.filter(c => c.platform.toLowerCase() === 'facebook').length,
+    instagram: filteredCustomers.filter(c => c.platform.toLowerCase() === 'instagram').length,
+    whatsapp: filteredCustomers.filter(c => c.platform.toLowerCase() === 'whatsapp').length,
+  };
+
+  // Total platform stats (unfiltered) for quick select buttons
+  const totalPlatformStats = {
     facebook: customers.filter(c => c.platform.toLowerCase() === 'facebook').length,
     instagram: customers.filter(c => c.platform.toLowerCase() === 'instagram').length,
     whatsapp: customers.filter(c => c.platform.toLowerCase() === 'whatsapp').length,
@@ -706,7 +713,7 @@ export default function CustomerFollowups() {
                 <Button variant="outline" size="sm" onClick={selectAllVisible}>
                   {language === "bn" ? "সব সিলেক্ট করুন" : "Select All"}
                 </Button>
-                {platformStats.facebook > 0 && (
+                {totalPlatformStats.facebook > 0 && (
                   <Button 
                     variant="outline" 
                     size="sm" 
@@ -714,10 +721,10 @@ export default function CustomerFollowups() {
                     className="text-blue-600 border-blue-200 hover:bg-blue-50"
                   >
                     <Facebook className="h-3 w-3 mr-1" />
-                    Facebook ({platformStats.facebook})
+                    Facebook ({totalPlatformStats.facebook})
                   </Button>
                 )}
-                {platformStats.instagram > 0 && (
+                {totalPlatformStats.instagram > 0 && (
                   <Button 
                     variant="outline" 
                     size="sm" 
@@ -725,10 +732,10 @@ export default function CustomerFollowups() {
                     className="text-pink-600 border-pink-200 hover:bg-pink-50"
                   >
                     <Instagram className="h-3 w-3 mr-1" />
-                    Instagram ({platformStats.instagram})
+                    Instagram ({totalPlatformStats.instagram})
                   </Button>
                 )}
-                {platformStats.whatsapp > 0 && (
+                {totalPlatformStats.whatsapp > 0 && (
                   <Button 
                     variant="outline" 
                     size="sm" 
@@ -736,7 +743,7 @@ export default function CustomerFollowups() {
                     className="text-green-600 border-green-200 hover:bg-green-50"
                   >
                     <MessageCircle className="h-3 w-3 mr-1" />
-                    WhatsApp ({platformStats.whatsapp})
+                    WhatsApp ({totalPlatformStats.whatsapp})
                   </Button>
                 )}
                 {selectedCustomers.length > 0 && (
