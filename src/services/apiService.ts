@@ -553,7 +553,45 @@ export async function deleteNotification(notificationId: string): Promise<boolea
   }
 }
 
-// Dashboard Stats - with retry and FALLBACK to direct Supabase RPC
+// Cache key for dashboard stats
+const DASHBOARD_STATS_CACHE_KEY = "autofloy_dashboard_stats_cache";
+const DASHBOARD_STATS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+// Get cached dashboard stats
+function getCachedDashboardStats(): DashboardStats | null {
+  try {
+    const cached = localStorage.getItem(DASHBOARD_STATS_CACHE_KEY);
+    if (cached) {
+      const { data, timestamp } = JSON.parse(cached);
+      // Return cached data if still valid (within TTL)
+      if (Date.now() - timestamp < DASHBOARD_STATS_CACHE_TTL) {
+        console.log("[dashboard-stats] Using cached data (valid)");
+        return data;
+      }
+      // Return stale data as fallback (better than showing 0)
+      console.log("[dashboard-stats] Using stale cached data as fallback");
+      return data;
+    }
+  } catch (e) {
+    console.warn("[dashboard-stats] Cache read error:", e);
+  }
+  return null;
+}
+
+// Save dashboard stats to cache
+function cacheDashboardStats(stats: DashboardStats): void {
+  try {
+    localStorage.setItem(DASHBOARD_STATS_CACHE_KEY, JSON.stringify({
+      data: stats,
+      timestamp: Date.now(),
+    }));
+    console.log("[dashboard-stats] Cached stats successfully");
+  } catch (e) {
+    console.warn("[dashboard-stats] Cache write error:", e);
+  }
+}
+
+// Dashboard Stats - with retry, FALLBACK to direct Supabase RPC, and LOCAL CACHE
 export async function fetchDashboardStats(): Promise<DashboardStats | null> {
   // First try Edge Function
   try {
@@ -570,6 +608,9 @@ export async function fetchDashboardStats(): Promise<DashboardStats | null> {
     if (response.ok) {
       const data = await response.json();
       console.log("[dashboard-stats] Edge Function success:", data.stats);
+      if (data.stats) {
+        cacheDashboardStats(data.stats);
+      }
       return data.stats;
     }
   } catch (error) {
@@ -583,7 +624,8 @@ export async function fetchDashboardStats(): Promise<DashboardStats | null> {
     
     if (!userId) {
       console.error("[dashboard-stats] No user ID for RPC fallback");
-      return null;
+      // Return cached data if available
+      return getCachedDashboardStats();
     }
 
     console.log("[dashboard-stats] Using RPC fallback for user:", userId);
@@ -594,15 +636,21 @@ export async function fetchDashboardStats(): Promise<DashboardStats | null> {
 
     if (error) {
       console.error("[dashboard-stats] RPC fallback failed:", error);
-      return null;
+      // Return cached data if API fails
+      return getCachedDashboardStats();
     }
 
     console.log("[dashboard-stats] RPC fallback success:", data);
     markRpcFallbackSuccess(); // Mark that fallback works - no need for extension warning
-    return data as unknown as DashboardStats;
+    const stats = data as unknown as DashboardStats;
+    if (stats) {
+      cacheDashboardStats(stats);
+    }
+    return stats;
   } catch (fallbackError) {
     console.error("[dashboard-stats] RPC fallback error:", fallbackError);
-    return null;
+    // Return cached data on complete failure
+    return getCachedDashboardStats();
   }
 }
 
