@@ -278,7 +278,7 @@ const BenefitsSection = forwardRef<HTMLElement, Record<string, never>>((_props, 
             ✅ Real Results from Real Businesses
           </motion.span>
           <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-6">
-            Why 500+ Businesses{" "}
+            Why Thousands of Businesses{" "}
             <span className="gradient-text">Choose {settings.company_name}</span>
           </h2>
           <p className="text-lg text-muted-foreground">
