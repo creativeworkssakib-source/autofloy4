@@ -33,8 +33,8 @@ async function verifyToken(authHeader: string | null): Promise<string | null> {
 }
 
 // Sync customers from AI conversations
-async function syncCustomersFromConversations(supabase: any, userId: string) {
-  console.log("[customer-followups] Syncing customers for user:", userId);
+async function syncCustomersFromConversations(supabase: any, userId: string, includeTestData: boolean = false) {
+  console.log("[customer-followups] Syncing customers for user:", userId, "includeTestData:", includeTestData);
   
   // Get all AI conversations for this user
   const { data: conversations, error: convError } = await supabase
@@ -70,10 +70,30 @@ async function syncCustomersFromConversations(supabase: any, userId: string) {
   const customerOrderData = new Map((orders as OrderRecord[] || []).map((o) => [o.customer_fb_id, o]));
 
   let syncedCount = 0;
+  let skippedTestData = 0;
   
   for (const conv of conversations || []) {
+    // Skip test data unless specifically requested
+    const isTestData = conv.sender_id?.startsWith('test') || 
+                       conv.sender_id?.includes('test_') ||
+                       conv.sender_name?.toLowerCase().includes('test');
+    
+    if (isTestData && !includeTestData) {
+      skippedTestData++;
+      console.log(`[customer-followups] Skipping test customer: ${conv.sender_id}`);
+      continue;
+    }
+
     const hasPurchased = purchasedCustomers.has(conv.sender_id);
     const orderData = customerOrderData.get(conv.sender_id);
+    
+    // Determine customer name - prefer collected, then sender_name, then order data, then FB ID
+    let customerName = conv.collected_name || conv.sender_name || orderData?.customer_name;
+    
+    // If still no name, use a formatted version of the FB ID for real customers
+    if (!customerName && !isTestData) {
+      customerName = `Customer #${conv.sender_id.substring(0, 8)}`;
+    }
     
     // Upsert customer followup record
     const { error: upsertError } = await supabase
@@ -81,9 +101,9 @@ async function syncCustomersFromConversations(supabase: any, userId: string) {
       .upsert({
         user_id: userId,
         customer_fb_id: conv.sender_id,
-        customer_name: conv.collected_name || conv.sender_name || orderData?.customer_name,
+        customer_name: customerName,
         customer_phone: conv.collected_phone || orderData?.customer_phone,
-        platform: "facebook",
+        platform: "facebook", // TODO: Detect platform from page_id or conversation context
         has_purchased: hasPurchased,
         total_messages: conv.total_messages_count || 0,
         last_message_at: conv.last_message_at,
@@ -102,8 +122,8 @@ async function syncCustomersFromConversations(supabase: any, userId: string) {
     }
   }
 
-  console.log(`[customer-followups] Synced ${syncedCount} customers`);
-  return { synced: syncedCount };
+  console.log(`[customer-followups] Synced ${syncedCount} customers, skipped ${skippedTestData} test records`);
+  return { synced: syncedCount, skipped: skippedTestData };
 }
 
 // Get customers with filtering
@@ -130,6 +150,13 @@ async function getCustomers(supabase: any, userId: string, filters: any) {
 
   if (filters.hasPhone) {
     query = query.not("customer_phone", "is", null);
+  }
+
+  // Filter out test data by default (unless includeTestData is true)
+  if (!filters.includeTestData) {
+    // Exclude customers with test IDs using NOT ILIKE pattern
+    // Note: We use neq for RPC or filter in JS after fetch
+    query = query.filter('customer_fb_id', 'not.ilike', 'test%');
   }
 
   const { data, error } = await query;
@@ -362,11 +389,13 @@ serve(async (req) => {
       const hasPurchased = url.searchParams.get("hasPurchased");
       const platform = url.searchParams.get("platform");
       const hasPhone = url.searchParams.get("hasPhone") === "true";
+      const includeTestData = url.searchParams.get("includeTestData") === "true";
       
       const customers = await getCustomers(supabase, userId, {
         hasPurchased: hasPurchased ? hasPurchased === "true" : undefined,
         platform,
-        hasPhone
+        hasPhone,
+        includeTestData
       });
       
       return new Response(JSON.stringify({ customers }), {
@@ -376,7 +405,16 @@ serve(async (req) => {
 
     // POST /customer-followups/sync - Sync from conversations
     if (req.method === "POST" && path === "sync") {
-      const result = await syncCustomersFromConversations(supabase, userId);
+      // Parse body for options
+      let includeTestData = false;
+      try {
+        const body = await req.json();
+        includeTestData = body?.includeTestData === true;
+      } catch {
+        // No body or invalid JSON - use defaults
+      }
+      
+      const result = await syncCustomersFromConversations(supabase, userId, includeTestData);
       return new Response(JSON.stringify(result), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
