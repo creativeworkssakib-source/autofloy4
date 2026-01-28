@@ -1942,6 +1942,7 @@ export type Database = {
           discount_percent: number | null
           display_order: number | null
           features: Json | null
+          has_offline_shop_option: boolean | null
           id: string
           is_active: boolean | null
           is_popular: boolean | null
@@ -1949,6 +1950,8 @@ export type Database = {
           max_shops: number | null
           name: string
           name_bn: string | null
+          offline_shop_bundle_price_numeric: number | null
+          offline_shop_price_numeric: number | null
           original_price_numeric: number | null
           period: string | null
           price_numeric: number | null
@@ -1966,6 +1969,7 @@ export type Database = {
           discount_percent?: number | null
           display_order?: number | null
           features?: Json | null
+          has_offline_shop_option?: boolean | null
           id: string
           is_active?: boolean | null
           is_popular?: boolean | null
@@ -1973,6 +1977,8 @@ export type Database = {
           max_shops?: number | null
           name: string
           name_bn?: string | null
+          offline_shop_bundle_price_numeric?: number | null
+          offline_shop_price_numeric?: number | null
           original_price_numeric?: number | null
           period?: string | null
           price_numeric?: number | null
@@ -1990,6 +1996,7 @@ export type Database = {
           discount_percent?: number | null
           display_order?: number | null
           features?: Json | null
+          has_offline_shop_option?: boolean | null
           id?: string
           is_active?: boolean | null
           is_popular?: boolean | null
@@ -1997,6 +2004,8 @@ export type Database = {
           max_shops?: number | null
           name?: string
           name_bn?: string | null
+          offline_shop_bundle_price_numeric?: number | null
+          offline_shop_price_numeric?: number | null
           original_price_numeric?: number | null
           period?: string | null
           price_numeric?: number | null
