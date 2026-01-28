@@ -811,7 +811,7 @@ export default function CustomerFollowups() {
                           <div className="flex items-start sm:items-center justify-between gap-2">
                             <div className="min-w-0 flex-1">
                               <h4 className="font-medium text-sm sm:text-base truncate">
-                                {customer.customer_name || "Unknown Customer"}
+                                {customer.customer_name || `Customer #${customer.customer_fb_id.substring(0, 8)}`}
                               </h4>
                               <div className="flex items-center gap-1.5 flex-wrap mt-1">
                                 <Badge 
