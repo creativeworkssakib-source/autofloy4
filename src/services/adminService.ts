@@ -443,6 +443,7 @@ export interface PaymentRequest {
   admin_notes: string | null;
   approved_at: string | null;
   approved_by: string | null;
+  subscription_type?: 'online' | 'offline' | 'both';
   created_at: string;
   updated_at: string;
   user?: {
