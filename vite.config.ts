@@ -28,7 +28,7 @@ export default defineConfig(({ mode }) => ({
         background_color: '#0f172a',
         display: 'standalone',
         orientation: 'portrait',
-        start_url: '/',
+        start_url: '/?source=pwa',
         scope: '/',
         categories: ['business', 'productivity', 'shopping'],
         lang: 'bn',
@@ -56,39 +56,43 @@ export default defineConfig(({ mode }) => ({
           {
             name: 'দোকান ড্যাশবোর্ড',
             short_name: 'Dashboard',
-            url: '/offline-shop',
+            url: '/offline-shop?source=pwa',
             icons: [{ src: '/pwa-192x192.png', sizes: '192x192' }]
           },
           {
             name: 'নতুন বিক্রি',
             short_name: 'New Sale',
-            url: '/offline-shop/sales',
+            url: '/offline-shop/sales?source=pwa',
             icons: [{ src: '/pwa-192x192.png', sizes: '192x192' }]
           }
         ]
       },
       workbox: {
-        // Cache all static assets
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,woff,ttf,json}'],
-        maximumFileSizeToCacheInBytes: 10 * 1024 * 1024, // 10MB
+        // Cache patterns - be more selective
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,woff,ttf}'],
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5MB max
         
-        // Important: Include index.html for navigation
+        // Navigation fallback
         navigateFallback: 'index.html',
-        navigateFallbackDenylist: [/^\/api/, /^\/functions/],
+        navigateFallbackDenylist: [/^\/api/, /^\/functions/, /^\/sw\.js/],
         
-        // Skip waiting - immediately activate new service worker
+        // CRITICAL: Skip waiting and claim clients immediately
         skipWaiting: true,
         clientsClaim: true,
         
+        // Clean old caches on activate
+        cleanupOutdatedCaches: true,
+        
         // Runtime caching strategies
         runtimeCaching: [
-          // Cache Google Fonts
+          // Cache Google Fonts with long expiration
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
             handler: 'CacheFirst',
             options: {
               cacheName: 'google-fonts-cache',
               expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
+              cacheableResponse: { statuses: [0, 200] },
             },
           },
           {
@@ -97,32 +101,54 @@ export default defineConfig(({ mode }) => ({
             options: {
               cacheName: 'gstatic-fonts-cache',
               expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
+              cacheableResponse: { statuses: [0, 200] },
             },
           },
-          // API calls - Network Only (no caching for fresh data)
+          // API calls - ALWAYS Network Only (never cache)
           {
             urlPattern: /^https:\/\/.*\.supabase\.co\/functions\/.*/i,
             handler: 'NetworkOnly',
           },
-          // REST API calls - Network Only
           {
             urlPattern: /^https:\/\/.*\.supabase\.co\/rest\/.*/i,
             handler: 'NetworkOnly',
           },
-          // Image caching
+          {
+            urlPattern: /^https:\/\/.*\.supabase\.co\/auth\/.*/i,
+            handler: 'NetworkOnly',
+          },
+          // Static images - cache with shorter expiration
           {
             urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp)$/i,
-            handler: 'CacheFirst',
+            handler: 'StaleWhileRevalidate',
             options: {
               cacheName: 'image-cache',
-              expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 * 30 }, // 30 days
+              expiration: { 
+                maxEntries: 50, 
+                maxAgeSeconds: 60 * 60 * 24 * 7 // 7 days only
+              },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          // JS/CSS assets - Network First to always get latest
+          {
+            urlPattern: /\/assets\/.*\.(?:js|css)$/i,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'assets-cache',
+              networkTimeoutSeconds: 10,
+              expiration: {
+                maxEntries: 30,
+                maxAgeSeconds: 60 * 60 * 24 // 1 day
+              },
+              cacheableResponse: { statuses: [0, 200] },
             },
           },
         ],
       },
       // Dev options
       devOptions: {
-        enabled: false, // Enable in dev if needed for testing
+        enabled: false,
       },
     }),
   ].filter(Boolean),
