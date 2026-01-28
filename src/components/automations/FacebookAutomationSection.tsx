@@ -749,32 +749,6 @@ const FacebookAutomationSection = ({
                   </div>
                 </div>
 
-                <Separator />
-
-                {/* Support WhatsApp Number */}
-                <div className="space-y-3 pt-2">
-                  <div className="space-y-0.5">
-                    <Label className="text-sm font-medium flex items-center gap-2">
-                      <Phone className="h-4 w-4 text-success" />
-                      Support WhatsApp Number
-                    </Label>
-                    <p className="text-xs text-muted-foreground">
-                      AI will share this number when customers ask to call or need urgent help
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      type="tel"
-                      placeholder="+880 1XXX XXXXXX"
-                      value={supportWhatsappNumber}
-                      onChange={(e) => setSupportWhatsappNumber(e.target.value)}
-                      className="max-w-[220px]"
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground italic">
-                    যখন customer কল করতে চাইবে বা urgent help লাগবে, AI এই নম্বরটি দিয়ে দিবে।
-                  </p>
-                </div>
               </div>
             </div>
           </CardContent>

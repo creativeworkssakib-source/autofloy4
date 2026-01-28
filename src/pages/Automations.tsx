@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import PlatformAutomationsGrid from "@/components/automations/PlatformAutomationsGrid";
+import GlobalAutomationSettings from "@/components/automations/GlobalAutomationSettings";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -191,6 +192,11 @@ const Automations = () => {
               </CardContent>
             </Card>
           </motion.div>
+        )}
+
+        {/* Global AI Settings - Always visible for all platforms */}
+        {hasAccess && (
+          <GlobalAutomationSettings />
         )}
 
         {/* Platform Automations Grid */}

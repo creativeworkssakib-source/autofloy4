@@ -4721,6 +4721,7 @@ export type Database = {
           subscription_ends_at: string | null
           subscription_plan: Database["public"]["Enums"]["subscription_plan_type"]
           subscription_started_at: string | null
+          support_whatsapp_number: string | null
           trial_end_date: string | null
           trial_started_at: string | null
           updated_at: string | null
@@ -4745,6 +4746,7 @@ export type Database = {
           subscription_ends_at?: string | null
           subscription_plan?: Database["public"]["Enums"]["subscription_plan_type"]
           subscription_started_at?: string | null
+          support_whatsapp_number?: string | null
           trial_end_date?: string | null
           trial_started_at?: string | null
           updated_at?: string | null
@@ -4769,6 +4771,7 @@ export type Database = {
           subscription_ends_at?: string | null
           subscription_plan?: Database["public"]["Enums"]["subscription_plan_type"]
           subscription_started_at?: string | null
+          support_whatsapp_number?: string | null
           trial_end_date?: string | null
           trial_started_at?: string | null
           updated_at?: string | null
