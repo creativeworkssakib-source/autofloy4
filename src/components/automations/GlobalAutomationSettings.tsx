@@ -23,7 +23,7 @@ const GlobalAutomationSettings = ({ className }: GlobalAutomationSettingsProps) 
     const loadSettings = async () => {
       setIsLoading(true);
       try {
-        const token = localStorage.getItem("auth_token");
+        const token = localStorage.getItem("autofloy_token");
         if (!token) return;
 
         const response = await supabase.functions.invoke("me", {
@@ -46,7 +46,7 @@ const GlobalAutomationSettings = ({ className }: GlobalAutomationSettingsProps) 
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      const token = localStorage.getItem("auth_token");
+      const token = localStorage.getItem("autofloy_token");
       if (!token) throw new Error("Not authenticated");
 
       // Use direct fetch with PUT method instead of supabase.functions.invoke
