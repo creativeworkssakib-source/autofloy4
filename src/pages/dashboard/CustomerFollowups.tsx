@@ -79,8 +79,10 @@ interface CustomerFollowup {
 
 interface BulkFollowupResult {
   customerId: string;
+  customerFbId: string;
   customerName: string;
   message: string;
+  platform: string;
   status: 'pending' | 'generating' | 'generated' | 'sending' | 'sent' | 'error';
   error?: string;
 }
@@ -171,7 +173,7 @@ export default function CustomerFollowups() {
     newProductInfoLabel: language === "bn" ? "নতুন প্রোডাক্টের তথ্য" : "New Product Info",
     customPromptLabel: language === "bn" ? "কাস্টম প্রম্পট" : "Custom Prompt",
     generatedMessageLabel: language === "bn" ? "তৈরি মেসেজ" : "Generated Message",
-    bulkFollowUp: language === "bn" ? "বাল্ক AI ফলো-আপ" : "Bulk AI Follow-up",
+    bulkFollowUp: language === "bn" ? "ইনবক্সে মেসেজ পাঠান" : "Send to Inbox",
     selectedCount: language === "bn" ? "নির্বাচিত" : "Selected",
     noPhone: language === "bn" ? "ফোন নেই" : "No phone",
     followupsSent: language === "bn" ? "ফলো-আপ পাঠানো হয়েছে" : "Follow-ups sent",
@@ -181,15 +183,16 @@ export default function CustomerFollowups() {
     allPlatforms: language === "bn" ? "সব প্ল্যাটফর্ম" : "All Platforms",
     generatingMessages: language === "bn" ? "AI মেসেজ তৈরি হচ্ছে..." : "Generating AI messages...",
     reviewMessages: language === "bn" ? "মেসেজ রিভিউ করুন" : "Review Messages",
-    sendAll: language === "bn" ? "সব পাঠান" : "Send All",
+    sendAll: language === "bn" ? "সব ইনবক্সে পাঠান" : "Send All to Inbox",
     generating: language === "bn" ? "তৈরি হচ্ছে" : "Generating",
     generated: language === "bn" ? "তৈরি" : "Generated",
     pending: language === "bn" ? "অপেক্ষায়" : "Pending",
     error: language === "bn" ? "ত্রুটি" : "Error",
     sent: language === "bn" ? "পাঠানো হয়েছে" : "Sent",
-    startBulkAI: language === "bn" ? "AI দিয়ে শুরু করুন" : "Start with AI",
-    aiWillRead: language === "bn" ? "AI প্রতিটি কাস্টমারের কথোপকথন পড়ে পার্সোনালাইজড মেসেজ তৈরি করবে" : "AI will read each customer's conversation and create personalized messages",
+    startBulkAI: language === "bn" ? "AI মেসেজ তৈরি করুন" : "Generate AI Messages",
+    aiWillRead: language === "bn" ? "AI প্রতিটি কাস্টমারের কথোপকথন পড়ে পার্সোনালাইজড মেসেজ তৈরি করবে এবং তাদের ইনবক্সে পাঠাবে (ফোন নম্বর লাগবে না)" : "AI will read each customer's conversation, create personalized messages, and send directly to their inbox (no phone number needed)",
     selectPlatform: language === "bn" ? "প্ল্যাটফর্ম সিলেক্ট করুন" : "Select Platform",
+    sendToInbox: language === "bn" ? "ইনবক্সে পাঠান" : "Send to Inbox",
   };
 
   const fetchCustomers = async () => {
@@ -256,38 +259,36 @@ export default function CustomerFollowups() {
     }
   };
 
-  const sendFollowupSms = async () => {
+  const sendFollowupToInbox = async () => {
     if (!selectedCustomer || !generatedMessage) return;
-    
-    if (!selectedCustomer.customer_phone) {
-      toast.error(language === "bn" ? "এই কাস্টমারের ফোন নম্বর নেই" : "This customer has no phone number");
-      return;
-    }
 
     setSending(true);
     try {
-      const response = await callEdgeFunction("send-followup-sms", {
+      const response = await callEdgeFunction("send-inbox-message", {
         method: "POST",
         body: JSON.stringify({
           customers: [{
+            customerId: selectedCustomer.id,
+            customerFbId: selectedCustomer.customer_fb_id,
             customerName: selectedCustomer.customer_name || "Customer",
-            customerPhone: selectedCustomer.customer_phone,
             message: generatedMessage,
+            platform: selectedCustomer.platform
           }]
         }),
       });
       
-      if (response.success) {
-        toast.success(language === "bn" ? "SMS পাঠানো হয়েছে!" : "SMS sent successfully!");
+      if (response.success && response.totalSent > 0) {
+        toast.success(language === "bn" ? "মেসেজ ইনবক্সে পাঠানো হয়েছে!" : "Message sent to inbox!");
         setFollowupModal(false);
         setGeneratedMessage("");
         fetchCustomers();
       } else {
-        throw new Error(response.message || "Failed to send");
+        const errorMsg = response.results?.[0]?.error || response.message || "Failed to send";
+        throw new Error(errorMsg);
       }
     } catch (error: any) {
-      console.error("Error sending SMS:", error);
-      toast.error(error.message || (language === "bn" ? "SMS পাঠাতে সমস্যা" : "Failed to send SMS"));
+      console.error("Error sending to inbox:", error);
+      toast.error(error.message || (language === "bn" ? "মেসেজ পাঠাতে সমস্যা" : "Failed to send message"));
     } finally {
       setSending(false);
     }
@@ -327,7 +328,8 @@ export default function CustomerFollowups() {
   };
 
   const selectAllVisible = () => {
-    const visibleIds = filteredCustomers.filter(c => c.customer_phone).map(c => c.id);
+    // Select all visible customers regardless of phone number (since we send to inbox now)
+    const visibleIds = filteredCustomers.map(c => c.id);
     const allSelected = visibleIds.every(id => selectedCustomers.includes(id));
     
     if (allSelected) {
@@ -338,8 +340,9 @@ export default function CustomerFollowups() {
   };
 
   const selectByPlatform = (platform: string) => {
+    // Select all customers of this platform regardless of phone number
     const platformIds = customers
-      .filter(c => c.customer_phone && c.platform.toLowerCase() === platform.toLowerCase())
+      .filter(c => c.platform.toLowerCase() === platform.toLowerCase())
       .map(c => c.id);
     
     const allSelected = platformIds.every(id => selectedCustomers.includes(id));
@@ -360,8 +363,10 @@ export default function CustomerFollowups() {
     const selectedCustomersList = customers.filter(c => selectedCustomers.includes(c.id));
     const results: BulkFollowupResult[] = selectedCustomersList.map(c => ({
       customerId: c.id,
+      customerFbId: c.customer_fb_id,
       customerName: c.customer_name || 'Unknown',
       message: '',
+      platform: c.platform,
       status: 'pending'
     }));
     setBulkResults(results);
@@ -406,40 +411,52 @@ export default function CustomerFollowups() {
     setBulkProgress(0);
     
     const toSend = bulkResults.filter(r => r.status === 'generated' && r.message);
-    const selectedCustomersList = customers.filter(c => selectedCustomers.includes(c.id));
     
-    for (let i = 0; i < toSend.length; i++) {
-      const result = toSend[i];
-      const customer = selectedCustomersList.find(c => c.id === result.customerId);
-      
-      if (!customer?.customer_phone) continue;
-      
-      setBulkResults(prev => prev.map(r => 
-        r.customerId === result.customerId ? { ...r, status: 'sending' } : r
-      ));
-      
-      try {
-        await callEdgeFunction("send-followup-sms", {
-          method: "POST",
-          body: JSON.stringify({
-            customers: [{
-              customerName: customer.customer_name || "Customer",
-              customerPhone: customer.customer_phone,
-              message: result.message,
-            }]
-          }),
-        });
-        
-        setBulkResults(prev => prev.map(r => 
-          r.customerId === result.customerId ? { ...r, status: 'sent' } : r
-        ));
-      } catch (error: any) {
-        setBulkResults(prev => prev.map(r => 
-          r.customerId === result.customerId ? { ...r, status: 'error', error: error.message } : r
-        ));
+    // Prepare all customers for sending to inbox
+    const customersToSend = toSend.map(result => ({
+      customerId: result.customerId,
+      customerFbId: result.customerFbId,
+      customerName: result.customerName,
+      message: result.message,
+      platform: result.platform
+    }));
+
+    try {
+      // Send all messages via inbox API
+      const response = await callEdgeFunction("send-inbox-message", {
+        method: "POST",
+        body: JSON.stringify({ customers: customersToSend }),
+      });
+
+      // Update results based on API response
+      if (response.results) {
+        setBulkResults(prev => prev.map(r => {
+          const apiResult = response.results.find((ar: any) => ar.customerId === r.customerId);
+          if (apiResult) {
+            return {
+              ...r,
+              status: apiResult.success ? 'sent' : 'error',
+              error: apiResult.error
+            };
+          }
+          return r;
+        }));
       }
+
+      setBulkProgress(100);
+      toast.success(
+        language === "bn" 
+          ? `${response.totalSent} মেসেজ ইনবক্সে পাঠানো হয়েছে!` 
+          : `${response.totalSent} messages sent to inbox!`
+      );
+    } catch (error: any) {
+      console.error("Error sending bulk messages:", error);
+      toast.error(error.message || (language === "bn" ? "মেসেজ পাঠাতে সমস্যা" : "Failed to send messages"));
       
-      setBulkProgress(((i + 1) / toSend.length) * 100);
+      // Mark all as error
+      setBulkResults(prev => prev.map(r => 
+        r.status === 'generated' ? { ...r, status: 'error', error: error.message } : r
+      ));
     }
     
     setBulkProcessing(false);
@@ -684,10 +701,10 @@ export default function CustomerFollowups() {
             </div>
             
             {/* Quick Select Buttons */}
-            {stats.withPhone > 0 && (
+            {customers.length > 0 && (
               <div className="flex gap-2 mt-4 flex-wrap">
                 <Button variant="outline" size="sm" onClick={selectAllVisible}>
-                  {language === "bn" ? "দৃশ্যমান সব সিলেক্ট" : "Select All Visible"}
+                  {language === "bn" ? "সব সিলেক্ট করুন" : "Select All"}
                 </Button>
                 {platformStats.facebook > 0 && (
                   <Button 
@@ -775,13 +792,11 @@ export default function CustomerFollowups() {
                       }`}
                     >
                       <div className="flex items-start gap-2 sm:gap-3">
-                        {customer.customer_phone && (
-                          <Checkbox
-                            checked={selectedCustomers.includes(customer.id)}
-                            onCheckedChange={() => toggleCustomerSelection(customer.id)}
-                            className="mt-1 shrink-0"
-                          />
-                        )}
+                        <Checkbox
+                          checked={selectedCustomers.includes(customer.id)}
+                          onCheckedChange={() => toggleCustomerSelection(customer.id)}
+                          className="mt-1 shrink-0"
+                        />
                         
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start sm:items-center justify-between gap-2">
@@ -819,10 +834,9 @@ export default function CustomerFollowups() {
                               <Button
                                 size="sm"
                                 onClick={() => openFollowupModal(customer)}
-                                disabled={!customer.customer_phone}
                               >
                                 <Send className="h-4 w-4 mr-1" />
-                                {t.followUp}
+                                {t.sendToInbox}
                               </Button>
                             </div>
                           </div>
@@ -887,10 +901,10 @@ export default function CustomerFollowups() {
                             <Button
                               size="sm"
                               onClick={() => openFollowupModal(customer)}
-                              disabled={!customer.customer_phone}
                               className="flex-1 h-8 text-xs"
                             >
                               <Send className="h-3.5 w-3.5 mr-1" />
+                              {t.sendToInbox}
                               {t.followUp}
                             </Button>
                           </div>
@@ -986,7 +1000,7 @@ export default function CustomerFollowups() {
                 {language === "bn" ? "বাতিল" : "Cancel"}
               </Button>
               <Button 
-                onClick={sendFollowupSms}
+                onClick={sendFollowupToInbox}
                 disabled={!generatedMessage || sending}
               >
                 {sending ? (
@@ -994,7 +1008,7 @@ export default function CustomerFollowups() {
                 ) : (
                   <Send className="h-4 w-4 mr-2" />
                 )}
-                {t.sendSms}
+                {t.sendToInbox}
               </Button>
             </DialogFooter>
           </DialogContent>
