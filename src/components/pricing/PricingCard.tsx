@@ -42,6 +42,7 @@ interface PricingCardProps {
   trialEndDate?: string;
   onContactClick?: () => void;
   isMobile?: boolean;
+  hideSelector?: boolean; // Hide individual business type selector
 }
 
 export const PricingCard = ({
@@ -54,6 +55,7 @@ export const PricingCard = ({
   trialEndDate,
   onContactClick,
   isMobile = false,
+  hideSelector = false,
 }: PricingCardProps) => {
   // Calculate price based on business type
   const getDisplayPrice = () => {
@@ -165,8 +167,8 @@ export const PricingCard = ({
     return null;
   };
 
-  // Skip showing selector for free trial
-  const showBusinessTypeSelector = plan.id !== "free-trial" && plan.id !== "lifetime" && plan.hasOfflineShopOption !== false;
+  // Hide selector if hideSelector prop is true, or if it's free-trial/lifetime plan
+  const showBusinessTypeSelector = !hideSelector && plan.id !== "free-trial" && plan.id !== "lifetime" && plan.hasOfflineShopOption !== false;
 
   if (isMobile) {
     return (
