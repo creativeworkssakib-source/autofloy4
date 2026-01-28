@@ -518,16 +518,16 @@ export default function CustomerFollowups() {
         </div>
 
         {/* Platform Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2 sm:gap-3">
           <Card className="col-span-1">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-primary/10 rounded-lg">
-                  <Users className="h-5 w-5 text-primary" />
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-1.5 sm:p-2 bg-primary/10 rounded-lg shrink-0">
+                  <Users className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                 </div>
-                <div>
-                  <p className="text-2xl font-bold">{stats.total}</p>
-                  <p className="text-xs text-muted-foreground">{t.all}</p>
+                <div className="min-w-0">
+                  <p className="text-lg sm:text-2xl font-bold">{stats.total}</p>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground truncate">{t.all}</p>
                 </div>
               </div>
             </CardContent>
@@ -537,14 +537,14 @@ export default function CustomerFollowups() {
             className={`cursor-pointer transition-all hover:shadow-md ${platformFilter === 'facebook' ? 'ring-2 ring-blue-500' : ''}`}
             onClick={() => setPlatformFilter(platformFilter === 'facebook' ? 'all' : 'facebook')}
           >
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-500/10 rounded-lg">
-                  <Facebook className="h-5 w-5 text-blue-600" />
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-1.5 sm:p-2 bg-blue-500/10 rounded-lg shrink-0">
+                  <Facebook className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
                 </div>
-                <div>
-                  <p className="text-2xl font-bold">{platformStats.facebook}</p>
-                  <p className="text-xs text-muted-foreground">Facebook</p>
+                <div className="min-w-0">
+                  <p className="text-lg sm:text-2xl font-bold">{platformStats.facebook}</p>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground truncate">Facebook</p>
                 </div>
               </div>
             </CardContent>
@@ -554,14 +554,14 @@ export default function CustomerFollowups() {
             className={`cursor-pointer transition-all hover:shadow-md ${platformFilter === 'instagram' ? 'ring-2 ring-pink-500' : ''}`}
             onClick={() => setPlatformFilter(platformFilter === 'instagram' ? 'all' : 'instagram')}
           >
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-pink-500/10 rounded-lg">
-                  <Instagram className="h-5 w-5 text-pink-600" />
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-1.5 sm:p-2 bg-pink-500/10 rounded-lg shrink-0">
+                  <Instagram className="h-4 w-4 sm:h-5 sm:w-5 text-pink-600" />
                 </div>
-                <div>
-                  <p className="text-2xl font-bold">{platformStats.instagram}</p>
-                  <p className="text-xs text-muted-foreground">Instagram</p>
+                <div className="min-w-0">
+                  <p className="text-lg sm:text-2xl font-bold">{platformStats.instagram}</p>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground truncate">Instagram</p>
                 </div>
               </div>
             </CardContent>
@@ -571,56 +571,56 @@ export default function CustomerFollowups() {
             className={`cursor-pointer transition-all hover:shadow-md ${platformFilter === 'whatsapp' ? 'ring-2 ring-green-500' : ''}`}
             onClick={() => setPlatformFilter(platformFilter === 'whatsapp' ? 'all' : 'whatsapp')}
           >
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-green-500/10 rounded-lg">
-                  <MessageCircle className="h-5 w-5 text-green-600" />
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-1.5 sm:p-2 bg-green-500/10 rounded-lg shrink-0">
+                  <MessageCircle className="h-4 w-4 sm:h-5 sm:w-5 text-green-600" />
                 </div>
-                <div>
-                  <p className="text-2xl font-bold">{platformStats.whatsapp}</p>
-                  <p className="text-xs text-muted-foreground">WhatsApp</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-green-500/10 rounded-lg">
-                  <ShoppingBag className="h-5 w-5 text-green-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">{stats.purchased}</p>
-                  <p className="text-xs text-muted-foreground">{t.purchased}</p>
+                <div className="min-w-0">
+                  <p className="text-lg sm:text-2xl font-bold">{platformStats.whatsapp}</p>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground truncate">WhatsApp</p>
                 </div>
               </div>
             </CardContent>
           </Card>
           
           <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-orange-500/10 rounded-lg">
-                  <MessageSquare className="h-5 w-5 text-orange-600" />
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-1.5 sm:p-2 bg-green-500/10 rounded-lg shrink-0">
+                  <ShoppingBag className="h-4 w-4 sm:h-5 sm:w-5 text-green-600" />
                 </div>
-                <div>
-                  <p className="text-2xl font-bold">{stats.notPurchased}</p>
-                  <p className="text-xs text-muted-foreground">{t.notPurchased}</p>
+                <div className="min-w-0">
+                  <p className="text-lg sm:text-2xl font-bold">{stats.purchased}</p>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground truncate">{t.purchased}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
           
           <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-500/10 rounded-lg">
-                  <Phone className="h-5 w-5 text-blue-600" />
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-1.5 sm:p-2 bg-orange-500/10 rounded-lg shrink-0">
+                  <MessageSquare className="h-4 w-4 sm:h-5 sm:w-5 text-orange-600" />
                 </div>
-                <div>
-                  <p className="text-2xl font-bold">{stats.withPhone}</p>
-                  <p className="text-xs text-muted-foreground">{language === "bn" ? "ফোন আছে" : "Have Phone"}</p>
+                <div className="min-w-0">
+                  <p className="text-lg sm:text-2xl font-bold">{stats.notPurchased}</p>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground truncate">{t.notPurchased}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-1.5 sm:p-2 bg-blue-500/10 rounded-lg shrink-0">
+                  <Phone className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-lg sm:text-2xl font-bold">{stats.withPhone}</p>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground truncate">{language === "bn" ? "ফোন আছে" : "Have Phone"}</p>
                 </div>
               </div>
             </CardContent>
@@ -770,93 +770,131 @@ export default function CustomerFollowups() {
                   {filteredCustomers.map((customer) => (
                     <div
                       key={customer.id}
-                      className={`flex items-center gap-4 p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors ${
+                      className={`p-3 sm:p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors ${
                         selectedCustomers.includes(customer.id) ? 'ring-2 ring-primary bg-primary/5' : ''
                       }`}
                     >
-                      {customer.customer_phone && (
-                        <Checkbox
-                          checked={selectedCustomers.includes(customer.id)}
-                          onCheckedChange={() => toggleCustomerSelection(customer.id)}
-                        />
-                      )}
-                      
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h4 className="font-medium truncate">
-                            {customer.customer_name || "Unknown Customer"}
-                          </h4>
-                          <Badge variant={customer.has_purchased ? "default" : "secondary"}>
-                            {customer.has_purchased ? (
-                              <><CheckCircle2 className="h-3 w-3 mr-1" /> {t.purchased}</>
-                            ) : (
-                              <><Clock className="h-3 w-3 mr-1" /> {t.notPurchased}</>
-                            )}
-                          </Badge>
-                          <Badge variant="outline" className={getPlatformBadgeClass(customer.platform)}>
-                            <PlatformIcon platform={customer.platform} className="h-3 w-3 mr-1" />
-                            {customer.platform}
-                          </Badge>
-                        </div>
+                      <div className="flex items-start gap-2 sm:gap-3">
+                        {customer.customer_phone && (
+                          <Checkbox
+                            checked={selectedCustomers.includes(customer.id)}
+                            onCheckedChange={() => toggleCustomerSelection(customer.id)}
+                            className="mt-1 shrink-0"
+                          />
+                        )}
                         
-                        <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground flex-wrap">
-                          {customer.customer_phone ? (
-                            <span className="flex items-center gap-1">
-                              <Phone className="h-3 w-3" />
-                              {customer.customer_phone}
-                            </span>
-                          ) : (
-                            <span className="flex items-center gap-1 text-orange-600">
-                              <XCircle className="h-3 w-3" />
-                              {t.noPhone}
-                            </span>
-                          )}
-                          <span className="flex items-center gap-1">
-                            <MessageSquare className="h-3 w-3" />
-                            {customer.total_messages} {t.messages}
-                          </span>
-                          {customer.last_message_at && (
-                            <span className="flex items-center gap-1">
-                              <Calendar className="h-3 w-3" />
-                              {format(new Date(customer.last_message_at), "dd MMM yyyy")}
-                            </span>
-                          )}
-                        </div>
-                        
-                        {customer.last_products_discussed && customer.last_products_discussed.length > 0 && (
-                          <div className="flex items-center gap-2 mt-2 flex-wrap">
-                            <Package className="h-3 w-3 text-muted-foreground" />
-                            {customer.last_products_discussed.slice(0, 3).map((product, idx) => (
-                              <Badge key={idx} variant="outline" className="text-xs">
-                                {product}
-                              </Badge>
-                            ))}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start sm:items-center justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <h4 className="font-medium text-sm sm:text-base truncate">
+                                {customer.customer_name || "Unknown Customer"}
+                              </h4>
+                              <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                                <Badge 
+                                  variant={customer.has_purchased ? "default" : "secondary"}
+                                  className="text-[10px] sm:text-xs px-1.5 py-0"
+                                >
+                                  {customer.has_purchased ? (
+                                    <><CheckCircle2 className="h-2.5 w-2.5 sm:h-3 sm:w-3 mr-0.5" /> {t.purchased}</>
+                                  ) : (
+                                    <><Clock className="h-2.5 w-2.5 sm:h-3 sm:w-3 mr-0.5" /> {t.notPurchased}</>
+                                  )}
+                                </Badge>
+                                <Badge variant="outline" className={`text-[10px] sm:text-xs px-1.5 py-0 ${getPlatformBadgeClass(customer.platform)}`}>
+                                  <PlatformIcon platform={customer.platform} className="h-2.5 w-2.5 sm:h-3 sm:w-3 mr-0.5" />
+                                  {customer.platform}
+                                </Badge>
+                              </div>
+                            </div>
+                            
+                            {/* Action buttons - visible on larger screens */}
+                            <div className="hidden sm:flex gap-2 shrink-0">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => viewConversation(customer)}
+                              >
+                                <MessageSquare className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                onClick={() => openFollowupModal(customer)}
+                                disabled={!customer.customer_phone}
+                              >
+                                <Send className="h-4 w-4 mr-1" />
+                                {t.followUp}
+                              </Button>
+                            </div>
                           </div>
-                        )}
-                        
-                        {customer.followup_count > 0 && (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {t.followupsSent}: {customer.followup_count}
-                          </p>
-                        )}
-                      </div>
-                      
-                      <div className="flex gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => viewConversation(customer)}
-                        >
-                          <MessageSquare className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          onClick={() => openFollowupModal(customer)}
-                          disabled={!customer.customer_phone}
-                        >
-                          <Send className="h-4 w-4 mr-1" />
-                          {t.followUp}
-                        </Button>
+                          
+                          <div className="flex items-center gap-2 sm:gap-4 mt-2 text-xs sm:text-sm text-muted-foreground flex-wrap">
+                            {customer.customer_phone ? (
+                              <span className="flex items-center gap-1">
+                                <Phone className="h-3 w-3 shrink-0" />
+                                <span className="truncate max-w-[100px] sm:max-w-none">{customer.customer_phone}</span>
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-1 text-orange-600">
+                                <XCircle className="h-3 w-3 shrink-0" />
+                                {t.noPhone}
+                              </span>
+                            )}
+                            <span className="flex items-center gap-1">
+                              <MessageSquare className="h-3 w-3 shrink-0" />
+                              {customer.total_messages} {t.messages}
+                            </span>
+                            {customer.last_message_at && (
+                              <span className="flex items-center gap-1">
+                                <Calendar className="h-3 w-3 shrink-0" />
+                                {format(new Date(customer.last_message_at), "dd MMM yyyy")}
+                              </span>
+                            )}
+                          </div>
+                          
+                          {customer.last_products_discussed && customer.last_products_discussed.length > 0 && (
+                            <div className="flex items-center gap-1.5 sm:gap-2 mt-2 flex-wrap">
+                              <Package className="h-3 w-3 text-muted-foreground shrink-0" />
+                              {customer.last_products_discussed.slice(0, 2).map((product, idx) => (
+                                <Badge key={idx} variant="outline" className="text-[10px] sm:text-xs px-1.5 py-0 truncate max-w-[80px] sm:max-w-none">
+                                  {product}
+                                </Badge>
+                              ))}
+                              {customer.last_products_discussed.length > 2 && (
+                                <span className="text-[10px] sm:text-xs text-muted-foreground">
+                                  +{customer.last_products_discussed.length - 2}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          
+                          {customer.followup_count > 0 && (
+                            <p className="text-[10px] sm:text-xs text-muted-foreground mt-1">
+                              {t.followupsSent}: {customer.followup_count}
+                            </p>
+                          )}
+                          
+                          {/* Action buttons - Mobile only */}
+                          <div className="flex sm:hidden gap-2 mt-3 pt-2 border-t">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => viewConversation(customer)}
+                              className="flex-1 h-8 text-xs"
+                            >
+                              <MessageSquare className="h-3.5 w-3.5 mr-1" />
+                              {language === "bn" ? "কথোপকথন" : "Chat"}
+                            </Button>
+                            <Button
+                              size="sm"
+                              onClick={() => openFollowupModal(customer)}
+                              disabled={!customer.customer_phone}
+                              className="flex-1 h-8 text-xs"
+                            >
+                              <Send className="h-3.5 w-3.5 mr-1" />
+                              {t.followUp}
+                            </Button>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   ))}
