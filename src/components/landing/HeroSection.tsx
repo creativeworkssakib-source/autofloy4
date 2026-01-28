@@ -2,12 +2,13 @@ import { useState, useMemo, memo, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { motion, useScroll, useTransform } from "framer-motion";
 
-import { ArrowRight, Play, Sparkles, Check, Zap, MessageSquare } from "lucide-react";
+import { ArrowRight, Play, Sparkles, Check, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import heroConversation from "@/assets/hero-conversation-clean.png";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSiteSettings } from "@/contexts/SiteSettingsContext";
 import DemoVideoModal from "./DemoVideoModal";
+import Logo from "@/components/ui/Logo";
 
 const HeroSection = memo(() => {
   const { t } = useLanguage();
@@ -256,7 +257,7 @@ const HeroSection = memo(() => {
               >
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-                    <Zap className="w-5 h-5 text-primary" />
+                    <Logo size="sm" />
                   </div>
                   <div>
                     <p className="text-sm font-semibold">92% {t("hero.statsSuccess")}</p>

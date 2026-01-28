@@ -6,7 +6,6 @@ import {
   Bot,
   FileText,
   Settings,
-  Zap,
   LogOut,
   Menu,
   X,
@@ -27,6 +26,7 @@ import {
   ImageIcon,
   Users,
 } from "lucide-react";
+import Logo from "@/components/ui/Logo";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -151,13 +151,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
         {/* Top row - Logo, notifications, menu */}
         <div className="h-14 flex items-center justify-between px-4">
           <Link to="/" className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary via-primary to-secondary flex items-center justify-center shadow-lg shadow-primary/25">
-              {settings.logo_url ? (
-                <img src={settings.logo_url} alt={settings.company_name} className="w-6 h-6 rounded-lg object-contain" />
-              ) : (
-                <Zap className="w-5 h-5 text-primary-foreground" />
-              )}
-            </div>
+            <Logo size="sm" />
             <div className="flex flex-col">
               <span className="font-bold text-sm leading-tight">{settings.company_name}</span>
               <span className="text-[10px] text-muted-foreground leading-tight">Dashboard</span>
@@ -210,9 +204,8 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
               <motion.div
                 whileHover={{ rotate: 360 }}
                 transition={{ duration: 0.5 }}
-                className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center"
               >
-                <Zap className="w-4 h-4 sm:w-5 sm:h-5 text-primary-foreground" />
+                <Logo size="md" />
               </motion.div>
               <span className="text-lg sm:text-xl font-bold">
                 Auto<span className="gradient-text">Floy</span>
