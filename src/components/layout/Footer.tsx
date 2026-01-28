@@ -60,7 +60,7 @@ const Footer = () => {
   const locationString = locationParts.join(', ');
 
   return (
-    <footer className="bg-muted dark:bg-slate-900 text-foreground dark:text-white">
+    <footer className="bg-slate-100 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800">
       <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="grid grid-cols-2 md:grid-cols-6 gap-4 lg:gap-6">
           {/* Brand Column */}
@@ -77,7 +77,7 @@ const Footer = () => {
                   <Zap className="w-3 h-3 text-primary-foreground" />
                 </div>
               )}
-              <span className="text-sm font-bold text-foreground">
+              <span className="text-sm font-bold text-slate-800 dark:text-slate-100">
                 {secondPart ? (
                   <>
                     {firstPart}<span className="text-primary">{secondPart}</span>
@@ -87,7 +87,7 @@ const Footer = () => {
                 )}
               </span>
             </Link>
-            <p className="text-muted-foreground text-[11px] mb-3 max-w-xs leading-relaxed">
+            <p className="text-slate-600 dark:text-slate-400 text-[11px] mb-3 max-w-xs leading-relaxed">
               {settings.tagline || 'AI-powered automation for your business.'}
             </p>
             <div className="flex gap-1.5">
@@ -98,7 +98,7 @@ const Footer = () => {
                   target={social.href !== '#' ? '_blank' : undefined}
                   rel={social.href !== '#' ? 'noopener noreferrer' : undefined}
                   aria-label={social.label}
-                  className="w-7 h-7 rounded-md bg-foreground/10 hover:bg-primary/80 hover:text-primary-foreground flex items-center justify-center transition-colors duration-200"
+                  className="w-7 h-7 rounded-md bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-primary hover:text-white flex items-center justify-center transition-colors duration-200"
                 >
                   <social.icon className="w-3.5 h-3.5" />
                 </a>
@@ -108,13 +108,13 @@ const Footer = () => {
 
           {/* Product Links */}
           <div>
-            <h3 className="font-semibold text-foreground text-xs mb-2">{t("footer.product")}</h3>
+            <h3 className="font-semibold text-slate-800 dark:text-slate-200 text-xs mb-2">{t("footer.product")}</h3>
             <ul className="space-y-1">
               {footerLinks.product.map((link) => (
                 <li key={link.name}>
                   <Link
                     to={link.href}
-                    className="text-muted-foreground hover:text-primary transition-colors text-[11px]"
+                    className="text-slate-600 dark:text-slate-400 hover:text-primary transition-colors text-[11px]"
                   >
                     {link.name}
                   </Link>
@@ -125,13 +125,13 @@ const Footer = () => {
 
           {/* Company Links */}
           <div>
-            <h3 className="font-semibold text-foreground text-xs mb-2">{t("footer.company")}</h3>
+            <h3 className="font-semibold text-slate-800 dark:text-slate-200 text-xs mb-2">{t("footer.company")}</h3>
             <ul className="space-y-1">
               {footerLinks.company.map((link) => (
                 <li key={link.name}>
                   <Link
                     to={link.href}
-                    className="text-muted-foreground hover:text-primary transition-colors text-[11px]"
+                    className="text-slate-600 dark:text-slate-400 hover:text-primary transition-colors text-[11px]"
                   >
                     {link.name}
                   </Link>
@@ -142,13 +142,13 @@ const Footer = () => {
 
           {/* Resources Links */}
           <div>
-            <h3 className="font-semibold text-foreground text-xs mb-2">{t("footer.resources")}</h3>
+            <h3 className="font-semibold text-slate-800 dark:text-slate-200 text-xs mb-2">{t("footer.resources")}</h3>
             <ul className="space-y-1">
               {footerLinks.resources.map((link) => (
                 <li key={link.name}>
                   <Link
                     to={link.href}
-                    className="text-muted-foreground hover:text-primary transition-colors text-[11px]"
+                    className="text-slate-600 dark:text-slate-400 hover:text-primary transition-colors text-[11px]"
                   >
                     {link.name}
                   </Link>
@@ -159,13 +159,13 @@ const Footer = () => {
 
           {/* Legal Links */}
           <div>
-            <h3 className="font-semibold text-foreground text-xs mb-2">{t("footer.legal")}</h3>
+            <h3 className="font-semibold text-slate-800 dark:text-slate-200 text-xs mb-2">{t("footer.legal")}</h3>
             <ul className="space-y-1">
               {footerLinks.legal.map((link) => (
                 <li key={link.name}>
                   <Link
                     to={link.href}
-                    className="text-muted-foreground hover:text-primary transition-colors text-[11px]"
+                    className="text-slate-600 dark:text-slate-400 hover:text-primary transition-colors text-[11px]"
                   >
                     {link.name}
                   </Link>
@@ -176,8 +176,8 @@ const Footer = () => {
         </div>
 
         {/* Contact Info */}
-        <div className="mt-4 pt-4 border-t border-border flex flex-col md:flex-row justify-between items-center gap-2">
-          <div className="flex flex-wrap justify-center md:justify-start gap-3 text-[11px] text-muted-foreground">
+        <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-800 flex flex-col md:flex-row justify-between items-center gap-2">
+          <div className="flex flex-wrap justify-center md:justify-start gap-3 text-[11px] text-slate-600 dark:text-slate-400">
             {settings.support_email && (
               <a href={`mailto:${settings.support_email}`} className="flex items-center gap-1 hover:text-primary transition-colors">
                 <Mail className="w-3 h-3" />
@@ -197,7 +197,7 @@ const Footer = () => {
               </span>
             )}
           </div>
-          <p className="text-[11px] text-muted-foreground/70">
+          <p className="text-[11px] text-slate-500 dark:text-slate-500">
             {settings.copyright_text || `© ${new Date().getFullYear()} ${settings.company_name}. All rights reserved.`}
           </p>
         </div>
