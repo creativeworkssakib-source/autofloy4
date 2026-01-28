@@ -16,7 +16,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { supabase } from '@/integrations/supabase/client';
 
 // Current app version - MUST match the edge function version
-const APP_VERSION = '2.0.2';
+const APP_VERSION = '2.0.3';
 const VERSION_KEY = 'autofloy_app_version';
 const VERSION_CHECK_INTERVAL = 30 * 1000; // Check every 30 seconds
 
