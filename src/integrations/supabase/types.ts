@@ -572,6 +572,66 @@ export type Database = {
           },
         ]
       }
+      customer_followups: {
+        Row: {
+          conversation_summary: string | null
+          created_at: string
+          customer_fb_id: string
+          customer_name: string | null
+          customer_phone: string | null
+          followup_count: number | null
+          has_purchased: boolean | null
+          id: string
+          last_followup_at: string | null
+          last_followup_message: string | null
+          last_message_at: string | null
+          last_products_discussed: string[] | null
+          platform: string
+          status: string | null
+          total_messages: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          conversation_summary?: string | null
+          created_at?: string
+          customer_fb_id: string
+          customer_name?: string | null
+          customer_phone?: string | null
+          followup_count?: number | null
+          has_purchased?: boolean | null
+          id?: string
+          last_followup_at?: string | null
+          last_followup_message?: string | null
+          last_message_at?: string | null
+          last_products_discussed?: string[] | null
+          platform?: string
+          status?: string | null
+          total_messages?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          conversation_summary?: string | null
+          created_at?: string
+          customer_fb_id?: string
+          customer_name?: string | null
+          customer_phone?: string | null
+          followup_count?: number | null
+          has_purchased?: boolean | null
+          id?: string
+          last_followup_at?: string | null
+          last_followup_message?: string | null
+          last_message_at?: string | null
+          last_products_discussed?: string[] | null
+          platform?: string
+          status?: string | null
+          total_messages?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       digital_product_sales: {
         Row: {
           created_at: string
@@ -925,6 +985,50 @@ export type Database = {
             columns: ["linked_product_id"]
             isOneToOne: false
             referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      followup_message_logs: {
+        Row: {
+          created_at: string
+          customer_followup_id: string | null
+          customer_name: string | null
+          customer_phone: string | null
+          id: string
+          message_content: string
+          message_type: string | null
+          status: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          customer_followup_id?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          id?: string
+          message_content: string
+          message_type?: string | null
+          status?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          customer_followup_id?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          id?: string
+          message_content?: string
+          message_type?: string | null
+          status?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "followup_message_logs_customer_followup_id_fkey"
+            columns: ["customer_followup_id"]
+            isOneToOne: false
+            referencedRelation: "customer_followups"
             referencedColumns: ["id"]
           },
         ]

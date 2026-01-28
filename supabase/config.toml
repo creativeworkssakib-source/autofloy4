@@ -170,3 +170,6 @@ verify_jwt = false
 
 [functions.webhook-events]
 verify_jwt = false
+
+[functions.customer-followups]
+verify_jwt = false
