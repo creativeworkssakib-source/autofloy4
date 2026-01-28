@@ -9,7 +9,7 @@ import { useSiteSettings } from "@/contexts/SiteSettingsContext";
 import { useAuth } from "@/contexts/AuthContext";
 import ContactLifetimeModal from "@/components/pricing/ContactLifetimeModal";
 import PricingCard, { PricingPlan } from "@/components/pricing/PricingCard";
-import { BusinessType } from "@/components/pricing/BusinessTypeSelector";
+import BusinessTypeSelector, { BusinessType } from "@/components/pricing/BusinessTypeSelector";
 import { supabase } from "@/integrations/supabase/client";
 
 interface DbPricingPlan {
@@ -47,8 +47,8 @@ const Pricing = () => {
   const [plans, setPlans] = useState<PricingPlan[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Track business type selection per plan
-  const [businessTypes, setBusinessTypes] = useState<Record<string, BusinessType>>({});
+  // GLOBAL business type selection - applies to ALL plans
+  const [globalBusinessType, setGlobalBusinessType] = useState<BusinessType>("online");
   
   // Check if user has active trial
   const hasActiveTrial = user?.isTrialActive && user?.trialEndDate;
@@ -154,10 +154,6 @@ const Pricing = () => {
     }
   };
 
-  const handleBusinessTypeChange = (planId: string, type: BusinessType) => {
-    setBusinessTypes(prev => ({ ...prev, [planId]: type }));
-  };
-
   // Find max features count for equal height
   const maxFeatures = Math.max(...plans.map(p => p.features.length), 8);
 
@@ -193,8 +189,22 @@ const Pricing = () => {
                 Choose Your{" "}
                 <span className="gradient-text">Perfect Plan</span>
               </h1>
-              <p className="text-sm md:text-base text-muted-foreground">
+              <p className="text-sm md:text-base text-muted-foreground mb-6">
                 Start with a 24-hour free trial. Upgrade anytime. Cancel anytime.
+              </p>
+              
+              {/* GLOBAL Business Type Selector */}
+              <div className="flex justify-center mb-4">
+                <BusinessTypeSelector
+                  value={globalBusinessType}
+                  onChange={setGlobalBusinessType}
+                  className="w-full max-w-xs"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {globalBusinessType === "online" && "অনলাইন ব্যবসার জন্য - Facebook/WhatsApp Automation"}
+                {globalBusinessType === "offline" && "অফলাইন শপের জন্য - Complete POS & Inventory System"}
+                {globalBusinessType === "both" && "অনলাইন + অফলাইন সম্পূর্ণ প্যাকেজ"}
               </p>
             </motion.div>
           </div>
@@ -216,13 +226,14 @@ const Pricing = () => {
                     key={plan.id}
                     plan={plan}
                     index={index}
-                    businessType={businessTypes[plan.id] || "online"}
-                    onBusinessTypeChange={(type) => handleBusinessTypeChange(plan.id, type)}
+                    businessType={globalBusinessType}
+                    onBusinessTypeChange={setGlobalBusinessType}
                     maxFeatures={maxFeatures}
                     hasActiveTrial={!!hasActiveTrial}
                     trialEndDate={user?.trialEndDate}
                     onContactClick={() => setIsContactModalOpen(true)}
                     isMobile
+                    hideSelector
                   />
                 ))}
               </div>
@@ -253,12 +264,13 @@ const Pricing = () => {
                   key={plan.id}
                   plan={plan}
                   index={index}
-                  businessType={businessTypes[plan.id] || "online"}
-                  onBusinessTypeChange={(type) => handleBusinessTypeChange(plan.id, type)}
+                  businessType={globalBusinessType}
+                  onBusinessTypeChange={setGlobalBusinessType}
                   maxFeatures={maxFeatures}
                   hasActiveTrial={!!hasActiveTrial}
                   trialEndDate={user?.trialEndDate}
                   onContactClick={() => setIsContactModalOpen(true)}
+                  hideSelector
                 />
               ))}
             </div>
