@@ -75,8 +75,22 @@ const UnifiedDashboard = () => {
   const isMobile = useIsMobile();
   const { isDigitalMode } = useProductType();
   
-  // Online data
-  const [onlineStats, setOnlineStats] = useState<DashboardStats | null>(null);
+  // Try to load cached stats on initial render to avoid showing 0
+  const getCachedStats = (): DashboardStats | null => {
+    try {
+      const cached = localStorage.getItem("autofloy_dashboard_stats_cache");
+      if (cached) {
+        const { data } = JSON.parse(cached);
+        return data;
+      }
+    } catch (e) {
+      console.warn("[Dashboard] Cache read error:", e);
+    }
+    return null;
+  };
+
+  // Online data - start with cached data if available
+  const [onlineStats, setOnlineStats] = useState<DashboardStats | null>(getCachedStats);
   const [connectedPages, setConnectedPages] = useState<ConnectedAccount[]>([]);
   const [recentLogs, setRecentLogs] = useState<ExecutionLog[]>([]);
   
