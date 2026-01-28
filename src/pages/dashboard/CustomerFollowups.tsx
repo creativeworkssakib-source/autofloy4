@@ -477,9 +477,11 @@ export default function CustomerFollowups() {
   }, []);
 
   const filteredCustomers = customers.filter(customer => {
-    const matchesSearch = 
-      (customer.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) || false) ||
-      (customer.customer_phone?.includes(searchTerm) || false);
+    // If no search term, match all. Otherwise check name/phone/fb_id
+    const matchesSearch = searchTerm.trim() === "" || 
+      (customer.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false) ||
+      (customer.customer_phone?.includes(searchTerm) ?? false) ||
+      (customer.customer_fb_id?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false);
     
     const matchesPurchase = 
       purchaseFilter === "all" ||
