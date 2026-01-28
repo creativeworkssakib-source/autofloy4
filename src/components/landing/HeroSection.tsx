@@ -160,10 +160,11 @@ const HeroSection = memo(() => {
                   transition={{ delay: 1 + index * 0.1 }}
                 >
                   <motion.div 
-                    className="w-5 h-5 rounded-full bg-success/20 flex items-center justify-center flex-shrink-0"
-                    whileHover={{ scale: 1.2 }}
+                    className="w-6 h-6 rounded-full bg-gradient-to-br from-success to-success/80 flex items-center justify-center flex-shrink-0 shadow-md"
+                    whileHover={{ scale: 1.2, rotate: 10 }}
+                    transition={{ type: "spring", stiffness: 400 }}
                   >
-                    <Check className="w-3 h-3 text-success" />
+                    <Check className="w-3.5 h-3.5 text-white drop-shadow-sm" />
                   </motion.div>
                   {benefit}
                 </motion.span>
@@ -232,8 +233,9 @@ const HeroSection = memo(() => {
                 transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-success/20 flex items-center justify-center">
-                    <MessageSquare className="w-5 h-5 text-success" />
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-success to-success/80 flex items-center justify-center shadow-lg relative overflow-hidden">
+                    <div className="absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-white/30 to-transparent rounded-t-xl pointer-events-none" />
+                    <MessageSquare className="w-6 h-6 text-white relative z-10 drop-shadow-sm" />
                   </div>
                   <div>
                     <p className="text-sm font-semibold">127 {t("hero.statsMessages")}</p>
@@ -255,8 +257,9 @@ const HeroSection = memo(() => {
                 transition={{ duration: 4, repeat: Infinity, ease: "easeInOut", delay: 1 }}
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-                    <Zap className="w-5 h-5 text-primary" />
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center shadow-lg relative overflow-hidden">
+                    <div className="absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-white/30 to-transparent rounded-t-xl pointer-events-none" />
+                    <Zap className="w-6 h-6 text-white relative z-10 drop-shadow-sm" />
                   </div>
                   <div>
                     <p className="text-sm font-semibold">92% {t("hero.statsSuccess")}</p>

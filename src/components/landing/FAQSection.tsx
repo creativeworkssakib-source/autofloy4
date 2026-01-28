@@ -63,10 +63,12 @@ const FAQSection = forwardRef<HTMLElement, Record<string, never>>((_props, _ref)
           className="text-center max-w-3xl mx-auto mb-10"
         >
           <motion.span 
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-secondary/10 text-secondary text-sm font-medium mb-4"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-secondary/15 to-primary/15 text-secondary text-sm font-medium mb-4 border border-secondary/20 shadow-sm"
             whileHover={{ scale: 1.05 }}
           >
-            <HelpCircle className="w-4 h-4" />
+            <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-secondary to-primary flex items-center justify-center shadow-md">
+              <HelpCircle className="w-3.5 h-3.5 text-white" />
+            </div>
             {t("faq.badge")}
           </motion.span>
           <h2 className="text-2xl md:text-3xl lg:text-4xl font-bold mb-4">
@@ -92,8 +94,9 @@ const FAQSection = forwardRef<HTMLElement, Record<string, never>>((_props, _ref)
                   <AccordionTrigger className="text-left font-medium text-sm hover:no-underline py-4 group-hover:text-primary transition-colors">
                     <span className="flex items-center gap-3">
                       <motion.span 
-                        className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-bold"
+                        className="flex-shrink-0 w-9 h-9 rounded-xl bg-gradient-to-br from-primary/20 to-secondary/10 flex items-center justify-center text-primary text-xs font-bold border border-primary/20 shadow-sm"
                         whileHover={{ scale: 1.1, rotate: 10 }}
+                        transition={{ type: "spring", stiffness: 400 }}
                       >
                         {index + 1}
                       </motion.span>
