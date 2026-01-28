@@ -137,7 +137,16 @@ serve(async (req) => {
   // Note: supabase.functions.invoke() always uses POST, so we accept both
   if (req.method === "PUT" || req.method === "POST") {
     try {
-      const body = await req.json();
+      // Handle empty body (from supabase.functions.invoke with no body)
+      let body: Record<string, any> = {};
+      try {
+        const text = await req.text();
+        if (text && text.trim()) {
+          body = JSON.parse(text);
+        }
+      } catch (parseError) {
+        console.log("Body parse info: empty or invalid JSON, treating as refresh request");
+      }
       const { display_name, phone, support_whatsapp_number } = body;
 
       // Check if this is just a data fetch (empty body) - used for refresh
