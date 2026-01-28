@@ -14,9 +14,39 @@ type Config = {
 // Check interval - every 1 minute for faster updates
 const UPDATE_CHECK_INTERVAL = 60 * 1000;
 
+// Version key to detect app updates and force cache clear
+const APP_CACHE_VERSION = 'v2.0.0-no-extension-blocker';
+const CACHE_VERSION_KEY = 'autofloy_cache_version';
+
+// Auto-clear old caches if version changed
+async function clearOldCachesIfNeeded(): Promise<void> {
+  try {
+    const storedVersion = localStorage.getItem(CACHE_VERSION_KEY);
+    if (storedVersion !== APP_CACHE_VERSION) {
+      console.log('[SW] App version changed, clearing old caches...');
+      
+      // Clear all caches
+      if ('caches' in window) {
+        const cacheNames = await caches.keys();
+        await Promise.all(cacheNames.map(name => caches.delete(name)));
+        console.log('[SW] Cleared', cacheNames.length, 'caches');
+      }
+      
+      // Update version
+      localStorage.setItem(CACHE_VERSION_KEY, APP_CACHE_VERSION);
+      console.log('[SW] Cache version updated to', APP_CACHE_VERSION);
+    }
+  } catch (error) {
+    console.warn('[SW] Error clearing old caches:', error);
+  }
+}
+
 export function register(config?: Config): void {
   if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
+    window.addEventListener('load', async () => {
+      // Clear old caches if app version changed (fixes stale component issues)
+      await clearOldCachesIfNeeded();
+      
       const swUrl = '/sw.js';
 
       navigator.serviceWorker
