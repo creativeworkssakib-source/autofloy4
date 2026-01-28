@@ -94,9 +94,9 @@ const Header = () => {
           {/* Logo - redirects to dashboard if logged in */}
           <Link to={user ? "/dashboard" : "/"} className="flex items-center gap-2 group">
             <div className="transition-transform duration-500 group-hover:rotate-[360deg]">
-              <Logo size="sm" />
+              <Logo size="md" />
             </div>
-            <span className="text-2xl font-bold">
+            <span className="text-xl font-bold">
               Auto<span className="gradient-text">Floy</span>
             </span>
           </Link>

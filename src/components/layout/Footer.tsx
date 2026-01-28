@@ -67,8 +67,8 @@ const Footer = () => {
           {/* Brand Column */}
           <div className="col-span-2">
             <Link to="/" className="flex items-center gap-2 mb-3">
-              <Logo size="xs" />
-              <span className="text-sm font-bold text-slate-800 dark:text-slate-100">
+              <Logo size="sm" />
+              <span className="text-base font-bold text-slate-800 dark:text-slate-100">
                 {secondPart ? (
                   <>
                     {firstPart}<span className="text-primary">{secondPart}</span>
