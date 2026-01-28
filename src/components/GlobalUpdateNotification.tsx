@@ -1,69 +1,141 @@
 /**
- * Global Update Notification Component
+ * Global Auto-Update Component
  * 
- * Shows update notification across ALL pages (not just offline shop).
- * Uses API-based version checking for reliable PWA updates.
- * 
- * KEY FIX: Uses Supabase Edge Function for version check instead of
- * fetching HTML (which gets cached by service worker).
+ * AUTOMATICALLY updates the PWA without user intervention.
+ * Shows a brief "Updating..." message and reloads.
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { RefreshCw, X, Sparkles } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 // Current app version - MUST match the edge function version
 const APP_VERSION = '2.0.3';
 const VERSION_KEY = 'autofloy_app_version';
 const VERSION_CHECK_INTERVAL = 30 * 1000; // Check every 30 seconds
+const LAST_AUTO_UPDATE_KEY = 'autofloy_last_auto_update';
 
 export const GlobalUpdateNotification = () => {
-  const { language } = useLanguage();
-  const [hasUpdate, setHasUpdate] = useState(false);
-  const [isUpdating, setIsUpdating] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
-  const [forceUpdate, setForceUpdate] = useState(false);
   const isCheckingRef = useRef(false);
   const hasInitializedRef = useRef(false);
+  const isUpdatingRef = useRef(false);
 
-  // Check for new version via API (never cached!)
+  // Perform automatic update
+  const performAutoUpdate = useCallback(async () => {
+    if (isUpdatingRef.current) return;
+    isUpdatingRef.current = true;
+    
+    console.log('[AutoUpdate] Starting automatic update...');
+    
+    // Show brief updating indicator
+    const overlay = document.createElement('div');
+    overlay.id = 'auto-update-overlay';
+    overlay.innerHTML = `
+      <div style="
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 99999;
+        flex-direction: column;
+        color: white;
+        font-family: system-ui, sans-serif;
+      ">
+        <div style="
+          width: 40px;
+          height: 40px;
+          border: 3px solid rgba(255,255,255,0.3);
+          border-top-color: white;
+          border-radius: 50%;
+          animation: spin 1s linear infinite;
+        "></div>
+        <p style="margin-top: 16px; font-size: 16px;">আপডেট হচ্ছে...</p>
+        <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    
+    try {
+      // Mark update time to prevent rapid re-updates
+      localStorage.setItem(LAST_AUTO_UPDATE_KEY, Date.now().toString());
+      localStorage.removeItem('autofloy_update_available');
+      
+      // Clear ALL caches
+      if ('caches' in window) {
+        const cacheNames = await caches.keys();
+        console.log('[AutoUpdate] Clearing', cacheNames.length, 'caches');
+        await Promise.all(cacheNames.map(name => caches.delete(name)));
+      }
+      
+      // Unregister ALL service workers
+      if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        console.log('[AutoUpdate] Unregistering', registrations.length, 'service workers');
+        await Promise.all(registrations.map(reg => reg.unregister()));
+      }
+      
+      // Clear version storage
+      localStorage.removeItem(VERSION_KEY);
+      localStorage.removeItem('autofloy_build_hash');
+      localStorage.removeItem('autofloy_cache_version');
+      
+      // Small delay to ensure everything is cleared
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Force hard reload
+      window.location.href = window.location.pathname + '?_refresh=' + Date.now();
+    } catch (error) {
+      console.error('[AutoUpdate] Update failed:', error);
+      document.body.removeChild(overlay);
+      isUpdatingRef.current = false;
+      // Still try to reload
+      window.location.reload();
+    }
+  }, []);
+
+  // Check for new version via API
   const checkForNewVersion = useCallback(async () => {
-    if (isCheckingRef.current || dismissed) return;
+    if (isCheckingRef.current || isUpdatingRef.current) return;
     isCheckingRef.current = true;
     
     try {
-      // Call the app-version edge function - this is NEVER cached
+      // Prevent rapid re-updates (wait at least 60 seconds between updates)
+      const lastUpdate = localStorage.getItem(LAST_AUTO_UPDATE_KEY);
+      if (lastUpdate && Date.now() - parseInt(lastUpdate) < 60000) {
+        isCheckingRef.current = false;
+        return;
+      }
+      
+      // Call the app-version edge function
       const { data, error } = await supabase.functions.invoke('app-version', {
         method: 'GET',
       });
       
       if (error) {
-        console.debug('[UpdateCheck] API error:', error);
+        console.debug('[AutoUpdate] API error:', error);
         isCheckingRef.current = false;
         return;
       }
       
       if (data?.version) {
         const serverVersion = data.version;
-        const serverBuildNumber = data.buildNumber || 0;
         
-        console.log('[UpdateCheck] Version check:', { 
+        console.log('[AutoUpdate] Version check:', { 
           current: APP_VERSION, 
-          server: serverVersion,
-          buildNumber: serverBuildNumber 
+          server: serverVersion 
         });
         
-        // Compare versions
+        // If versions don't match, auto-update immediately
         if (serverVersion !== APP_VERSION) {
-          console.log('[UpdateCheck] Update available!', { current: APP_VERSION, server: serverVersion });
-          setHasUpdate(true);
-          setForceUpdate(data.forceUpdate === true);
-          
-          // Store that we detected an update
-          localStorage.setItem('autofloy_update_available', 'true');
+          console.log('[AutoUpdate] New version detected! Auto-updating...', { 
+            current: APP_VERSION, 
+            server: serverVersion 
+          });
+          await performAutoUpdate();
         }
         
         // Store current version
@@ -71,21 +143,19 @@ export const GlobalUpdateNotification = () => {
       }
       
     } catch (error) {
-      console.debug('[UpdateCheck] Check failed:', error);
+      console.debug('[AutoUpdate] Check failed:', error);
     } finally {
       isCheckingRef.current = false;
     }
-  }, [dismissed]);
+  }, [performAutoUpdate]);
 
-  // Listen for service worker updates (backup detection)
+  // Listen for service worker updates
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return;
     
     const handleControllerChange = () => {
-      console.log('[UpdateCheck] Service worker controller changed');
-      if (!dismissed) {
-        setHasUpdate(true);
-      }
+      console.log('[AutoUpdate] Service worker changed - auto-updating');
+      performAutoUpdate();
     };
     
     navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange);
@@ -93,8 +163,8 @@ export const GlobalUpdateNotification = () => {
     // Check for waiting service worker
     navigator.serviceWorker.ready.then(registration => {
       if (registration.waiting) {
-        console.log('[UpdateCheck] Service worker waiting to activate');
-        setHasUpdate(true);
+        console.log('[AutoUpdate] Service worker waiting - auto-updating');
+        performAutoUpdate();
       }
       
       registration.addEventListener('updatefound', () => {
@@ -102,32 +172,25 @@ export const GlobalUpdateNotification = () => {
         if (newWorker) {
           newWorker.addEventListener('statechange', () => {
             if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              console.log('[UpdateCheck] New service worker installed');
-              if (!dismissed) {
-                setHasUpdate(true);
-              }
+              console.log('[AutoUpdate] New service worker installed - auto-updating');
+              performAutoUpdate();
             }
           });
         }
       });
     }).catch(err => {
-      console.debug('[UpdateCheck] SW ready error:', err);
+      console.debug('[AutoUpdate] SW ready error:', err);
     });
     
     return () => {
       navigator.serviceWorker.removeEventListener('controllerchange', handleControllerChange);
     };
-  }, [dismissed]);
+  }, [performAutoUpdate]);
 
   // Initial setup and periodic checks
   useEffect(() => {
     if (hasInitializedRef.current) return;
     hasInitializedRef.current = true;
-    
-    // Check if we already detected an update
-    if (localStorage.getItem('autofloy_update_available') === 'true') {
-      setHasUpdate(true);
-    }
     
     // Store current version on first load
     localStorage.setItem(VERSION_KEY, APP_VERSION);
@@ -146,7 +209,7 @@ export const GlobalUpdateNotification = () => {
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
     
-    // Check on online event (reconnect)
+    // Check on online event
     const handleOnline = () => {
       setTimeout(checkForNewVersion, 2000);
     };
@@ -160,108 +223,8 @@ export const GlobalUpdateNotification = () => {
     };
   }, [checkForNewVersion]);
 
-  // Check for dismissed state
-  useEffect(() => {
-    if (sessionStorage.getItem('update_dismissed') === 'true' && !forceUpdate) {
-      setDismissed(true);
-    }
-  }, [forceUpdate]);
-
-  const handleUpdate = async () => {
-    setIsUpdating(true);
-    
-    try {
-      // Clear update available flag
-      localStorage.removeItem('autofloy_update_available');
-      
-      // Clear ALL caches
-      if ('caches' in window) {
-        const cacheNames = await caches.keys();
-        console.log('[UpdateCheck] Clearing', cacheNames.length, 'caches');
-        await Promise.all(cacheNames.map(name => caches.delete(name)));
-      }
-      
-      // Unregister ALL service workers
-      if ('serviceWorker' in navigator) {
-        const registrations = await navigator.serviceWorker.getRegistrations();
-        console.log('[UpdateCheck] Unregistering', registrations.length, 'service workers');
-        await Promise.all(registrations.map(reg => reg.unregister()));
-      }
-      
-      // Clear version storage
-      localStorage.removeItem(VERSION_KEY);
-      localStorage.removeItem('autofloy_build_hash');
-      localStorage.removeItem('autofloy_cache_version');
-      localStorage.removeItem('autofloy_last_version_check');
-      
-      // Small delay to ensure everything is cleared
-      await new Promise(resolve => setTimeout(resolve, 300));
-      
-      // Force hard reload with cache busting
-      window.location.href = window.location.pathname + '?_refresh=' + Date.now();
-    } catch (error) {
-      console.error('[UpdateCheck] Update failed:', error);
-      // Still try to reload
-      window.location.reload();
-    }
-  };
-
-  const handleDismiss = () => {
-    if (forceUpdate) return; // Can't dismiss forced updates
-    setDismissed(true);
-    setHasUpdate(false);
-    sessionStorage.setItem('update_dismissed', 'true');
-  };
-
-  if (!hasUpdate || dismissed) return null;
-
-  return (
-    <Alert className="fixed bottom-4 right-4 left-4 sm:left-auto sm:w-96 z-[9999] bg-gradient-to-r from-primary/20 to-primary/10 border-primary shadow-xl animate-in slide-in-from-bottom-4 backdrop-blur-sm">
-      <Sparkles className="h-4 w-4 text-primary" />
-      <AlertTitle className="font-semibold text-primary">
-        {language === 'bn' ? '🎉 নতুন আপডেট!' : '🎉 New Update!'}
-      </AlertTitle>
-      <AlertDescription className="mt-2">
-        <p className="text-sm text-muted-foreground mb-3">
-          {language === 'bn' 
-            ? 'অ্যাপের নতুন ভার্সন প্রস্তুত। নতুন ফিচার ও বাগ ফিক্স পেতে এখনই আপডেট করুন।'
-            : 'A new version is ready. Update now to get new features and bug fixes.'
-          }
-        </p>
-        <div className="flex gap-2">
-          <Button 
-            size="sm" 
-            onClick={handleUpdate}
-            disabled={isUpdating}
-            className="flex-1 bg-primary hover:bg-primary/90"
-          >
-            {isUpdating ? (
-              <>
-                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                {language === 'bn' ? 'আপডেট হচ্ছে...' : 'Updating...'}
-              </>
-            ) : (
-              <>
-                <RefreshCw className="h-4 w-4 mr-2" />
-                {language === 'bn' ? 'এখনই আপডেট করুন' : 'Update Now'}
-              </>
-            )}
-          </Button>
-          {!forceUpdate && (
-            <Button 
-              size="sm" 
-              variant="ghost" 
-              onClick={handleDismiss}
-              disabled={isUpdating}
-              className="px-2"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          )}
-        </div>
-      </AlertDescription>
-    </Alert>
-  );
+  // This component renders nothing - updates happen automatically
+  return null;
 };
 
 export default GlobalUpdateNotification;
