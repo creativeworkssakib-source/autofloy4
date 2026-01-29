@@ -742,7 +742,7 @@ export function useOfflineLoans() {
 
 export function useOfflineCashRegister() {
   const [registers, setRegisters] = useState<any[]>([]);
-  const [todayRegister, setTodayRegister] = useState<any>(null);
+  const [register, setRegister] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const { currentShop } = useShop();
   const isOnline = useIsOnline();
@@ -755,11 +755,11 @@ export function useOfflineCashRegister() {
         offlineFirstService.getTodayRegister(),
       ]);
       setRegisters(registersResult.registers || []);
-      setTodayRegister(todayResult.register);
+      setRegister(todayResult.register);
     } catch (error) {
       console.error('Failed to fetch cash registers:', error);
       setRegisters([]);
-      setTodayRegister(null);
+      setRegister(null);
     } finally {
       setLoading(false);
     }
@@ -778,7 +778,7 @@ export function useOfflineCashRegister() {
   const openRegister = useCallback(async (openingCash: number) => {
     const result = await offlineFirstService.openCashRegister(openingCash);
     await refetch();
-    return result;
+    return { message: 'Register opened successfully', ...result };
   }, [refetch]);
 
   const closeRegister = useCallback(async (closingCash: number, notes?: string) => {
@@ -788,8 +788,8 @@ export function useOfflineCashRegister() {
   }, [refetch]);
 
   return {
+    register, // This is what DailyCashRegister expects
     registers,
-    todayRegister,
     loading,
     refetch,
     openRegister,
