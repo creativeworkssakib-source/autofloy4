@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -11,8 +11,17 @@ const AuthGoogleCallback = () => {
   const { toast } = useToast();
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
   const [errorMessage, setErrorMessage] = useState("");
+  
+  // Prevent double execution in React Strict Mode
+  const isProcessingRef = useRef(false);
+  const hasProcessedRef = useRef(false);
 
   useEffect(() => {
+    // Prevent double execution
+    if (isProcessingRef.current || hasProcessedRef.current) {
+      return;
+    }
+    
     const processCallback = async () => {
       const code = searchParams.get("code");
       const error = searchParams.get("error");
@@ -31,8 +40,15 @@ const AuthGoogleCallback = () => {
         return;
       }
 
+      // Mark as processing to prevent double calls
+      isProcessingRef.current = true;
+
       try {
         const result = await handleGoogleCallback(code);
+        
+        // Mark as processed
+        hasProcessedRef.current = true;
+        isProcessingRef.current = false;
         
         if (result.success) {
           setStatus("success");
@@ -49,9 +65,13 @@ const AuthGoogleCallback = () => {
           setTimeout(() => navigate("/login"), 3000);
         }
       } catch (error) {
-        setStatus("error");
-        setErrorMessage("An unexpected error occurred");
-        setTimeout(() => navigate("/login"), 3000);
+        // Only show error if we haven't already processed successfully
+        if (!hasProcessedRef.current) {
+          setStatus("error");
+          setErrorMessage("An unexpected error occurred");
+          setTimeout(() => navigate("/login"), 3000);
+        }
+        isProcessingRef.current = false;
       }
     };
 
