@@ -19,59 +19,26 @@ export const GlobalUpdateNotification = () => {
   const hasInitializedRef = useRef(false);
   const isUpdatingRef = useRef(false);
 
-  // Perform automatic update
+  // Perform automatic update silently in background
   const performAutoUpdate = useCallback(async () => {
     if (isUpdatingRef.current) return;
     isUpdatingRef.current = true;
     
-    console.log('[AutoUpdate] Starting automatic update...');
-    
-    // Show brief updating indicator
-    const overlay = document.createElement('div');
-    overlay.id = 'auto-update-overlay';
-    overlay.innerHTML = `
-      <div style="
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0,0,0,0.8);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 99999;
-        flex-direction: column;
-        color: white;
-        font-family: system-ui, sans-serif;
-      ">
-        <div style="
-          width: 40px;
-          height: 40px;
-          border: 3px solid rgba(255,255,255,0.3);
-          border-top-color: white;
-          border-radius: 50%;
-          animation: spin 1s linear infinite;
-        "></div>
-        <p style="margin-top: 16px; font-size: 16px;">আপডেট হচ্ছে...</p>
-        <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
-      </div>
-    `;
-    document.body.appendChild(overlay);
+    console.log('[AutoUpdate] Starting silent background update...');
     
     try {
       // Mark update time to prevent rapid re-updates
       localStorage.setItem(LAST_AUTO_UPDATE_KEY, Date.now().toString());
       localStorage.removeItem('autofloy_update_available');
       
-      // Clear ALL caches
+      // Clear ALL caches silently
       if ('caches' in window) {
         const cacheNames = await caches.keys();
         console.log('[AutoUpdate] Clearing', cacheNames.length, 'caches');
         await Promise.all(cacheNames.map(name => caches.delete(name)));
       }
       
-      // Unregister ALL service workers
+      // Unregister ALL service workers silently
       if ('serviceWorker' in navigator) {
         const registrations = await navigator.serviceWorker.getRegistrations();
         console.log('[AutoUpdate] Unregistering', registrations.length, 'service workers');
@@ -84,15 +51,14 @@ export const GlobalUpdateNotification = () => {
       localStorage.removeItem('autofloy_cache_version');
       
       // Small delay to ensure everything is cleared
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 300));
       
-      // Force hard reload
+      // Force silent reload
       window.location.href = window.location.pathname + '?_refresh=' + Date.now();
     } catch (error) {
       console.error('[AutoUpdate] Update failed:', error);
-      document.body.removeChild(overlay);
       isUpdatingRef.current = false;
-      // Still try to reload
+      // Still try to reload silently
       window.location.reload();
     }
   }, []);
