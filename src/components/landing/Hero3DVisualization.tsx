@@ -120,156 +120,284 @@ const Hero3DVisualization = memo(() => {
             <FlowLine delay={0.8} direction="left" />
           </div>
 
-          {/* Center - AI Core - MEGA 3D DESIGN */}
+          {/* Center - AI Core - PREMIUM 3D DESIGN */}
           <motion.div
             className="relative z-10"
             initial={{ scale: 0, opacity: 0, rotateY: -180 }}
             animate={{ scale: 1, opacity: 1, rotateY: 0 }}
             transition={{ duration: 0.8, type: "spring", delay: 0.3 }}
           >
-            {/* Outer Rotating Rings */}
+            {/* Outer Glow Aura */}
+            <div className="absolute inset-0 -m-24 md:-m-32">
+              <motion.div 
+                className="absolute inset-0 rounded-full"
+                style={{
+                  background: 'radial-gradient(circle, hsl(var(--primary) / 0.15) 0%, transparent 70%)',
+                }}
+                animate={{ 
+                  scale: [1, 1.1, 1],
+                  opacity: [0.5, 0.8, 0.5]
+                }}
+                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+              />
+            </div>
+
+            {/* Outer Tech Ring - Large */}
             <motion.div
-              className="absolute inset-0 -m-16 md:-m-20"
+              className="absolute inset-0 -m-20 md:-m-24"
               animate={{ rotate: 360 }}
-              transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+              transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
             >
-              <div className="w-full h-full rounded-full border border-dashed border-primary/20" />
+              <svg viewBox="0 0 200 200" className="w-full h-full">
+                <circle 
+                  cx="100" cy="100" r="95" 
+                  fill="none" 
+                  stroke="url(#outerGradient)" 
+                  strokeWidth="0.5"
+                  strokeDasharray="8 4"
+                  className="opacity-40"
+                />
+                <defs>
+                  <linearGradient id="outerGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="hsl(var(--primary))" />
+                    <stop offset="50%" stopColor="hsl(var(--secondary))" />
+                    <stop offset="100%" stopColor="hsl(var(--primary))" />
+                  </linearGradient>
+                </defs>
+              </svg>
+              {/* Orbiting Nodes */}
               {[0, 90, 180, 270].map((deg) => (
                 <motion.div
                   key={deg}
-                  className="absolute top-1/2 left-1/2 w-3 h-3 md:w-4 md:h-4 -translate-x-1/2 -translate-y-1/2"
+                  className="absolute top-1/2 left-1/2"
                   style={{ 
-                    transform: `rotate(${deg}deg) translateX(80px) rotate(-${deg}deg)`,
-                  }}
-                >
-                  <div className="w-full h-full rounded-full bg-gradient-to-br from-primary to-secondary shadow-lg shadow-primary/50" />
-                </motion.div>
-              ))}
-            </motion.div>
-
-            {/* Middle Rotating Ring */}
-            <motion.div
-              className="absolute inset-0 -m-10 md:-m-14"
-              animate={{ rotate: -360 }}
-              transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
-            >
-              <div className="w-full h-full rounded-full border-2 border-secondary/30" />
-              {[45, 135, 225, 315].map((deg) => (
-                <motion.div
-                  key={deg}
-                  className="absolute top-1/2 left-1/2 w-2 h-2 md:w-3 md:h-3"
-                  style={{ 
-                    transform: `rotate(${deg}deg) translateX(56px) rotate(-${deg}deg) translate(-50%, -50%)`,
+                    transform: `rotate(${deg}deg) translateX(96px) translateY(-50%)`,
                   }}
                 >
                   <motion.div 
-                    className="w-full h-full rounded-full bg-secondary shadow-lg shadow-secondary/50"
-                    animate={{ scale: [1, 1.5, 1] }}
-                    transition={{ duration: 2, repeat: Infinity, delay: deg / 180 }}
+                    className="w-2 h-2 rounded-full bg-primary/60"
+                    animate={{ 
+                      scale: [1, 1.5, 1],
+                      opacity: [0.6, 1, 0.6]
+                    }}
+                    transition={{ duration: 2, repeat: Infinity, delay: deg / 360 }}
+                    style={{
+                      boxShadow: '0 0 10px hsl(var(--primary) / 0.5)'
+                    }}
                   />
                 </motion.div>
               ))}
             </motion.div>
 
-            {/* Pulsing Glow Layers */}
+            {/* Middle Tech Ring */}
             <motion.div
-              className="absolute inset-0 -m-12 rounded-full bg-gradient-to-r from-primary/30 via-secondary/30 to-primary/30 blur-3xl"
+              className="absolute inset-0 -m-14 md:-m-18"
+              animate={{ rotate: -360 }}
+              transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+            >
+              <svg viewBox="0 0 200 200" className="w-full h-full">
+                <circle 
+                  cx="100" cy="100" r="95" 
+                  fill="none" 
+                  stroke="hsl(var(--secondary) / 0.3)"
+                  strokeWidth="1"
+                  className="opacity-60"
+                />
+                {/* Tech line segments */}
+                <path 
+                  d="M 100 5 L 100 15 M 195 100 L 185 100 M 100 195 L 100 185 M 5 100 L 15 100" 
+                  stroke="hsl(var(--primary))" 
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  className="opacity-50"
+                />
+              </svg>
+              {/* Corner Indicators */}
+              {[45, 135, 225, 315].map((deg) => (
+                <motion.div
+                  key={deg}
+                  className="absolute top-1/2 left-1/2"
+                  style={{ 
+                    transform: `rotate(${deg}deg) translateX(72px) translateY(-50%)`,
+                  }}
+                >
+                  <div className="w-1.5 h-1.5 rounded-full bg-secondary/80" 
+                    style={{
+                      boxShadow: '0 0 8px hsl(var(--secondary) / 0.6)'
+                    }}
+                  />
+                </motion.div>
+              ))}
+            </motion.div>
+
+            {/* Inner Pulsing Glow */}
+            <motion.div
+              className="absolute inset-0 -m-10 rounded-3xl"
+              style={{
+                background: 'radial-gradient(ellipse, hsl(var(--primary) / 0.4) 0%, hsl(var(--secondary) / 0.2) 50%, transparent 70%)',
+              }}
               animate={{ 
-                opacity: [0.3, 0.7, 0.3],
-                scale: [1, 1.2, 1]
+                opacity: [0.4, 0.7, 0.4],
+                scale: [1, 1.1, 1]
               }}
               transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
             />
-            <motion.div
-              className="absolute inset-0 -m-8 rounded-3xl bg-gradient-radial from-primary/40 to-transparent blur-2xl"
-              animate={{ 
-                opacity: [0.4, 0.8, 0.4],
-                scale: [1, 1.15, 1]
-              }}
-              transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
-            />
             
-            {/* Inner Rotating Ring with Data Particles */}
+            {/* Close Inner Ring */}
             <motion.div
-              className="absolute inset-0 -m-4 md:-m-6"
+              className="absolute inset-0 -m-6 md:-m-8"
               animate={{ rotate: 360 }}
-              transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
+              transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
             >
-              <div className="w-full h-full rounded-2xl md:rounded-3xl border border-primary/30" />
+              <div className="w-full h-full rounded-2xl border border-primary/20" />
+              {/* Data flow dots */}
               {[0, 120, 240].map((deg) => (
                 <motion.div
                   key={deg}
                   className="absolute top-1/2 left-1/2"
                   style={{ 
-                    transform: `rotate(${deg}deg) translateX(44px)`,
+                    transform: `rotate(${deg}deg) translateX(52px) translateY(-50%)`,
                   }}
                 >
                   <motion.div 
-                    className="w-2 h-2 rounded-full bg-gradient-to-r from-cyan-400 to-primary"
+                    className="w-1.5 h-1.5 rounded-full bg-primary"
                     animate={{ 
-                      boxShadow: [
-                        "0 0 5px hsl(var(--primary))",
-                        "0 0 20px hsl(var(--primary))",
-                        "0 0 5px hsl(var(--primary))",
-                      ]
+                      scale: [1, 1.8, 1],
+                      opacity: [0.7, 1, 0.7]
                     }}
                     transition={{ duration: 1.5, repeat: Infinity, delay: deg / 360 }}
+                    style={{
+                      boxShadow: '0 0 12px hsl(var(--primary))'
+                    }}
                   />
                 </motion.div>
               ))}
             </motion.div>
 
-            {/* Main Core Card - 3D Effect */}
-            <div className="relative w-28 h-28 md:w-36 md:h-36" style={{ perspective: '1000px' }}>
-              {/* Deep Shadow Layer */}
-              <div className="absolute inset-0 rounded-2xl md:rounded-3xl bg-gradient-to-br from-primary/40 to-secondary/40 transform translate-x-3 translate-y-3 blur-lg" />
-              <div className="absolute inset-0 rounded-2xl md:rounded-3xl bg-gradient-to-br from-primary/60 to-secondary/60 transform translate-x-2 translate-y-2 blur-md" />
-              <div className="absolute inset-0 rounded-2xl md:rounded-3xl bg-gradient-to-br from-primary/80 to-secondary/80 transform translate-x-1 translate-y-1 blur-sm" />
+            {/* Main Core Card - Premium Glass 3D */}
+            <div className="relative w-32 h-32 md:w-40 md:h-40" style={{ perspective: '1200px' }}>
+              {/* Multi-layer Deep Shadow */}
+              <div className="absolute inset-0 rounded-[24px] md:rounded-[28px] bg-gradient-to-br from-primary/20 to-secondary/20 transform translate-x-4 translate-y-4 blur-2xl" />
+              <div className="absolute inset-0 rounded-[24px] md:rounded-[28px] bg-gradient-to-br from-primary/40 to-secondary/40 transform translate-x-3 translate-y-3 blur-xl" />
+              <div className="absolute inset-0 rounded-[24px] md:rounded-[28px] bg-gradient-to-br from-primary/60 to-secondary/50 transform translate-x-2 translate-y-2 blur-lg" />
+              <div className="absolute inset-0 rounded-[24px] md:rounded-[28px] bg-gradient-to-br from-primary/80 to-secondary/70 transform translate-x-1 translate-y-1 blur-md" />
               
-              {/* Main Card with 3D Transform */}
+              {/* Outer Border Glow */}
               <motion.div 
-                className="absolute inset-0 rounded-2xl md:rounded-3xl bg-gradient-to-br from-primary via-primary to-secondary shadow-2xl overflow-hidden"
-                animate={{ 
-                  rotateY: [0, 5, 0, -5, 0],
-                  rotateX: [0, 3, 0, -3, 0],
-                  boxShadow: [
-                    "0 25px 50px -12px hsl(var(--primary) / 0.5)",
-                    "0 30px 60px -10px hsl(var(--secondary) / 0.5)",
-                    "0 25px 50px -12px hsl(var(--primary) / 0.5)",
-                  ]
+                className="absolute inset-0 rounded-[24px] md:rounded-[28px] p-[2px]"
+                style={{
+                  background: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)), hsl(var(--primary)))',
+                  backgroundSize: '200% 200%',
                 }}
-                transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
-                style={{ transformStyle: 'preserve-3d' }}
+                animate={{
+                  backgroundPosition: ['0% 0%', '100% 100%', '0% 0%']
+                }}
+                transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
               >
-                {/* Animated Shine Effect */}
-                <motion.div 
-                  className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent -skew-x-12"
-                  animate={{ x: ["-150%", "250%"] }}
-                  transition={{ duration: 2.5, repeat: Infinity, repeatDelay: 3, ease: "easeInOut" }}
-                />
-                {/* Glass Effect Top */}
-                <div className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/30 to-transparent" />
-                {/* Glass Effect Side */}
-                <div className="absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-white/15 to-transparent" />
-                {/* Inner Glow */}
-                <div className="absolute inset-0 bg-gradient-radial from-white/10 to-transparent" />
+                <div className="w-full h-full rounded-[22px] md:rounded-[26px] bg-gradient-to-br from-[#1e3a8a] via-[#2563eb] to-[#3b82f6]" />
               </motion.div>
               
-              {/* Icon with 3D Effect */}
+              {/* Main Card Body */}
+              <motion.div 
+                className="absolute inset-0 rounded-[24px] md:rounded-[28px] overflow-hidden"
+                animate={{ 
+                  rotateY: [0, 3, 0, -3, 0],
+                  rotateX: [0, 2, 0, -2, 0],
+                }}
+                transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+                style={{ transformStyle: 'preserve-3d' }}
+              >
+                {/* Premium Gradient Background */}
+                <div className="absolute inset-0 bg-gradient-to-br from-[#1e40af] via-[#2563eb] to-[#3b82f6]" />
+                
+                {/* Inner Border */}
+                <div className="absolute inset-[3px] rounded-[21px] md:rounded-[25px] border border-white/10" />
+                
+                {/* Top Glass Reflection */}
+                <div className="absolute inset-0 bg-gradient-to-b from-white/25 via-white/5 to-transparent" 
+                  style={{ clipPath: 'polygon(0 0, 100% 0, 100% 50%, 0 60%)' }}
+                />
+                
+                {/* Left Glass Edge */}
+                <div className="absolute inset-y-0 left-0 w-[40%] bg-gradient-to-r from-white/15 via-white/5 to-transparent" />
+                
+                {/* Corner Highlight */}
+                <div className="absolute top-2 left-2 w-8 h-8 rounded-full bg-white/10 blur-md" />
+                
+                {/* Bottom Reflection */}
+                <div className="absolute bottom-0 inset-x-0 h-1/4 bg-gradient-to-t from-black/20 to-transparent" />
+                
+                {/* Animated Premium Shine */}
+                <motion.div 
+                  className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -skew-x-12 w-[60%]"
+                  animate={{ x: ['-100%', '300%'] }}
+                  transition={{ duration: 3, repeat: Infinity, repeatDelay: 4, ease: "easeInOut" }}
+                />
+                
+                {/* Holographic Effect */}
+                <motion.div 
+                  className="absolute inset-0 opacity-30"
+                  style={{
+                    background: 'linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.1) 50%, transparent 70%)',
+                    backgroundSize: '200% 200%',
+                  }}
+                  animate={{
+                    backgroundPosition: ['0% 0%', '100% 100%']
+                  }}
+                  transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+                />
+              </motion.div>
+              
+              {/* Icon Container with Enhanced 3D */}
               <div className="absolute inset-0 flex items-center justify-center">
                 <motion.div
+                  className="relative"
                   animate={{ 
-                    scale: [1, 1.1, 1],
-                    rotateY: [0, 15, 0, -15, 0],
-                    z: [0, 20, 0]
+                    scale: [1, 1.05, 1],
+                    rotateY: [0, 8, 0, -8, 0],
                   }}
-                  transition={{ duration: 4, repeat: Infinity }}
+                  transition={{ duration: 5, repeat: Infinity }}
                   style={{ transformStyle: 'preserve-3d' }}
                 >
-                  <Bot className="w-12 h-12 md:w-16 md:h-16 text-white drop-shadow-2xl" style={{ filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))' }} />
+                  {/* Icon Glow */}
+                  <motion.div 
+                    className="absolute inset-0 -m-2 rounded-2xl bg-white/20 blur-xl"
+                    animate={{ 
+                      opacity: [0.3, 0.6, 0.3],
+                      scale: [1, 1.2, 1]
+                    }}
+                    transition={{ duration: 2, repeat: Infinity }}
+                  />
+                  <Bot 
+                    className="w-14 h-14 md:w-18 md:h-18 text-white relative z-10" 
+                    strokeWidth={1.5}
+                    style={{ 
+                      filter: 'drop-shadow(0 4px 12px rgba(255,255,255,0.3)) drop-shadow(0 8px 16px rgba(0,0,0,0.4))'
+                    }} 
+                  />
                 </motion.div>
               </div>
 
+              {/* Corner Tech Indicators */}
+              <div className="absolute top-3 right-3 flex gap-1">
+                {[0, 1, 2].map((i) => (
+                  <motion.div 
+                    key={i}
+                    className="w-1 h-1 rounded-full bg-white/60"
+                    animate={{ opacity: [0.4, 1, 0.4] }}
+                    transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }}
+                  />
+                ))}
+              </div>
+              
+              {/* Bottom Tech Line */}
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
+                <motion.div 
+                  className="w-12 h-0.5 rounded-full bg-gradient-to-r from-transparent via-white/40 to-transparent"
+                  animate={{ opacity: [0.3, 0.7, 0.3] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                />
+              </div>
             </div>
 
             {/* AI Label with Glow */}
