@@ -11,9 +11,7 @@ import {
   Zap,
   Clock,
   Shield,
-  Brain,
   Sparkles,
-  Activity,
   Cpu
 } from "lucide-react";
 
@@ -273,24 +271,7 @@ const Hero3DVisualization = memo(() => {
                 </motion.div>
               </div>
 
-              {/* Floating Decorative Icons */}
-              <motion.div
-                className="absolute -top-4 -right-4 md:-top-5 md:-right-5"
-                animate={{ 
-                  y: [0, -8, 0],
-                  rotate: [0, 15, 0],
-                  scale: [1, 1.1, 1]
-                }}
-                transition={{ duration: 2.5, repeat: Infinity }}
-              >
-                <div className="relative">
-                  <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-yellow-400 to-amber-500 blur-md opacity-50" />
-                  <div className="relative w-9 h-9 md:w-11 md:h-11 rounded-xl bg-gradient-to-br from-yellow-400 via-amber-400 to-orange-500 flex items-center justify-center shadow-xl shadow-amber-500/40">
-                    <Brain className="w-4 h-4 md:w-5 md:h-5 text-white" />
-                  </div>
-                </div>
-              </motion.div>
-
+              {/* Floating Decorative Icons - Only 2 kept */}
               <motion.div
                 className="absolute -bottom-3 -left-3 md:-bottom-4 md:-left-4"
                 animate={{ 
@@ -321,22 +302,6 @@ const Hero3DVisualization = memo(() => {
                   <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-pink-400 to-purple-500 blur-md opacity-50" />
                   <div className="relative w-7 h-7 md:w-8 md:h-8 rounded-lg bg-gradient-to-br from-pink-400 via-purple-400 to-violet-500 flex items-center justify-center shadow-xl shadow-purple-500/40">
                     <Sparkles className="w-3 h-3 md:w-3.5 md:h-3.5 text-white" />
-                  </div>
-                </div>
-              </motion.div>
-
-              <motion.div
-                className="absolute -bottom-5 -right-3 md:-bottom-6 md:-right-4"
-                animate={{ 
-                  y: [0, 4, 0],
-                  scale: [1, 1.1, 1]
-                }}
-                transition={{ duration: 2.2, repeat: Infinity, delay: 0.9 }}
-              >
-                <div className="relative">
-                  <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-emerald-400 to-teal-500 blur-md opacity-50" />
-                  <div className="relative w-7 h-7 md:w-8 md:h-8 rounded-lg bg-gradient-to-br from-emerald-400 via-teal-400 to-cyan-500 flex items-center justify-center shadow-xl shadow-teal-500/40">
-                    <Activity className="w-3 h-3 md:w-3.5 md:h-3.5 text-white" />
                   </div>
                 </div>
               </motion.div>
@@ -425,7 +390,7 @@ const Hero3DVisualization = memo(() => {
       <FeatureBadge 
         icon={<Zap className="w-3.5 h-3.5" />}
         label="10x Faster"
-        position="bottom-12 left-1/2 -translate-x-1/2"
+        position="bottom-12 inset-x-0 flex justify-center"
         delay={2}
         highlight
       />
