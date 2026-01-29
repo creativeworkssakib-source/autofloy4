@@ -2,11 +2,15 @@
  * Shop Data Hooks with Real-time Sync
  * All hooks needed for shop functionality
  * 
- * Uses offlineShopService for direct Supabase API calls
+ * Uses offlineFirstService for TRUE offline-first functionality
+ * - When ONLINE: Fetches from API, caches to IndexedDB
+ * - When OFFLINE: Reads from IndexedDB, queues writes for sync
+ * 
  * Includes automatic real-time updates across all devices
  */
 
 import { useState, useEffect, useCallback } from 'react';
+import { offlineFirstService } from '@/services/offlineFirstService';
 import { offlineShopService } from '@/services/offlineShopService';
 import { useShop } from '@/contexts/ShopContext';
 import { useRealtimeSync, useMultiTableRealtimeSync } from './useRealtimeSync';
@@ -23,7 +27,7 @@ export function useOfflinePurchases(startDate?: string, endDate?: string) {
   const refetch = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await offlineShopService.getPurchases();
+      const result = await offlineFirstService.getPurchases();
       setPurchases(result.purchases || []);
     } catch (error) {
       console.error('Failed to fetch purchases:', error);
@@ -45,13 +49,15 @@ export function useOfflinePurchases(startDate?: string, endDate?: string) {
   });
 
   const createPurchase = useCallback(async (data: any) => {
-    const result = await offlineShopService.createPurchase(data);
+    const result = await offlineFirstService.createPurchase(data);
+    await refetch();
     return { purchase: result.purchase };
-  }, []);
+  }, [refetch]);
 
   const deletePurchase = useCallback(async (id: string) => {
     await offlineShopService.deletePurchase(id);
-  }, []);
+    await refetch();
+  }, [refetch]);
 
   return {
     purchases,
@@ -73,7 +79,7 @@ export function useOfflineSuppliersExt() {
   const refetch = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await offlineShopService.getSuppliers();
+      const result = await offlineFirstService.getSuppliers();
       setSuppliers(result.suppliers || []);
     } catch (error) {
       console.error('Failed to fetch suppliers:', error);
@@ -95,22 +101,26 @@ export function useOfflineSuppliersExt() {
   });
 
   const createSupplier = useCallback(async (data: any) => {
-    const result = await offlineShopService.createSupplier(data);
+    const result = await offlineFirstService.createSupplier(data);
+    await refetch();
     return { supplier: result.supplier };
-  }, []);
+  }, [refetch]);
 
   const updateSupplier = useCallback(async (id: string, data: any) => {
-    await offlineShopService.updateSupplier({ id, ...data });
-  }, []);
+    await offlineFirstService.updateSupplier({ id, ...data });
+    await refetch();
+  }, [refetch]);
 
   const deleteSupplier = useCallback(async (id: string) => {
-    await offlineShopService.deleteSupplier(id);
-  }, []);
+    await offlineFirstService.deleteSupplier(id);
+    await refetch();
+  }, [refetch]);
 
   const deleteSuppliers = useCallback(async (ids: string[]) => {
     const result = await offlineShopService.deleteSuppliers(ids);
+    await refetch();
     return result;
-  }, []);
+  }, [refetch]);
 
   return {
     suppliers,
@@ -134,7 +144,7 @@ export function useOfflineAdjustments(filterType?: string) {
   const refetch = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await offlineShopService.getStockAdjustments({ filterType });
+      const result = await offlineFirstService.getStockAdjustments({ filterType });
       setAdjustments(result.adjustments || []);
     } catch (error) {
       console.error('Failed to fetch adjustments:', error);
@@ -156,7 +166,7 @@ export function useOfflineAdjustments(filterType?: string) {
   });
 
   const createAdjustment = useCallback(async (data: any) => {
-    const result = await offlineShopService.createStockAdjustment(data);
+    const result = await offlineFirstService.createStockAdjustment(data);
     await refetch();
     return { adjustment: result.adjustment };
   }, [refetch]);
@@ -187,8 +197,13 @@ export function useOfflineReturns(returnType?: 'sale' | 'purchase') {
   const refetch = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await offlineShopService.getReturns(returnType);
-      setReturns(result.returns || []);
+      const result = await offlineFirstService.getReturns();
+      // Filter by return type if specified
+      let filteredReturns = result.returns || [];
+      if (returnType) {
+        filteredReturns = filteredReturns.filter((r: any) => r.return_type === returnType);
+      }
+      setReturns(filteredReturns);
     } catch (error) {
       console.error('Failed to fetch returns:', error);
       setReturns([]);
@@ -236,10 +251,16 @@ export function useOfflineLoans(statusFilter?: string) {
   const refetch = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await offlineShopService.getLoans(statusFilter);
-      const allLoans = result.loans || [];
+      const result = await offlineFirstService.getLoans();
+      let allLoans = result.loans || [];
+      
+      // Apply status filter if provided
+      if (statusFilter && statusFilter !== 'all') {
+        allLoans = allLoans.filter((l: any) => l.status === statusFilter);
+      }
+      
       setLoans(allLoans);
-      setStats(result.stats);
+      setStats((result as any).stats || null);
       setUpcomingLoans(allLoans.filter((l: any) => l.status === 'active'));
       setOverdueLoans(allLoans.filter((l: any) => l.status === 'overdue'));
     } catch (error) {
@@ -262,7 +283,7 @@ export function useOfflineLoans(statusFilter?: string) {
   );
 
   const createLoan = useCallback(async (data: any) => {
-    const result = await offlineShopService.createLoan(data);
+    const result = await offlineFirstService.createLoan(data);
     await refetch();
     return { loan: result.loan };
   }, [refetch]);
@@ -319,13 +340,13 @@ export function useOfflineCashSummary() {
     setLoading(true);
     try {
       const [salesRes, purchasesRes, expensesRes, customersRes, suppliersRes, productsRes, adjustmentsRes] = await Promise.all([
-        offlineShopService.getSales(),
-        offlineShopService.getPurchases(),
-        offlineShopService.getExpenses(),
-        offlineShopService.getCustomers(),
-        offlineShopService.getSuppliers(),
-        offlineShopService.getProducts(),
-        offlineShopService.getStockAdjustments(),
+        offlineFirstService.getSales(),
+        offlineFirstService.getPurchases(),
+        offlineFirstService.getExpenses(),
+        offlineFirstService.getCustomers(),
+        offlineFirstService.getSuppliers(),
+        offlineFirstService.getProducts(),
+        offlineFirstService.getStockAdjustments(),
       ]);
 
       setData({
@@ -373,7 +394,7 @@ export function useOfflineDueCustomers() {
   const refetch = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await offlineShopService.getSales();
+      const response = await offlineFirstService.getSales();
       const allSales = response.sales || [];
       
       // Filter sales with due amount > 0
@@ -476,12 +497,14 @@ export function useOfflineDueCustomers() {
 
   const updateSalePayment = useCallback(async (saleId: string, paidAmount: number, dueAmount: number) => {
     const status = dueAmount <= 0 ? 'paid' : 'partial';
-    await offlineShopService.updateSale(saleId, { paid_amount: paidAmount, due_amount: dueAmount, payment_status: status });
-  }, []);
+    await offlineFirstService.updateSale(saleId, { paid_amount: paidAmount, due_amount: dueAmount, payment_status: status });
+    await refetch();
+  }, [refetch]);
 
   const deleteSales = useCallback(async (ids: string[]) => {
-    await offlineShopService.deleteSales(ids);
-  }, []);
+    await offlineFirstService.deleteSales(ids);
+    await refetch();
+  }, [refetch]);
 
   return {
     dueCustomers,
@@ -504,10 +527,13 @@ export function useOfflineDailyCashRegister(date?: string) {
   const refetch = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await offlineShopService.getCashRegister(date);
-      // API returns { registers, todayRegister, hasOpenRegister }
-      setRegister(result.todayRegister || null);
-      setRegisters(result.registers || []);
+      // Use offlineFirstService for true offline-first functionality
+      const [registersResult, todayResult] = await Promise.all([
+        offlineFirstService.getCashRegisters(),
+        offlineFirstService.getTodayRegister(),
+      ]);
+      setRegister(todayResult.register || null);
+      setRegisters(registersResult.registers || []);
     } catch (error) {
       console.error('Failed to fetch daily cash register:', error);
       setRegister(null);
@@ -529,13 +555,13 @@ export function useOfflineDailyCashRegister(date?: string) {
   );
 
   const openRegister = useCallback(async (openingBalance: number) => {
-    const result = await offlineShopService.openCashRegister(openingBalance);
+    const result = await offlineFirstService.openCashRegister(openingBalance);
     await refetch();
-    return result;
+    return { message: 'Register opened successfully', ...result };
   }, [refetch]);
 
   const closeRegister = useCallback(async (closingBalance: number, notes?: string) => {
-    const result = await offlineShopService.closeCashRegister(closingBalance, notes);
+    const result = await offlineFirstService.closeCashRegister(closingBalance, notes);
     await refetch();
     return result;
   }, [refetch]);
@@ -564,8 +590,8 @@ export function useOfflineDashboard(range: 'today' | 'week' | 'month' = 'today')
   const refetch = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await offlineShopService.getDashboard(range);
-      setData(result);
+      const result = await offlineFirstService.getDashboard(range);
+      setData(result.dashboard || result);
     } catch (error) {
       console.error('Failed to fetch dashboard:', error);
       setData(null);
@@ -602,17 +628,17 @@ export function useOfflineReports(type: "sales" | "purchases" | "expenses" | "in
   const refetch = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await offlineShopService.getReports(type, { startDate, endDate });
+      const result = await offlineFirstService.getReports(type, { startDate, endDate });
       
       // Normalize the response to have consistent `records` array
       // API returns: { sales: [...], summary: {...} } or { expenses: [...], summary: {...} } etc.
-      const records = result.sales || result.purchases || result.expenses || result.products || result.customers || [];
+      const records = (result as any).sales || (result as any).purchases || (result as any).expenses || (result as any).products || (result as any).customers || [];
       
       // Normalize summary structure for UI
-      const summary = result.summary || {};
+      const summary = (result as any).summary || (result as any).report || {};
       if (type === 'sales') {
-        summary.totalAmount = summary.totalSales || 0;
-        summary.count = summary.count || 0;
+        summary.totalAmount = summary.totalSales || summary.totalRevenue || 0;
+        summary.count = summary.count || summary.salesCount || 0;
         // Calculate total items
         summary.totalItems = records.reduce((sum: number, s: any) => {
           return sum + (s.items || []).reduce((itemSum: number, item: any) => itemSum + (item.quantity || 0), 0);
@@ -622,7 +648,7 @@ export function useOfflineReports(type: "sales" | "purchases" | "expenses" | "in
       } else if (type === 'expenses') {
         summary.totalAmount = summary.totalExpenses || 0;
       } else if (type === 'inventory') {
-        summary.totalProducts = summary.totalProducts || 0;
+        summary.totalProducts = summary.totalProducts || summary.productCount || 0;
         summary.totalValue = summary.totalValue || 0;
         summary.lowStockCount = summary.lowStockCount || 0;
       }
@@ -658,7 +684,7 @@ export function useOfflineProductsSimple() {
   const refetch = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await offlineShopService.getProducts();
+      const result = await offlineFirstService.getProducts();
       setProducts(result.products || []);
     } catch (error) {
       console.error('Failed to fetch products:', error);
@@ -690,9 +716,9 @@ export function useOfflineTrash() {
   const refetch = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await offlineShopService.getTrash() as { trash?: any[]; items?: any[] };
-      // API returns { trash: [] } or { items: [] }
-      setTrash(result.trash || result.items || []);
+      const result = await offlineFirstService.getTrash();
+      // API returns { trash: [] }
+      setTrash(result.trash || []);
     } catch (error) {
       console.error('Failed to fetch trash:', error);
       setTrash([]);
@@ -706,17 +732,17 @@ export function useOfflineTrash() {
   }, [refetch]);
 
   const restoreItem = useCallback(async (id: string, type: string) => {
-    await offlineShopService.restoreFromTrash(id, type);
+    await offlineFirstService.restoreFromTrash(id, type);
     await refetch();
   }, [refetch]);
 
   const permanentDelete = useCallback(async (id: string, type: string) => {
-    await offlineShopService.permanentDelete(id, type);
+    await offlineFirstService.permanentDelete(id, type);
     await refetch();
   }, [refetch]);
 
   const emptyTrash = useCallback(async () => {
-    await offlineShopService.emptyTrash();
+    await offlineFirstService.emptyTrash();
     await refetch();
   }, [refetch]);
 
