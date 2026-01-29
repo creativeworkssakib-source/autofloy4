@@ -78,6 +78,76 @@ async function encryptToken(token: string): Promise<string> {
   return `v2:${arrayBufferToBase64(salt.buffer)}:${arrayBufferToBase64(iv.buffer)}:${arrayBufferToBase64(encrypted)}`;
 }
 
+async function decryptToken(encryptedData: string): Promise<string> {
+  try {
+    // Check for v2 format
+    if (encryptedData.startsWith("v2:")) {
+      const parts = encryptedData.substring(3).split(":");
+      if (parts.length !== 3) {
+        throw new Error("Invalid v2 token structure");
+      }
+      
+      const [saltB64, ivB64, encryptedB64] = parts;
+      
+      const salt = Uint8Array.from(atob(saltB64), c => c.charCodeAt(0));
+      const iv = Uint8Array.from(atob(ivB64), c => c.charCodeAt(0));
+      const encrypted = Uint8Array.from(atob(encryptedB64), c => c.charCodeAt(0));
+      
+      const encoder = new TextEncoder();
+      const keyMaterial = await crypto.subtle.importKey(
+        "raw",
+        encoder.encode(tokenEncryptionKey),
+        { name: "PBKDF2" },
+        false,
+        ["deriveKey"]
+      );
+      
+      const key = await crypto.subtle.deriveKey(
+        { name: "PBKDF2", salt, iterations: 100000, hash: "SHA-256" },
+        keyMaterial,
+        { name: "AES-GCM", length: 256 },
+        false,
+        ["decrypt"]
+      );
+      
+      const decrypted = await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv },
+        key,
+        encrypted
+      );
+      
+      return new TextDecoder().decode(decrypted);
+    }
+    
+    // Legacy v1 format fallback
+    const [ivHex, encryptedHex] = encryptedData.split(":");
+    const iv = new Uint8Array(ivHex.match(/.{2}/g)!.map(byte => parseInt(byte, 16)));
+    const encrypted = new Uint8Array(encryptedHex.match(/.{2}/g)!.map(byte => parseInt(byte, 16)));
+    
+    const encoder = new TextEncoder();
+    const keyData = encoder.encode(tokenEncryptionKey.padEnd(32, "0").slice(0, 32));
+    
+    const cryptoKey = await crypto.subtle.importKey(
+      "raw",
+      keyData,
+      { name: "AES-GCM" },
+      false,
+      ["decrypt"]
+    );
+    
+    const decrypted = await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv },
+      cryptoKey,
+      encrypted
+    );
+    
+    return new TextDecoder().decode(decrypted);
+  } catch (error) {
+    console.error("[Decrypt] Failed to decrypt token:", error);
+    throw error;
+  }
+}
+
 async function verifyJWT(authHeader: string | null): Promise<string | null> {
   if (!authHeader || !authHeader.startsWith("Bearer ")) return null;
   
@@ -607,6 +677,121 @@ serve(async (req) => {
         });
       }
     } catch {
+      return new Response(JSON.stringify({ error: "Internal error" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+  }
+
+  // ========== POST - Re-subscribe webhooks ==========
+  if (req.method === "POST" && action === "resubscribe-webhooks") {
+    try {
+      console.log("[Resubscribe] Starting webhook re-subscription for user:", userId);
+      
+      // Get all connected Facebook accounts with their encrypted tokens
+      const { data: accounts, error: accountsError } = await supabase
+        .from("connected_accounts")
+        .select("id, external_id, name, access_token_encrypted")
+        .eq("user_id", userId)
+        .eq("platform", "facebook")
+        .eq("is_connected", true);
+
+      if (accountsError || !accounts || accounts.length === 0) {
+        return new Response(JSON.stringify({ 
+          success: false, 
+          error: "No connected Facebook pages found" 
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const results: { pageId: string; pageName: string; success: boolean; error?: string }[] = [];
+
+      for (const account of accounts) {
+        try {
+          // Decrypt the access token
+          let pageToken: string;
+          try {
+            pageToken = await decryptToken(account.access_token_encrypted);
+          } catch (decryptError) {
+            console.error(`[Resubscribe] Failed to decrypt token for ${account.name}:`, decryptError);
+            results.push({
+              pageId: account.external_id,
+              pageName: account.name || "Unknown",
+              success: false,
+              error: "Token decryption failed - please reconnect the page",
+            });
+            continue;
+          }
+
+          // Subscribe to Facebook Page webhooks
+          const subscribeUrl = `https://graph.facebook.com/${FB_API_VERSION}/${account.external_id}/subscribed_apps`;
+          const subscribeResponse = await fetch(subscribeUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+              access_token: pageToken,
+              subscribed_fields: "feed,messages,messaging_postbacks,message_reads,message_deliveries",
+            }),
+          });
+          
+          const subscribeResult = await subscribeResponse.json();
+          
+          if (subscribeResult.success) {
+            console.log(`[Resubscribe] Successfully subscribed to webhooks for ${account.name}`);
+            
+            // Update page_memory to mark as subscribed
+            await supabase.from("page_memory").update({
+              webhook_subscribed: true,
+            }).eq("page_id", account.external_id).eq("user_id", userId);
+            
+            results.push({
+              pageId: account.external_id,
+              pageName: account.name || "Unknown",
+              success: true,
+            });
+          } else {
+            console.error(`[Resubscribe] Webhook subscription failed for ${account.name}:`, subscribeResult);
+            
+            // Check if token is expired
+            const errorCode = subscribeResult.error?.code;
+            const errorMsg = errorCode === 190 
+              ? "Token expired - please reconnect the page"
+              : subscribeResult.error?.message || "Subscription failed";
+            
+            results.push({
+              pageId: account.external_id,
+              pageName: account.name || "Unknown",
+              success: false,
+              error: errorMsg,
+            });
+          }
+        } catch (pageError) {
+          console.error(`[Resubscribe] Error processing ${account.name}:`, pageError);
+          results.push({
+            pageId: account.external_id,
+            pageName: account.name || "Unknown",
+            success: false,
+            error: "Processing error",
+          });
+        }
+      }
+
+      const successCount = results.filter(r => r.success).length;
+      const failCount = results.filter(r => !r.success).length;
+
+      return new Response(JSON.stringify({ 
+        success: successCount > 0,
+        message: `Subscribed ${successCount} pages, ${failCount} failed`,
+        results,
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    } catch (err) {
+      console.error("[Resubscribe] Error:", err);
       return new Response(JSON.stringify({ error: "Internal error" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
