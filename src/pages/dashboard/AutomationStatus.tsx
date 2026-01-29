@@ -403,16 +403,6 @@ const AutomationStatus = () => {
                         variant="outline"
                         size="sm"
                         className="gap-2"
-                        onClick={handleFixWebhook}
-                        disabled={isFixingWebhook}
-                      >
-                        <Zap className={`h-4 w-4 ${isFixingWebhook ? "animate-pulse" : ""}`} />
-                        {isFixingWebhook ? "Fixing..." : "Fix Webhook"}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-2"
                         onClick={() => navigate(`/dashboard/automations`)}
                       >
                         <Settings className="h-4 w-4" />
