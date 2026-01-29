@@ -98,24 +98,24 @@ const Hero3DVisualization = memo(() => {
             transition={{ duration: 3, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
           />
           
-          {/* Rotating Outer Ring */}
+          {/* Rotating Outer Ring - Positioned below */}
           <motion.div
-            className="absolute inset-0 -m-5 rounded-3xl border border-primary/20"
+            className="absolute -bottom-16 left-1/2 -translate-x-1/2 w-32 h-8"
             animate={{ rotate: 360 }}
-            transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+            transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
+            style={{ transformOrigin: "center center" }}
           >
-            <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-gradient-to-r from-primary to-secondary shadow-lg shadow-primary/50" />
-            <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-secondary shadow-lg shadow-secondary/50" />
+            <div className="absolute top-1/2 left-0 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-gradient-to-r from-primary to-secondary shadow-lg shadow-primary/50" />
+            <div className="absolute top-1/2 right-0 -translate-y-1/2 w-2 h-2 rounded-full bg-secondary shadow-lg shadow-secondary/50" />
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-primary/70" />
           </motion.div>
 
-          {/* Counter-Rotating Inner Ring */}
+          {/* Decorative Ring around Core */}
           <motion.div
-            className="absolute inset-0 -m-3 rounded-2xl border border-secondary/15"
+            className="absolute inset-0 -m-4 rounded-3xl border border-primary/15"
             animate={{ rotate: -360 }}
-            transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
-          >
-            <div className="absolute top-1/2 -left-1 -translate-y-1/2 w-2 h-2 rounded-full bg-primary shadow-lg" />
-          </motion.div>
+            transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+          />
 
           {/* Main Core Card */}
           <div className="relative w-28 h-28 md:w-36 md:h-36">
@@ -191,15 +191,14 @@ const Hero3DVisualization = memo(() => {
 
           {/* AI Label */}
           <motion.div
-            className="absolute -bottom-12 inset-x-0 flex flex-col items-center"
+            className="absolute -bottom-10 inset-x-0 flex justify-center"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.8 }}
           >
-            <span className="text-base md:text-lg font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent whitespace-nowrap">
+            <span className="text-base md:text-lg font-bold text-foreground tracking-wide">
               AI Agent
             </span>
-            <span className="text-xs text-muted-foreground">Powered by GPT</span>
           </motion.div>
         </motion.div>
 
