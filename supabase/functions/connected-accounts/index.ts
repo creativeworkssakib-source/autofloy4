@@ -335,7 +335,7 @@ serve(async (req) => {
             category: p.category || null,
             access_token: "encrypted",
             access_token_encrypted: encryptedToken,
-            is_connected: false,
+            is_connected: true, // Set to true immediately
             encryption_version: 2,
             picture_url: pictureUrl || null,
           }, { onConflict: "user_id,platform,external_id" }).select("id").single();
@@ -343,7 +343,15 @@ serve(async (req) => {
           if (!upsertError && insertedAccount) {
             connectedCount++;
             
-            // Auto-create page_memory with fetched Facebook data
+            // Auto-create page_memory with fetched Facebook data and default automation settings
+            const defaultAutomationSettings = {
+              autoInboxReply: true,
+              autoCommentReply: true,
+              orderTaking: true,
+              reactionOnComments: true,
+              aiMediaUnderstanding: true,
+            };
+            
             const { error: memoryError } = await supabase.from("page_memory").upsert({
               user_id: userId,
               account_id: insertedAccount.id,
@@ -354,14 +362,52 @@ serve(async (req) => {
               custom_instructions: contactInfo || null,
               detected_language: "auto",
               preferred_tone: "friendly",
-              automation_settings: {},
-              webhook_subscribed: false,
+              automation_settings: defaultAutomationSettings,
+              webhook_subscribed: true,
             }, { onConflict: "user_id,page_id" });
 
             if (memoryError) {
               console.error("[FB Callback] Error creating page_memory:", memoryError);
             } else {
               console.log(`[FB Callback] Auto-populated page_memory for ${p.name}`);
+            }
+
+            // Auto-create automation record for this page
+            const { error: automationError } = await supabase.from("automations").upsert({
+              user_id: userId,
+              account_id: insertedAccount.id,
+              name: `${p.name} - AI Auto Reply`,
+              type: "message", // Use valid enum type
+              is_enabled: true,
+              config: defaultAutomationSettings,
+            }, { onConflict: "user_id,account_id,type" });
+
+            if (automationError) {
+              console.error("[FB Callback] Error creating automation:", automationError);
+            } else {
+              console.log(`[FB Callback] Auto-created automation for ${p.name}`);
+            }
+
+            // Subscribe to Facebook Page webhooks
+            try {
+              const pageToken = p.access_token as string;
+              const subscribeUrl = `https://graph.facebook.com/${FB_API_VERSION}/${p.id}/subscribed_apps`;
+              const subscribeResponse = await fetch(subscribeUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: new URLSearchParams({
+                  access_token: pageToken,
+                  subscribed_fields: "feed,messages,messaging_postbacks,message_reads,message_deliveries",
+                }),
+              });
+              const subscribeResult = await subscribeResponse.json();
+              if (subscribeResult.success) {
+                console.log(`[FB Callback] Successfully subscribed to webhooks for ${p.name}`);
+              } else {
+                console.warn(`[FB Callback] Webhook subscription warning for ${p.name}:`, subscribeResult);
+              }
+            } catch (webhookError) {
+              console.error(`[FB Callback] Webhook subscription error for ${p.name}:`, webhookError);
             }
           }
         } catch (e) {
