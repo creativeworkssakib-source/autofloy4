@@ -353,7 +353,7 @@ const AutomationStatus = () => {
               variant="destructive"
               size="sm"
               onClick={handleFixWebhook}
-              disabled={isFixingWebhook || connectedPages.length === 0}
+              disabled={isFixingWebhook}
               className="gap-2"
             >
               <Zap className={`h-4 w-4 ${isFixingWebhook ? "animate-pulse" : ""}`} />
