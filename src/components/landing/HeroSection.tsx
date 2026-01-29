@@ -1,25 +1,19 @@
 import { useState, useMemo, memo, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
-import { motion, useScroll, useTransform } from "framer-motion";
+import { motion } from "framer-motion";
 
-import { ArrowRight, Play, Sparkles, Check, Zap, MessageSquare } from "lucide-react";
+import { ArrowRight, Play, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Hero3DVisualization from "./Hero3DVisualization";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSiteSettings } from "@/contexts/SiteSettingsContext";
 import DemoVideoModal from "./DemoVideoModal";
-
 const HeroSection = memo(() => {
   const { t } = useLanguage();
   const { settings } = useSiteSettings();
   const [isDemoModalOpen, setIsDemoModalOpen] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
   const sectionRef = useRef<HTMLElement>(null);
-  
-  const { scrollY } = useScroll();
-  const y1 = useTransform(scrollY, [0, 500], [0, 100]);
-  const opacity = useTransform(scrollY, [0, 300], [1, 0.3]);
-  
   const isDemoEnabled = settings.demo_video_enabled && 
     ((settings.demo_video_type === 'youtube' && settings.demo_video_youtube_url) ||
      (settings.demo_video_type === 'upload' && settings.demo_video_upload_url));
@@ -53,20 +47,6 @@ const HeroSection = memo(() => {
       transition: { 
         duration: 0.6,
         ease: "easeOut" as const
-      }
-    }
-  };
-
-  const floatingCardVariants = {
-    hidden: { opacity: 0, scale: 0.8, y: 20 },
-    visible: { 
-      opacity: 1,
-      scale: 1, 
-      y: 0,
-      transition: { 
-        duration: 0.8,
-        ease: "easeOut" as const,
-        delay: 0.8
       }
     }
   };
@@ -179,55 +159,6 @@ const HeroSection = memo(() => {
           >
             {/* 3D Visualization */}
             <Hero3DVisualization />
-
-            {/* Floating Stat Cards */}
-            <motion.div 
-              className="absolute top-4 left-4 lg:left-12 z-30 hidden md:block"
-              variants={floatingCardVariants}
-              initial="hidden"
-              animate="visible"
-            >
-              <motion.div 
-                className="bg-card/90 backdrop-blur-md rounded-2xl shadow-xl p-4 border border-border/50"
-                animate={{ y: [0, -10, 0] }}
-                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-success to-success/80 flex items-center justify-center shadow-lg relative overflow-hidden">
-                    <div className="absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-white/30 to-transparent rounded-t-xl pointer-events-none" />
-                    <MessageSquare className="w-6 h-6 text-white relative z-10 drop-shadow-sm" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold">24/7 {t("hero.statsMessages")}</p>
-                    <p className="text-xs text-muted-foreground">{t("hero.statsHandled")}</p>
-                  </div>
-                </div>
-              </motion.div>
-            </motion.div>
-
-            <motion.div 
-              className="absolute bottom-4 right-4 lg:right-12 z-30 hidden md:block"
-              variants={floatingCardVariants}
-              initial="hidden"
-              animate="visible"
-            >
-              <motion.div 
-                className="bg-card/90 backdrop-blur-md rounded-2xl shadow-xl p-4 border border-border/50"
-                animate={{ y: [0, -10, 0] }}
-                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut", delay: 1 }}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center shadow-lg relative overflow-hidden">
-                    <div className="absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-white/30 to-transparent rounded-t-xl pointer-events-none" />
-                    <Zap className="w-6 h-6 text-white relative z-10 drop-shadow-sm" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold">10x {t("hero.statsSuccess")}</p>
-                    <p className="text-xs text-muted-foreground">{t("hero.statsAutoReply")}</p>
-                  </div>
-                </div>
-              </motion.div>
-            </motion.div>
           </motion.div>
         </motion.div>
       </motion.div>
