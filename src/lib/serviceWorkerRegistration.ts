@@ -16,7 +16,7 @@ const UPDATE_CHECK_INTERVAL = 30 * 1000;
 
 // Version key to detect app updates and force cache clear
 // CRITICAL: Update this on EVERY deployment to force cache clear on existing PWAs!
-const APP_CACHE_VERSION = 'v2.0.3-api-update-20250128';
+const APP_CACHE_VERSION = 'v2.0.4-cache-fix-20250129';
 const CACHE_VERSION_KEY = 'autofloy_cache_version';
 
 // Expose forceUpdate globally for emergency use
