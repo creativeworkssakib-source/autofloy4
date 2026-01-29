@@ -348,6 +348,17 @@ const AutomationStatus = () => {
               <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
               Refresh
             </Button>
+            {/* Global Fix Webhook Button - Always visible */}
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleFixWebhook}
+              disabled={isFixingWebhook || connectedPages.length === 0}
+              className="gap-2"
+            >
+              <Zap className={`h-4 w-4 ${isFixingWebhook ? "animate-pulse" : ""}`} />
+              {isFixingWebhook ? "Fixing..." : "🔧 Fix Webhook"}
+            </Button>
           </div>
         </motion.div>
 
