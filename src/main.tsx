@@ -3,12 +3,28 @@ import App from "./App.tsx";
 import "./index.css";
 import { register as registerSW, forceUpdate } from "./lib/serviceWorkerRegistration";
 
-// CLEANUP: Remove old extension blocker warning state that caused false positives
+// CLEANUP: Remove old extension blocker warning state and stale cached data
 // This runs once on app load to ensure clean slate
 try {
   localStorage.removeItem('extension-warning-dismissed');
   localStorage.removeItem('rpc-fallback-success');
   localStorage.removeItem('extension-blocker-detected');
+  
+  // Clear stale dashboard cache on app startup to ensure fresh data
+  const dashboardCache = localStorage.getItem('autofloy_dashboard_stats_cache');
+  if (dashboardCache) {
+    try {
+      const { timestamp } = JSON.parse(dashboardCache);
+      // Clear cache if older than 10 minutes
+      if (Date.now() - timestamp > 10 * 60 * 1000) {
+        localStorage.removeItem('autofloy_dashboard_stats_cache');
+        console.log('[App] Cleared stale dashboard cache');
+      }
+    } catch {
+      // If parse fails, clear it
+      localStorage.removeItem('autofloy_dashboard_stats_cache');
+    }
+  }
 } catch {
   // Ignore storage errors
 }

@@ -555,7 +555,8 @@ export async function deleteNotification(notificationId: string): Promise<boolea
 
 // Cache key for dashboard stats
 const DASHBOARD_STATS_CACHE_KEY = "autofloy_dashboard_stats_cache";
-const DASHBOARD_STATS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const DASHBOARD_STATS_CACHE_TTL = 2 * 60 * 1000; // 2 minutes - shorter TTL for fresher data
+const DASHBOARD_STATS_MAX_AGE = 10 * 60 * 1000; // 10 minutes max - don't use very stale data
 
 // Get cached dashboard stats
 function getCachedDashboardStats(): DashboardStats | null {
@@ -563,8 +564,17 @@ function getCachedDashboardStats(): DashboardStats | null {
     const cached = localStorage.getItem(DASHBOARD_STATS_CACHE_KEY);
     if (cached) {
       const { data, timestamp } = JSON.parse(cached);
+      const age = Date.now() - timestamp;
+      
+      // Don't use data older than max age - could be outdated
+      if (age > DASHBOARD_STATS_MAX_AGE) {
+        console.log("[dashboard-stats] Cache too old, clearing");
+        localStorage.removeItem(DASHBOARD_STATS_CACHE_KEY);
+        return null;
+      }
+      
       // Return cached data if still valid (within TTL)
-      if (Date.now() - timestamp < DASHBOARD_STATS_CACHE_TTL) {
+      if (age < DASHBOARD_STATS_CACHE_TTL) {
         console.log("[dashboard-stats] Using cached data (valid)");
         return data;
       }
