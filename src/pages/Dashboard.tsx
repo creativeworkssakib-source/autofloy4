@@ -36,6 +36,7 @@ import { fetchDashboardStats, fetchConnectedAccounts, fetchExecutionLogs, Dashbo
 import { offlineShopService } from "@/services/offlineShopService";
 import { formatDistanceToNow } from "date-fns";
 import AIOrdersSection from "@/components/dashboard/AIOrdersSection";
+import { useToast } from "@/hooks/use-toast";
 
 const LOGS_PER_PAGE = 5;
 
@@ -109,6 +110,7 @@ interface ShopDashboardData {
 
 const Dashboard = () => {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [shopData, setShopData] = useState<ShopDashboardData | null>(null);
   const [connectedPages, setConnectedPages] = useState<ConnectedAccount[]>([]);
@@ -116,6 +118,7 @@ const Dashboard = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [shopLoading, setShopLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
+  const [isResubscribing, setIsResubscribing] = useState(false);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -143,6 +146,50 @@ const Dashboard = () => {
       console.error("Failed to load shop data:", error);
     } finally {
       setShopLoading(false);
+    }
+  };
+
+  // Re-subscribe to Facebook webhooks
+  const handleResubscribeWebhooks = async () => {
+    setIsResubscribing(true);
+    try {
+      const token = localStorage.getItem("autofloy_token");
+      const response = await fetch(
+        "https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1/connected-accounts?action=resubscribe-webhooks",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: token ? `Bearer ${token}` : "",
+          },
+        }
+      );
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        toast({
+          title: "✅ Webhook Subscribed",
+          description: data.message,
+        });
+        // Reload data to show updated status
+        await loadData();
+      } else {
+        toast({
+          title: "Subscription Failed",
+          description: data.error || "Please reconnect your Facebook pages",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Resubscribe error:", error);
+      toast({
+        title: "Error",
+        description: "Failed to resubscribe webhooks",
+        variant: "destructive",
+      });
+    } finally {
+      setIsResubscribing(false);
     }
   };
 
@@ -454,9 +501,28 @@ const Dashboard = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
         >
-          <div className="flex items-center gap-2 mb-4">
-            <Bot className="w-5 h-5 text-primary" />
-            <h2 className="text-lg font-semibold">AI Automation Stats</h2>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Bot className="w-5 h-5 text-primary" />
+              <h2 className="text-lg font-semibold">AI Automation Stats</h2>
+              {connectedPages.length > 0 && (stats?.activeAutomations || 0) > 0 && (
+                <Badge className="bg-success/10 text-success border-success/20">
+                  {stats?.activeAutomations} Active
+                </Badge>
+              )}
+            </div>
+            {connectedPages.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleResubscribeWebhooks}
+                disabled={isResubscribing}
+                className="gap-2"
+              >
+                <Zap className={`w-4 h-4 ${isResubscribing ? 'animate-pulse' : ''}`} />
+                {isResubscribing ? 'Connecting...' : 'Fix Webhook'}
+              </Button>
+            )}
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {automationCards.map((stat, index) => (
