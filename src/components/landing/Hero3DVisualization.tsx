@@ -118,12 +118,12 @@ const Hero3DVisualization = memo(() => {
 
           {/* AI Label */}
           <motion.div
-            className="absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap"
+            className="absolute -bottom-10 inset-x-0 flex justify-center"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.8 }}
           >
-            <span className="text-sm md:text-base font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+            <span className="text-sm md:text-base font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent whitespace-nowrap">
               AI Agent
             </span>
           </motion.div>
