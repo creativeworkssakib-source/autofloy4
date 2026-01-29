@@ -53,6 +53,7 @@ import { appUpdateService } from "@/services/appUpdateService";
 import { useShop } from "@/contexts/ShopContext";
 import { usePlanLimits } from "@/hooks/usePlanLimits";
 import { SyncStatusIndicator, FloatingSyncStatus } from "./SyncStatusIndicator";
+import { FloatingOfflineSyncIndicator } from "./OfflineSyncIndicator";
 import { syncManager } from "@/lib/syncManager";
 import { offlineDb } from "@/lib/offlineDatabase";
 
@@ -331,6 +332,7 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
         
         {/* Floating Sync Status for Mobile */}
         <FloatingSyncStatus />
+        <FloatingOfflineSyncIndicator />
         
         {/* Update Notification */}
         <UpdateNotification />
