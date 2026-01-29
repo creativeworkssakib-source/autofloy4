@@ -17,6 +17,12 @@ import {
 const Hero3DVisualization = memo(() => {
   return (
     <div className="relative w-full max-w-6xl mx-auto h-[420px] md:h-[520px] flex items-center justify-center overflow-hidden">
+      {/* Top Edge Blur - Seamless fade to background */}
+      <div className="absolute top-0 left-0 right-0 h-24 bg-gradient-to-b from-background via-background/80 to-transparent z-20 pointer-events-none" />
+      
+      {/* Bottom Edge Blur - Seamless fade to background */}
+      <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-background via-background/80 to-transparent z-20 pointer-events-none" />
+      
       {/* Animated Background Layers */}
       <div className="absolute inset-0 pointer-events-none">
         {/* Gradient Orbs */}
