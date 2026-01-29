@@ -480,13 +480,15 @@ const Hero3DVisualization = memo(() => {
         position="top-4 right-4 md:top-8 md:right-12"
         delay={1.8}
       />
-      <FeatureBadge 
-        icon={<Zap className="w-3.5 h-3.5" />}
-        label="10x Faster"
-        position="bottom-12 inset-x-0 flex justify-center"
-        delay={2}
-        highlight
-      />
+      <div className="absolute bottom-6 inset-x-0 flex justify-center">
+        <FeatureBadge 
+          icon={<Zap className="w-3.5 h-3.5" />}
+          label="10x Faster"
+          position=""
+          delay={2}
+          highlight
+        />
+      </div>
 
       {/* Enhanced Floating Particles */}
       <FloatingParticles />
@@ -512,7 +514,7 @@ const FeatureBadge = memo(({
   highlight?: boolean;
 }) => (
   <motion.div
-    className={`absolute ${position} hidden md:flex`}
+    className={`${position ? `absolute ${position}` : ''} hidden md:flex`}
     initial={{ opacity: 0, scale: 0.8, y: 20 }}
     animate={{ opacity: 1, scale: 1, y: 0 }}
     transition={{ delay, duration: 0.5 }}
