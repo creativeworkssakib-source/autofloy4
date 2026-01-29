@@ -11,7 +11,6 @@ import {
   Zap,
   Clock,
   Shield,
-  Sparkles,
   Cpu
 } from "lucide-react";
 
@@ -271,40 +270,6 @@ const Hero3DVisualization = memo(() => {
                 </motion.div>
               </div>
 
-              {/* Floating Decorative Icons - Only 2 kept */}
-              <motion.div
-                className="absolute -bottom-3 -left-3 md:-bottom-4 md:-left-4"
-                animate={{ 
-                  y: [0, 6, 0],
-                  scale: [1, 1.15, 1],
-                  rotate: [0, -10, 0]
-                }}
-                transition={{ duration: 2, repeat: Infinity, delay: 0.3 }}
-              >
-                <div className="relative">
-                  <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-cyan-400 to-blue-500 blur-md opacity-50" />
-                  <div className="relative w-8 h-8 md:w-9 md:h-9 rounded-lg bg-gradient-to-br from-cyan-400 via-blue-400 to-indigo-500 flex items-center justify-center shadow-xl shadow-cyan-500/40">
-                    <Zap className="w-3.5 h-3.5 md:w-4 md:h-4 text-white" />
-                  </div>
-                </div>
-              </motion.div>
-
-              <motion.div
-                className="absolute -top-2 -left-5 md:-top-3 md:-left-6"
-                animate={{ 
-                  y: [0, -5, 0],
-                  x: [0, 3, 0],
-                  rotate: [0, 20, 0]
-                }}
-                transition={{ duration: 3, repeat: Infinity, delay: 0.6 }}
-              >
-                <div className="relative">
-                  <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-pink-400 to-purple-500 blur-md opacity-50" />
-                  <div className="relative w-7 h-7 md:w-8 md:h-8 rounded-lg bg-gradient-to-br from-pink-400 via-purple-400 to-violet-500 flex items-center justify-center shadow-xl shadow-purple-500/40">
-                    <Sparkles className="w-3 h-3 md:w-3.5 md:h-3.5 text-white" />
-                  </div>
-                </div>
-              </motion.div>
             </div>
 
             {/* AI Label with Glow */}
