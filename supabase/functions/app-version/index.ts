@@ -9,8 +9,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 // CRITICAL: Update this on every deployment!
 // This is the single source of truth for app version
-const APP_VERSION = "2.0.4";
-const BUILD_NUMBER = 20250129001; // YYYYMMDDnnn format (with increment)
+const APP_VERSION = "2.0.5";
+const BUILD_NUMBER = 20250129002; // YYYYMMDDnnn format (with increment)
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

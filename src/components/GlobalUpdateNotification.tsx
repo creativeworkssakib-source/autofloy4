@@ -9,7 +9,7 @@ import { useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 // Current app version - MUST match the edge function version
-const APP_VERSION = '2.0.4';
+const APP_VERSION = '2.0.5';
 const VERSION_KEY = 'autofloy_app_version';
 const VERSION_CHECK_INTERVAL = 30 * 1000; // Check every 30 seconds
 const LAST_AUTO_UPDATE_KEY = 'autofloy_last_auto_update';
