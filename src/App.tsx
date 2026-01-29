@@ -18,7 +18,7 @@ import { DynamicDocumentTitle } from "@/components/DynamicDocumentTitle";
 import { DynamicAppearance } from "@/components/DynamicAppearance";
 import BackToTopButton from "@/components/ui/BackToTopButton";
 import { OfflineReadyIndicator } from "@/components/OfflineIndicators";
-import { ExtensionBlockerDetector } from "@/components/ExtensionBlockerDetector";
+// ExtensionBlockerDetector completely removed - was causing false positive warnings
 import { GlobalUpdateNotification } from "@/components/GlobalUpdateNotification";
 import { Loader2 } from "lucide-react";
 
@@ -152,7 +152,7 @@ const App = () => (
               <CookieConsentBanner />
               <BackToTopButton />
               <OfflineReadyIndicator />
-              <ExtensionBlockerDetector />
+              {/* ExtensionBlockerDetector removed */}
               <GlobalUpdateNotification />
               <Suspense fallback={<PageLoader />}>
                 <Routes>
