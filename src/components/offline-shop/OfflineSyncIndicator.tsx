@@ -1,6 +1,7 @@
 /**
  * Offline Sync Status Indicator
  * Shows users their sync status and pending changes
+ * Uses navigator.onLine directly for accurate online detection
  */
 
 import { useState, useEffect } from 'react';
@@ -16,13 +17,26 @@ export function OfflineSyncIndicator() {
   const { language } = useLanguage();
   const [status, setStatus] = useState(offlineFirstService.getSyncStatus());
   const [isSyncing, setIsSyncing] = useState(false);
+  // Use navigator.onLine directly for accurate detection
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
     const unsubscribe = offlineFirstService.subscribeSyncStatus((newStatus) => {
       setStatus(newStatus);
       setIsSyncing(newStatus.status === 'syncing');
     });
-    return unsubscribe;
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      unsubscribe();
+    };
   }, []);
 
   const handleForceSync = async () => {
@@ -34,7 +48,6 @@ export function OfflineSyncIndicator() {
     }
   };
 
-  const isOnline = status.isOnline;
   const pendingCount = status.pendingCount;
 
   // Don't show if online with no pending changes
@@ -122,13 +135,25 @@ export function OfflineSyncIndicator() {
 export function FloatingOfflineSyncIndicator() {
   const { language } = useLanguage();
   const [status, setStatus] = useState(offlineFirstService.getSyncStatus());
+  // Use navigator.onLine directly for accurate detection
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
     const unsubscribe = offlineFirstService.subscribeSyncStatus(setStatus);
-    return unsubscribe;
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      unsubscribe();
+    };
   }, []);
 
-  const isOnline = status.isOnline;
   const pendingCount = status.pendingCount;
 
   // Only show when offline or has pending changes
