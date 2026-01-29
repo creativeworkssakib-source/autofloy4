@@ -4,7 +4,7 @@ import { motion, useScroll, useTransform } from "framer-motion";
 
 import { ArrowRight, Play, Sparkles, Check, Zap, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import heroConversation from "@/assets/hero-conversation-clean.png";
+import Hero3DVisualization from "./Hero3DVisualization";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSiteSettings } from "@/contexts/SiteSettingsContext";
 import DemoVideoModal from "./DemoVideoModal";
@@ -172,57 +172,17 @@ const HeroSection = memo(() => {
             </motion.div>
           </div>
 
-          {/* Bottom Content - Hero Conversation Illustration */}
+          {/* Bottom Content - Premium 3D Automation Visualization */}
           <motion.div
             variants={itemVariants}
-            className="relative flex justify-center"
+            className="relative w-full"
           >
-            {/* Main Illustration Container */}
-            <motion.div 
-              className="relative w-full max-w-sm sm:max-w-md md:max-w-2xl lg:max-w-3xl"
-              whileHover={{ scale: 1.02 }}
-              transition={{ duration: 0.3 }}
-            >
-              <img
-                src={heroConversation}
-                alt="AI Robot and Human Conversation"
-                className="relative w-full drop-shadow-xl"
-                loading="eager"
-                width={768}
-                height={432}
-                decoding="async"
-                fetchPriority="high"
-                sizes="(max-width: 640px) 384px, (max-width: 768px) 448px, (max-width: 1024px) 672px, 768px"
-              />
-
-              {/* AI Label on Robot */}
-              <motion.div 
-                className="absolute top-[28%] left-[12%] sm:left-[15%] z-20"
-                initial={{ opacity: 0, scale: 0 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 1.2, type: "spring" }}
-              >
-                <div className="bg-card/95 backdrop-blur-sm rounded-lg px-2 py-1 shadow-md border border-border/50 animate-icon-bounce">
-                  <span className="text-[10px] sm:text-xs font-bold text-primary">AI Bot</span>
-                </div>
-              </motion.div>
-
-              {/* Customer Label on Human */}
-              <motion.div 
-                className="absolute top-[28%] right-[6%] sm:right-[10%] z-20"
-                initial={{ opacity: 0, scale: 0 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 1.3, type: "spring" }}
-              >
-                <div className="bg-card/95 backdrop-blur-sm rounded-lg px-2 py-1 shadow-md border border-border/50 animate-icon-bounce" style={{ animationDelay: "0.5s" }}>
-                  <span className="text-[10px] sm:text-xs font-bold text-secondary">Customer</span>
-                </div>
-              </motion.div>
-            </motion.div>
+            {/* 3D Visualization */}
+            <Hero3DVisualization />
 
             {/* Floating Stat Cards */}
             <motion.div 
-              className="absolute -top-4 -left-12 lg:-left-28 z-30 hidden md:block"
+              className="absolute top-4 left-4 lg:left-12 z-30 hidden md:block"
               variants={floatingCardVariants}
               initial="hidden"
               animate="visible"
@@ -238,7 +198,7 @@ const HeroSection = memo(() => {
                     <MessageSquare className="w-6 h-6 text-white relative z-10 drop-shadow-sm" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold">127 {t("hero.statsMessages")}</p>
+                    <p className="text-sm font-semibold">24/7 {t("hero.statsMessages")}</p>
                     <p className="text-xs text-muted-foreground">{t("hero.statsHandled")}</p>
                   </div>
                 </div>
@@ -246,7 +206,7 @@ const HeroSection = memo(() => {
             </motion.div>
 
             <motion.div 
-              className="absolute bottom-4 -right-12 lg:-right-28 z-30 hidden md:block"
+              className="absolute bottom-4 right-4 lg:right-12 z-30 hidden md:block"
               variants={floatingCardVariants}
               initial="hidden"
               animate="visible"
@@ -262,7 +222,7 @@ const HeroSection = memo(() => {
                     <Zap className="w-6 h-6 text-white relative z-10 drop-shadow-sm" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold">92% {t("hero.statsSuccess")}</p>
+                    <p className="text-sm font-semibold">10x {t("hero.statsSuccess")}</p>
                     <p className="text-xs text-muted-foreground">{t("hero.statsAutoReply")}</p>
                   </div>
                 </div>
