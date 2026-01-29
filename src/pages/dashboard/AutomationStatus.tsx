@@ -29,8 +29,11 @@ import {
   RefreshCw,
   ArrowLeft,
   Settings,
-  ExternalLink
+  ExternalLink,
+  Zap,
+  AlertTriangle,
 } from "lucide-react";
+import { authService } from "@/services/authService";
 
 interface PageStatusData {
   page: ConnectedAccount;
@@ -46,6 +49,7 @@ const AutomationStatus = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingPageMemory, setIsLoadingPageMemory] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isFixingWebhook, setIsFixingWebhook] = useState(false);
   const [connectedPages, setConnectedPages] = useState<ConnectedAccount[]>([]);
   const [selectedPageId, setSelectedPageId] = useState<string>("");
   const [pageStatusData, setPageStatusData] = useState<PageStatusData | null>(null);
@@ -208,6 +212,48 @@ const AutomationStatus = () => {
     });
   };
 
+  // Fix webhook subscription for selected page
+  const handleFixWebhook = async () => {
+    if (!selectedPageId || !pageStatusData?.page) return;
+    
+    setIsFixingWebhook(true);
+    try {
+      const token = authService.getToken();
+      const response = await fetch(
+        `https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1/connected-accounts?action=resubscribe-webhooks`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: token ? `Bearer ${token}` : "",
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to fix webhook");
+      }
+
+      toast({
+        title: "Webhook Fixed!",
+        description: data.message || "Webhook subscription has been renewed successfully.",
+      });
+
+      await loadData();
+    } catch (error: any) {
+      console.error("Webhook fix error:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to fix webhook. Try disconnecting and reconnecting your page.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsFixingWebhook(false);
+    }
+  };
+
   // Derive status from data
   const deriveChecklistStatus = () => {
     if (!pageStatusData) {
@@ -342,6 +388,16 @@ const AutomationStatus = () => {
                   {pageStatusData && (
                     <div className="flex items-center gap-3">
                       <PageStatusBadge status={pageStatus} size="lg" />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                        onClick={handleFixWebhook}
+                        disabled={isFixingWebhook}
+                      >
+                        <Zap className={`h-4 w-4 ${isFixingWebhook ? "animate-pulse" : ""}`} />
+                        {isFixingWebhook ? "Fixing..." : "Fix Webhook"}
+                      </Button>
                       <Button
                         variant="outline"
                         size="sm"
