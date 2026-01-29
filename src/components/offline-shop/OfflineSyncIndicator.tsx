@@ -161,33 +161,25 @@ export function FloatingOfflineSyncIndicator() {
     return null;
   }
 
+  // Only show when truly offline (don't show just for pending sync)
+  if (isOnline) {
+    return null;
+  }
+
   return (
     <div className={cn(
       "fixed bottom-20 right-4 z-50 flex items-center gap-2 px-3 py-2 rounded-full shadow-lg transition-all",
       "backdrop-blur-sm border",
-      !isOnline 
-        ? "bg-amber-500/90 text-white border-amber-600" 
-        : "bg-blue-500/90 text-white border-blue-600"
+      "bg-amber-500/90 text-white border-amber-600"
     )}>
-      {!isOnline ? (
-        <>
-          <WifiOff className="h-4 w-4" />
-          <span className="text-sm font-medium">
-            {language === 'bn' ? 'অফলাইন মোড' : 'Offline Mode'}
-          </span>
-          {pendingCount > 0 && (
-            <Badge variant="secondary" className="bg-white/20 text-white text-xs">
-              {pendingCount}
-            </Badge>
-          )}
-        </>
-      ) : (
-        <>
-          <Cloud className="h-4 w-4" />
-          <span className="text-sm font-medium">
-            {pendingCount} {language === 'bn' ? 'সিঙ্ক হবে' : 'to sync'}
-          </span>
-        </>
+      <WifiOff className="h-4 w-4" />
+      <span className="text-sm font-medium">
+        {language === 'bn' ? 'অফলাইন মোড' : 'Offline Mode'}
+      </span>
+      {pendingCount > 0 && (
+        <Badge variant="secondary" className="bg-white/20 text-white text-xs">
+          {pendingCount}
+        </Badge>
       )}
     </div>
   );
