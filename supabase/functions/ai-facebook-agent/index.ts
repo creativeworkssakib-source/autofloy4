@@ -1152,9 +1152,36 @@ function buildSystemPrompt(
   digitalProductContext?: DigitalProductContext, // Rich digital product context
   productMedia?: ProductMediaItem[] // Product media for AI to use
 ): string {
-  const tone = pageMemory.preferred_tone === "professional" ? "পেশাদার কিন্তু casual" : "বন্ধুর মতো";
-  const language = pageMemory.detected_language === "english" ? "English" : 
-                   pageMemory.detected_language === "bangla" ? "বাংলা" : "বাংলা+English মিক্স (Banglish)";
+  // Map tone settings to instructions
+  const toneMap: Record<string, string> = {
+    "professional": "Professional - formal, polite, business-like. Use 'আপনি' always, avoid slang.",
+    "friendly": "Friendly - warm, approachable, like a helpful friend. Can use 'তুমি' with young people.",
+    "casual": "Casual - relaxed, informal, like texting a friend. Use 'তুই/তুমি', slang okay.",
+    "formal": "Formal - very polite, respectful, use honorifics. Always 'আপনি' with extra respect.",
+  };
+  const tone = toneMap[pageMemory.preferred_tone || "friendly"] || toneMap["friendly"];
+  
+  // Map language settings - CRITICAL: AI must respond in this language ONLY
+  const languageMap: Record<string, { name: string; instruction: string }> = {
+    "english": { 
+      name: "English Only", 
+      instruction: "RESPOND ONLY IN ENGLISH. Do not use any Bangla/Bengali words. All responses must be 100% English."
+    },
+    "bangla": { 
+      name: "বাংলা Only", 
+      instruction: "শুধুমাত্র বাংলায় উত্তর দিন। কোনো English word ব্যবহার করবেন না। সব response 100% বাংলায় হতে হবে।"
+    },
+    "banglish": { 
+      name: "Banglish (Mixed)", 
+      instruction: "বাংলা+English মিক্স করে বলুন। Like 'Vai eta product ta best, price o reasonable.'"
+    },
+    "auto": { 
+      name: "Auto-detect", 
+      instruction: "Customer যে ভাষায় message করবে সেই ভাষায় reply করুন। Match their language."
+    },
+  };
+  const langSetting = languageMap[pageMemory.detected_language || "auto"] || languageMap["auto"];
+  const language = langSetting.name;
   
   // Build conversation context with smart memory
   const conversationContext = buildConversationContext(
@@ -1338,8 +1365,38 @@ ${mediaContext}`;
 
   prompt += `
 
-## ভাষা: ${language}
-## টোন: ${tone}`;
+## 🌐 LANGUAGE RULE (CRITICAL - MUST FOLLOW):
+**${langSetting.instruction}**
+Current Language Setting: ${language}
+
+## 💬 TONE RULE:
+**${tone}**
+`;
+
+  // Add language-specific example phrases
+  if (pageMemory.detected_language === "english") {
+    prompt += `
+### English Response Examples (USE THESE):
+**Greetings:**
+- "Hi! How can I help you?"
+- "Hello! What are you looking for?"
+- "Yes, tell me!"
+
+**Price queries:**
+- "This one is ৳${productContext?.price || 'XXX'}"
+- "The price is ৳${productContext?.price || 'XXX'}, would you like to order?"
+
+**Confirmations:**
+- "Sure!"
+- "Okay, got it!"
+- "Alright!"
+
+**Order taking:**
+- "Want to order? Please share your name"
+- "Great! What's your phone number?"
+- "And your delivery address?"
+`;
+  }
 
   // Order taking
   if (orderTakingEnabled) {
@@ -2270,6 +2327,7 @@ serve(async (req) => {
     const autoInboxReplyEnabled = settings.autoInboxReply === true;
     
     console.log(`[AI Agent] ⚙️ Settings check: orderTaking=${orderTakingEnabled}, autoCommentReply=${autoCommentReplyEnabled}, autoInboxReply=${autoInboxReplyEnabled}`);
+    console.log(`[AI Agent] 🌐 Language: ${pageMemory.detected_language || 'auto'}, Tone: ${pageMemory.preferred_tone || 'friendly'}`);
     
     if (isComment && !autoCommentReplyEnabled) {
       console.log("[AI Agent] ⛔ Comment auto-reply DISABLED");
