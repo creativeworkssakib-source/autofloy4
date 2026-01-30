@@ -47,6 +47,7 @@ import { useOfflineShopTrial, useOfflineGracePeriod } from "@/hooks/useOfflineSh
 import OfflineTrialBanner from "./OfflineTrialBanner";
 import OfflineTrialExpiredOverlay from "./OfflineTrialExpiredOverlay";
 import { FeatureDisabledOverlay } from "@/components/FeatureDisabledOverlay";
+import { NoSubscriptionOverlay } from "@/components/NoSubscriptionOverlay";
 import { OfflineExpiredModal } from "./OfflineExpiredModal";
 import { UpdateNotification } from "./UpdateNotification";
 import { appUpdateService } from "@/services/appUpdateService";
@@ -71,12 +72,25 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
   const { isTrialUser, isOfflineTrialExpired } = useOfflineShopTrial();
   const { isExpired: isOfflineExpired } = useOfflineGracePeriod();
   const { currentShop } = useShop();
-  const { hasOfflineAccess, canAccessOfflineShop } = usePlanLimits();
+  const { hasOfflineAccess, canAccessOfflineShop, hasActiveSubscription, isTrialExpired, planId } = usePlanLimits();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showOfflineExpiredModal, setShowOfflineExpiredModal] = useState(false);
 
   // Check if offline shop is disabled by admin
   const isOfflineShopDisabled = settings.offline_shop_enabled === false;
+  
+  // Check if user has NO active subscription at all
+  const hasNoSubscription = !hasActiveSubscription && planId === "none";
+  const hasExpiredSubscription = isTrialExpired || (!hasActiveSubscription && planId !== "none" && planId !== "trial");
+  
+  // Determine which overlay to show for no subscription
+  const getNoSubType = (): "no_plan" | "trial_expired" | "subscription_expired" | null => {
+    if (isTrialExpired) return "trial_expired";
+    if (hasNoSubscription) return "no_plan";
+    if (hasExpiredSubscription) return "subscription_expired";
+    return null;
+  };
+  const noSubType = getNoSubType();
   
   // Check if user has offline access based on subscription_type
   const offlineAccessCheck = canAccessOfflineShop();
@@ -306,8 +320,16 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
 
           {/* Page Content */}
           <main className="p-3 sm:p-4 lg:p-6 relative">
-            {/* Show frozen overlay if user doesn't have offline access */}
-            {noOfflineAccess && (
+            {/* Priority 1: Show overlay if user has no active subscription */}
+            {noSubType && (
+              <NoSubscriptionOverlay 
+                type={noSubType}
+                userName={user?.name}
+              />
+            )}
+            
+            {/* Priority 2: Show frozen overlay if user doesn't have offline access */}
+            {!noSubType && noOfflineAccess && (
               <FeatureDisabledOverlay 
                 featureName={language === "bn" ? "অফলাইন শপ সিস্টেম" : "Offline Shop System"} 
                 featureType="offline"
@@ -315,16 +337,16 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
               />
             )}
             
-            {/* Show frozen overlay if feature is disabled by admin */}
-            {!noOfflineAccess && isOfflineShopDisabled && (
+            {/* Priority 3: Show frozen overlay if feature is disabled by admin */}
+            {!noSubType && !noOfflineAccess && isOfflineShopDisabled && (
               <FeatureDisabledOverlay featureName={language === "bn" ? "অফলাইন শপ সিস্টেম" : "Offline Shop System"} featureType="offline" />
             )}
             
-            {/* Trial Banner for trial users */}
-            {!noOfflineAccess && <OfflineTrialBanner />}
+            {/* Trial Banner for trial users (only if they have active subscription) */}
+            {!noSubType && !noOfflineAccess && <OfflineTrialBanner />}
             
-            {/* Show overlay if trial expired */}
-            {!noOfflineAccess && isTrialUser && isOfflineTrialExpired && <OfflineTrialExpiredOverlay />}
+            {/* Show overlay if trial expired (only show if user HAD an active trial before) */}
+            {!noSubType && !noOfflineAccess && isTrialUser && isOfflineTrialExpired && <OfflineTrialExpiredOverlay />}
             
             {children}
           </main>
