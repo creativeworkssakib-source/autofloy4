@@ -718,12 +718,19 @@ async function processBufferedMessages(
   
   // Send AI response
   if (aiResponse?.reply && decryptedToken) {
-    const sendResult = await sendFacebookMessage(decryptedToken, senderId, aiResponse.reply);
-    if (sendResult.success) {
-      console.log("[Buffer] ✅ AI reply sent for batched messages to:", senderId);
-    } else {
-      console.log("[Buffer] ❌ Failed to send AI reply, error code:", sendResult.errorCode);
+    console.log(`[Buffer] Attempting to send reply to ${senderId}, reply length: ${aiResponse.reply.length}`);
+    try {
+      const sendResult = await sendFacebookMessage(decryptedToken, senderId, aiResponse.reply);
+      if (sendResult.success) {
+        console.log("[Buffer] ✅ AI reply sent for batched messages to:", senderId);
+      } else {
+        console.log("[Buffer] ❌ Failed to send AI reply, error:", JSON.stringify(sendResult.error), "code:", sendResult.errorCode);
+      }
+    } catch (sendError) {
+      console.error("[Buffer] Exception while sending message:", sendError);
     }
+  } else {
+    console.log(`[Buffer] Skipping send - reply: ${!!aiResponse?.reply}, token: ${!!decryptedToken}`);
   }
 }
 
@@ -860,9 +867,10 @@ async function processMessagingEvent(supabase: any, pageId: string, event: any) 
         pageMemory
       );
     } else {
-      // Schedule delayed check (async, don't await)
-      checkAndProcessBuffer(supabase, pageId, senderId, decryptedToken, account, pageMemory)
-        .catch(err => console.error("[Buffer] Error in delayed processing:", err));
+      // Schedule delayed check - we MUST await this to ensure message is sent before function terminates
+      // Using a shorter delay and awaiting to prevent edge function shutdown before send completes
+      console.log(`[Buffer] Scheduling delayed processing for ${senderId}`);
+      await checkAndProcessBuffer(supabase, pageId, senderId, decryptedToken, account, pageMemory);
     }
   }
 
