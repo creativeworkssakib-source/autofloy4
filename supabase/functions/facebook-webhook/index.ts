@@ -602,41 +602,48 @@ async function checkAndProcessBuffer(
   // Wait for the batch delay
   await new Promise(resolve => setTimeout(resolve, MESSAGE_BATCH_DELAY_MS));
   
-  // Get the buffer again
-  const { data: buffer } = await supabase
+  // CRITICAL: Use atomic update to claim the buffer (prevents duplicate processing)
+  // Only one process can successfully claim is_processed = false -> true
+  const { data: claimedBuffer, error: claimError } = await supabase
     .from("ai_message_buffer")
-    .select("*")
+    .update({ is_processed: true })
     .eq("page_id", pageId)
     .eq("sender_id", senderId)
     .eq("is_processed", false)
-    .single();
+    .select("*")
+    .maybeSingle();
   
-  if (!buffer) {
-    console.log("[Buffer] Buffer already processed or missing");
+  if (claimError) {
+    console.log("[Buffer] Error claiming buffer:", claimError.message);
     return;
   }
   
-  const lastMessageAt = new Date(buffer.last_message_at);
+  if (!claimedBuffer) {
+    console.log("[Buffer] Buffer already claimed/processed by another instance, skipping");
+    return;
+  }
+  
+  const lastMessageAt = new Date(claimedBuffer.last_message_at);
   const timeSinceLast = Date.now() - lastMessageAt.getTime();
   
-  // If new message arrived within the delay window, skip (it will trigger its own check)
+  // If new message arrived very recently, unmark and let that trigger handle it
   if (timeSinceLast < MESSAGE_BATCH_DELAY_MS - 500) {
-    console.log(`[Buffer] Recent message arrived (${timeSinceLast}ms ago), skipping`);
+    console.log(`[Buffer] Recent message arrived (${timeSinceLast}ms ago), releasing buffer`);
+    await supabase
+      .from("ai_message_buffer")
+      .update({ is_processed: false })
+      .eq("id", claimedBuffer.id);
     return;
   }
   
-  // Mark as processing
-  await supabase
-    .from("ai_message_buffer")
-    .update({ is_processed: true })
-    .eq("id", buffer.id);
+  console.log(`[Buffer] Successfully claimed buffer ${claimedBuffer.id}, processing...`);
   
   // Process all buffered messages together
   await processBufferedMessages(
     supabase,
     pageId,
     senderId,
-    buffer.messages,
+    claimedBuffer.messages,
     decryptedToken,
     account,
     pageMemory
