@@ -526,32 +526,34 @@ serve(async (req) => {
 const MESSAGE_BATCH_DELAY_MS = 4000; // Wait 4 seconds after LAST message before processing
 const MESSAGE_BATCH_MAX_WAIT_MS = 15000; // Max 15 seconds total wait (for multiple messages)
 
-// Deduplication cache to prevent processing same message twice (Facebook retries)
-const processedMessageIds = new Map<string, number>(); // messageId -> timestamp
-const MESSAGE_ID_CACHE_TTL = 60000; // Keep IDs for 60 seconds
-
-// Clean old message IDs periodically
-function cleanupMessageIdCache() {
-  const now = Date.now();
-  for (const [id, timestamp] of processedMessageIds) {
-    if (now - timestamp > MESSAGE_ID_CACHE_TTL) {
-      processedMessageIds.delete(id);
+// *** DATABASE-BASED DEDUPLICATION (survives Edge Function restarts) ***
+// Check if message already exists in any buffer (processed or not)
+async function isMessageAlreadySeen(supabase: any, pageId: string, senderId: string, messageId: string): Promise<boolean> {
+  if (!messageId) return false;
+  
+  // Check all buffers for this page/sender for this messageId
+  const { data: buffers } = await supabase
+    .from("ai_message_buffer")
+    .select("id, messages")
+    .eq("page_id", pageId)
+    .eq("sender_id", senderId)
+    .order("created_at", { ascending: false })
+    .limit(5);
+  
+  if (!buffers || buffers.length === 0) return false;
+  
+  for (const buffer of buffers) {
+    const messages = buffer.messages || [];
+    if (messages.some((m: any) => m.messageId === messageId)) {
+      console.log(`[Dedup] ⚠️ Message ${messageId} already in buffer ${buffer.id}`);
+      return true;
     }
   }
+  
+  return false;
 }
 
-// Check if message was already processed (prevent duplicates from Facebook retries)
-function isMessageAlreadyProcessed(messageId: string): boolean {
-  cleanupMessageIdCache();
-  return processedMessageIds.has(messageId);
-}
-
-// Mark message as processed
-function markMessageProcessed(messageId: string) {
-  processedMessageIds.set(messageId, Date.now());
-}
-
-// Add message to buffer - IMPROVED with deduplication
+// Add message to buffer - IMPROVED with database-based deduplication
 async function addToMessageBuffer(
   supabase: any, 
   pageId: string, 
@@ -561,15 +563,13 @@ async function addToMessageBuffer(
   const now = new Date();
   const messageId = messageData.messageId;
   
-  // *** CRITICAL: Check for duplicate message (Facebook retry) ***
-  if (messageId && isMessageAlreadyProcessed(messageId)) {
-    console.log(`[Buffer] ⚠️ DUPLICATE message detected: ${messageId}, ignoring Facebook retry`);
-    return { shouldProcess: false, isDuplicate: true };
-  }
-  
-  // Mark this message as seen (even before adding to buffer)
+  // *** CRITICAL: Database-based deduplication (survives Edge Function restarts) ***
   if (messageId) {
-    markMessageProcessed(messageId);
+    const alreadySeen = await isMessageAlreadySeen(supabase, pageId, senderId, messageId);
+    if (alreadySeen) {
+      console.log(`[Buffer] ⚠️ DUPLICATE message detected: ${messageId}, ignoring Facebook retry`);
+      return { shouldProcess: false, isDuplicate: true };
+    }
   }
   
   // Check for existing unprocessed buffer for this sender
@@ -579,10 +579,10 @@ async function addToMessageBuffer(
     .eq("page_id", pageId)
     .eq("sender_id", senderId)
     .eq("is_processed", false)
-    .single();
+    .maybeSingle();
   
   if (existingBuffer) {
-    // Check if this exact message is already in the buffer (double-check)
+    // Double-check if this exact message is already in the buffer
     const alreadyInBuffer = existingBuffer.messages?.some((m: any) => m.messageId === messageId);
     if (alreadyInBuffer) {
       console.log(`[Buffer] Message ${messageId} already in buffer, ignoring duplicate`);
