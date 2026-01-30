@@ -51,6 +51,7 @@ import { useSyncSettings } from "@/hooks/useSyncSettings";
 import { checkAdminRole } from "@/services/adminService";
 import Footer from "@/components/layout/Footer";
 import { FeatureDisabledOverlay } from "@/components/FeatureDisabledOverlay";
+import { NoSubscriptionOverlay } from "@/components/NoSubscriptionOverlay";
 import { usePlanLimits } from "@/hooks/usePlanLimits";
 
 interface DashboardLayoutProps {
@@ -67,7 +68,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const { syncEnabled } = useSyncSettings();
   const { t, language } = useLanguage();
   const { isDigitalMode } = useProductType();
-  const { hasOnlineAccess, canRunAutomation } = usePlanLimits();
+  const { hasOnlineAccess, canRunAutomation, hasActiveSubscription, isTrialExpired, planId } = usePlanLimits();
   const {
     notifications,
     unreadCount,
@@ -139,6 +140,19 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   // Check if online business is disabled by admin
   const isOnlineBusinessDisabled = settings.online_business_enabled === false;
   
+  // Check if user has NO active subscription at all (no plan, expired trial, expired subscription)
+  const hasNoSubscription = !hasActiveSubscription && planId === "none";
+  const hasExpiredSubscription = isTrialExpired || (!hasActiveSubscription && planId !== "none" && planId !== "trial");
+  
+  // Determine which overlay to show for no subscription
+  const getNoSubType = (): "no_plan" | "trial_expired" | "subscription_expired" | null => {
+    if (isTrialExpired) return "trial_expired";
+    if (hasNoSubscription) return "no_plan";
+    if (hasExpiredSubscription) return "subscription_expired";
+    return null;
+  };
+  const noSubType = getNoSubType();
+  
   // Check if user has online access based on subscription_type
   const onlineAccessCheck = canRunAutomation(0); // Check automation access as proxy for online access
   const noOnlineAccess = !hasOnlineAccess;
@@ -147,11 +161,14 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const allowedRoutesWhenOnlineDisabled = ['/dashboard/sync', '/dashboard/settings'];
   const isAllowedRoute = allowedRoutesWhenOnlineDisabled.some(route => location.pathname.startsWith(route));
   
-  // Show overlay for users without online access (except for sync/settings pages)
-  const shouldShowNoAccessOverlay = noOnlineAccess && !isAllowedRoute;
+  // First priority: No subscription at all
+  const shouldShowNoSubscriptionOverlay = noSubType !== null && !isAllowedRoute;
   
-  // Only show admin-disabled overlay for online business features, not for shared features like sync/settings
-  const shouldShowDisabledOverlay = !noOnlineAccess && isOnlineBusinessDisabled && !isAllowedRoute;
+  // Second priority: Show overlay for users without online access (except for sync/settings pages)
+  const shouldShowNoAccessOverlay = !shouldShowNoSubscriptionOverlay && noOnlineAccess && !isAllowedRoute;
+  
+  // Third priority: Only show admin-disabled overlay for online business features, not for shared features like sync/settings
+  const shouldShowDisabledOverlay = !shouldShowNoSubscriptionOverlay && !noOnlineAccess && isOnlineBusinessDisabled && !isAllowedRoute;
 
   return (
     <div className="min-h-screen bg-muted/30">
@@ -402,8 +419,16 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
 
         {/* Page Content */}
         <div className="flex-1 p-4 sm:p-6 lg:p-8 relative">
-          {/* Show frozen overlay if user doesn't have online access (except for sync/settings pages) */}
-          {shouldShowNoAccessOverlay && (
+          {/* Priority 1: Show overlay if user has no active subscription */}
+          {shouldShowNoSubscriptionOverlay && noSubType && (
+            <NoSubscriptionOverlay 
+              type={noSubType}
+              userName={user?.name}
+            />
+          )}
+          
+          {/* Priority 2: Show frozen overlay if user doesn't have online access (except for sync/settings pages) */}
+          {!shouldShowNoSubscriptionOverlay && shouldShowNoAccessOverlay && (
             <FeatureDisabledOverlay 
               featureName={language === "bn" ? "অনলাইন বিজনেস" : "Online Business"} 
               featureType="online"
@@ -414,8 +439,8 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
             />
           )}
           
-          {/* Show frozen overlay if feature is disabled by admin (except for sync/settings pages) */}
-          {shouldShowDisabledOverlay && (
+          {/* Priority 3: Show frozen overlay if feature is disabled by admin (except for sync/settings pages) */}
+          {!shouldShowNoSubscriptionOverlay && !shouldShowNoAccessOverlay && shouldShowDisabledOverlay && (
             <FeatureDisabledOverlay featureName={language === "bn" ? "অনলাইন বিজনেস" : "Online Business"} featureType="online" />
           )}
           {children}
