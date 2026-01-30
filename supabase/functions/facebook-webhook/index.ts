@@ -523,8 +523,8 @@ serve(async (req) => {
 });
 
 // MESSAGE BATCHING CONSTANTS
-const MESSAGE_BATCH_DELAY_MS = 4000; // Wait 4 seconds before processing
-const MESSAGE_BATCH_MAX_WAIT_MS = 10000; // Max 10 seconds total wait
+const MESSAGE_BATCH_DELAY_MS = 2500; // Wait 2.5 seconds before processing
+const MESSAGE_BATCH_MAX_WAIT_MS = 5000; // Max 5 seconds total wait
 
 // Add message to buffer and check if should process
 async function addToMessageBuffer(
