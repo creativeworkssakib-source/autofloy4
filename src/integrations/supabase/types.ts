@@ -130,6 +130,39 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_message_buffer: {
+        Row: {
+          created_at: string
+          first_message_at: string
+          id: string
+          is_processed: boolean | null
+          last_message_at: string
+          messages: Json
+          page_id: string
+          sender_id: string
+        }
+        Insert: {
+          created_at?: string
+          first_message_at?: string
+          id?: string
+          is_processed?: boolean | null
+          last_message_at?: string
+          messages?: Json
+          page_id: string
+          sender_id: string
+        }
+        Update: {
+          created_at?: string
+          first_message_at?: string
+          id?: string
+          is_processed?: boolean | null
+          last_message_at?: string
+          messages?: Json
+          page_id?: string
+          sender_id?: string
+        }
+        Relationships: []
+      }
       ai_orders: {
         Row: {
           advance_amount: number | null

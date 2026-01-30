@@ -522,7 +522,212 @@ serve(async (req) => {
   }
 });
 
-// Process incoming messages
+// MESSAGE BATCHING CONSTANTS
+const MESSAGE_BATCH_DELAY_MS = 4000; // Wait 4 seconds before processing
+const MESSAGE_BATCH_MAX_WAIT_MS = 10000; // Max 10 seconds total wait
+
+// Add message to buffer and check if should process
+async function addToMessageBuffer(
+  supabase: any, 
+  pageId: string, 
+  senderId: string, 
+  messageData: any
+): Promise<{ shouldProcess: boolean; bufferId?: string; allMessages?: any[] }> {
+  const now = new Date();
+  
+  // Check for existing unprocessed buffer
+  const { data: existingBuffer } = await supabase
+    .from("ai_message_buffer")
+    .select("*")
+    .eq("page_id", pageId)
+    .eq("sender_id", senderId)
+    .eq("is_processed", false)
+    .single();
+  
+  if (existingBuffer) {
+    // Add to existing buffer
+    const updatedMessages = [...(existingBuffer.messages || []), messageData];
+    const firstMessageAt = new Date(existingBuffer.first_message_at);
+    const timeSinceFirst = now.getTime() - firstMessageAt.getTime();
+    
+    // Update buffer
+    await supabase
+      .from("ai_message_buffer")
+      .update({ 
+        messages: updatedMessages, 
+        last_message_at: now.toISOString() 
+      })
+      .eq("id", existingBuffer.id);
+    
+    // Check if max wait exceeded - force process
+    if (timeSinceFirst >= MESSAGE_BATCH_MAX_WAIT_MS) {
+      console.log(`[Buffer] Max wait exceeded (${timeSinceFirst}ms), forcing process`);
+      return { 
+        shouldProcess: true, 
+        bufferId: existingBuffer.id, 
+        allMessages: updatedMessages 
+      };
+    }
+    
+    console.log(`[Buffer] Added to existing buffer, total: ${updatedMessages.length}, waiting...`);
+    return { shouldProcess: false };
+  } else {
+    // Create new buffer
+    const { data: newBuffer } = await supabase
+      .from("ai_message_buffer")
+      .insert({
+        page_id: pageId,
+        sender_id: senderId,
+        messages: [messageData],
+        first_message_at: now.toISOString(),
+        last_message_at: now.toISOString(),
+      })
+      .select()
+      .single();
+    
+    console.log(`[Buffer] Created new buffer: ${newBuffer?.id}`);
+    return { shouldProcess: false };
+  }
+}
+
+// Check buffer after delay and process if no new messages
+async function checkAndProcessBuffer(
+  supabase: any,
+  pageId: string,
+  senderId: string,
+  decryptedToken: string | null,
+  account: any,
+  pageMemory: any
+): Promise<void> {
+  // Wait for the batch delay
+  await new Promise(resolve => setTimeout(resolve, MESSAGE_BATCH_DELAY_MS));
+  
+  // Get the buffer again
+  const { data: buffer } = await supabase
+    .from("ai_message_buffer")
+    .select("*")
+    .eq("page_id", pageId)
+    .eq("sender_id", senderId)
+    .eq("is_processed", false)
+    .single();
+  
+  if (!buffer) {
+    console.log("[Buffer] Buffer already processed or missing");
+    return;
+  }
+  
+  const lastMessageAt = new Date(buffer.last_message_at);
+  const timeSinceLast = Date.now() - lastMessageAt.getTime();
+  
+  // If new message arrived within the delay window, skip (it will trigger its own check)
+  if (timeSinceLast < MESSAGE_BATCH_DELAY_MS - 500) {
+    console.log(`[Buffer] Recent message arrived (${timeSinceLast}ms ago), skipping`);
+    return;
+  }
+  
+  // Mark as processing
+  await supabase
+    .from("ai_message_buffer")
+    .update({ is_processed: true })
+    .eq("id", buffer.id);
+  
+  // Process all buffered messages together
+  await processBufferedMessages(
+    supabase,
+    pageId,
+    senderId,
+    buffer.messages,
+    decryptedToken,
+    account,
+    pageMemory
+  );
+}
+
+// Process all buffered messages as one context
+async function processBufferedMessages(
+  supabase: any,
+  pageId: string,
+  senderId: string,
+  messages: any[],
+  decryptedToken: string | null,
+  account: any,
+  pageMemory: any
+): Promise<void> {
+  const startTime = Date.now();
+  
+  console.log(`[Buffer] Processing ${messages.length} batched messages for sender ${senderId}`);
+  
+  // Combine all messages into context
+  let combinedText = "";
+  let allAttachments: any[] = [];
+  let senderName: string | undefined = messages[0]?.senderName;
+  let primaryMessageType = "text";
+  
+  for (const msg of messages) {
+    if (msg.messageText) {
+      combinedText += (combinedText ? "\n" : "") + msg.messageText;
+    }
+    if (msg.attachments) {
+      allAttachments.push(...msg.attachments);
+    }
+    // Prioritize image/video type over text
+    if (msg.messageType !== "text") {
+      primaryMessageType = msg.messageType;
+    }
+  }
+  
+  // If only media without text, add context
+  if (!combinedText && allAttachments.length > 0) {
+    combinedText = `[Customer sent ${allAttachments.length} ${primaryMessageType} message(s)]`;
+  }
+  
+  console.log(`[Buffer] Combined context: "${combinedText?.substring(0, 100)}...", attachments: ${allAttachments.length}`);
+  
+  // Call AI Agent with combined context
+  const aiResponse = await callAIAgent(supabase, {
+    pageId,
+    senderId,
+    senderName,
+    messageText: combinedText || `[${primaryMessageType} message]`,
+    messageType: primaryMessageType,
+    attachments: allAttachments.length > 0 ? allAttachments : undefined,
+    isComment: false,
+    userId: account.user_id,
+  });
+  
+  console.log(`[Buffer] AI response for batched messages: reply length=${aiResponse?.reply?.length || 0}`);
+  
+  // Log the execution
+  await supabase.from("execution_logs").insert({
+    user_id: account.user_id,
+    automation_id: null,
+    source_platform: "facebook",
+    event_type: "batched_message_received",
+    status: aiResponse?.reply ? "success" : "error",
+    incoming_payload: {
+      sender_id: senderId,
+      sender_name: senderName,
+      page_id: pageId,
+      message_count: messages.length,
+      combined_text: combinedText?.substring(0, 500),
+      primary_type: primaryMessageType,
+    },
+    response_payload: aiResponse || { error: "AI agent failed" },
+    processing_time_ms: Date.now() - startTime,
+  });
+  
+  // Send AI response
+  if (aiResponse?.reply && decryptedToken) {
+    const sendResult = await sendFacebookMessage(decryptedToken, senderId, aiResponse.reply);
+    if (sendResult.success) {
+      console.log("[Buffer] ✅ AI reply sent for batched messages to:", senderId);
+    } else {
+      console.log("[Buffer] ❌ Failed to send AI reply, error code:", sendResult.errorCode);
+    }
+  }
+}
+
+// Process incoming messages with batching
 async function processMessagingEvent(supabase: any, pageId: string, event: any) {
   const senderId = event.sender?.id;
   const recipientId = event.recipient?.id;
@@ -560,8 +765,6 @@ async function processMessagingEvent(supabase: any, pageId: string, event: any) 
     }
   }
 
-  const startTime = Date.now();
-
   // Get page memory for AI context
   const { data: pageMemory } = await supabase
     .from("page_memory")
@@ -598,54 +801,32 @@ async function processMessagingEvent(supabase: any, pageId: string, event: any) 
       else if (firstAttachment.type === "video" || firstAttachment.type === "video_inline") messageType = "video";
       else if (firstAttachment.type === "file") messageType = "file";
       else if (firstAttachment.type === "sticker") messageType = "sticker";
-      // *** GIF DETECTION ***
       else if (firstAttachment.type === "animated_image_share" || 
                firstAttachment.type === "gif" ||
                firstAttachment.url?.includes(".gif") ||
                firstAttachment.payload?.url?.includes(".gif")) {
         messageType = "gif";
       }
-      // *** ANIMATED STICKER ***
       else if (firstAttachment.type === "animated_sticker") {
         messageType = "animated_sticker";
       }
       attachments = message.attachments;
     }
     
-    // Sticker detection (sticker_id present)
     if (message.sticker_id) {
       messageType = "sticker";
-      // Add sticker context to message
       messageText = messageText || `[Sticker: ${message.sticker_id}]`;
     }
     
-    console.log(`[Webhook] Message type: ${messageType}, Sticker ID: ${message.sticker_id || 'none'}, Has attachments: ${!!attachments}`);
+    console.log(`[Webhook] Message type: ${messageType}, Has attachments: ${!!attachments}`);
 
     // Check if AI Media Understanding is enabled for media messages (STRICT CHECK)
     const isMediaMessage = messageType !== "text";
     const aiMediaUnderstandingEnabled = pageMemory?.automation_settings?.aiMediaUnderstanding === true;
-    console.log(`[Webhook] aiMediaUnderstanding enabled: ${aiMediaUnderstandingEnabled}`);
     
     if (isMediaMessage && !aiMediaUnderstandingEnabled) {
-      console.log("[Webhook] AI Media Understanding disabled, using simple response for media:", messageType);
-      // Send a simple generic response instead of AI analysis
-      if (decryptedToken) {
-        await sendFacebookMessage(decryptedToken, senderId, "ধন্যবাদ! কিভাবে সাহায্য করতে পারি বলুন। 😊");
-      }
-      await supabase.from("execution_logs").insert({
-        user_id: account.user_id,
-        source_platform: "facebook",
-        event_type: "media_message_simple_reply",
-        status: "success",
-        incoming_payload: {
-          sender_id: senderId,
-          page_id: pageId,
-          message_type: messageType,
-          reason: "AI Media Understanding disabled"
-        },
-        processing_time_ms: Date.now() - startTime,
-      });
-      return;
+      console.log("[Webhook] AI Media Understanding disabled, buffering for simple response");
+      // Still buffer - maybe text will come after image
     }
 
     // Get sender profile
@@ -655,48 +836,33 @@ async function processMessagingEvent(supabase: any, pageId: string, event: any) 
       senderName = profile?.name || undefined;
     }
 
-    // Call AI Agent with enhanced message info
-    const aiResponse = await callAIAgent(supabase, {
-      pageId,
-      senderId,
-      senderName,
-      messageText: messageText || `[${messageType} message]`,
+    // *** MESSAGE BATCHING: Add to buffer instead of immediate processing ***
+    const messageData = {
+      messageText,
       messageType,
       attachments,
-      isComment: false,
-      userId: account.user_id,
-    });
+      senderName,
+      timestamp,
+      messageId: message.mid,
+    };
     
-    console.log(`[Webhook] AI response received: reply length=${aiResponse?.reply?.length || 0}`);
-
-    // Log the execution
-    await supabase.from("execution_logs").insert({
-      user_id: account.user_id,
-      automation_id: null,
-      source_platform: "facebook",
-      event_type: "message_received",
-      status: aiResponse?.reply ? "success" : "error",
-      incoming_payload: {
-        sender_id: senderId,
-        sender_name: senderName,
-        page_id: pageId,
-        message_text: message.text,
-        message_type: messageType,
-        message_id: message.mid,
-        timestamp,
-      },
-      response_payload: aiResponse || { error: "AI agent failed" },
-      processing_time_ms: Date.now() - startTime,
-    });
-
-    // Send AI response if available
-    if (aiResponse?.reply && decryptedToken) {
-      const sendResult = await sendFacebookMessage(decryptedToken, senderId, aiResponse.reply);
-      if (sendResult.success) {
-        console.log("[Webhook] AI reply sent to:", senderId);
-      } else {
-        console.log("[Webhook] Failed to send AI reply, error code:", sendResult.errorCode);
-      }
+    const bufferResult = await addToMessageBuffer(supabase, pageId, senderId, messageData);
+    
+    if (bufferResult.shouldProcess && bufferResult.allMessages) {
+      // Max wait exceeded, process immediately
+      await processBufferedMessages(
+        supabase,
+        pageId,
+        senderId,
+        bufferResult.allMessages,
+        decryptedToken,
+        account,
+        pageMemory
+      );
+    } else {
+      // Schedule delayed check (async, don't await)
+      checkAndProcessBuffer(supabase, pageId, senderId, decryptedToken, account, pageMemory)
+        .catch(err => console.error("[Buffer] Error in delayed processing:", err));
     }
   }
 
@@ -717,7 +883,7 @@ async function processMessagingEvent(supabase: any, pageId: string, event: any) 
         timestamp,
       },
       response_payload: { status: "logged" },
-      processing_time_ms: Date.now() - startTime,
+      processing_time_ms: 0,
     });
   }
 }
