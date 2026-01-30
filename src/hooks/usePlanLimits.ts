@@ -46,7 +46,10 @@ export function usePlanLimits(): PlanLimitsResult {
   let hasActiveSubscription = false;
   let subscriptionType: SubscriptionType = 'online';
   
-  if (user) {
+  // CRITICAL: Check suspension status first - suspended users have NO access
+  const isSuspended = user?.is_suspended === true;
+  
+  if (user && !isSuspended) {
     const subPlan = user.subscriptionPlan?.toLowerCase() as PlanId;
     subscriptionType = user.subscriptionType || 'online';
     
