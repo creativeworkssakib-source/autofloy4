@@ -80,8 +80,10 @@ export interface ExecutionLog {
 
 export interface DashboardStats {
   messagesHandled: number;
+  todayMessagesHandled?: number;
   messagesDiff: string;
   autoRepliesSent: number;
+  todayAutoReplies?: number;
   successRate: string;
   activeAutomations: number;
   totalAutomations: number;
@@ -90,6 +92,12 @@ export interface DashboardStats {
   connectedPages: number;
   todayOrders: number;
   todayRevenue: number;
+  totalAiOrders?: number;
+  pendingAiOrders?: number;
+  confirmedAiOrders?: number;
+  totalAiRevenue?: number;
+  todayAiOrders?: number;
+  todayAiRevenue?: number;
 }
 
 export interface BusinessOverviewStats {

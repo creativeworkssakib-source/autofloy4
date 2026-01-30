@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import PlatformAutomationCard, { PlatformConfig } from "./PlatformAutomationCard";
 import PlatformAutomationSection from "./PlatformAutomationSection";
@@ -11,6 +11,7 @@ import {
   ShoppingCart,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchDashboardStats, DashboardStats } from "@/services/apiService";
 
 interface ConnectedPage {
   id: string;
@@ -58,6 +59,19 @@ const PlatformAutomationsGrid = ({
   const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null);
   const [webhookConfigs, setWebhookConfigs] = useState<WebhookConfig[]>([]);
   const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+
+  // Fetch dashboard stats
+  const loadStats = useCallback(async () => {
+    try {
+      const result = await fetchDashboardStats();
+      if (result) {
+        setStats(result);
+      }
+    } catch (error) {
+      console.error("Failed to fetch stats:", error);
+    }
+  }, []);
 
   // Fetch webhook configs from database with real-time updates
   useEffect(() => {
@@ -74,6 +88,7 @@ const PlatformAutomationsGrid = ({
       setLoading(false);
     };
     fetchConfigs();
+    loadStats();
 
     // Real-time subscription
     const channel = supabase
@@ -94,7 +109,7 @@ const PlatformAutomationsGrid = ({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [loadStats]);
 
   // Convert webhook configs to platform configs
   const platforms: PlatformConfig[] = webhookConfigs.map(config => {
@@ -102,6 +117,17 @@ const PlatformAutomationsGrid = ({
     const isFacebookConnected = config.id === 'facebook' && connectedFacebookPages.length > 0;
     // Platform is available if not coming soon AND is active
     const isAvailable = !config.is_coming_soon && config.is_active;
+    
+    // Only show stats for Facebook (connected platform)
+    const platformStats = config.id === 'facebook' && isFacebookConnected && stats ? {
+      repliesToday: stats.todayMessagesHandled || 0,
+      automationsEnabled: stats.activeAutomations || 0,
+      totalAutomations: stats.messagesHandled || 0,
+    } : {
+      repliesToday: 0,
+      automationsEnabled: 0,
+      totalAutomations: 0,
+    };
     
     return {
       id: config.id,
@@ -113,11 +139,7 @@ const PlatformAutomationsGrid = ({
       description: config.description,
       isConnected: isAvailable && (config.id === 'facebook' ? isFacebookConnected : true),
       isActive: isAvailable && (config.id === 'facebook' ? isFacebookConnected : true),
-      stats: {
-        repliesToday: 0,
-        automationsEnabled: 0,
-        totalAutomations: 0,
-      },
+      stats: platformStats,
       comingSoon: config.is_coming_soon,
     };
   });
