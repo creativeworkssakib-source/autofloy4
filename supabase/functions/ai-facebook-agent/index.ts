@@ -1725,7 +1725,11 @@ Now confirm: confirm with all collected info`;
     }
     
     // BARGAINING POWER (AI NEGOTIATION)
-    if (pageMemory.selling_rules.bargainingEnabled === true) {
+    // CRITICAL: Bargaining with discounts is ONLY allowed if BOTH bargainingEnabled AND allowDiscount are TRUE
+    const canBargainWithDiscount = pageMemory.selling_rules.bargainingEnabled === true && 
+                                    pageMemory.selling_rules.allowDiscount === true;
+    
+    if (canBargainWithDiscount) {
       const bargainingLevel = pageMemory.selling_rules.bargainingLevel || "medium";
       const minDiscount = pageMemory.selling_rules.minAcceptableDiscount || 1;
       const maxDiscount = pageMemory.selling_rules.maxAcceptableDiscount || 5;
@@ -1758,7 +1762,7 @@ bargainingLevel === "medium" ?
 bargainingLevel === "high" ?
 `- "ভাই এই দাম fixed, quality দেখলে বুঝবেন"
 - Value highlight করুন, ছাড়ের কথা এখনই বলবেন না` :
-`- "ভাই এই দামেই best, অন্য কোথাও পাবেন না এই quality"
+`- "ভাই এই দামে best, অন্য কোথাও পাবেন না এই quality"
 - প্রথম এ ছাড় দেবেন না`}
 
 **২. Customer আবার চাপ দিলে:**
@@ -1814,6 +1818,19 @@ bargainingLevel === "high" ?
 3. Customer এর tone বুঝে react করুন - Bargaining Style: ${bargainingLevel} অনুযায়ী
 4. Angry/rude customer কে calm করুন, তারপর negotiate
 5. ${maxDiscount}% এর বেশি কোনোভাবেই দিবেন না - এটা strict limit`;
+    } else if (pageMemory.selling_rules.bargainingEnabled === true && pageMemory.selling_rules.allowDiscount === false) {
+      // Bargaining is ON but Discount is OFF - AI can negotiate but NOT give any discount
+      prompt += `
+
+## ⛔ BARGAINING WITHOUT DISCOUNT (CRITICAL!):
+- Bargaining চালু আছে কিন্তু Discount বন্ধ!
+- আপনি customer এর সাথে কথা বলতে পারবেন, convince করতে পারবেন
+- কিন্তু **কোনো discount/ছাড় দিতে পারবেন না**
+- Customer দাম কমাতে চাইলে politely বুঝান কেন এই দাম worth it
+- Value highlight করুন, quality বলুন, কিন্তু দাম কমাবেন না
+- "ভাই দাম fixed, কিন্তু quality দেখলে বুঝবেন worth it"
+- "এই দামে এই quality অন্য কোথাও পাবেন না"
+- **কোনোভাবেই ০.০১% ও discount দেওয়া যাবে না - এটা strict rule**`;
     } else {
       prompt += `
 
