@@ -82,14 +82,23 @@ async function getOrCreateConversation(supabase: any, userId: string, pageId: st
   return conv;
 }
 
-// AI Call
+// AI Call with better error handling
 async function callAI(systemPrompt: string, messages: any[], imageUrls?: string[]): Promise<string> {
   const aiMessages: any[] = [];
   
   for (const msg of messages.slice(-10)) {
     if (msg.role === "user" || msg.role === "assistant") {
-      aiMessages.push({ role: msg.role, content: msg.content || msg.text || "" });
+      const content = msg.content || msg.text || "";
+      // Ensure content is never empty
+      if (content.trim()) {
+        aiMessages.push({ role: msg.role, content: content.trim() });
+      }
     }
+  }
+  
+  // Ensure at least one user message exists
+  if (aiMessages.length === 0 || !aiMessages.some(m => m.role === "user")) {
+    aiMessages.push({ role: "user", content: "Hi" });
   }
   
   // Add images if present
@@ -104,20 +113,42 @@ async function callAI(systemPrompt: string, messages: any[], imageUrls?: string[
     }
   }
   
+  // Select model - use gpt-5 for images, gpt-5-mini for text (new Lovable AI Gateway models)
+  const model = imageUrls?.length ? "openai/gpt-5" : "openai/gpt-5-mini";
+  
+  const requestBody = {
+    model,
+    messages: [{ role: "system", content: systemPrompt }, ...aiMessages],
+    max_completion_tokens: 1024,  // GPT-5 needs more tokens for Bangla text
+  };
+  
+  console.log(`[AI Agent] Calling AI with model: ${model}, messages count: ${aiMessages.length}`);
+  
   const response = await fetch(AI_GATEWAY_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${LOVABLE_API_KEY}` },
-    body: JSON.stringify({
-      model: imageUrls?.length ? "gpt-4o" : "gpt-4o-mini",
-      messages: [{ role: "system", content: systemPrompt }, ...aiMessages],
-      temperature: 0.7,
-      max_tokens: 300,
-    }),
+    body: JSON.stringify(requestBody),
   });
   
-  if (!response.ok) throw new Error(`AI API error: ${response.status}`);
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`[AI Agent] API Error ${response.status}:`, errorText);
+    throw new Error(`AI API error: ${response.status} - ${errorText.substring(0, 200)}`);
+  }
+  
   const data = await response.json();
-  return data.choices?.[0]?.message?.content || "দুঃখিত, একটু সমস্যা হচ্ছে।";
+  console.log(`[AI Agent] API Response structure:`, JSON.stringify(data).substring(0, 300));
+  
+  // Try different response formats (some APIs use different structures)
+  const reply = data.choices?.[0]?.message?.content 
+    || data.choices?.[0]?.text 
+    || data.message?.content
+    || data.content
+    || data.response
+    || "দুঃখিত, একটু সমস্যা হচ্ছে।";
+    
+  console.log(`[AI Agent] AI replied: ${reply.substring(0, 100)}...`);
+  return reply;
 }
 
 // Create order
