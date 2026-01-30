@@ -570,9 +570,14 @@ async function processMessagingEvent(supabase: any, pageId: string, event: any) 
     .eq("user_id", account.user_id)
     .single();
 
-  // Check if auto-reply is enabled
-  if (!pageMemory?.automation_settings?.autoInboxReply) {
-    console.log("[Webhook] Auto inbox reply disabled for page:", pageId);
+  console.log(`[Webhook] Page ${pageId} automation_settings:`, JSON.stringify(pageMemory?.automation_settings));
+
+  // Check if auto-reply is enabled (STRICT CHECK - default is FALSE if not set)
+  const autoInboxReply = pageMemory?.automation_settings?.autoInboxReply === true;
+  console.log(`[Webhook] autoInboxReply enabled: ${autoInboxReply}`);
+  
+  if (!autoInboxReply) {
+    console.log("[Webhook] ⛔ Auto inbox reply DISABLED for page:", pageId);
     return;
   }
 
@@ -761,6 +766,8 @@ async function processFeedChange(supabase: any, pageId: string, change: any) {
     .eq("user_id", account.user_id)
     .single();
 
+  console.log(`[Webhook] Comment - Page ${pageId} automation_settings:`, JSON.stringify(pageMemory?.automation_settings));
+
   // Handle comments
   if (item === "comment" && value.verb === "add") {
     // Skip if comment is from the page itself
@@ -797,9 +804,12 @@ async function processFeedChange(supabase: any, pageId: string, change: any) {
     console.log(`[Webhook] Comment on page ${pageId}: "${commentText.substring(0, 50)}..." type: ${commentMessageType}`);
     console.log(`[Webhook] Parent ID: ${parentId || 'none (top-level comment)'}, Has attachment: ${!!commentAttachment}`);
 
-    // Check if auto-reply is enabled
-    if (!pageMemory?.automation_settings?.autoCommentReply) {
-      console.log("[Webhook] Auto comment reply disabled for page:", pageId);
+    // Check if auto-reply is enabled (STRICT CHECK - default is FALSE if not set)
+    const autoCommentReply = pageMemory?.automation_settings?.autoCommentReply === true;
+    console.log(`[Webhook] autoCommentReply enabled: ${autoCommentReply}`);
+    
+    if (!autoCommentReply) {
+      console.log("[Webhook] ⛔ Auto comment reply DISABLED for page:", pageId);
       return;
     }
     
