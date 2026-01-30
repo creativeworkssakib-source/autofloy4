@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { motion } from "framer-motion";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
@@ -15,13 +15,8 @@ import {
   AlertTriangle,
   Crown,
   Activity,
-  CheckCircle2,
 } from "lucide-react";
-import {
-  fetchAutomationsWithAccess,
-  fetchConnectedAccounts,
-  ConnectedAccount,
-} from "@/services/apiService";
+import { useAutomationsData } from "@/hooks/useAutomationsData";
 
 interface ConnectedPage {
   id: string;
@@ -33,13 +28,24 @@ const Automations = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [isLoading, setIsLoading] = useState(true);
-  const [connectedPages, setConnectedPages] = useState<ConnectedPage[]>([]);
-  const [connectedAccounts, setConnectedAccounts] = useState<ConnectedAccount[]>([]);
   
-  // Trial/Access state
-  const [hasAccess, setHasAccess] = useState(true);
-  const [accessDeniedReason, setAccessDeniedReason] = useState<string | undefined>();
+  // Use optimized hook with caching & realtime
+  const { 
+    automationsResponse, 
+    accountsResponse, 
+    isLoading, 
+    refresh 
+  } = useAutomationsData();
+
+  // Derive state from hook data
+  const hasAccess = automationsResponse?.hasAccess ?? true;
+  const accessDeniedReason = automationsResponse?.accessDeniedReason;
+  const connectedAccounts = accountsResponse?.accounts?.filter(a => a.is_connected) || [];
+  const connectedPages: ConnectedPage[] = connectedAccounts.map(a => ({
+    id: a.external_id,
+    name: a.name || "Facebook Page",
+    accountId: a.id,
+  }));
 
   // Handle Facebook OAuth callback success
   useEffect(() => {
@@ -52,54 +58,9 @@ const Automations = () => {
         description: `Successfully connected ${pagesCount || ""} page(s).`,
       });
       setSearchParams({});
-      fetchConnectedAccounts("facebook").then((accounts) => {
-        const connected = accounts.filter((a: ConnectedAccount) => a.is_connected);
-        setConnectedAccounts(connected);
-        setConnectedPages(connected.map((a: ConnectedAccount) => ({
-          id: a.external_id,
-          name: a.name || "Facebook Page",
-          accountId: a.id,
-        })));
-      });
+      refresh(); // Refresh to get new data
     }
-  }, [searchParams, setSearchParams, toast]);
-
-  // Load connected accounts
-  useEffect(() => {
-    const loadData = async () => {
-      setIsLoading(true);
-      try {
-        const [automationsResponse, accountsData] = await Promise.all([
-          fetchAutomationsWithAccess(),
-          fetchConnectedAccounts("facebook"),
-        ]);
-
-        setHasAccess(automationsResponse.hasAccess);
-        setAccessDeniedReason(automationsResponse.accessDeniedReason);
-        setConnectedAccounts(accountsData.filter((a: ConnectedAccount) => a.is_connected));
-        setConnectedPages(
-          accountsData
-            .filter((a: ConnectedAccount) => a.is_connected)
-            .map((a: ConnectedAccount) => ({
-              id: a.external_id,
-              name: a.name || "Facebook Page",
-              accountId: a.id,
-            }))
-        );
-      } catch (error) {
-        console.error("Failed to load data:", error);
-        toast({
-          title: "Error",
-          description: "Failed to load automations.",
-          variant: "destructive",
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadData();
-  }, [toast]);
+  }, [searchParams, setSearchParams, toast, refresh]);
 
   if (isLoading) {
     return (
