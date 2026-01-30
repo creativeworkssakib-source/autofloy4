@@ -523,19 +523,56 @@ serve(async (req) => {
 });
 
 // MESSAGE BATCHING CONSTANTS
-const MESSAGE_BATCH_DELAY_MS = 3000; // Wait 3 seconds before processing
-const MESSAGE_BATCH_MAX_WAIT_MS = 6000; // Max 6 seconds total wait
+const MESSAGE_BATCH_DELAY_MS = 4000; // Wait 4 seconds after LAST message before processing
+const MESSAGE_BATCH_MAX_WAIT_MS = 15000; // Max 15 seconds total wait (for multiple messages)
 
-// Add message to buffer and check if should process
+// Deduplication cache to prevent processing same message twice (Facebook retries)
+const processedMessageIds = new Map<string, number>(); // messageId -> timestamp
+const MESSAGE_ID_CACHE_TTL = 60000; // Keep IDs for 60 seconds
+
+// Clean old message IDs periodically
+function cleanupMessageIdCache() {
+  const now = Date.now();
+  for (const [id, timestamp] of processedMessageIds) {
+    if (now - timestamp > MESSAGE_ID_CACHE_TTL) {
+      processedMessageIds.delete(id);
+    }
+  }
+}
+
+// Check if message was already processed (prevent duplicates from Facebook retries)
+function isMessageAlreadyProcessed(messageId: string): boolean {
+  cleanupMessageIdCache();
+  return processedMessageIds.has(messageId);
+}
+
+// Mark message as processed
+function markMessageProcessed(messageId: string) {
+  processedMessageIds.set(messageId, Date.now());
+}
+
+// Add message to buffer - IMPROVED with deduplication
 async function addToMessageBuffer(
   supabase: any, 
   pageId: string, 
   senderId: string, 
   messageData: any
-): Promise<{ shouldProcess: boolean; bufferId?: string; allMessages?: any[] }> {
+): Promise<{ shouldProcess: boolean; bufferId?: string; allMessages?: any[]; isDuplicate?: boolean }> {
   const now = new Date();
+  const messageId = messageData.messageId;
   
-  // Check for existing unprocessed buffer
+  // *** CRITICAL: Check for duplicate message (Facebook retry) ***
+  if (messageId && isMessageAlreadyProcessed(messageId)) {
+    console.log(`[Buffer] ⚠️ DUPLICATE message detected: ${messageId}, ignoring Facebook retry`);
+    return { shouldProcess: false, isDuplicate: true };
+  }
+  
+  // Mark this message as seen (even before adding to buffer)
+  if (messageId) {
+    markMessageProcessed(messageId);
+  }
+  
+  // Check for existing unprocessed buffer for this sender
   const { data: existingBuffer } = await supabase
     .from("ai_message_buffer")
     .select("*")
@@ -545,12 +582,19 @@ async function addToMessageBuffer(
     .single();
   
   if (existingBuffer) {
-    // Add to existing buffer
+    // Check if this exact message is already in the buffer (double-check)
+    const alreadyInBuffer = existingBuffer.messages?.some((m: any) => m.messageId === messageId);
+    if (alreadyInBuffer) {
+      console.log(`[Buffer] Message ${messageId} already in buffer, ignoring duplicate`);
+      return { shouldProcess: false, isDuplicate: true };
+    }
+    
+    // Add new message to existing buffer
     const updatedMessages = [...(existingBuffer.messages || []), messageData];
     const firstMessageAt = new Date(existingBuffer.first_message_at);
     const timeSinceFirst = now.getTime() - firstMessageAt.getTime();
     
-    // Update buffer
+    // Update buffer with new message and reset last_message_at
     await supabase
       .from("ai_message_buffer")
       .update({ 
@@ -559,9 +603,11 @@ async function addToMessageBuffer(
       })
       .eq("id", existingBuffer.id);
     
-    // Check if max wait exceeded - force process
+    console.log(`[Buffer] ➕ Added message ${updatedMessages.length} to buffer ${existingBuffer.id}`);
+    
+    // Check if max wait exceeded - force process immediately
     if (timeSinceFirst >= MESSAGE_BATCH_MAX_WAIT_MS) {
-      console.log(`[Buffer] Max wait exceeded (${timeSinceFirst}ms), forcing process`);
+      console.log(`[Buffer] ⏰ Max wait exceeded (${timeSinceFirst}ms), forcing immediate process`);
       return { 
         shouldProcess: true, 
         bufferId: existingBuffer.id, 
@@ -569,11 +615,11 @@ async function addToMessageBuffer(
       };
     }
     
-    console.log(`[Buffer] Added to existing buffer, total: ${updatedMessages.length}, waiting...`);
+    // Don't process yet - wait for more messages
     return { shouldProcess: false };
   } else {
-    // Create new buffer
-    const { data: newBuffer } = await supabase
+    // Create NEW buffer for this conversation
+    const { data: newBuffer, error: insertError } = await supabase
       .from("ai_message_buffer")
       .insert({
         page_id: pageId,
@@ -581,16 +627,22 @@ async function addToMessageBuffer(
         messages: [messageData],
         first_message_at: now.toISOString(),
         last_message_at: now.toISOString(),
+        is_processed: false,
       })
       .select()
       .single();
     
-    console.log(`[Buffer] Created new buffer: ${newBuffer?.id}`);
+    if (insertError) {
+      console.error(`[Buffer] Failed to create buffer:`, insertError.message);
+      return { shouldProcess: false };
+    }
+    
+    console.log(`[Buffer] 🆕 Created new buffer: ${newBuffer?.id} for sender ${senderId}`);
     return { shouldProcess: false };
   }
 }
 
-// Check buffer after delay and process if no new messages
+// Check buffer after delay and process if no new messages came
 async function checkAndProcessBuffer(
   supabase: any,
   pageId: string,
@@ -599,17 +651,40 @@ async function checkAndProcessBuffer(
   account: any,
   pageMemory: any
 ): Promise<void> {
-  // Wait for the batch delay
+  // Wait for the batch delay (4 seconds)
+  console.log(`[Buffer] ⏳ Waiting ${MESSAGE_BATCH_DELAY_MS}ms for more messages from ${senderId}...`);
   await new Promise(resolve => setTimeout(resolve, MESSAGE_BATCH_DELAY_MS));
   
-  // CRITICAL: Use atomic update to claim the buffer (prevents duplicate processing)
-  // Only one process can successfully claim is_processed = false -> true
-  const { data: claimedBuffer, error: claimError } = await supabase
+  // Re-check the buffer - has a new message arrived during our wait?
+  const { data: currentBuffer } = await supabase
     .from("ai_message_buffer")
-    .update({ is_processed: true })
+    .select("*")
     .eq("page_id", pageId)
     .eq("sender_id", senderId)
     .eq("is_processed", false)
+    .maybeSingle();
+  
+  if (!currentBuffer) {
+    console.log("[Buffer] No unprocessed buffer found (already processed or none exists)");
+    return;
+  }
+  
+  const lastMessageAt = new Date(currentBuffer.last_message_at);
+  const timeSinceLast = Date.now() - lastMessageAt.getTime();
+  
+  // If a new message arrived during our wait, don't process yet
+  // Let the newer message's checkAndProcessBuffer handle it
+  if (timeSinceLast < MESSAGE_BATCH_DELAY_MS - 1000) {
+    console.log(`[Buffer] 🔄 New message arrived ${timeSinceLast}ms ago, letting that trigger handle it`);
+    return;
+  }
+  
+  // CRITICAL: Atomic claim - only ONE instance can successfully claim this buffer
+  const { data: claimedBuffer, error: claimError } = await supabase
+    .from("ai_message_buffer")
+    .update({ is_processed: true })
+    .eq("id", currentBuffer.id)
+    .eq("is_processed", false)  // Only update if still false
     .select("*")
     .maybeSingle();
   
@@ -619,24 +694,11 @@ async function checkAndProcessBuffer(
   }
   
   if (!claimedBuffer) {
-    console.log("[Buffer] Buffer already claimed/processed by another instance, skipping");
+    console.log("[Buffer] ⛔ Buffer already claimed by another instance");
     return;
   }
   
-  const lastMessageAt = new Date(claimedBuffer.last_message_at);
-  const timeSinceLast = Date.now() - lastMessageAt.getTime();
-  
-  // If new message arrived very recently, unmark and let that trigger handle it
-  if (timeSinceLast < MESSAGE_BATCH_DELAY_MS - 500) {
-    console.log(`[Buffer] Recent message arrived (${timeSinceLast}ms ago), releasing buffer`);
-    await supabase
-      .from("ai_message_buffer")
-      .update({ is_processed: false })
-      .eq("id", claimedBuffer.id);
-    return;
-  }
-  
-  console.log(`[Buffer] Successfully claimed buffer ${claimedBuffer.id}, processing...`);
+  console.log(`[Buffer] ✅ Successfully claimed buffer ${claimedBuffer.id} with ${claimedBuffer.messages?.length || 0} messages`);
   
   // Process all buffered messages together
   await processBufferedMessages(
@@ -862,21 +924,36 @@ async function processMessagingEvent(supabase: any, pageId: string, event: any) 
     
     const bufferResult = await addToMessageBuffer(supabase, pageId, senderId, messageData);
     
+    // If this is a duplicate (Facebook retry), ignore completely
+    if (bufferResult.isDuplicate) {
+      console.log(`[Webhook] ⛔ Ignoring duplicate message, returning early`);
+      return;
+    }
+    
     if (bufferResult.shouldProcess && bufferResult.allMessages) {
-      // Max wait exceeded, process immediately
-      await processBufferedMessages(
-        supabase,
-        pageId,
-        senderId,
-        bufferResult.allMessages,
-        decryptedToken,
-        account,
-        pageMemory
-      );
+      // Max wait exceeded, process immediately with atomic claim
+      const { data: claimedBuffer } = await supabase
+        .from("ai_message_buffer")
+        .update({ is_processed: true })
+        .eq("id", bufferResult.bufferId)
+        .eq("is_processed", false)
+        .select("*")
+        .maybeSingle();
+      
+      if (claimedBuffer) {
+        await processBufferedMessages(
+          supabase,
+          pageId,
+          senderId,
+          claimedBuffer.messages,
+          decryptedToken,
+          account,
+          pageMemory
+        );
+      }
     } else {
-      // Schedule delayed check - we MUST await this to ensure message is sent before function terminates
-      // Using a shorter delay and awaiting to prevent edge function shutdown before send completes
-      console.log(`[Buffer] Scheduling delayed processing for ${senderId}`);
+      // Schedule delayed check - AWAIT to ensure processing completes before function terminates
+      console.log(`[Buffer] ⏳ Scheduling delayed processing for ${senderId}`);
       await checkAndProcessBuffer(supabase, pageId, senderId, decryptedToken, account, pageMemory);
     }
   }
