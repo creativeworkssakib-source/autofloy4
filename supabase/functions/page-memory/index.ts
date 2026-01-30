@@ -260,6 +260,9 @@ serve(async (req) => {
         });
       }
 
+      // Log automation settings being saved
+      console.log("[page-memory] Saving automation_settings:", JSON.stringify(automation_settings));
+
       // Upsert page memory with AI behavior configuration
       const { data: memory, error } = await supabase
         .from("page_memory")
@@ -285,6 +288,8 @@ serve(async (req) => {
         })
         .select()
         .single();
+      
+      console.log("[page-memory] Saved successfully. automation_settings in DB:", JSON.stringify(memory?.automation_settings));
 
       if (error) {
         console.error("Upsert page memory error:", error);
