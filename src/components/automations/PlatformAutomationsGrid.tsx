@@ -120,9 +120,10 @@ const PlatformAutomationsGrid = ({
       const isAvailable = !config.is_coming_soon && config.is_active;
       
       // Only show stats for Facebook (connected platform)
+      // Use connectedPages instead of activeAutomations since AI agent works via webhooks
       const platformStats = config.id === 'facebook' && isFacebookConnected && stats ? {
         repliesToday: stats.todayMessagesHandled || 0,
-        automationsEnabled: stats.activeAutomations || 0,
+        automationsEnabled: stats.connectedPages || 0,
         totalAutomations: stats.messagesHandled || 0,
       } : {
         repliesToday: 0,
