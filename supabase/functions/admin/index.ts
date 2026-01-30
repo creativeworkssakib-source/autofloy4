@@ -728,7 +728,10 @@ Deno.serve(async (req) => {
 
       const updateData: Record<string, unknown> = {};
       if (display_name !== undefined) updateData.display_name = display_name;
-      if (status !== undefined) updateData.status = status;
+      if (status !== undefined) {
+        updateData.status = status;
+        updateData.is_suspended = status === "suspended"; // Sync is_suspended flag
+      }
       if (trial_end_date !== undefined) updateData.trial_end_date = trial_end_date;
       if (is_trial_active !== undefined) updateData.is_trial_active = is_trial_active;
       if (subscription_type !== undefined) updateData.subscription_type = subscription_type;
@@ -1242,9 +1245,13 @@ Deno.serve(async (req) => {
         .eq("id", userId)
         .single();
 
+      // Update both status and is_suspended for compatibility
       const { error } = await supabase
         .from("users")
-        .update({ status })
+        .update({ 
+          status,
+          is_suspended: status === "suspended"
+        })
         .eq("id", userId);
 
       if (error) throw error;
