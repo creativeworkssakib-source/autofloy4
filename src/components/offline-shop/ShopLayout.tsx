@@ -72,28 +72,39 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
   const { isTrialUser, isOfflineTrialExpired } = useOfflineShopTrial();
   const { isExpired: isOfflineExpired } = useOfflineGracePeriod();
   const { currentShop } = useShop();
-  const { hasOfflineAccess, canAccessOfflineShop, hasActiveSubscription, isTrialExpired, planId } = usePlanLimits();
+  const { hasOfflineAccess, hasActiveSubscription, isTrialExpired, planId } = usePlanLimits();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showOfflineExpiredModal, setShowOfflineExpiredModal] = useState(false);
 
   // Check if offline shop is disabled by admin
   const isOfflineShopDisabled = settings.offline_shop_enabled === false;
   
-  // Check if user has NO active subscription at all
-  const hasNoSubscription = !hasActiveSubscription && planId === "none";
-  const hasExpiredSubscription = isTrialExpired || (!hasActiveSubscription && planId !== "none" && planId !== "trial");
+  // Check if account is suspended
+  const isSuspended = user?.is_suspended === true;
   
   // Determine which overlay to show for no subscription
-  const getNoSubType = (): "no_plan" | "trial_expired" | "subscription_expired" | null => {
+  const getNoSubType = (): "no_plan" | "trial_expired" | "subscription_expired" | "suspended" | null => {
+    // Priority 0: Suspended account - block everything
+    if (isSuspended) return "suspended";
+    
+    // Priority 1: Trial expired
     if (isTrialExpired) return "trial_expired";
-    if (hasNoSubscription) return "no_plan";
-    if (hasExpiredSubscription) return "subscription_expired";
+    
+    // Priority 2: No active subscription at all
+    if (!hasActiveSubscription) {
+      // Check if it was a paid plan that expired
+      if (planId !== "none" && planId !== "trial") {
+        return "subscription_expired";
+      }
+      // No plan at all
+      return "no_plan";
+    }
+    
     return null;
   };
   const noSubType = getNoSubType();
   
   // Check if user has offline access based on subscription_type
-  const offlineAccessCheck = canAccessOfflineShop();
   const noOfflineAccess = !hasOfflineAccess;
 
   // Initialize app update service and offline sync
@@ -333,7 +344,9 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
               <FeatureDisabledOverlay 
                 featureName={language === "bn" ? "অফলাইন শপ সিস্টেম" : "Offline Shop System"} 
                 featureType="offline"
-                customMessage={offlineAccessCheck.message}
+                customMessage={language === "bn" 
+                  ? "আপনার শুধু Online Business subscription আছে। Offline Shop ব্যবহার করতে Offline plan কিনুন।"
+                  : "You have an Online Business subscription only. Please purchase an Offline plan to use Offline Shop."}
               />
             )}
             

@@ -68,7 +68,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const { syncEnabled } = useSyncSettings();
   const { t, language } = useLanguage();
   const { isDigitalMode } = useProductType();
-  const { hasOnlineAccess, canRunAutomation, hasActiveSubscription, isTrialExpired, planId } = usePlanLimits();
+  const { hasOnlineAccess, hasActiveSubscription, isTrialExpired, planId } = usePlanLimits();
   const {
     notifications,
     unreadCount,
@@ -140,34 +140,43 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   // Check if online business is disabled by admin
   const isOnlineBusinessDisabled = settings.online_business_enabled === false;
   
-  // Check if user has NO active subscription at all (no plan, expired trial, expired subscription)
-  const hasNoSubscription = !hasActiveSubscription && planId === "none";
-  const hasExpiredSubscription = isTrialExpired || (!hasActiveSubscription && planId !== "none" && planId !== "trial");
+  // Check if account is suspended
+  const isSuspended = user?.is_suspended === true;
+  
+  // Routes that should still work even without active subscription (settings, sync, pricing navigation)
+  const allowedRoutesWhenNoSub = ['/dashboard/settings'];
+  const isAllowedRoute = allowedRoutesWhenNoSub.some(route => location.pathname.startsWith(route));
   
   // Determine which overlay to show for no subscription
-  const getNoSubType = (): "no_plan" | "trial_expired" | "subscription_expired" | null => {
+  const getNoSubType = (): "no_plan" | "trial_expired" | "subscription_expired" | "suspended" | null => {
+    // Priority 0: Suspended account - block everything
+    if (isSuspended) return "suspended";
+    
+    // Priority 1: Trial expired
     if (isTrialExpired) return "trial_expired";
-    if (hasNoSubscription) return "no_plan";
-    if (hasExpiredSubscription) return "subscription_expired";
+    
+    // Priority 2: No active subscription at all
+    if (!hasActiveSubscription) {
+      // Check if it was a paid plan that expired
+      if (planId !== "none" && planId !== "trial") {
+        return "subscription_expired";
+      }
+      // No plan at all
+      return "no_plan";
+    }
+    
     return null;
   };
   const noSubType = getNoSubType();
   
-  // Check if user has online access based on subscription_type
-  const onlineAccessCheck = canRunAutomation(0); // Check automation access as proxy for online access
-  const noOnlineAccess = !hasOnlineAccess;
-  
-  // Routes that should still work when online business is disabled (shared with offline shop)
-  const allowedRoutesWhenOnlineDisabled = ['/dashboard/sync', '/dashboard/settings'];
-  const isAllowedRoute = allowedRoutesWhenOnlineDisabled.some(route => location.pathname.startsWith(route));
-  
-  // First priority: No subscription at all
+  // First priority: Suspended or no active subscription - block access (except settings)
   const shouldShowNoSubscriptionOverlay = noSubType !== null && !isAllowedRoute;
   
-  // Second priority: Show overlay for users without online access (except for sync/settings pages)
+  // Second priority: Show overlay for users without online access (offline-only subscription)
+  const noOnlineAccess = !hasOnlineAccess;
   const shouldShowNoAccessOverlay = !shouldShowNoSubscriptionOverlay && noOnlineAccess && !isAllowedRoute;
   
-  // Third priority: Only show admin-disabled overlay for online business features, not for shared features like sync/settings
+  // Third priority: Only show admin-disabled overlay for online business features
   const shouldShowDisabledOverlay = !shouldShowNoSubscriptionOverlay && !noOnlineAccess && isOnlineBusinessDisabled && !isAllowedRoute;
 
   return (
