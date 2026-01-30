@@ -278,75 +278,87 @@ const AdminUsers = () => {
 
   return (
     <AdminLayout>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between gap-4">
-          <div>
-            <h2 className="text-2xl font-bold">User Management</h2>
-            <p className="text-muted-foreground">
-              {data?.total || 0} total users
-            </p>
+      <div className="space-y-4 sm:space-y-6">
+        {/* Header - Mobile optimized */}
+        <div className="flex flex-col gap-3 sm:gap-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl sm:text-2xl font-bold">User Management</h2>
+              <p className="text-sm text-muted-foreground">
+                {data?.total || 0} total users
+              </p>
+            </div>
+            <Button onClick={() => setCreateModalOpen(true)} size="sm" className="sm:hidden">
+              <Plus className="w-4 h-4" />
+            </Button>
           </div>
-          <div className="flex gap-3">
-            <div className="relative w-full sm:w-80">
+          <div className="flex gap-2 sm:gap-3">
+            <div className="relative flex-1 sm:w-80 sm:flex-none">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search by email or name..."
+                placeholder="Search..."
                 value={search}
                 onChange={(e) => handleSearchChange(e.target.value)}
-                className="pl-10"
+                className="pl-9 h-9 text-sm"
               />
             </div>
-            <Button onClick={() => setCreateModalOpen(true)}>
+            <Button onClick={() => setCreateModalOpen(true)} className="hidden sm:flex">
               <Plus className="w-4 h-4 mr-2" />
               Add User
             </Button>
           </div>
         </div>
 
-        {/* Users Table */}
+        {/* Users Table - Mobile responsive */}
         <div className="rounded-xl border border-border bg-card overflow-hidden">
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>User</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Plan</TableHead>
-                  <TableHead>Access</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="min-w-[180px]">User</TableHead>
+                    <TableHead className="hidden sm:table-cell">Role</TableHead>
+                    <TableHead className="min-w-[80px]">Status</TableHead>
+                    <TableHead className="hidden md:table-cell">Plan</TableHead>
+                    <TableHead className="hidden lg:table-cell">Access</TableHead>
+                    <TableHead className="hidden xl:table-cell">Created</TableHead>
+                    <TableHead className="text-right min-w-[80px]">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
               <TableBody>
                 {data?.users.map((user: AdminUser) => (
                   <TableRow key={user.id}>
                     <TableCell>
-                      <div>
-                        <div className="font-medium">{user.display_name || "Unnamed"}</div>
-                        <div className="text-sm text-muted-foreground">{user.email}</div>
+                      <div className="min-w-0">
+                        <div className="font-medium text-sm truncate">{user.display_name || "Unnamed"}</div>
+                        <div className="text-xs text-muted-foreground truncate max-w-[150px] sm:max-w-none">{user.email}</div>
+                        {/* Mobile-only: show badges inline */}
+                        <div className="flex flex-wrap gap-1 mt-1 sm:hidden">
+                          {getRoleBadge(user.role)}
+                          {getPlanBadge(user.subscription_plan)}
+                        </div>
                       </div>
                     </TableCell>
-                    <TableCell>{getRoleBadge(user.role)}</TableCell>
+                    <TableCell className="hidden sm:table-cell">{getRoleBadge(user.role)}</TableCell>
                     <TableCell>{getStatusBadge(user.status)}</TableCell>
-                    <TableCell>{getPlanBadge(user.subscription_plan)}</TableCell>
-                    <TableCell>{getAccessBadge(user.subscription_type)}</TableCell>
-                    <TableCell>
+                    <TableCell className="hidden md:table-cell">{getPlanBadge(user.subscription_plan)}</TableCell>
+                    <TableCell className="hidden lg:table-cell">{getAccessBadge(user.subscription_type)}</TableCell>
+                    <TableCell className="hidden xl:table-cell text-sm">
                       {format(new Date(user.created_at), "MMM d, yyyy")}
                     </TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm">
-                            Actions
+                          <Button variant="ghost" size="sm" className="h-8 px-2 text-xs">
+                            <span className="hidden sm:inline">Actions</span>
+                            <span className="sm:hidden">•••</span>
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
+                        <DropdownMenuContent align="end" className="w-48">
                           <DropdownMenuItem asChild>
                             <Link to={`/admin/users/${user.id}`} className="flex items-center gap-2">
                               <Eye className="w-4 h-4" />
@@ -418,6 +430,7 @@ const AdminUsers = () => {
                 )}
               </TableBody>
             </Table>
+            </div>
           )}
         </div>
 
@@ -451,14 +464,14 @@ const AdminUsers = () => {
         )}
       </div>
 
-      {/* Create User Modal */}
+      {/* Create User Modal - Mobile responsive */}
       <Dialog open={createModalOpen} onOpenChange={setCreateModalOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto mx-4 sm:mx-auto">
           <DialogHeader>
-            <DialogTitle>Create New User</DialogTitle>
-            <DialogDescription>Add a new user to the platform.</DialogDescription>
+            <DialogTitle className="text-lg">Create New User</DialogTitle>
+            <DialogDescription className="text-sm">Add a new user to the platform.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <div className="space-y-4 py-2 sm:py-4">
             <div className="space-y-2">
               <Label htmlFor="create-email">Email *</Label>
               <Input
@@ -488,9 +501,9 @@ const AdminUsers = () => {
                 placeholder="John Doe"
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div className="space-y-2">
-                <Label>Role</Label>
+                <Label className="text-sm">Role</Label>
                 <Select
                   value={createForm.role}
                   onValueChange={(v) => setCreateForm({ ...createForm, role: v as "admin" | "user" })}
@@ -505,7 +518,7 @@ const AdminUsers = () => {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Status</Label>
+                <Label className="text-sm">Status</Label>
                 <Select
                   value={createForm.status}
                   onValueChange={(v) => setCreateForm({ ...createForm, status: v as "active" | "suspended" })}
@@ -520,9 +533,9 @@ const AdminUsers = () => {
                 </Select>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div className="space-y-2">
-                <Label>Subscription Plan</Label>
+                <Label className="text-sm">Subscription Plan</Label>
                 <Select
                   value={createForm.subscription_plan}
                   onValueChange={(v) => setCreateForm({ ...createForm, subscription_plan: v })}
@@ -541,7 +554,7 @@ const AdminUsers = () => {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Access Type</Label>
+                <Label className="text-sm">Access Type</Label>
                 <Select
                   value={createForm.subscription_type || "online"}
                   onValueChange={(v) => setCreateForm({ ...createForm, subscription_type: v as 'online' | 'offline' | 'both' })}
@@ -558,7 +571,7 @@ const AdminUsers = () => {
               </div>
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="flex-col-reverse sm:flex-row gap-2 sm:gap-0">
             <Button variant="outline" onClick={() => setCreateModalOpen(false)}>
               Cancel
             </Button>
@@ -576,19 +589,19 @@ const AdminUsers = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Edit User Modal */}
+      {/* Edit User Modal - Mobile responsive */}
       <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto mx-4 sm:mx-auto">
           <DialogHeader>
-            <DialogTitle>Edit User</DialogTitle>
-            <DialogDescription>
-              Update user information for {selectedUser?.email}
+            <DialogTitle className="text-lg">Edit User</DialogTitle>
+            <DialogDescription className="text-sm truncate max-w-[280px] sm:max-w-none">
+              Update: {selectedUser?.email}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <div className="space-y-3 sm:space-y-4 py-2 sm:py-4">
             {/* Account Info Section */}
-            <div className="space-y-4">
-              <h4 className="text-sm font-medium text-muted-foreground">Account Information</h4>
+            <div className="space-y-3 sm:space-y-4">
+              <h4 className="text-xs sm:text-sm font-medium text-muted-foreground uppercase tracking-wide">Account Information</h4>
               <div className="space-y-2">
                 <Label htmlFor="edit-email">Email</Label>
                 <Input
@@ -611,9 +624,9 @@ const AdminUsers = () => {
             </div>
 
             {/* Status & Plan Section */}
-            <div className="space-y-4 pt-2 border-t border-border">
-              <h4 className="text-sm font-medium text-muted-foreground pt-2">Status & Subscription</h4>
-              <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-3 sm:space-y-4 pt-2 border-t border-border">
+              <h4 className="text-xs sm:text-sm font-medium text-muted-foreground pt-2 uppercase tracking-wide">Status & Subscription</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div className="space-y-2">
                   <Label>Status</Label>
                   <Select
@@ -705,10 +718,10 @@ const AdminUsers = () => {
             </div>
 
             {/* Access Control Section */}
-            <div className="space-y-4 pt-2 border-t border-border">
-              <h4 className="text-sm font-medium text-muted-foreground pt-2">Access Control</h4>
+            <div className="space-y-3 sm:space-y-4 pt-2 border-t border-border">
+              <h4 className="text-xs sm:text-sm font-medium text-muted-foreground pt-2 uppercase tracking-wide">Access Control</h4>
               <div className="space-y-2">
-                <Label>Feature Access</Label>
+                <Label className="text-sm">Feature Access</Label>
                 <Select
                   value={editForm.subscription_type || "online"}
                   onValueChange={(v) => setEditForm({ ...editForm, subscription_type: v as 'online' | 'offline' | 'both' })}
@@ -729,9 +742,9 @@ const AdminUsers = () => {
             </div>
 
             {/* Password Reset Section */}
-            <div className="space-y-4 pt-2 border-t border-border">
-              <h4 className="text-sm font-medium text-muted-foreground pt-2">Reset Password</h4>
-              <div className="flex gap-2">
+            <div className="space-y-3 sm:space-y-4 pt-2 border-t border-border">
+              <h4 className="text-xs sm:text-sm font-medium text-muted-foreground pt-2 uppercase tracking-wide">Reset Password</h4>
+              <div className="flex flex-col sm:flex-row gap-2">
                 <Input
                   type="password"
                   placeholder="Enter new password (min 8 chars)"
@@ -762,7 +775,7 @@ const AdminUsers = () => {
               </p>
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="flex-col-reverse sm:flex-row gap-2 sm:gap-0">
             <Button variant="outline" onClick={() => setEditModalOpen(false)}>
               Cancel
             </Button>
