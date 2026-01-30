@@ -291,7 +291,7 @@ serve(async (req) => {
             const emailHtml = getWelcomeEmailTemplate(userName, googleUser.email);
 
             const { error: emailError } = await resend.emails.send({
-              from: "AutoFloy <noreply@fileforge.site>",
+              from: "AutoFloy <noreply@autofloy.online>",
               to: [googleUser.email],
               subject: "🎉 Welcome to AutoFloy - Your Account is Ready!",
               html: emailHtml,

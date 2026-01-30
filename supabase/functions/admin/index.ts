@@ -78,7 +78,7 @@ async function sendAdminNotification(
 
   try {
     const result = await resend.emails.send({
-      from: `${companyName} <noreply@autofloy.com>`,
+      from: `${companyName} <noreply@autofloy.online>`,
       to: [userEmail],
       subject,
       html,
@@ -833,7 +833,7 @@ Deno.serve(async (req) => {
               const emailHtml = getPlanExpiredEmailTemplate(userName, previousPlanName, companyName);
               
               await resend.emails.send({
-                from: `${companyName} <noreply@autofloy.com>`,
+                from: `${companyName} <noreply@autofloy.online>`,
                 to: [currentUser.email],
                 subject: `⏰ Your ${previousPlanName} Plan Has Expired - ${companyName}`,
                 html: emailHtml,
@@ -852,7 +852,7 @@ Deno.serve(async (req) => {
               const emailHtml = getTrialAssignedEmailTemplate(userName, trialDays, endDate, companyName);
               
               await resend.emails.send({
-                from: `${companyName} <noreply@autofloy.com>`,
+                from: `${companyName} <noreply@autofloy.online>`,
                 to: [currentUser.email],
                 subject: `🎁 Free Trial Activated - ${companyName}`,
                 html: emailHtml,
@@ -878,7 +878,7 @@ Deno.serve(async (req) => {
               );
 
               await resend.emails.send({
-                from: `${companyName} <noreply@autofloy.com>`,
+                from: `${companyName} <noreply@autofloy.online>`,
                 to: [currentUser.email],
                 subject: `🎉 Your ${newPlanName} Plan is Now Active - ${companyName}`,
                 html: emailHtml,
@@ -929,7 +929,7 @@ Deno.serve(async (req) => {
             const emailHtml = getAccountUpdateEmailTemplate(userName, otherChanges, companyName);
             
             await resend.emails.send({
-              from: `${companyName} <noreply@autofloy.com>`,
+              from: `${companyName} <noreply@autofloy.online>`,
               to: [currentUser.email],
               subject: `📝 Your Account Has Been Updated - ${companyName}`,
               html: emailHtml,
@@ -2367,7 +2367,7 @@ Deno.serve(async (req) => {
           
           try {
             await resend.emails.send({
-              from: `${companyName} <noreply@autofloy.com>`,
+              from: `${companyName} <noreply@autofloy.online>`,
               to: [userData.email],
               subject: `🎉 ${request.plan_name} Plan Activated!`,
               html,
