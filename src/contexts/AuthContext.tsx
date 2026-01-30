@@ -15,6 +15,7 @@ interface User {
   subscriptionStartedAt?: string;
   subscriptionEndsAt?: string;
   avatarUrl?: string;
+  is_suspended?: boolean;
   createdAt: string;
 }
 
@@ -48,6 +49,7 @@ const mapServiceUser = (serviceUser: ServiceUser): User => ({
   subscriptionStartedAt: serviceUser.subscription_started_at || undefined,
   subscriptionEndsAt: serviceUser.subscription_ends_at || undefined,
   avatarUrl: serviceUser.avatar_url || undefined,
+  is_suspended: serviceUser.is_suspended || false,
   createdAt: new Date().toISOString(),
 });
 

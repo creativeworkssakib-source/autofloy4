@@ -4764,6 +4764,7 @@ export type Database = {
           has_used_trial: boolean
           id: string
           is_active: boolean | null
+          is_suspended: boolean | null
           is_trial_active: boolean | null
           password_hash: string
           phone: string | null
@@ -4790,6 +4791,7 @@ export type Database = {
           has_used_trial?: boolean
           id?: string
           is_active?: boolean | null
+          is_suspended?: boolean | null
           is_trial_active?: boolean | null
           password_hash: string
           phone?: string | null
@@ -4816,6 +4818,7 @@ export type Database = {
           has_used_trial?: boolean
           id?: string
           is_active?: boolean | null
+          is_suspended?: boolean | null
           is_trial_active?: boolean | null
           password_hash?: string
           phone?: string | null
