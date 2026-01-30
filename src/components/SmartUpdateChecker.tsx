@@ -68,27 +68,29 @@ export const SmartUpdateChecker = () => {
     }
   }, []);
 
-  // Perform automatic update silently in background
+  // Perform automatic update silently in background - NO VISIBLE RELOAD
   const performAutoUpdate = useCallback(async () => {
     if (isUpdatingRef.current) return;
     isUpdatingRef.current = true;
     
-    console.log('[SmartUpdate] Starting silent background update...');
+    console.log('[SmartUpdate] Starting silent background update (no reload)...');
     
     try {
       localStorage.setItem(LAST_AUTO_UPDATE_KEY, Date.now().toString());
       localStorage.removeItem('autofloy_update_available');
       
-      // Clear ALL caches silently
+      // Clear ALL caches silently in background
       if ('caches' in window) {
         const cacheNames = await caches.keys();
         await Promise.all(cacheNames.map(name => caches.delete(name)));
+        console.log('[SmartUpdate] Caches cleared silently');
       }
       
       // Unregister ALL service workers silently
       if ('serviceWorker' in navigator) {
         const registrations = await navigator.serviceWorker.getRegistrations();
         await Promise.all(registrations.map(reg => reg.unregister()));
+        console.log('[SmartUpdate] Service workers unregistered silently');
       }
       
       // Clear version storage
@@ -96,13 +98,25 @@ export const SmartUpdateChecker = () => {
       localStorage.removeItem('autofloy_build_hash');
       localStorage.removeItem('autofloy_cache_version');
       
-      await new Promise(resolve => setTimeout(resolve, 300));
+      // Clear React Query cache to force fresh data fetch
+      localStorage.removeItem('dashboard_cache');
+      localStorage.removeItem('automations_cache');
+      localStorage.removeItem('notifications_cache');
       
-      window.location.href = window.location.pathname + '?_refresh=' + Date.now();
+      // Update the stored version without reloading
+      localStorage.setItem(VERSION_KEY, APP_VERSION);
+      
+      console.log('[SmartUpdate] Background update complete - no reload needed');
+      
+      // Dispatch custom event so React Query hooks can refetch
+      window.dispatchEvent(new CustomEvent('app-updated', { 
+        detail: { version: APP_VERSION } 
+      }));
+      
     } catch (error) {
-      console.error('[SmartUpdate] Update failed:', error);
+      console.error('[SmartUpdate] Background update failed:', error);
+    } finally {
       isUpdatingRef.current = false;
-      window.location.reload();
     }
   }, []);
 
