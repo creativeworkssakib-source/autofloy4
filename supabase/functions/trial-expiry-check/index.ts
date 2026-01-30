@@ -96,7 +96,7 @@ serve(async (req) => {
 
         try {
           const { error: emailError } = await resend.emails.send({
-            from: "AutoFloy <noreply@fileforge.site>",
+            from: "AutoFloy <noreply@autofloy.online>",
             to: [user.email],
             subject: `⏰ Your AutoFloy Trial Expires in ${hoursRemaining} Hours!`,
             html: emailHtml,
@@ -140,7 +140,7 @@ serve(async (req) => {
         try {
           const emailHtml = getSubscriptionExpiredEmailTemplate(userName);
           await resend.emails.send({
-            from: "AutoFloy <noreply@fileforge.site>",
+            from: "AutoFloy <noreply@autofloy.online>",
             to: [user.email],
             subject: "😢 Your AutoFloy Trial Has Expired",
             html: emailHtml,
@@ -188,7 +188,7 @@ serve(async (req) => {
         try {
           const emailHtml = getPlanExpiredEmailTemplate(userName, previousPlan);
           await resend.emails.send({
-            from: "AutoFloy <noreply@fileforge.site>",
+            from: "AutoFloy <noreply@autofloy.online>",
             to: [user.email],
             subject: `⏰ Your ${previousPlan} Plan Has Expired - AutoFloy`,
             html: emailHtml,

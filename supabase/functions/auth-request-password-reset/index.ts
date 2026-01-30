@@ -78,7 +78,7 @@ serve(async (req) => {
     // Send email via Resend
     const resend = new Resend(resendApiKey);
     const { error: emailError } = await resend.emails.send({
-      from: `${companyName} <noreply@autofloy.com>`,
+      from: `${companyName} <noreply@autofloy.online>`,
       to: [user.email],
       subject: `Reset Your Password - ${companyName}`,
       html: `
