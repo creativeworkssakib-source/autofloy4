@@ -1847,24 +1847,52 @@ bargainingLevel === "high" ?
 
 ## FINAL RULES:
 1. Response ছোট রাখুন (১-২ বাক্য)
-2. Emoji কম/না দিন
+2. Emoji কম/না দিন (সর্বোচ্চ ১টা)
 3. Robot এর মতো formal বাংলা না
 4. Real বাংলাদেশি friend এর মতো কথা বলুন
 5. অতিরিক্ত "ধন্যবাদ", "অনুগ্রহ করে" বলবেন না
 6. গালি দিলে শান্ত থাকুন: "ঠিক আছে ভাই"
 7. **Customer ছাড়বেন না - sell করেই ছাড়বেন!**
-8. **⚠️ CONSECUTIVE MESSAGE RULE (VERY IMPORTANT):**
-   - একই greeting পরপর ২ বার বলবেন না!
-   - যদি আগের message এ "জি ভাই" বলে থাকেন, পরের message এ সরাসরি কথায় ঢুকুন
-   - আগের message এ name দিয়ে সম্বোধন করলে, পরের message এ নাম না বলে সরাসরি বলুন
-   - পরপর দুইটা message এ একই style শুরু করা unprofessional
-   - উদাহরণ যা করবেন না:
-     * Msg1: "জি রহিম ভাই, দাম ৳১৫৫০"
-     * Msg2: "জি ভাই বলেন, কিছু বলবেন?" ❌ (আবার জি ভাই হয়ে গেল)
-   - উদাহরণ যা করবেন:
-     * Msg1: "জি রহিম ভাই, দাম ৳১৫৫০"
-     * Msg2: "কি ভাবলেন? নিবেন?" ✅ (সরাসরি কথায় ঢুকলেন)
-   - আগের message দেখে vary করুন - monotonous হবেন না
+
+## 🚫 NAME USAGE RULES (CRITICAL - মানুষ এত নাম বলে না!):
+- **প্রতি conversation এ সর্বোচ্চ ২-৩ বার নাম ব্যবহার করবেন**
+- একটানা messages এ বার বার নাম বললে FAKE/BOT মনে হয়
+- নাম ব্যবহার করার সঠিক সময়:
+  * প্রথম greeting এ: "আসসালামু আলাইকুম রহিম ভাই"
+  * Order confirm করার সময়: "রহিম ভাই, তাহলে confirm?"
+  * ফিরে আসলে: "এই রহিম ভাই, ফিরে এলেন!"
+- নাম ব্যবহার করবেন না যখন:
+  * প্রতিটা message এ ❌
+  * পরপর দুইটা message এ ❌
+  * Price বলার সময় (শুধু দাম বলুন)
+  * Simple answers এ ("হ্যাঁ আছে", "না নাই")
+- **একজন real মানুষ প্রতি message এ friend এর নাম ধরে না - আপনিও ধরবেন না!**
+
+## 🤖 EMOJI/STICKER/LIKE REACTION এ কিভাবে REPLY করবেন (VERY IMPORTANT):
+- Customer শুধু 👍 বা like দিলে: **DESCRIBE করবেন না!**
+  * ❌ WRONG: "এটি একটি নীল রঙের থাম্বস আপ চিহ্ন। আমি আপনাকে কীভাবে সাহায্য করতে পারি?"
+  * ❌ WRONG: "আপনি একটি like দিয়েছেন। ধন্যবাদ!"
+  * ✅ RIGHT: "👍" (শুধু react back)
+  * ✅ RIGHT: "ওকে 😊"
+  * ✅ RIGHT: কোনো reply না দেওয়া (silence is okay!)
+- Customer sticker দিলে: **DESCRIBE করবেন না, SHORT reply দিন**
+  * ❌ WRONG: "এটি একটি হাসির স্টিকার। আপনি কি খুশি আছেন?"
+  * ✅ RIGHT: "😊" বা "হাহা" বা কোনো reply না
+- **মানুষ like/sticker এ লম্বা reply দেয় না - আপনিও দেবেন না!**
+- Context বুঝুন: Like = acknowledgment, কিছু জানতে চাওয়া না
+
+## ⚠️ CONSECUTIVE MESSAGE RULE (VERY IMPORTANT):
+- একই greeting পরপর ২ বার বলবেন না!
+- যদি আগের message এ "জি ভাই" বলে থাকেন, পরের message এ সরাসরি কথায় ঢুকুন
+- আগের message এ name দিয়ে সম্বোধন করলে, পরের message এ নাম না বলে সরাসরি বলুন
+- পরপর দুইটা message এ একই style শুরু করা unprofessional
+- উদাহরণ যা করবেন না:
+  * Msg1: "জি রহিম ভাই, দাম ৳১৫৫০"
+  * Msg2: "জি ভাই বলেন, কিছু বলবেন?" ❌ (আবার জি ভাই হয়ে গেল)
+- উদাহরণ যা করবেন:
+  * Msg1: "জি রহিম ভাই, দাম ৳১৫৫০"
+  * Msg2: "কি ভাবলেন? নিবেন?" ✅ (সরাসরি কথায় ঢুকলেন)
+- আগের message দেখে vary করুন - monotonous হবেন না
 
 ## 📞 CALL & SUPPORT HANDLING - কল/জরুরি সাপোর্ট হ্যান্ডলিং:
 
@@ -3016,48 +3044,87 @@ serve(async (req) => {
         
         // Generate appropriate reply based on message type
         if (messageType === "sticker" || smartAnalysis.isSticker || smartAnalysis.isJustReaction) {
-          // Sticker/emoji in inbox - respond warmly, don't ask about photos
+      // Sticker/emoji/like in inbox - respond naturally like a human
+          // IMPORTANT: A human wouldn't describe what the sticker is - they'd just respond naturally
           const stickerAnalysis = analyzeSticker(undefined, messageText, attachments);
           
           let smartReply = "";
-          if (stickerAnalysis.sentiment === "positive") {
+          
+          // Check if it's just a thumbs up / like reaction
+          const isThumbsUpOnly = /^[\s]*[👍]+[\s]*$/.test(messageText) || 
+            messageText?.toLowerCase().includes("thumbs up") ||
+            (attachments?.some((a: any) => a.type === "like" || a.sticker_id === "like"));
+          
+          if (isThumbsUpOnly) {
+            // Customer just gave a thumbs up / like - this is acknowledgment
+            // A HUMAN would NOT describe it or ask questions - they'd just acknowledge briefly or not reply at all
+            const likeReplies = [
+              "👍", // Just react back
+              "😊", // Simple emoji back
+              "", // Don't reply at all (empty means skip)
+              "জি 👍",
+              "ওকে 😊",
+            ];
+            smartReply = likeReplies[Math.floor(Math.random() * likeReplies.length)];
+            
+            // 40% chance to not reply at all to a simple like - this is more human-like
+            if (Math.random() < 0.4) {
+              smartReply = "";
+            }
+            
+            response.reply = smartReply;
+            response.reactionType = "LIKE";
+            response.skipReply = smartReply === ""; // Skip reply if empty
+            response.smartAnalysis = {
+              type: "acknowledgment_like",
+              reason: "Customer sent thumbs up - acknowledged naturally",
+              sentiment: "positive",
+            };
+            
+          } else if (stickerAnalysis.sentiment === "positive") {
+            // Positive sticker - respond warmly but don't use name every time
             const positiveReplies = [
-              `${senderName ? senderName.split(" ")[0] + ", " : ""}ধন্যবাদ! 😊 আপনাকে কীভাবে সাহায্য করতে পারি?`,
-              `${senderName ? senderName.split(" ")[0] + ", " : ""}আপনার সাথে কথা বলতে পেরে ভালো লাগছে! 💕 কিছু জানতে চাইলে বলুন।`,
-              `ধন্যবাদ! 🙏 কোন প্রোডাক্ট সম্পর্কে জানতে চান?`,
+              `ধন্যবাদ! 😊`,
+              `জি ভাই 😊`,
+              `🙏`,
+              `জি, বলুন`,
             ];
             smartReply = positiveReplies[Math.floor(Math.random() * positiveReplies.length)];
           } else if (stickerAnalysis.sentiment === "negative") {
-            smartReply = `${senderName ? senderName.split(" ")[0] + ", " : ""}কোনো সমস্যা হলে জানাবেন, সাহায্য করার চেষ্টা করব। 🙏`;
+            smartReply = `কোনো সমস্যা হলে জানাবেন 🙏`;
           } else {
-            smartReply = `${senderName ? senderName.split(" ")[0] + ", " : ""}হ্যাঁ, বলুন কীভাবে সাহায্য করতে পারি? 😊`;
+            smartReply = `জি, বলুন 😊`;
           }
           
-          response.reply = smartReply;
-          response.reactionType = stickerAnalysis.reaction;
-          response.smartAnalysis = {
-            type: smartAnalysis.commentType,
-            reason: smartAnalysis.reason,
-            sentiment: smartAnalysis.sentiment,
-          };
+          if (!response.skipReply) {
+            response.reply = smartReply;
+            response.reactionType = stickerAnalysis.reaction;
+            response.smartAnalysis = {
+              type: smartAnalysis.commentType,
+              reason: smartAnalysis.reason,
+              sentiment: smartAnalysis.sentiment,
+            };
+          }
         } else if (messageType === "gif") {
-          // GIF in inbox - respond with matching energy
+          // GIF in inbox - respond naturally, not robotically
           const gifAnalysis = analyzeSticker(undefined, messageText, attachments);
           
           let gifReply = "";
           if (gifAnalysis.sentiment === "positive") {
             const gifReplies = [
-              `হাহা! 😄 আপনার সাথে কথা বলতে মজা লাগছে! কিছু জানতে চান?`,
-              `😊💕 ধন্যবাদ! কীভাবে সাহায্য করতে পারি?`,
-              `🔥 নাইস! কোন প্রোডাক্ট পছন্দ হয়েছে?`,
+              "😄",
+              "🔥",
+              "জি ভাই 😊",
+              "", // Sometimes don't reply - very human
             ];
             gifReply = gifReplies[Math.floor(Math.random() * gifReplies.length)];
           } else {
-            gifReply = `😊 বলুন, কীভাবে সাহায্য করতে পারি?`;
+            gifReply = "😊";
           }
           
           response.reply = gifReply;
           response.reactionType = gifAnalysis.reaction;
+          response.skipReply = gifReply === "";
           response.smartAnalysis = {
             type: "gif",
             reason: gifAnalysis.meaning,
