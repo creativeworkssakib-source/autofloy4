@@ -1162,6 +1162,7 @@ function buildSystemPrompt(
   const tone = toneMap[pageMemory.preferred_tone || "friendly"] || toneMap["friendly"];
   
   // Map language settings - CRITICAL: AI must respond in this language ONLY
+  // Support multiple variations: bengali/bangla, mixed/banglish, auto
   const languageMap: Record<string, { name: string; instruction: string }> = {
     "english": { 
       name: "English Only", 
@@ -1171,7 +1172,15 @@ function buildSystemPrompt(
       name: "বাংলা Only", 
       instruction: "শুধুমাত্র বাংলায় উত্তর দিন। কোনো English word ব্যবহার করবেন না। সব response 100% বাংলায় হতে হবে।"
     },
+    "bengali": { 
+      name: "বাংলা Only", 
+      instruction: "শুধুমাত্র বাংলায় উত্তর দিন। কোনো English word ব্যবহার করবেন না। সব response 100% বাংলায় হতে হবে।"
+    },
     "banglish": { 
+      name: "Banglish (Mixed)", 
+      instruction: "বাংলা+English মিক্স করে বলুন। Like 'Vai eta product ta best, price o reasonable.'"
+    },
+    "mixed": { 
       name: "Banglish (Mixed)", 
       instruction: "বাংলা+English মিক্স করে বলুন। Like 'Vai eta product ta best, price o reasonable.'"
     },
@@ -1180,8 +1189,16 @@ function buildSystemPrompt(
       instruction: "Customer যে ভাষায় message করবে সেই ভাষায় reply করুন। Match their language."
     },
   };
-  const langSetting = languageMap[pageMemory.detected_language || "auto"] || languageMap["auto"];
+  
+  // Normalize language value - handle different variations
+  const detectedLang = pageMemory.detected_language?.toLowerCase() || "auto";
+  const langSetting = languageMap[detectedLang] || languageMap["auto"];
   const language = langSetting.name;
+  
+  console.log(`[AI Prompt] 🌐 Language detected: "${pageMemory.detected_language}" → using "${language}"`);
+  console.log(`[AI Prompt] 💬 Tone: "${pageMemory.preferred_tone}"`);
+  console.log(`[AI Prompt] 📝 Instruction: "${langSetting.instruction.substring(0, 50)}..."`);
+  
   
   // Build conversation context with smart memory
   const conversationContext = buildConversationContext(
@@ -1208,9 +1225,14 @@ function buildSystemPrompt(
   const isReturning = (conversationState.total_messages_count || 0) > 1 || conversationState.has_ordered_before;
 
   // BUILD LANGUAGE-SPECIFIC PROMPT
+  // Use normalized language for all comparisons
+  const isEnglish = detectedLang === "english";
+  const isBangla = detectedLang === "bangla" || detectedLang === "bengali";
+  const isMixed = detectedLang === "mixed" || detectedLang === "banglish" || detectedLang === "auto";
+  
   let prompt = "";
   
-  if (pageMemory.detected_language === "english") {
+  if (isEnglish) {
     // ENGLISH ONLY PROMPT
     prompt = `# You are a REAL human sales person - NOT a bot/AI!
 
@@ -1301,7 +1323,7 @@ ${pageMemory.products_summary || ""}
 ${productCatalog}
 
 ${mediaContext}`;
-  } else if (pageMemory.detected_language === "bangla") {
+  } else if (isBangla) {
     // PURE BANGLA PROMPT
     prompt = `# আপনি একজন REAL বাংলাদেশি মানুষ - AI/Bot একদম না!
 
@@ -1476,7 +1498,7 @@ ${mediaContext}`;
 
   // Returning customer - language aware
   if (isReturning && firstName) {
-    if (pageMemory.detected_language === "english") {
+    if (isEnglish) {
       prompt += `
 
 ## Returning Customer - ${firstName}
@@ -1500,7 +1522,7 @@ You've talked before. Greet like a familiar person:
     if (productContext.isDigital && digitalProductContext) {
       prompt += buildDigitalProductContext(digitalProductContext);
     } else if (productContext.isDigital) {
-      if (pageMemory.detected_language === "english") {
+      if (isEnglish) {
         prompt += `
 
 ## 💻 Current Digital Product:
@@ -1521,7 +1543,7 @@ You've talked before. Greet like a familiar person:
       }
     } else {
       // Physical product
-      if (pageMemory.detected_language === "english") {
+      if (isEnglish) {
         prompt += `
 
 ## 📦 Current Product:
@@ -1549,7 +1571,7 @@ You've talked before. Greet like a familiar person:
 
   // Order taking - language aware
   if (orderTakingEnabled) {
-    if (pageMemory.detected_language === "english") {
+    if (isEnglish) {
       prompt += `
 
 ## Order Taking Steps:
@@ -1571,7 +1593,7 @@ Don't push. If customer isn't ready: "No problem, let me know later"`;
 জোর করবেন না। customer ready না হলে: "ঠিক আছে, পরে বলবেন"`;
     }
   } else {
-    if (pageMemory.detected_language === "english") {
+    if (isEnglish) {
       prompt += `
 
 ## Order Disabled
@@ -1587,7 +1609,7 @@ Don't push. If customer isn't ready: "No problem, let me know later"`;
   }
 
   // Current state - language aware
-  if (pageMemory.detected_language === "english") {
+  if (isEnglish) {
     prompt += `
 
 ## Current State: ${conversationState.conversation_state}`;
@@ -1601,7 +1623,7 @@ Don't push. If customer isn't ready: "No problem, let me know later"`;
     prompt += ` | Product: ${conversationState.current_product_name} (৳${conversationState.current_product_price})`;
   }
   if (conversationState.collected_name) {
-    prompt += ` | ${pageMemory.detected_language === "english" ? "Name" : "নাম"}: ${conversationState.collected_name}`;
+    prompt += ` | ${isEnglish ? "Name" : "নাম"}: ${conversationState.collected_name}`;
   }
   if (conversationState.collected_phone) {
     prompt += ` | Phone: ${conversationState.collected_phone}`;
@@ -1612,7 +1634,7 @@ Don't push. If customer isn't ready: "No problem, let me know later"`;
 
   // State-specific prompts - language aware
   if (conversationState.conversation_state === "collecting_name") {
-    if (pageMemory.detected_language === "english") {
+    if (isEnglish) {
       prompt += `
 Now ask for name: "What's your name?"`;
     } else {
@@ -1620,7 +1642,7 @@ Now ask for name: "What's your name?"`;
 এখন নাম চান: "নামটা বলেন ভাই"`;
     }
   } else if (conversationState.conversation_state === "collecting_phone") {
-    if (pageMemory.detected_language === "english") {
+    if (isEnglish) {
       prompt += `
 Now ask for phone: "Phone number please"`;
     } else {
@@ -1628,7 +1650,7 @@ Now ask for phone: "Phone number please"`;
 এখন phone চান: "phone number দেন"`;
     }
   } else if (conversationState.conversation_state === "collecting_address") {
-    if (pageMemory.detected_language === "english") {
+    if (isEnglish) {
       prompt += `
 Now ask for address: "Delivery address please"`;
     } else {
@@ -1636,7 +1658,7 @@ Now ask for address: "Delivery address please"`;
 এখন address চান: "address বলেন, full address"`;
     }
   } else if (conversationState.conversation_state === "order_confirmation") {
-    if (pageMemory.detected_language === "english") {
+    if (isEnglish) {
       prompt += `
 Now confirm: confirm with all collected info`;
     } else {
