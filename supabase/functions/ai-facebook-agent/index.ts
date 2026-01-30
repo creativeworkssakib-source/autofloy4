@@ -229,8 +229,21 @@ serve(async (req) => {
     
     console.log(`[AI Agent] Intent: ${intent}, Sentiment: ${sentiment}, State: ${conversation.conversation_state}`);
     
-    // Update message history
+    // CRITICAL: Sanitize message history to remove hallucinated content
+    // If no products exist, filter out any messages that mention fake product names/prices
     let messageHistory = conversation.message_history || [];
+    
+    // Check if we have any real products
+    const hasRealProducts = allProducts.length > 0 || (pageMemory.products_summary && pageMemory.products_summary.trim().length > 0);
+    
+    if (!hasRealProducts) {
+      // Remove assistant messages that contain hallucinated product info
+      // Keep only last 3 user messages for context, discard all AI responses
+      const userMessages = messageHistory.filter((m: any) => m.role === "user").slice(-3);
+      messageHistory = userMessages;
+      console.log(`[AI Agent] No products configured - cleared ${(conversation.message_history || []).length - messageHistory.length} potentially hallucinated messages`);
+    }
+    
     messageHistory.push({
       role: "user", content: messageText, timestamp: new Date().toISOString(),
       intent, sentiment, messageType,
