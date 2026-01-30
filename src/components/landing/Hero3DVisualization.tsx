@@ -16,12 +16,12 @@ import {
 
 const Hero3DVisualization = memo(() => {
   return (
-    <div className="relative w-full max-w-6xl mx-auto h-[420px] md:h-[520px] flex items-center justify-center overflow-hidden">
+    <div className="relative w-full max-w-6xl mx-auto h-[320px] sm:h-[380px] md:h-[520px] flex items-center justify-center overflow-hidden px-2 sm:px-4">
       {/* Animated Background Layers */}
       <div className="absolute inset-0 pointer-events-none">
-        {/* Gradient Orbs */}
+        {/* Gradient Orbs - scaled down for mobile */}
         <motion.div 
-          className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full bg-gradient-to-r from-primary/20 to-secondary/20 blur-3xl"
+          className="absolute top-1/4 left-1/4 w-48 sm:w-64 md:w-96 h-48 sm:h-64 md:h-96 rounded-full bg-gradient-to-r from-primary/20 to-secondary/20 blur-3xl"
           animate={{ 
             scale: [1, 1.2, 1],
             x: [0, 50, 0],
@@ -30,7 +30,7 @@ const Hero3DVisualization = memo(() => {
           transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
         />
         <motion.div 
-          className="absolute bottom-1/4 right-1/4 w-80 h-80 rounded-full bg-gradient-to-r from-secondary/20 to-primary/20 blur-3xl"
+          className="absolute bottom-1/4 right-1/4 w-40 sm:w-56 md:w-80 h-40 sm:h-56 md:h-80 rounded-full bg-gradient-to-r from-secondary/20 to-primary/20 blur-3xl"
           animate={{ 
             scale: [1.2, 1, 1.2],
             x: [0, -40, 0],
@@ -39,7 +39,7 @@ const Hero3DVisualization = memo(() => {
           transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
         />
         <motion.div 
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 rounded-full bg-gradient-to-r from-cyan-500/10 to-purple-500/10 blur-2xl"
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 sm:w-48 md:w-64 h-32 sm:h-48 md:h-64 rounded-full bg-gradient-to-r from-cyan-500/10 to-purple-500/10 blur-2xl"
           animate={{ 
             scale: [1, 1.3, 1],
             rotate: [0, 180, 360],
@@ -48,8 +48,8 @@ const Hero3DVisualization = memo(() => {
         />
       </div>
 
-      {/* 3D Grid Floor Effect */}
-      <div className="absolute bottom-0 left-0 right-0 h-32 opacity-20 pointer-events-none overflow-hidden">
+      {/* 3D Grid Floor Effect - hidden on small mobile */}
+      <div className="absolute bottom-0 left-0 right-0 h-16 sm:h-24 md:h-32 opacity-20 pointer-events-none overflow-hidden hidden sm:block">
         <div 
           className="w-full h-full"
           style={{
@@ -64,8 +64,8 @@ const Hero3DVisualization = memo(() => {
         />
       </div>
 
-      {/* Hexagon Pattern */}
-      <div className="absolute inset-0 opacity-[0.03] pointer-events-none">
+      {/* Hexagon Pattern - hidden on mobile */}
+      <div className="absolute inset-0 opacity-[0.03] pointer-events-none hidden md:block">
         <svg width="100%" height="100%">
           <defs>
             <pattern id="hexagons" width="50" height="43.4" patternUnits="userSpaceOnUse">
@@ -81,9 +81,9 @@ const Hero3DVisualization = memo(() => {
         </svg>
       </div>
 
-      {/* Main Flow Container - CENTERED */}
-      <div className="relative flex items-center justify-center w-full">
-        <div className="flex items-center justify-center gap-4 md:gap-8 lg:gap-12">
+      {/* Main Flow Container - CENTERED with scale for mobile */}
+      <div className="relative flex items-center justify-center w-full scale-[0.65] sm:scale-[0.8] md:scale-100 origin-center">
+        <div className="flex items-center justify-center gap-2 sm:gap-4 md:gap-8 lg:gap-12">
           
           {/* Left Side - Input Sources */}
           <div className="flex flex-col gap-4 md:gap-6">
