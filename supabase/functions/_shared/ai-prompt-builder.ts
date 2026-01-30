@@ -3,6 +3,32 @@
 
 import type { PageMemory, ProductContext } from "./ai-agent-helpers.ts";
 
+// Normalize language value to handle different formats from database
+function normalizeLanguage(lang: string | undefined): string {
+  if (!lang) return "bangla";
+  const normalized = lang.toLowerCase().trim();
+  // Map all variations to standard values
+  if (normalized === "bn" || normalized === "bangla" || normalized === "bengali" || normalized === "বাংলা") {
+    return "bangla";
+  }
+  if (normalized === "en" || normalized === "english" || normalized === "ইংরেজি") {
+    return "english";
+  }
+  if (normalized === "mixed" || normalized === "banglish" || normalized === "mix") {
+    return "mixed";
+  }
+  return "bangla"; // Default to Bangla
+}
+
+// Normalize tone value
+function normalizeTone(tone: string | undefined): string {
+  if (!tone) return "friendly";
+  const normalized = tone.toLowerCase().trim();
+  if (["formal", "professional", "সম্মানজনক"].includes(normalized)) return "formal";
+  if (["casual", "বন্ধুত্বপূর্ণ"].includes(normalized)) return "casual";
+  return "friendly";
+}
+
 export function buildSystemPrompt(
   pageMemory: PageMemory,
   productContext: ProductContext | null,
@@ -11,8 +37,10 @@ export function buildSystemPrompt(
   mediaContext?: string,
   digitalContext?: string
 ): string {
-  const tone = pageMemory.preferred_tone || "friendly";
-  const language = pageMemory.detected_language || "bn";
+  const tone = normalizeTone(pageMemory.preferred_tone);
+  const language = normalizeLanguage(pageMemory.detected_language);
+  
+  console.log(`[Prompt Builder] Language: ${pageMemory.detected_language} -> ${language}, Tone: ${pageMemory.preferred_tone} -> ${tone}`);
   
   // Build product list - CRITICAL: If empty, explicitly say NO PRODUCTS to prevent hallucination
   const productList = pageMemory.products_summary 
@@ -22,9 +50,12 @@ export function buildSystemPrompt(
 
   const hasProducts = !!productList;
 
-  let prompt = `আপনি একজন বাংলাদেশী ব্যবসার সহায়ক AI। আপনি Facebook Page এ Customer দের সাথে কথা বলছেন।
+  // Language-specific prompt intro
+  let prompt = language === "english" 
+    ? `You are a Bangladeshi business assistant AI. You are chatting with customers on a Facebook Page.`
+    : `আপনি একজন বাংলাদেশী ব্যবসার সহায়ক AI। আপনি Facebook Page এ Customer দের সাথে কথা বলছেন।`;
 
-## ⛔⛔⛔ CRITICAL ANTI-HALLUCINATION RULES (MUST FOLLOW) ⛔⛔⛔
+  prompt += `\n\n## ⛔⛔⛔ CRITICAL ANTI-HALLUCINATION RULES (MUST FOLLOW) ⛔⛔⛔
 ${!hasProducts ? `
 **আপনার কোনো প্রোডাক্ট তালিকা নেই। এটা মেনে চলুন:**
 1. কোনো প্রোডাক্টের নাম বলবেন না (lovable, product, item কিছুই না)
@@ -45,9 +76,12 @@ ${pageMemory.business_description || "ব্যবসার বিবরণ স�
 ## 💼 প্রোডাক্ট তালিকা:
 ${hasProducts ? productList : "❌ কোনো প্রোডাক্ট যুক্ত করা হয়নি"}
 
-## 🎭 কথা বলার ধরন: ${tone === "formal" ? "সম্মানজনক ভাষায়" : tone === "casual" ? "বন্ধুত্বপূর্ণ" : "বন্ধুত্বপূর্ণ কিন্তু professional"}
-## 🌐 ভাষা: ${language === "en" ? "English" : language === "bn" ? "বাংলা" : "Banglish mix"}
-`;
+## 🎭 কথা বলার ধরন: ${tone === "formal" ? "সম্মানজনক/আপনি ব্যবহার করুন" : tone === "casual" ? "Casual/তুমি ব্যবহার করতে পারেন" : "Friendly/ভাই বলুন, মিশ্র ভঙ্গি"}
+
+## 🌐 ভাষা (STRICTLY FOLLOW):
+${language === "english" ? "✅ ONLY English - সম্পূর্ণ ইংরেজিতে উত্তর দিন" : 
+  language === "bangla" ? "✅ শুধুমাত্র বাংলায় উত্তর দিন - NO English words except brand names" : 
+  "✅ Banglish mix - বাংলা + English মিশ্রিত"}`;
 
   // Current product context
   if (productContext) {
