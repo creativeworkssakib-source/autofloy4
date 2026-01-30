@@ -40,7 +40,7 @@ interface PageMemory {
     bargainingEnabled?: boolean;
     bargainingLevel?: "low" | "medium" | "high" | "aggressive";
     minAcceptableDiscount?: number;
-    maxBargainingRounds?: number;
+    maxAcceptableDiscount?: number;
   };
   ai_behavior_rules?: {
     neverHallucinate: boolean;
@@ -1727,9 +1727,8 @@ Now confirm: confirm with all collected info`;
     // BARGAINING POWER (AI NEGOTIATION)
     if (pageMemory.selling_rules.bargainingEnabled === true) {
       const bargainingLevel = pageMemory.selling_rules.bargainingLevel || "medium";
-      const minDiscount = pageMemory.selling_rules.minAcceptableDiscount || 5;
-      const maxDiscount = pageMemory.selling_rules.maxDiscountPercent || 10;
-      const maxRounds = pageMemory.selling_rules.maxBargainingRounds || 3;
+      const minDiscount = pageMemory.selling_rules.minAcceptableDiscount || 1;
+      const maxDiscount = pageMemory.selling_rules.maxAcceptableDiscount || 5;
       
       prompt += `
 
@@ -1745,11 +1744,11 @@ Now confirm: confirm with all collected info`;
 ### Discount Range:
 - প্রথমে অফার: ${minDiscount}% (minimum)
 - সর্বোচ্চ: ${maxDiscount}% (maximum)
-- Max ${maxRounds} বার negotiate করবেন, তারপর final offer
+- Bargaining Style অনুযায়ী মানুষের মতো negotiate করুন
 
-### BARGAINING TECHNIQUES:
+### BARGAINING TECHNIQUES (${bargainingLevel} style):
 
-**১. Customer "দাম কমাও" বললে (Round 1):**
+**১. Customer "দাম কমাও" বললে:**
 ${bargainingLevel === "low" ? 
 `- "ভাই আপনার জন্য ${minDiscount}% off দিচ্ছি, ৳X হবে"
 - সাথে সাথে ছাড় দিন` :
@@ -1760,11 +1759,11 @@ bargainingLevel === "high" ?
 `- "ভাই এই দাম fixed, quality দেখলে বুঝবেন"
 - Value highlight করুন, ছাড়ের কথা এখনই বলবেন না` :
 `- "ভাই এই দামেই best, অন্য কোথাও পাবেন না এই quality"
-- প্রথম round এ ছাড় দেবেন না`}
+- প্রথম এ ছাড় দেবেন না`}
 
-**২. Customer আবার চাপ দিলে (Round 2):**
+**২. Customer আবার চাপ দিলে:**
 ${bargainingLevel === "low" ? 
-`- "আচ্ছা ভাই, ${Math.min(minDiscount + 2, maxDiscount)}% দিচ্ছি, final"` :
+`- "আচ্ছা ভাই, ${Math.min(minDiscount + 1, maxDiscount)}% দিচ্ছি, final"` :
 bargainingLevel === "medium" ?
 `- "দেখেন ভাই, ${minDiscount}% দিতে পারি maximum"
 - এখন প্রথম offer দিন` :
@@ -1774,16 +1773,16 @@ bargainingLevel === "high" ?
 `- "ভাই সত্যি বলছি, margin নাই... তবে আপনার জন্য ${minDiscount}% last offer"
 - খুব কষ্টে দিচ্ছেন এমন বলুন`}
 
-**৩. Customer still চায় (Round 3+):**
+**৩. Customer still চায়:**
 ${bargainingLevel === "low" ? 
-`- "ওকে ভাই ${Math.min(minDiscount + 5, maxDiscount)}% final, নিয়ে নেন"` :
+`- "ওকে ভাই ${maxDiscount}% final, নিয়ে নেন"` :
 bargainingLevel === "medium" ?
 `- "ভাই আর সম্ভব না, ${Math.floor((minDiscount + maxDiscount) / 2)}% last, নিলে নেন"` :
 bargainingLevel === "high" ?
 `- "ভাই আমার loss হবে... তবে আপনি regular হবেন ভেবে ${maxDiscount}% দিলাম, আর হবে না"` :
 `- "একদম শেষ offer ভাই, ${maxDiscount}% - হ্যাঁ বলেন নাহলে এই দামেই"`}
 
-**৪. Final Round (${maxRounds} বার পর):**
+**৪. Final Offer:**
 - "ভাই এটাই last, ${maxDiscount}% - take it or leave it"
 - "আর possible না ভাই, boss এ allow করবে না"
 - "okay ভাই, ভেবে জানাবেন" (walking away technique)
@@ -1810,11 +1809,11 @@ bargainingLevel === "high" ?
 - (বেশিরভাগ সময় customer ফিরে আসে)
 
 ### IMPORTANT RULES:
-1. সরাসরি max discount বলবেন না - ধীরে ধীরে বাড়ান
+1. সরাসরি max discount (${maxDiscount}%) বলবেন না - ধীরে ধীরে বাড়ান ${minDiscount}% থেকে শুরু করে
 2. প্রতিটা discount কে "special favor" এর মতো present করুন
-3. Customer এর tone বুঝে react করুন
+3. Customer এর tone বুঝে react করুন - Bargaining Style: ${bargainingLevel} অনুযায়ী
 4. Angry/rude customer কে calm করুন, তারপর negotiate
-5. ${maxRounds} round পর final offer, আর negotiate নয়`;
+5. ${maxDiscount}% এর বেশি কোনোভাবেই দিবেন না - এটা strict limit`;
     } else {
       prompt += `
 

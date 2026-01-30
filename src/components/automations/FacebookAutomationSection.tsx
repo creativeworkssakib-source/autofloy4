@@ -69,7 +69,7 @@ interface SellingRules {
   bargainingEnabled: boolean;
   bargainingLevel: "low" | "medium" | "high" | "aggressive"; // How aggressively AI can bargain
   minAcceptableDiscount: number; // Minimum discount AI can accept from customer's bargaining
-  maxBargainingRounds: number; // Max back-and-forth before final offer
+  maxAcceptableDiscount: number; // Maximum discount AI can give during bargaining
 }
 
 interface AIBehaviorRules {
@@ -121,8 +121,8 @@ const FacebookAutomationSection = ({
     allowLowProfitSale: false,
     bargainingEnabled: false,
     bargainingLevel: "medium",
-    minAcceptableDiscount: 5,
-    maxBargainingRounds: 3,
+    minAcceptableDiscount: 1,
+    maxAcceptableDiscount: 5,
   });
 
   // AI behavior rules
@@ -173,15 +173,16 @@ const FacebookAutomationSection = ({
           
           // Load selling rules
           if (memory.selling_rules) {
+            const sellingData = memory.selling_rules as Record<string, unknown>;
             setSellingRules({
-              usePriceFromProduct: memory.selling_rules.usePriceFromProduct ?? true,
-              allowDiscount: memory.selling_rules.allowDiscount ?? false,
-              maxDiscountPercent: memory.selling_rules.maxDiscountPercent ?? 10,
-              allowLowProfitSale: memory.selling_rules.allowLowProfitSale ?? false,
-              bargainingEnabled: memory.selling_rules.bargainingEnabled ?? false,
-              bargainingLevel: memory.selling_rules.bargainingLevel ?? "medium",
-              minAcceptableDiscount: memory.selling_rules.minAcceptableDiscount ?? 5,
-              maxBargainingRounds: memory.selling_rules.maxBargainingRounds ?? 3,
+              usePriceFromProduct: (sellingData.usePriceFromProduct as boolean) ?? true,
+              allowDiscount: (sellingData.allowDiscount as boolean) ?? false,
+              maxDiscountPercent: (sellingData.maxDiscountPercent as number) ?? 10,
+              allowLowProfitSale: (sellingData.allowLowProfitSale as boolean) ?? false,
+              bargainingEnabled: (sellingData.bargainingEnabled as boolean) ?? false,
+              bargainingLevel: (sellingData.bargainingLevel as "low" | "medium" | "high" | "aggressive") ?? "medium",
+              minAcceptableDiscount: (sellingData.minAcceptableDiscount as number) ?? 1,
+              maxAcceptableDiscount: (sellingData.maxAcceptableDiscount as number) ?? 5,
             });
           }
 
@@ -681,53 +682,51 @@ const FacebookAutomationSection = ({
                       </Select>
                     </div>
 
-                    {/* Min Acceptable Discount */}
+                    {/* Discount Range */}
                     <div className="space-y-2">
                       <Label className="text-sm flex items-center gap-2">
                         <Percent className="h-3 w-3" />
-                        Minimum Acceptable Discount
+                        Discount Range
                       </Label>
                       <p className="text-xs text-muted-foreground">
-                        Customer চাইলে AI সর্বনিম্ন যে পরিমাণ ছাড় দিতে পারবে
+                        AI সর্বনিম্ন থেকে সর্বোচ্চ কত % পর্যন্ত ছাড় দিতে পারবে
                       </p>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          type="number"
-                          min={0}
-                          max={sellingRules.maxDiscountPercent || 50}
-                          value={sellingRules.minAcceptableDiscount}
-                          onChange={(e) => setSellingRules(prev => ({ 
-                            ...prev, 
-                            minAcceptableDiscount: Math.min(
-                              parseInt(e.target.value) || 0, 
-                              prev.maxDiscountPercent || 50
-                            )
-                          }))}
-                          className="w-24"
-                        />
-                        <span className="text-sm text-muted-foreground">% (min ছাড়)</span>
-                      </div>
-                    </div>
-
-                    {/* Max Bargaining Rounds */}
-                    <div className="space-y-2">
-                      <Label className="text-sm">Max Negotiation Rounds</Label>
-                      <p className="text-xs text-muted-foreground">
-                        কতবার পর্যন্ত AI দর কষাকষি করবে, তারপর final offer দিবে
-                      </p>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          type="number"
-                          min={1}
-                          max={10}
-                          value={sellingRules.maxBargainingRounds}
-                          onChange={(e) => setSellingRules(prev => ({ 
-                            ...prev, 
-                            maxBargainingRounds: Math.max(1, Math.min(10, parseInt(e.target.value) || 3))
-                          }))}
-                          className="w-24"
-                        />
-                        <span className="text-sm text-muted-foreground">বার</span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="number"
+                            min={0}
+                            max={sellingRules.maxAcceptableDiscount}
+                            value={sellingRules.minAcceptableDiscount}
+                            onChange={(e) => setSellingRules(prev => ({ 
+                              ...prev, 
+                              minAcceptableDiscount: Math.min(
+                                Math.max(0, parseInt(e.target.value) || 0), 
+                                prev.maxAcceptableDiscount
+                              )
+                            }))}
+                            className="w-20"
+                          />
+                          <span className="text-sm text-muted-foreground">% (min)</span>
+                        </div>
+                        <span className="text-muted-foreground">—</span>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="number"
+                            min={sellingRules.minAcceptableDiscount}
+                            max={30}
+                            value={sellingRules.maxAcceptableDiscount}
+                            onChange={(e) => setSellingRules(prev => ({ 
+                              ...prev, 
+                              maxAcceptableDiscount: Math.max(
+                                prev.minAcceptableDiscount,
+                                Math.min(30, parseInt(e.target.value) || 5)
+                              )
+                            }))}
+                            className="w-20"
+                          />
+                          <span className="text-sm text-muted-foreground">% (max)</span>
+                        </div>
                       </div>
                     </div>
 
@@ -735,8 +734,8 @@ const FacebookAutomationSection = ({
                     <div className="p-3 rounded-md bg-primary/5 border border-primary/20">
                       <p className="text-xs font-medium text-primary mb-1">📋 AI এভাবে কাজ করবে:</p>
                       <p className="text-xs text-muted-foreground">
-                        Customer দাম কমাতে চাইলে AI {sellingRules.bargainingLevel === "low" ? "সহজে" : sellingRules.bargainingLevel === "medium" ? "কিছুটা চেষ্টার পর" : sellingRules.bargainingLevel === "high" ? "ভালোভাবে negotiate করে" : "শক্তভাবে দাম ধরে রেখে"} সর্বোচ্চ {sellingRules.maxDiscountPercent || 10}% পর্যন্ত ছাড় দিতে পারবে। 
-                        প্রথমে {sellingRules.minAcceptableDiscount || 5}% অফার করবে এবং সর্বোচ্চ {sellingRules.maxBargainingRounds || 3} বার negotiate করার পর final offer দিবে।
+                        Customer দাম কমাতে চাইলে AI {sellingRules.bargainingLevel === "low" ? "সহজে" : sellingRules.bargainingLevel === "medium" ? "কিছুটা চেষ্টার পর" : sellingRules.bargainingLevel === "high" ? "ভালোভাবে negotiate করে" : "শক্তভাবে দাম ধরে রেখে"} সর্বোচ্চ {sellingRules.maxAcceptableDiscount}% পর্যন্ত ছাড় দিতে পারবে। 
+                        প্রথমে {sellingRules.minAcceptableDiscount}% অফার করে Bargaining Style অনুযায়ী negotiate করবে।
                       </p>
                     </div>
                   </div>
