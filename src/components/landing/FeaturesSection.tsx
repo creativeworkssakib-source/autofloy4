@@ -91,9 +91,8 @@ const FeatureCard = memo(({
       <Link
         to={`/features/${feature.slug}`}
         className={`inline-flex items-center ${variant === "compact" ? "text-success-accessible text-xs" : "text-primary text-sm"} font-medium group/link relative z-10`}
-        aria-label={`Learn more about ${feature.title}`}
       >
-        <span>Learn More</span>
+        <span>Learn More<span className="sr-only"> about {feature.title}</span></span>
         <motion.span
           className="ml-1"
           initial={{ x: 0 }}
