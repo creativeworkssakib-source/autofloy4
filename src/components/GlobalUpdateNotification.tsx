@@ -11,7 +11,7 @@ import { supabase } from '@/integrations/supabase/client';
 // Current app version - MUST match the edge function version
 const APP_VERSION = '2.0.5';
 const VERSION_KEY = 'autofloy_app_version';
-const VERSION_CHECK_INTERVAL = 30 * 1000; // Check every 30 seconds
+const VERSION_CHECK_INTERVAL = 5 * 60 * 1000; // Check every 5 minutes (reduced from 30s to save edge function invocations)
 const LAST_AUTO_UPDATE_KEY = 'autofloy_last_auto_update';
 
 export const GlobalUpdateNotification = () => {

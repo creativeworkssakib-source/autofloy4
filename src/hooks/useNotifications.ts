@@ -102,8 +102,9 @@ export function useNotifications() {
   useEffect(() => {
     loadNotifications();
     
-    // Poll every 30 seconds for new notifications
-    intervalRef.current = setInterval(loadNotifications, 30000);
+    // Poll every 2 minutes for new notifications (reduced from 30s to save edge function invocations)
+    // For truly real-time notifications, consider using Supabase Realtime subscriptions
+    intervalRef.current = setInterval(loadNotifications, 2 * 60 * 1000);
     
     return () => {
       if (intervalRef.current) {
