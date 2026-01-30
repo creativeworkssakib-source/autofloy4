@@ -2263,22 +2263,26 @@ serve(async (req) => {
       pageMemory.support_whatsapp_number = globalSupportNumber;
     }
 
-    // Check automation settings
+    // Check automation settings (STRICT CHECK - all features default to FALSE if not set)
     const settings = pageMemory.automation_settings || {};
-    const orderTakingEnabled = settings.orderTaking !== false; // Default true for backwards compat
+    const orderTakingEnabled = settings.orderTaking === true;
+    const autoCommentReplyEnabled = settings.autoCommentReply === true;
+    const autoInboxReplyEnabled = settings.autoInboxReply === true;
     
-    if (isComment && !settings.autoCommentReply) {
+    console.log(`[AI Agent] ⚙️ Settings check: orderTaking=${orderTakingEnabled}, autoCommentReply=${autoCommentReplyEnabled}, autoInboxReply=${autoInboxReplyEnabled}`);
+    
+    if (isComment && !autoCommentReplyEnabled) {
+      console.log("[AI Agent] ⛔ Comment auto-reply DISABLED");
       return new Response(JSON.stringify({ skip: true, reason: "Comment auto-reply disabled" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    if (!isComment && !settings.autoInboxReply) {
+    if (!isComment && !autoInboxReplyEnabled) {
+      console.log("[AI Agent] ⛔ Inbox auto-reply DISABLED");
       return new Response(JSON.stringify({ skip: true, reason: "Inbox auto-reply disabled" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    
-    console.log(`[AI Agent] Settings: orderTaking=${orderTakingEnabled}, autoCommentReply=${settings.autoCommentReply}, autoInboxReply=${settings.autoInboxReply}`);
 
     // Get product context
     let productContext: ProductContext | null = null;

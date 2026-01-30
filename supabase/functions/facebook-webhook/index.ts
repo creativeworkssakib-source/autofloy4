@@ -621,9 +621,10 @@ async function processMessagingEvent(supabase: any, pageId: string, event: any) 
     
     console.log(`[Webhook] Message type: ${messageType}, Sticker ID: ${message.sticker_id || 'none'}, Has attachments: ${!!attachments}`);
 
-    // Check if AI Media Understanding is enabled for media messages
+    // Check if AI Media Understanding is enabled for media messages (STRICT CHECK)
     const isMediaMessage = messageType !== "text";
-    const aiMediaUnderstandingEnabled = pageMemory?.automation_settings?.aiMediaUnderstanding !== false; // Default true
+    const aiMediaUnderstandingEnabled = pageMemory?.automation_settings?.aiMediaUnderstanding === true;
+    console.log(`[Webhook] aiMediaUnderstanding enabled: ${aiMediaUnderstandingEnabled}`);
     
     if (isMediaMessage && !aiMediaUnderstandingEnabled) {
       console.log("[Webhook] AI Media Understanding disabled, using simple response for media:", messageType);
@@ -813,9 +814,10 @@ async function processFeedChange(supabase: any, pageId: string, change: any) {
       return;
     }
     
-    // Check if AI Media Understanding is enabled for media comments
+    // Check if AI Media Understanding is enabled for media comments (STRICT CHECK)
     const isMediaComment = commentMessageType !== "text";
-    const aiMediaUnderstandingEnabled = pageMemory?.automation_settings?.aiMediaUnderstanding !== false; // Default true
+    const aiMediaUnderstandingEnabled = pageMemory?.automation_settings?.aiMediaUnderstanding === true;
+    console.log(`[Webhook] Comment aiMediaUnderstanding enabled: ${aiMediaUnderstandingEnabled}`);
     
     if (isMediaComment && !aiMediaUnderstandingEnabled) {
       console.log("[Webhook] AI Media Understanding disabled, skipping media comment analysis:", commentMessageType);
@@ -950,10 +952,10 @@ async function processFeedChange(supabase: any, pageId: string, change: any) {
       const replyResult = await replyToComment(decryptedToken, value.comment_id, commentReplyText);
       console.log("[Webhook] Comment reply sent:", commentReplyText.substring(0, 60));
 
-      // Add reaction based on AI decision
-      const reactionEnabled = pageMemory?.automation_settings?.reactionOnComments;
+      // Add reaction based on AI decision (STRICT CHECK - default is FALSE if not set)
+      const reactionEnabled = pageMemory?.automation_settings?.reactionOnComments === true;
       const reactionType = aiResponse.reactionType || "LIKE";
-      console.log(`[Webhook] Reaction check: enabled=${reactionEnabled}, type=${reactionType}, shouldReact=${reactionType !== "NONE"}`);
+      console.log(`[Webhook] reactionOnComments enabled: ${reactionEnabled}, type=${reactionType}`);
       
       if (reactionEnabled && reactionType !== "NONE") {
         const reactionSuccess = await addReaction(decryptedToken, value.comment_id, reactionType);
