@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { motion } from "framer-motion";
 import PlatformAutomationCard, { PlatformConfig } from "./PlatformAutomationCard";
 import PlatformAutomationSection from "./PlatformAutomationSection";
@@ -111,38 +111,40 @@ const PlatformAutomationsGrid = ({
     };
   }, [loadStats]);
 
-  // Convert webhook configs to platform configs
-  const platforms: PlatformConfig[] = webhookConfigs.map(config => {
-    const colors = colorMap[config.id] || { color: "text-muted-foreground", bgColor: "bg-muted", borderColor: "border-border" };
-    const isFacebookConnected = config.id === 'facebook' && connectedFacebookPages.length > 0;
-    // Platform is available if not coming soon AND is active
-    const isAvailable = !config.is_coming_soon && config.is_active;
-    
-    // Only show stats for Facebook (connected platform)
-    const platformStats = config.id === 'facebook' && isFacebookConnected && stats ? {
-      repliesToday: stats.todayMessagesHandled || 0,
-      automationsEnabled: stats.activeAutomations || 0,
-      totalAutomations: stats.messagesHandled || 0,
-    } : {
-      repliesToday: 0,
-      automationsEnabled: 0,
-      totalAutomations: 0,
-    };
-    
-    return {
-      id: config.id,
-      name: config.name,
-      icon: iconMap[config.icon] || <Mail className="h-6 w-6" />,
-      color: colors.color,
-      bgColor: colors.bgColor,
-      borderColor: colors.borderColor,
-      description: config.description,
-      isConnected: isAvailable && (config.id === 'facebook' ? isFacebookConnected : true),
-      isActive: isAvailable && (config.id === 'facebook' ? isFacebookConnected : true),
-      stats: platformStats,
-      comingSoon: config.is_coming_soon,
-    };
-  });
+  // Convert webhook configs to platform configs - use useMemo to properly react to stats changes
+  const platforms: PlatformConfig[] = useMemo(() => {
+    return webhookConfigs.map(config => {
+      const colors = colorMap[config.id] || { color: "text-muted-foreground", bgColor: "bg-muted", borderColor: "border-border" };
+      const isFacebookConnected = config.id === 'facebook' && connectedFacebookPages.length > 0;
+      // Platform is available if not coming soon AND is active
+      const isAvailable = !config.is_coming_soon && config.is_active;
+      
+      // Only show stats for Facebook (connected platform)
+      const platformStats = config.id === 'facebook' && isFacebookConnected && stats ? {
+        repliesToday: stats.todayMessagesHandled || 0,
+        automationsEnabled: stats.activeAutomations || 0,
+        totalAutomations: stats.messagesHandled || 0,
+      } : {
+        repliesToday: 0,
+        automationsEnabled: 0,
+        totalAutomations: 0,
+      };
+      
+      return {
+        id: config.id,
+        name: config.name,
+        icon: iconMap[config.icon] || <Mail className="h-6 w-6" />,
+        color: colors.color,
+        bgColor: colors.bgColor,
+        borderColor: colors.borderColor,
+        description: config.description,
+        isConnected: isAvailable && (config.id === 'facebook' ? isFacebookConnected : true),
+        isActive: isAvailable && (config.id === 'facebook' ? isFacebookConnected : true),
+        stats: platformStats,
+        comingSoon: config.is_coming_soon,
+      };
+    });
+  }, [webhookConfigs, connectedFacebookPages, stats]);
 
   const handleManage = (platformId: string) => {
     setSelectedPlatform(platformId);
