@@ -229,21 +229,50 @@ serve(async (req) => {
     
     console.log(`[AI Agent] Intent: ${intent}, Sentiment: ${sentiment}, State: ${conversation.conversation_state}`);
     
-    // CRITICAL: Sanitize message history to remove hallucinated content
-    // If no products exist, filter out any messages that mention fake product names/prices
-    let messageHistory = conversation.message_history || [];
-    
-    // Check if we have any real products
+    // CRITICAL: Check if we have any real products configured
     const hasRealProducts = allProducts.length > 0 || (pageMemory.products_summary && pageMemory.products_summary.trim().length > 0);
     
+    // Get message history from database
+    let messageHistory = conversation.message_history || [];
+    
+    // *** SUPER CRITICAL: AGGRESSIVE HALLUCINATION PREVENTION ***
+    // If NO products configured - we MUST completely reset conversation to prevent hallucination
     if (!hasRealProducts) {
-      // Remove assistant messages that contain hallucinated product info
-      // Keep only last 3 user messages for context, discard all AI responses
-      const userMessages = messageHistory.filter((m: any) => m.role === "user").slice(-3);
-      messageHistory = userMessages;
-      console.log(`[AI Agent] No products configured - cleared ${(conversation.message_history || []).length - messageHistory.length} potentially hallucinated messages`);
+      console.log(`[AI Agent] ⚠️ NO PRODUCTS CONFIGURED - Aggressive hallucination prevention activated!`);
+      
+      // Detect hallucinated content in history (any mention of "lovable", prices, or products)
+      const hallucination_patterns = [
+        /lovable/i,
+        /৳\d+/,  // Bengali currency with price
+        /\d+\s*টাকা/i,  // X taka
+        /product.*"\w+"/i,  // product "something"
+        /order.*dite|diben|korte/i,  // Order related in Banglish
+        /delivery.*paben/i,  // Delivery promises
+      ];
+      
+      const hasHallucination = messageHistory.some((m: any) => 
+        m.role === "assistant" && hallucination_patterns.some(p => p.test(m.content || ""))
+      );
+      
+      if (hasHallucination) {
+        console.log(`[AI Agent] 🚨 HALLUCINATION DETECTED in history - PURGING entire history!`);
+        
+        // COMPLETELY RESET the conversation in database to prevent future hallucination
+        await supabase.from("ai_conversations").update({
+          message_history: [],
+          customer_summary: null,
+          current_product_id: null,
+          current_product_name: null,
+          current_product_price: null,
+          conversation_state: "idle",
+        }).eq("id", conversation.id);
+        
+        // Start fresh - only the current message
+        messageHistory = [];
+      }
     }
     
+    // Add current message to history
     messageHistory.push({
       role: "user", content: messageText, timestamp: new Date().toISOString(),
       intent, sentiment, messageType,
