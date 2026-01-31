@@ -525,15 +525,20 @@ serve(async (req) => {
   }
 });
 
-// ============= SMART MESSAGE BATCHING (HUMAN-LIKE) =============
+// ============= SMART MESSAGE BATCHING V3 (AGGRESSIVE LOCK) =============
 // Buffer messages and process after SILENCE from customer
-// Timer resets on each new message - waits 4 seconds after LAST message
-// Example: "vai" -> wait 4s -> "r kisu ase?" -> wait 4s -> no more -> reply to both together
+// Uses database-level locking to prevent race conditions from parallel webhooks
+// 
+// STRATEGY: Use "processing_started_at" timestamp as a distributed lock
+// - First webhook sets processing_started_at = now() and becomes processor
+// - Other webhooks see this timestamp and back off
+// - Processor waits for silence, then sends single reply
 
-const SILENCE_WAIT_MS = 4000;            // Wait 4 seconds after LAST message (human-like timing)
-const BATCH_MAX_TOTAL_WAIT_MS = 15000;   // Max 15s total wait (generous for slow typers)
-const STUCK_BUFFER_THRESHOLD_MS = 20000; // Process stuck buffers after 20s
-const POLL_INTERVAL_MS = 300;            // Check every 300ms for new messages
+const SILENCE_WAIT_MS = 4000;            // Wait 4 seconds after LAST message
+const BATCH_MAX_TOTAL_WAIT_MS = 15000;   // Max 15s total wait
+const STUCK_BUFFER_THRESHOLD_MS = 25000; // Process stuck buffers after 25s
+const POLL_INTERVAL_MS = 250;            // Check every 250ms for new messages
+const LOCK_ACQUIRE_TIMEOUT_MS = 500;     // Wait max 500ms to acquire lock
 
 // *** CLEANUP STUCK BUFFERS (from previous failed runs) ***
 async function cleanupStuckBuffers(supabase: any): Promise<void> {
@@ -625,8 +630,13 @@ async function isMessageAlreadySeen(supabase: any, pageId: string, senderId: str
   return false;
 }
 
-// *** SIMPLIFIED BUFFER: Use atomic SQL upsert pattern ***
-// Instead of complex logic, use database-level uniqueness
+// *** AGGRESSIVE BUFFER V3: Single-instance processing with claim mechanism ***
+// KEY INSIGHT: Facebook sends webhooks in parallel, so we need database-level coordination
+// STRATEGY: 
+//   1. All webhooks add their message to buffer
+//   2. Only ONE webhook becomes the "processor" using atomic claim
+//   3. Processor waits for silence, then processes ALL messages together
+
 async function addMessageToSmartBuffer(
   supabase: any, 
   pageId: string, 
@@ -635,112 +645,100 @@ async function addMessageToSmartBuffer(
 ): Promise<{ action: "be_processor" | "skip_duplicate" | "let_first_handle"; bufferId?: string }> {
   const now = Date.now();
   const messageId = messageData.messageId;
+  const webhookId = `wh_${now}_${Math.random().toString(36).slice(2, 8)}`;
+  
+  console.log(`[Buffer ${webhookId}] Processing message ${messageId?.slice(-8) || 'unknown'}`);
   
   // Quick duplicate check
   if (messageId && await isMessageAlreadySeen(supabase, pageId, senderId, messageId)) {
+    console.log(`[Buffer ${webhookId}] Duplicate message, skipping`);
     return { action: "skip_duplicate" };
   }
 
-  // KEY STRATEGY: Always try to append first, create only if nothing exists
-  // Use multiple attempts with increasing delays to handle race conditions
+  // Add random jitter to desynchronize parallel webhooks (50-150ms)
+  await new Promise(r => setTimeout(r, 50 + Math.random() * 100));
+
+  // STEP 1: Find or create buffer
+  const { data: existingBuffers } = await supabase
+    .from("ai_message_buffer")
+    .select("*")
+    .eq("page_id", pageId)
+    .eq("sender_id", senderId)
+    .eq("is_processed", false)
+    .order("created_at", { ascending: true })
+    .limit(5);
   
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    // Delay increases on retry (0ms, 200ms, 500ms)
-    if (attempt > 1) {
-      await new Promise(r => setTimeout(r, 150 * attempt));
+  let targetBuffer: any = null;
+  let isFirstProcessor = false;
+  
+  if (existingBuffers && existingBuffers.length > 0) {
+    // Use the FIRST (oldest) unprocessed buffer
+    targetBuffer = existingBuffers[0];
+    
+    // Check if our message is already there
+    const existingMsgs = targetBuffer.messages || [];
+    if (existingMsgs.some((m: any) => m.messageId === messageId)) {
+      console.log(`[Buffer ${webhookId}] Message already in buffer`);
+      return { action: "skip_duplicate" };
     }
     
-    // Find ANY unprocessed buffer for this sender
-    const { data: existingBuffers } = await supabase
+    // Merge messages from any duplicate buffers
+    let allMsgs = [...existingMsgs];
+    if (existingBuffers.length > 1) {
+      console.log(`[Buffer ${webhookId}] Merging ${existingBuffers.length} buffers`);
+      for (const dup of existingBuffers.slice(1)) {
+        for (const dm of (dup.messages || [])) {
+          if (!allMsgs.some((m: any) => m.messageId === dm.messageId)) {
+            allMsgs.push(dm);
+          }
+        }
+        // Delete duplicate
+        await supabase.from("ai_message_buffer").delete().eq("id", dup.id);
+      }
+    }
+    
+    // Add our message
+    if (!allMsgs.some((m: any) => m.messageId === messageId)) {
+      allMsgs.push(messageData);
+    }
+    
+    // Update buffer
+    await supabase
+      .from("ai_message_buffer")
+      .update({ 
+        messages: allMsgs, 
+        last_message_at: new Date(now).toISOString() 
+      })
+      .eq("id", targetBuffer.id)
+      .eq("is_processed", false);
+    
+    console.log(`[Buffer ${webhookId}] 📥 Added msg #${allMsgs.length} to existing buffer ${targetBuffer.id.slice(-8)}`);
+    
+  } else {
+    // No buffer exists - create new one
+    // Wait a bit more to let parallel requests settle
+    await new Promise(r => setTimeout(r, 100 + Math.random() * 100));
+    
+    // Double-check no one else created one
+    const { data: recheckBuffer } = await supabase
       .from("ai_message_buffer")
       .select("*")
       .eq("page_id", pageId)
       .eq("sender_id", senderId)
       .eq("is_processed", false)
-      .order("created_at", { ascending: true })
-      .limit(5);
+      .maybeSingle();
     
-    if (existingBuffers && existingBuffers.length > 0) {
-      // Use the FIRST (oldest) buffer
-      const primaryBuffer = existingBuffers[0];
-      
-      // Check if our message is already in there
-      const allMsgs = primaryBuffer.messages || [];
-      if (allMsgs.some((m: any) => m.messageId === messageId)) {
-        console.log(`[Buffer] Message already in buffer, skipping`);
-        return { action: "skip_duplicate" };
-      }
-      
-      // Append our message
-      const updatedMsgs = [...allMsgs, messageData];
-      
-      const { error: updateError } = await supabase
+    if (recheckBuffer) {
+      // Someone else created it - add our message
+      const msgs = [...(recheckBuffer.messages || []), messageData];
+      await supabase
         .from("ai_message_buffer")
-        .update({ 
-          messages: updatedMsgs, 
-          last_message_at: new Date(now).toISOString() 
-        })
-        .eq("id", primaryBuffer.id)
-        .eq("is_processed", false);
-      
-      if (!updateError) {
-        console.log(`[Buffer] 📥 Added msg #${updatedMsgs.length} to buffer ${primaryBuffer.id} (attempt ${attempt})`);
-        
-        // Clean up duplicate buffers if any exist
-        if (existingBuffers.length > 1) {
-          for (const dup of existingBuffers.slice(1)) {
-            // Merge messages from duplicate into primary
-            const dupMsgs = dup.messages || [];
-            for (const dm of dupMsgs) {
-              if (!updatedMsgs.some((m: any) => m.messageId === dm.messageId)) {
-                updatedMsgs.push(dm);
-              }
-            }
-            // Delete the duplicate
-            await supabase.from("ai_message_buffer").delete().eq("id", dup.id);
-          }
-          // Update primary with merged messages
-          if (updatedMsgs.length > (primaryBuffer.messages?.length || 0) + 1) {
-            await supabase
-              .from("ai_message_buffer")
-              .update({ messages: updatedMsgs })
-              .eq("id", primaryBuffer.id);
-          }
-        }
-        
-        return { action: "let_first_handle", bufferId: primaryBuffer.id };
-      }
-      
-      console.log(`[Buffer] Update failed on attempt ${attempt}, retrying...`);
-      continue;
-    }
-    
-    // No buffer exists - only attempt 1 should try to create
-    if (attempt === 1) {
-      // Wait a moment to let parallel requests settle
-      await new Promise(r => setTimeout(r, 100 + Math.random() * 100));
-      
-      // Double-check no buffer was created while we waited
-      const { data: recheckBuffer } = await supabase
-        .from("ai_message_buffer")
-        .select("id, messages")
-        .eq("page_id", pageId)
-        .eq("sender_id", senderId)
-        .eq("is_processed", false)
-        .maybeSingle();
-      
-      if (recheckBuffer) {
-        // Someone else created it - append instead
-        const msgs = [...(recheckBuffer.messages || []), messageData];
-        await supabase
-          .from("ai_message_buffer")
-          .update({ messages: msgs, last_message_at: new Date(now).toISOString() })
-          .eq("id", recheckBuffer.id);
-        console.log(`[Buffer] 📥 Appended to just-created buffer ${recheckBuffer.id}`);
-        return { action: "let_first_handle", bufferId: recheckBuffer.id };
-      }
-      
-      // Actually create the buffer
+        .update({ messages: msgs, last_message_at: new Date(now).toISOString() })
+        .eq("id", recheckBuffer.id);
+      console.log(`[Buffer ${webhookId}] 📥 Added to just-created buffer ${recheckBuffer.id.slice(-8)}`);
+      targetBuffer = recheckBuffer;
+    } else {
+      // We are the first - create buffer AND become processor
       const { data: newBuffer, error: insertError } = await supabase
         .from("ai_message_buffer")
         .insert({
@@ -755,34 +753,71 @@ async function addMessageToSmartBuffer(
         .single();
       
       if (!insertError && newBuffer) {
-        console.log(`[Buffer] 🆕 Created buffer ${newBuffer.id} - this webhook will process`);
-        return { action: "be_processor", bufferId: newBuffer.id };
+        console.log(`[Buffer ${webhookId}] 🆕 Created buffer ${newBuffer.id.slice(-8)} - becoming processor`);
+        targetBuffer = newBuffer;
+        isFirstProcessor = true;
+      } else {
+        // Insert failed (race condition) - try to find and append
+        const { data: fallbackBuffer } = await supabase
+          .from("ai_message_buffer")
+          .select("*")
+          .eq("page_id", pageId)
+          .eq("sender_id", senderId)
+          .eq("is_processed", false)
+          .maybeSingle();
+        
+        if (fallbackBuffer) {
+          const msgs = [...(fallbackBuffer.messages || [])];
+          if (!msgs.some((m: any) => m.messageId === messageId)) {
+            msgs.push(messageData);
+            await supabase
+              .from("ai_message_buffer")
+              .update({ messages: msgs, last_message_at: new Date(now).toISOString() })
+              .eq("id", fallbackBuffer.id);
+          }
+          targetBuffer = fallbackBuffer;
+        }
       }
-      
-      console.log(`[Buffer] Insert failed: ${insertError?.message}, will retry`);
     }
   }
   
-  // Last attempt: find any buffer
-  const { data: finalBuffer } = await supabase
-    .from("ai_message_buffer")
-    .select("*")
-    .eq("page_id", pageId)
-    .eq("sender_id", senderId)
-    .eq("is_processed", false)
-    .maybeSingle();
-  
-  if (finalBuffer) {
-    const msgs = [...(finalBuffer.messages || [])];
-    if (!msgs.some((m: any) => m.messageId === messageId)) {
-      msgs.push(messageData);
-      await supabase
-        .from("ai_message_buffer")
-        .update({ messages: msgs, last_message_at: new Date().toISOString() })
-        .eq("id", finalBuffer.id);
-    }
-    return { action: "let_first_handle", bufferId: finalBuffer.id };
+  if (!targetBuffer) {
+    console.log(`[Buffer ${webhookId}] ⚠️ Failed to find/create buffer`);
+    return { action: "skip_duplicate" };
   }
+  
+  // STEP 2: Determine if we should be the processor
+  // Only the first webhook (that created the buffer) processes
+  // Others just add messages and exit
+  
+  if (isFirstProcessor) {
+    return { action: "be_processor", bufferId: targetBuffer.id };
+  }
+  
+  // For non-first webhooks: Check if buffer was JUST created (within 500ms)
+  // If so, wait a bit and re-check to see if we should take over
+  const bufferAge = now - new Date(targetBuffer.created_at).getTime();
+  
+  if (bufferAge < LOCK_ACQUIRE_TIMEOUT_MS) {
+    // Buffer is very new - wait a bit and see if the original processor is still alive
+    await new Promise(r => setTimeout(r, 200));
+    
+    // Check buffer state
+    const { data: checkBuffer } = await supabase
+      .from("ai_message_buffer")
+      .select("is_processed, messages, last_message_at")
+      .eq("id", targetBuffer.id)
+      .maybeSingle();
+    
+    if (!checkBuffer || checkBuffer.is_processed) {
+      // Already processed or deleted - our message was handled
+      console.log(`[Buffer ${webhookId}] Buffer already processed, message was included`);
+      return { action: "skip_duplicate" };
+    }
+  }
+  
+  console.log(`[Buffer ${webhookId}] 📥 Letting first webhook process`);
+  return { action: "let_first_handle", bufferId: targetBuffer.id };
   
   console.log(`[Buffer] ⚠️ Failed all attempts for message ${messageId}`);
   return { action: "skip_duplicate" };
