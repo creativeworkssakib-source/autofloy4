@@ -525,80 +525,30 @@ serve(async (req) => {
   }
 });
 
-// ============= SMART MESSAGE BATCHING V3 (AGGRESSIVE LOCK) =============
-// Buffer messages and process after SILENCE from customer
-// Uses database-level locking to prevent race conditions from parallel webhooks
+// ============= SMART MESSAGE BATCHING V7 (SIMPLE & CORRECT) =============
 // 
-// STRATEGY: Use "processing_started_at" timestamp as a distributed lock
-// - First webhook sets processing_started_at = now() and becomes processor
-// - Other webhooks see this timestamp and back off
-// - Processor waits for silence, then sends single reply
+// **সহজ লজিক:**
+// 1. Message এলে ➜ 2 সেকেন্ড wait (parallel webhooks sync করতে)
+// 2. Buffer খুঁজি বা তৈরি করি
+// 3. **4 সেকেন্ড silence** wait করি (last message থেকে)
+// 4. 4s-এ কোনো message না এলে ➜ একটাই reply পাঠাই
+// 5. 4s-এ নতুন message এলে ➜ timer reset, আবার 4s wait
+//
+// KEY FIX: প্রতিটা webhook আগে 2s wait করবে, তারপর buffer দেখবে
+// এতে সব parallel webhook একই buffer-এ join করতে পারবে
 
-// *** ADAPTIVE SILENCE DETECTION ***
-// Wait time adjusts based on MESSAGE VELOCITY (how fast customer is typing)
-// - Fast typer (multiple msgs in <2s each) → wait longer, they're still typing
-// - Slow typer (1 msg, 4+ seconds passed) → process sooner, they're done
-// - Single long message → process quickly (4s)
-// - Rapid-fire short messages → wait longer (8s)
+const INITIAL_SYNC_DELAY_MS = 2000;      // প্রথমে 2s wait (webhooks sync করতে)
+const SILENCE_WAIT_MS = 4000;            // 4 seconds silence = done typing
+const MAX_TOTAL_WAIT_MS = 20000;         // Max 20s total wait
+const STUCK_BUFFER_THRESHOLD_MS = 30000; // Process stuck buffers after 30s
+const POLL_INTERVAL_MS = 500;            // Check every 500ms for new messages
 
-const BASE_SILENCE_WAIT_MS = 6000;       // Minimum 6s silence (increased from 4s)
-const MAX_SILENCE_WAIT_MS = 12000;       // Maximum 12s silence for rapid-fire (increased from 8s)
-const BATCH_MAX_TOTAL_WAIT_MS = 25000;   // Max 25s total wait (increased from 20s)
-const STUCK_BUFFER_THRESHOLD_MS = 35000; // Process stuck buffers after 35s
-const POLL_INTERVAL_MS = 400;            // Check every 400ms for new messages
-const LOCK_ACQUIRE_TIMEOUT_MS = 800;     // Wait max 800ms to acquire lock
-const RECENT_BUFFER_WINDOW_MS = 15000;   // Consider ANY buffer from last 15s as "active session"
-
-// *** CALCULATE ADAPTIVE SILENCE WAIT based on message velocity ***
-function calculateAdaptiveSilenceWait(messages: any[], firstMessageAt: string): number {
-  if (!messages || messages.length === 0) return BASE_SILENCE_WAIT_MS;
-  
-  // Single message - still wait longer to catch follow-ups
-  if (messages.length === 1) {
-    return BASE_SILENCE_WAIT_MS; // 6 seconds
-  }
-  
-  // Multiple messages - calculate average interval
-  const timestamps: number[] = messages
-    .map((m: any) => m.receivedAt ? new Date(m.receivedAt).getTime() : 0)
-    .filter(t => t > 0)
-    .sort((a, b) => a - b);
-  
-  if (timestamps.length >= 2) {
-    let totalInterval = 0;
-    for (let i = 1; i < timestamps.length; i++) {
-      totalInterval += timestamps[i] - timestamps[i - 1];
-    }
-    const avgInterval = totalInterval / (timestamps.length - 1);
-    
-    // Very fast typing (< 3s between messages) → wait longest
-    if (avgInterval < 3000) {
-      console.log(`[Adaptive] ⚡ Fast typer detected (${Math.round(avgInterval)}ms avg) → wait ${MAX_SILENCE_WAIT_MS}ms`);
-      return MAX_SILENCE_WAIT_MS; // 12 seconds
-    }
-    
-    // Medium typing (3-6s between messages)
-    if (avgInterval < 6000) {
-      const wait = BASE_SILENCE_WAIT_MS + 3000; // 9 seconds
-      console.log(`[Adaptive] ⏱️ Medium typer (${Math.round(avgInterval)}ms avg) → wait ${wait}ms`);
-      return wait;
-    }
-    
-    // Slow typing - use base
-    console.log(`[Adaptive] 🐢 Slow typer (${Math.round(avgInterval)}ms avg) → wait ${BASE_SILENCE_WAIT_MS}ms`);
-    return BASE_SILENCE_WAIT_MS;
-  }
-  
-  // Fallback: More messages = likely rapid-fire
-  if (messages.length >= 3) {
-    const elapsedSinceFirst = Date.now() - new Date(firstMessageAt).getTime();
-    if (elapsedSinceFirst < 8000) {
-      console.log(`[Adaptive] 🔥 Rapid-fire: ${messages.length} msgs in ${Math.round(elapsedSinceFirst/1000)}s → wait ${MAX_SILENCE_WAIT_MS}ms`);
-      return MAX_SILENCE_WAIT_MS;
-    }
-  }
-  
-  return BASE_SILENCE_WAIT_MS + 2000; // 8 seconds default
+// Simple silence wait - always 4 seconds after last message
+function getRequiredSilence(messageCount: number): number {
+  // একাধিক message হলে একটু বেশি wait (মানুষ তখনো টাইপ করতে পারে)
+  if (messageCount >= 3) return 5000; // 5s for rapid messages
+  if (messageCount >= 2) return 4500; // 4.5s for 2 messages
+  return SILENCE_WAIT_MS; // 4s default
 }
 
 // *** CLEANUP STUCK BUFFERS (from previous failed runs) ***
@@ -723,11 +673,11 @@ async function addMessageToSmartBuffer(
     return { action: "skip_duplicate" };
   }
 
-  // *** CRITICAL FIX: VERY LONG initial jitter (500-1000ms) ***
-  // This ensures ALL parallel webhooks see the same buffer state
-  const jitterMs = 500 + Math.random() * 500; // 500-1000ms
-  console.log(`[Buffer ${webhookId}] Initial jitter: ${Math.round(jitterMs)}ms`);
-  await new Promise(r => setTimeout(r, jitterMs));
+  // *** V7 FIX: LONG INITIAL SYNC DELAY (2 seconds) ***
+  // এটাই মূল সমাধান! 2 সেকেন্ড wait করলে সব parallel webhook একসাথে buffer দেখবে
+  // এর ফলে তারা সবাই একই buffer-এ join করতে পারবে
+  console.log(`[Buffer ${webhookId}] ⏳ Initial sync delay: ${INITIAL_SYNC_DELAY_MS}ms`);
+  await new Promise(r => setTimeout(r, INITIAL_SYNC_DELAY_MS));
 
   const MAX_RETRIES = 12; // More retries
   let attempts = 0;
@@ -932,8 +882,8 @@ async function waitAndProcessBuffer(
   while (true) {
     const elapsed = Date.now() - startTime;
     
-    // Safety: don't exceed max wait (15 seconds for slow typers)
-    if (elapsed > BATCH_MAX_TOTAL_WAIT_MS) {
+    // Safety: don't exceed max wait
+    if (elapsed > MAX_TOTAL_WAIT_MS) {
       console.log(`[Buffer] ⏰ Max wait ${elapsed}ms reached, processing now`);
       break;
     }
@@ -1010,12 +960,8 @@ async function waitAndProcessBuffer(
       lastMessageCount = currentMsgCount;
     }
     
-    // *** ADAPTIVE SILENCE CHECK ***
-    // Calculate required silence based on message velocity
-    const requiredSilence = calculateAdaptiveSilenceWait(
-      ourBuffer.messages || [], 
-      ourBuffer.first_message_at || ourBuffer.created_at
-    );
+    // *** SIMPLE SILENCE CHECK - 4 seconds ***
+    const requiredSilence = getRequiredSilence(currentMsgCount);
     
     // Check if we have enough silence
     if (silenceMs >= requiredSilence) {
