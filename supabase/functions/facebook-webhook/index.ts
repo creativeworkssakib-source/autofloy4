@@ -483,6 +483,9 @@ serve(async (req) => {
 
       const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+      // *** FIRST: Cleanup stuck buffers from previous failed runs ***
+      await cleanupStuckBuffers(supabase);
+
       // Process Facebook webhook events
       if (body.object === "page") {
         for (const entry of body.entry || []) {
@@ -523,8 +526,95 @@ serve(async (req) => {
 });
 
 // MESSAGE BATCHING CONSTANTS
-const MESSAGE_BATCH_DELAY_MS = 4000; // Wait 4 seconds after LAST message before processing
-const MESSAGE_BATCH_MAX_WAIT_MS = 15000; // Max 15 seconds total wait (for multiple messages)
+// Reduced timing for faster response (Edge Function has limited execution time)
+const MESSAGE_BATCH_DELAY_MS = 2000; // Wait 2 seconds after LAST message before processing
+const MESSAGE_BATCH_MAX_WAIT_MS = 8000; // Max 8 seconds total wait (for multiple messages)
+const STUCK_BUFFER_THRESHOLD_MS = 10000; // Process buffers stuck for more than 10 seconds
+
+// *** CLEANUP STUCK BUFFERS (from previous failed runs) ***
+async function cleanupStuckBuffers(supabase: any): Promise<void> {
+  try {
+    // Find buffers that are unprocessed and older than threshold
+    const threshold = new Date(Date.now() - STUCK_BUFFER_THRESHOLD_MS).toISOString();
+    
+    const { data: stuckBuffers } = await supabase
+      .from("ai_message_buffer")
+      .select("id, page_id, sender_id, messages, created_at")
+      .eq("is_processed", false)
+      .lt("created_at", threshold)
+      .limit(5);
+    
+    if (!stuckBuffers || stuckBuffers.length === 0) {
+      return;
+    }
+    
+    console.log(`[Cleanup] Found ${stuckBuffers.length} stuck buffers, processing...`);
+    
+    for (const buffer of stuckBuffers) {
+      // Atomically claim this buffer
+      const { data: claimed } = await supabase
+        .from("ai_message_buffer")
+        .update({ is_processed: true })
+        .eq("id", buffer.id)
+        .eq("is_processed", false)
+        .select("id")
+        .maybeSingle();
+      
+      if (claimed) {
+        console.log(`[Cleanup] Claimed stuck buffer ${buffer.id}, processing ${buffer.messages?.length || 0} messages`);
+        
+        // Get account and page memory for this page
+        const { data: account } = await supabase
+          .from("connected_accounts")
+          .select("id, user_id, is_connected, access_token_encrypted, encryption_version")
+          .eq("external_id", buffer.page_id)
+          .eq("platform", "facebook")
+          .eq("is_connected", true)
+          .single();
+        
+        if (account) {
+          // Decrypt token
+          let decryptedToken: string | null = null;
+          if (account.access_token_encrypted && account.encryption_version === 2) {
+            try {
+              decryptedToken = await decryptToken(account.access_token_encrypted);
+            } catch (e) {
+              console.error("[Cleanup] Failed to decrypt token:", e);
+            }
+          }
+          
+          // Get page memory
+          const { data: pageMemory } = await supabase
+            .from("page_memory")
+            .select("automation_settings")
+            .eq("page_id", buffer.page_id)
+            .eq("user_id", account.user_id)
+            .single();
+          
+          // Check if auto reply is enabled
+          const autoInboxReply = pageMemory?.automation_settings?.autoInboxReply === true;
+          
+          if (autoInboxReply && decryptedToken) {
+            await processBufferedMessages(
+              supabase,
+              buffer.page_id,
+              buffer.sender_id,
+              buffer.messages || [],
+              decryptedToken,
+              account,
+              pageMemory
+            );
+            console.log(`[Cleanup] ✅ Processed stuck buffer ${buffer.id}`);
+          } else {
+            console.log(`[Cleanup] Skipped buffer ${buffer.id}: autoReply=${autoInboxReply}, hasToken=${!!decryptedToken}`);
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error("[Cleanup] Error processing stuck buffers:", error);
+  }
+}
 
 // *** DATABASE-BASED DEDUPLICATION (survives Edge Function restarts) ***
 // Check if message already exists in any buffer (processed or not)
@@ -651,7 +741,7 @@ async function checkAndProcessBuffer(
   account: any,
   pageMemory: any
 ): Promise<void> {
-  // Wait for the batch delay (4 seconds)
+  // Wait for the batch delay
   console.log(`[Buffer] ⏳ Waiting ${MESSAGE_BATCH_DELAY_MS}ms for more messages from ${senderId}...`);
   await new Promise(resolve => setTimeout(resolve, MESSAGE_BATCH_DELAY_MS));
   
