@@ -534,11 +534,13 @@ serve(async (req) => {
 // - Other webhooks see this timestamp and back off
 // - Processor waits for silence, then sends single reply
 
-const SILENCE_WAIT_MS = 4000;            // Wait 4 seconds after LAST message
-const BATCH_MAX_TOTAL_WAIT_MS = 15000;   // Max 15s total wait
-const STUCK_BUFFER_THRESHOLD_MS = 25000; // Process stuck buffers after 25s
-const POLL_INTERVAL_MS = 250;            // Check every 250ms for new messages
-const LOCK_ACQUIRE_TIMEOUT_MS = 500;     // Wait max 500ms to acquire lock
+// *** TUNED FOR BANGLADESHI USERS: Most type 2-3 messages in 6-10 seconds ***
+const SILENCE_WAIT_MS = 6000;            // Wait 6 seconds after LAST message (increased from 4s)
+const BATCH_MAX_TOTAL_WAIT_MS = 20000;   // Max 20s total wait (increased from 15s for slow typers)
+const STUCK_BUFFER_THRESHOLD_MS = 30000; // Process stuck buffers after 30s
+const POLL_INTERVAL_MS = 300;            // Check every 300ms for new messages
+const LOCK_ACQUIRE_TIMEOUT_MS = 600;     // Wait max 600ms to acquire lock
+const RECENT_PROCESS_THRESHOLD_MS = 12000; // Consider buffers processed in last 12s as "recent"
 
 // *** CLEANUP STUCK BUFFERS (from previous failed runs) ***
 async function cleanupStuckBuffers(supabase: any): Promise<void> {
@@ -655,10 +657,28 @@ async function addMessageToSmartBuffer(
     return { action: "skip_duplicate" };
   }
 
-  // Add random jitter to desynchronize parallel webhooks (50-150ms)
-  await new Promise(r => setTimeout(r, 50 + Math.random() * 100));
+  // Add random jitter to desynchronize parallel webhooks (80-200ms)
+  await new Promise(r => setTimeout(r, 80 + Math.random() * 120));
 
-  // STEP 1: Find or create buffer
+  // *** NEW: Check if there's a RECENTLY processed buffer (within 12 seconds) ***
+  // This means the customer is continuing a rapid conversation
+  const recentThreshold = new Date(now - RECENT_PROCESS_THRESHOLD_MS).toISOString();
+  const { data: recentlyProcessed } = await supabase
+    .from("ai_message_buffer")
+    .select("id, created_at")
+    .eq("page_id", pageId)
+    .eq("sender_id", senderId)
+    .eq("is_processed", true)
+    .gt("created_at", recentThreshold)
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  const hasRecentActivity = recentlyProcessed && recentlyProcessed.length > 0;
+  if (hasRecentActivity) {
+    console.log(`[Buffer ${webhookId}] 🔥 Recent activity detected - customer is rapid-firing messages!`);
+  }
+
+  // STEP 1: Find or create buffer (check UNPROCESSED first)
   const { data: existingBuffers } = await supabase
     .from("ai_message_buffer")
     .select("*")
@@ -715,7 +735,10 @@ async function addMessageToSmartBuffer(
     console.log(`[Buffer ${webhookId}] 📥 Added msg #${allMsgs.length} to existing buffer ${targetBuffer.id.slice(-8)}`);
     
   } else {
-    // No buffer exists - create new one
+    // No unprocessed buffer exists
+    // BUT: If there was recent activity (buffer processed within 12s), this is a CONTINUATION
+    // Customer sent more messages AFTER we replied. We should still batch and reply once.
+    
     // Wait a bit more to let parallel requests settle
     await new Promise(r => setTimeout(r, 100 + Math.random() * 100));
     
@@ -739,6 +762,7 @@ async function addMessageToSmartBuffer(
       targetBuffer = recheckBuffer;
     } else {
       // We are the first - create buffer AND become processor
+      // BUT: If there's recent activity, use SHORTER silence wait (customer is fast-chatting)
       const { data: newBuffer, error: insertError } = await supabase
         .from("ai_message_buffer")
         .insert({
@@ -753,7 +777,12 @@ async function addMessageToSmartBuffer(
         .single();
       
       if (!insertError && newBuffer) {
-        console.log(`[Buffer ${webhookId}] 🆕 Created buffer ${newBuffer.id.slice(-8)} - becoming processor`);
+        // If recent activity detected, log it for processor to use shorter wait
+        if (hasRecentActivity) {
+          console.log(`[Buffer ${webhookId}] 🆕 Created buffer ${newBuffer.id.slice(-8)} (FAST MODE - recent activity) - becoming processor`);
+        } else {
+          console.log(`[Buffer ${webhookId}] 🆕 Created buffer ${newBuffer.id.slice(-8)} - becoming processor`);
+        }
         targetBuffer = newBuffer;
         isFirstProcessor = true;
       } else {
