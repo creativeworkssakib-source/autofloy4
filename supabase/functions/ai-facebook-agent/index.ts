@@ -69,17 +69,48 @@ async function findProductByName(supabase: any, userId: string, text: string): P
 }
 
 async function getOrCreateConversation(supabase: any, userId: string, pageId: string, senderId: string, senderName?: string) {
-  let { data: conv } = await supabase.from("ai_conversations")
+  // Try to find existing conversation
+  const { data: conv, error: selectError } = await supabase.from("ai_conversations")
     .select("*").eq("page_id", pageId).eq("sender_id", senderId).single();
   
-  if (!conv) {
-    const { data: newConv } = await supabase.from("ai_conversations")
-      .insert({ user_id: userId, page_id: pageId, sender_id: senderId, sender_name: senderName, 
-                conversation_state: "idle", message_history: [] })
-      .select().single();
-    conv = newConv;
+  if (selectError) {
+    console.log(`[AI Agent] Select conversation error (may be normal for new):`, selectError.code);
   }
-  return conv;
+  
+  if (conv) {
+    return conv;
+  }
+  
+  // Create new conversation if not found
+  console.log(`[AI Agent] Creating new conversation for sender ${senderId}`);
+  const { data: newConv, error: insertError } = await supabase.from("ai_conversations")
+    .insert({ 
+      user_id: userId, 
+      page_id: pageId, 
+      sender_id: senderId, 
+      sender_name: senderName, 
+      conversation_state: "idle", 
+      message_history: [] 
+    })
+    .select().single();
+  
+  if (insertError) {
+    console.error(`[AI Agent] Failed to create conversation:`, insertError);
+    // Return a minimal conversation object to prevent crash
+    return {
+      id: null,
+      user_id: userId,
+      page_id: pageId,
+      sender_id: senderId,
+      sender_name: senderName,
+      conversation_state: "idle",
+      message_history: [],
+      fake_order_score: 0,
+      total_messages_count: 0,
+    };
+  }
+  
+  return newConv;
 }
 
 // AI Call with better error handling
