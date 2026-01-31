@@ -44,13 +44,15 @@ async function getAllProducts(supabase: any, userId: string): Promise<ProductCon
     category: p.category, sku: p.sku, is_active: p.is_active, isDigital: false
   }));
   
+  // FIXED: Use `price` as primary, NOT sale_price (sale_price is optional discount)
   (digital || []).forEach((d: any) => {
     products.push({
-      id: d.id, name: d.name, price: d.sale_price || d.price, description: d.description,
+      id: d.id, name: d.name, price: d.price, description: d.description,
       category: d.product_type, is_active: d.is_active, isDigital: true, product_type: d.product_type
     });
   });
   
+  console.log(`[AI Agent] Loaded products: ${products.map(p => `${p.name}=৳${p.price}`).join(", ")}`);
   return products;
 }
 
@@ -150,7 +152,7 @@ async function callAI(systemPrompt: string, messages: any[], imageUrls?: string[
   const requestBody = {
     model,
     messages: [{ role: "system", content: systemPrompt }, ...aiMessages],
-    max_completion_tokens: 1024,  // GPT-5 needs more tokens for Bangla text
+    max_completion_tokens: 2048,  // Increased: GPT-5 needs more tokens for Bangla text
   };
   
   console.log(`[AI Agent] Calling AI with model: ${model}, messages count: ${aiMessages.length}`);
@@ -268,31 +270,27 @@ serve(async (req) => {
     // Get message history from database
     let messageHistory = conversation.message_history || [];
     
-    // *** SUPER CRITICAL: AGGRESSIVE HALLUCINATION PREVENTION ***
-    // ALWAYS check for hallucinated content in history - regardless of product config
-    // These patterns indicate AI invented fake products
-    const hallucination_patterns = [
-      /lovable/i,                        // Specific fake product name
-      /৳\s*(500|600|700|800|900|1000)/,  // Common hallucinated prices
-      /\d+\s*টাকা(?!\s*delivery)/i,      // X taka (but not delivery charge)
-      /product.*"[^"]{3,15}"/i,          // product "something"
-      /amader\s+product.*৳/i,            // "amader product ৳XXX"
-      /আমাদের\s+প্রোডাক্ট.*৳/i,          // Bengali version
-    ];
+    // *** SMART HALLUCINATION DETECTION (only when NO products exist) ***
+    // Build valid product names/prices from our actual product list
+    const validProductNames = allProducts.map(p => p.name.toLowerCase());
+    const validPrices = allProducts.map(p => p.price);
     
-    const hasHallucination = messageHistory.some((m: any) => 
-      m.role === "assistant" && hallucination_patterns.some(p => p.test(m.content || ""))
-    );
-    
-    // If no real products OR hallucination detected - PURGE history
-    if (!hasRealProducts || hasHallucination) {
+    // Only check for hallucination if we have NO products at all
+    let hasHallucination = false;
+    if (!hasRealProducts) {
+      // If no products configured, ANY product/price mention is hallucination
+      const pricePattern = /৳\s*\d+|টাকা/i;
+      hasHallucination = messageHistory.some((m: any) => 
+        m.role === "assistant" && pricePattern.test(m.content || "")
+      );
+      
       if (hasHallucination) {
-        console.log(`[AI Agent] 🚨 HALLUCINATION DETECTED in history - PURGING entire history!`);
+        console.log(`[AI Agent] 🚨 HALLUCINATION: AI mentioned prices but no products configured - PURGING history!`);
       } else {
         console.log(`[AI Agent] ⚠️ NO PRODUCTS CONFIGURED - Preventing hallucination`);
       }
       
-      // COMPLETELY RESET the conversation in database to prevent future hallucination
+      // COMPLETELY RESET only when NO products
       if (conversation.id) {
         await supabase.from("ai_conversations").update({
           message_history: [],
@@ -303,9 +301,28 @@ serve(async (req) => {
           conversation_state: "idle",
         }).eq("id", conversation.id);
       }
-      
-      // Start fresh - only the current message
       messageHistory = [];
+    } else {
+      // We HAVE products - check for WRONG prices (not matching our actual products)
+      for (const msg of messageHistory) {
+        if (msg.role !== "assistant") continue;
+        const content = msg.content || "";
+        
+        // Extract any price mentioned
+        const priceMatches = content.match(/৳\s*(\d+)/g);
+        if (priceMatches) {
+          for (const match of priceMatches) {
+            const price = parseInt(match.replace(/৳\s*/, ""));
+            // If AI mentioned a price that's NOT in our valid prices list
+            if (!validPrices.includes(price) && price > 0 && price !== 50 && price !== 60 && price !== 100) {
+              console.log(`[AI Agent] ⚠️ Wrong price detected: ${price} not in valid prices [${validPrices.join(",")}]`);
+              // Don't purge all history, just trim to last 3 messages
+              messageHistory = messageHistory.slice(-3);
+              break;
+            }
+          }
+        }
+      }
     }
     
     // Add current message to history

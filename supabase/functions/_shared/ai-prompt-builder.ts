@@ -42,13 +42,17 @@ export function buildSystemPrompt(
   
   console.log(`[Prompt Builder] Language: ${pageMemory.detected_language} -> ${language}, Tone: ${pageMemory.preferred_tone} -> ${tone}`);
   
-  // Build product list - CRITICAL: If empty, explicitly say NO PRODUCTS to prevent hallucination
+  // Build product list - CRITICAL: Use exact prices from database
   const productList = pageMemory.products_summary 
     || (allProducts.length > 0 
-        ? allProducts.map(p => `- ${p.name}: ৳${p.price}`).slice(0, 30).join("\n")
+        ? allProducts.map(p => `- ${p.name}: ৳${p.price}${p.isDigital ? " (ডিজিটাল)" : ""}`).slice(0, 30).join("\n")
         : null);
 
   const hasProducts = !!productList;
+  
+  // Log what products we're using
+  console.log(`[Prompt Builder] Products for prompt: ${hasProducts ? allProducts.slice(0, 3).map(p => `${p.name}=৳${p.price}`).join(", ") : "NONE"}`);
+
 
   // Language-specific prompt intro
   let prompt = language === "english" 
