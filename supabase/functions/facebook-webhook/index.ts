@@ -525,36 +525,39 @@ serve(async (req) => {
   }
 });
 
-// ============= SMART MESSAGE BATCHING V8 (LAST MESSAGE TIMER RESET) =============
+// ============= SMART MESSAGE BATCHING V9 (FASTER SYNC + AGGRESSIVE REOPEN) =============
 // 
-// **সমস্যা V7:** প্রথম message process হয়ে যাচ্ছে, তারপর দ্বিতীয় message নতুন buffer তৈরি করছে
+// **V8 সমস্যা:** 2s initial delay খুব বেশি - 1st buffer process হয়ে যায় 2nd message আসার আগে
 // 
-// **V8 সমাধান - LAST MESSAGE TIMER RESET:**
-// 1. Message এলে ➜ 2 সেকেন্ড sync wait
-// 2. Buffer খুঁজি বা তৈরি করি (unique constraint আছে)
-// 3. **4 সেকেন্ড STRICT SILENCE** wait করি
-//    - প্রতি poll-এ check: last_message_at থেকে 4s পেরিয়েছে?
-//    - নতুন message এলে timer RESET হয় (database-level)
-// 4. 4s silence পেলে ➜ **FINAL CHECK** করি, তারপরই process
-// 5. FIRST WINS: শুধু প্রথম webhook processor হয়, বাকিরা skip
+// **V9 সমাধান - FASTER SYNC + AGGRESSIVE REOPEN:**
+// 1. Initial sync delay কমানো: 2s → 1s
+// 2. Silence threshold বাড়ানো: 4s → 5s (একই sender এর জন্য)
+// 3. Reopen window বাড়ানো: 20s → 30s
+// 4. **CRITICAL**: Reopen করার সময় messages APPEND করা
+// 5. Final check আরও robust করা
 //
-// KEY INSIGHT: Database-based `last_message_at` ই timer source
-// নতুন message ➜ last_message_at update ➜ timer reset স্বয়ংক্রিয়
+// TIMELINE EXAMPLE (hi আসে t=0, vai আসে t=3s):
+// t=0: hi আসে
+// t=1s: hi's sync delay শেষ, buffer তৈরি
+// t=3s: vai আসে  
+// t=4s: vai's sync delay শেষ, buffer খুঁজে পায় (এখনো 5s silence হয়নি!)
+// t=6s: 5s silence পার, দুইটা message একসাথে process
 
-const INITIAL_SYNC_DELAY_MS = 2000;      // প্রথমে 2s wait (webhooks sync করতে)
-const SILENCE_WAIT_MS = 4000;            // 4 seconds silence = done typing
-const MAX_TOTAL_WAIT_MS = 25000;         // Max 25s total wait (increased)
-const STUCK_BUFFER_THRESHOLD_MS = 35000; // Process stuck buffers after 35s
-const POLL_INTERVAL_MS = 400;            // Check every 400ms for faster detection
-const FINAL_CHECK_DELAY_MS = 300;        // Final check delay before processing
+const INITIAL_SYNC_DELAY_MS = 1000;      // 1s sync (faster)
+const SILENCE_WAIT_MS = 5000;            // 5 seconds silence = done typing (increased)
+const MAX_TOTAL_WAIT_MS = 30000;         // Max 30s total wait
+const STUCK_BUFFER_THRESHOLD_MS = 40000; // Process stuck buffers after 40s
+const POLL_INTERVAL_MS = 350;            // Check every 350ms for faster detection
+const FINAL_CHECK_DELAY_MS = 400;        // Final check delay
+const REOPEN_WINDOW_MS = 30000;          // 30 seconds reopen window (increased)
 
-// Silence wait scales with message count
+// Silence wait scales with message count - LONGER for multi-message
 function getRequiredSilence(messageCount: number): number {
-  // যত বেশি message, তত বেশি wait (মানুষ আরো type করতে পারে)
-  if (messageCount >= 4) return 5500; // 5.5s for many messages
-  if (messageCount >= 3) return 5000; // 5s for 3+ messages
-  if (messageCount >= 2) return 4500; // 4.5s for 2 messages
-  return SILENCE_WAIT_MS; // 4s default for single message
+  // যত বেশি message, তত বেশি wait (user আরো type করতে পারে)
+  if (messageCount >= 4) return 6000; // 6s for 4+ messages
+  if (messageCount >= 3) return 5500; // 5.5s for 3 messages
+  if (messageCount >= 2) return 5000; // 5s for 2 messages
+  return SILENCE_WAIT_MS; // 5s default
 }
 
 // *** CLEANUP STUCK BUFFERS (from previous failed runs) ***
@@ -735,10 +738,9 @@ async function addMessageToSmartBuffer(
         continue;
       }
     } else {
-      // *** KEY FIX V6: Check for VERY RECENTLY processed buffer (within 20s) ***
-      // If found, REOPEN it instead of creating new one!
-      const reopenWindowMs = 20000; // 20 seconds
-      const recentThreshold = new Date(now - reopenWindowMs).toISOString();
+      // *** V9 FIX: Check for RECENTLY processed buffer ***
+      // Use the constant REOPEN_WINDOW_MS (30 seconds)
+      const recentThreshold = new Date(now - REOPEN_WINDOW_MS).toISOString();
       
       const { data: recentProcessed } = await supabase
         .from("ai_message_buffer")
