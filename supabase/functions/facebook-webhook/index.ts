@@ -539,21 +539,22 @@ serve(async (req) => {
 //
 // **KEY FIX:** recentThreshold check করবে last_message_at, created_at না!
 
-const INITIAL_SYNC_DELAY_MS = 500;       // 500ms sync (fastest join)
-const SILENCE_WAIT_MS = 6000;            // 6 seconds silence = done typing (LONGER!)
-const MAX_TOTAL_WAIT_MS = 35000;         // Max 35s total wait
-const STUCK_BUFFER_THRESHOLD_MS = 45000; // Process stuck buffers after 45s
-const POLL_INTERVAL_MS = 300;            // Check every 300ms (faster)
-const FINAL_CHECK_DELAY_MS = 500;        // Final check delay (more time)
-const REOPEN_WINDOW_MS = 45000;          // 45 seconds reopen window (MUCH longer)
+const INITIAL_SYNC_DELAY_MS = 300;       // 300ms sync (ultra fast join)
+const SILENCE_WAIT_MS = 3000;            // 3 seconds silence = done typing (FASTER!)
+const MAX_TOTAL_WAIT_MS = 20000;         // Max 20s total wait
+const STUCK_BUFFER_THRESHOLD_MS = 30000; // Process stuck buffers after 30s
+const POLL_INTERVAL_MS = 250;            // Check every 250ms (faster detection)
+const FINAL_CHECK_DELAY_MS = 300;        // Final check delay
+const REOPEN_WINDOW_MS = 45000;          // 45 seconds reopen window
 
-// Silence wait scales with message count - LONGER for multi-message
+// Silence wait scales with message count
 function getRequiredSilence(messageCount: number): number {
-  // যত বেশি message, তত বেশি wait (user আরো type করতে পারে)
-  if (messageCount >= 4) return 7000; // 7s for 4+ messages
-  if (messageCount >= 3) return 6500; // 6.5s for 3 messages
-  if (messageCount >= 2) return 6000; // 6s for 2 messages
-  return SILENCE_WAIT_MS; // 6s default
+  // Single message = fast reply (3s)
+  // Multiple messages = give more time to finish typing
+  if (messageCount >= 4) return 4500; // 4.5s for 4+ messages
+  if (messageCount >= 3) return 4000; // 4s for 3 messages
+  if (messageCount >= 2) return 3500; // 3.5s for 2 messages
+  return SILENCE_WAIT_MS; // 3s default for single message
 }
 
 // *** CLEANUP STUCK BUFFERS (from previous failed runs) ***
