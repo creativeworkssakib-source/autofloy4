@@ -539,13 +539,18 @@ serve(async (req) => {
 //
 // **KEY FIX:** recentThreshold check করবে last_message_at, created_at না!
 
-const INITIAL_SYNC_DELAY_MS = 200;       // 200ms sync (ultra fast join)
-const SILENCE_WAIT_MS = 1500;            // 1.5 seconds silence = done typing (SUPER FAST!)
+// *** V12 BULLETPROOF: LONGER SYNC + RANDOM JITTER ***
+// সমস্যা: 200ms sync এ parallel webhooks সবাই খালি buffer দেখে, সবাই নতুন buffer বানায়
+// সমাধান: 600ms base + random jitter (0-400ms) = total 600-1000ms spread
+//         এতে প্রথম webhook এর buffer অন্যরা দেখতে পাবে
+const INITIAL_SYNC_DELAY_BASE_MS = 600;  // 600ms base delay
+const INITIAL_SYNC_JITTER_MS = 400;      // +0-400ms random jitter
+const SILENCE_WAIT_MS = 1500;            // 1.5 seconds silence = done typing
 const MAX_TOTAL_WAIT_MS = 15000;         // Max 15s total wait
 const STUCK_BUFFER_THRESHOLD_MS = 25000; // Process stuck buffers after 25s
 const POLL_INTERVAL_MS = 150;            // Check every 150ms (ultra fast detection)
 const FINAL_CHECK_DELAY_MS = 200;        // Final check delay
-const REOPEN_WINDOW_MS = 30000;          // 30 seconds reopen window
+const REOPEN_WINDOW_MS = 45000;          // 45 seconds reopen window
 
 // Silence wait scales with message count - FAST!
 function getRequiredSilence(messageCount: number): number {
@@ -678,11 +683,12 @@ async function addMessageToSmartBuffer(
     return { action: "skip_duplicate" };
   }
 
-  // *** V7 FIX: LONG INITIAL SYNC DELAY (2 seconds) ***
-  // এটাই মূল সমাধান! 2 সেকেন্ড wait করলে সব parallel webhook একসাথে buffer দেখবে
-  // এর ফলে তারা সবাই একই buffer-এ join করতে পারবে
-  console.log(`[Buffer ${webhookId}] ⏳ Initial sync delay: ${INITIAL_SYNC_DELAY_MS}ms`);
-  await new Promise(r => setTimeout(r, INITIAL_SYNC_DELAY_MS));
+  // *** V12 FIX: LONG INITIAL SYNC DELAY + RANDOM JITTER ***
+  // এটাই মূল সমাধান! base + random jitter wait করলে parallel webhooks আলাদা সময়ে check করবে
+  // প্রথম webhook buffer তৈরি করবে, বাকিরা সেই buffer join করবে
+  const syncDelay = INITIAL_SYNC_DELAY_BASE_MS + Math.floor(Math.random() * INITIAL_SYNC_JITTER_MS);
+  console.log(`[Buffer ${webhookId}] ⏳ Initial sync delay: ${syncDelay}ms (base ${INITIAL_SYNC_DELAY_BASE_MS} + jitter)`);
+  await new Promise(r => setTimeout(r, syncDelay));
 
   const MAX_RETRIES = 12; // More retries
   let attempts = 0;
