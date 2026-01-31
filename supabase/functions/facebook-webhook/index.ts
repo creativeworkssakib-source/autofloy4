@@ -624,7 +624,7 @@ async function isMessageAlreadySeen(supabase: any, pageId: string, senderId: str
   return false;
 }
 
-// *** SMART BUFFER: Add message - returns whether THIS webhook should process ***
+// *** SMART BUFFER: Race-safe using optimistic locking ***
 async function addMessageToSmartBuffer(
   supabase: any, 
   pageId: string, 
@@ -634,58 +634,111 @@ async function addMessageToSmartBuffer(
   const now = Date.now();
   const messageId = messageData.messageId;
   
-  // Check for duplicate
+  // Check for duplicate first
   if (messageId && await isMessageAlreadySeen(supabase, pageId, senderId, messageId)) {
     return { action: "skip_duplicate" };
   }
-  
-  // Find existing unprocessed buffer
+
+  // *** STEP 1: Find any existing unprocessed buffer ***
   const { data: existingBuffer } = await supabase
     .from("ai_message_buffer")
     .select("*")
     .eq("page_id", pageId)
     .eq("sender_id", senderId)
     .eq("is_processed", false)
+    .order("created_at", { ascending: false })
+    .limit(1)
     .maybeSingle();
-  
+
   if (existingBuffer) {
-    // Check if message already in buffer
+    // Buffer exists - add message and let first handler process
     if ((existingBuffer.messages || []).some((m: any) => m.messageId === messageId)) {
-      console.log(`[Buffer] Message already in buffer, skip`);
+      console.log(`[Buffer] Message ${messageId} already in buffer, skipping`);
       return { action: "skip_duplicate" };
     }
-    
+
     const updatedMessages = [...(existingBuffer.messages || []), messageData];
     
-    // Just add message, update timestamp - let first handler process later
     await supabase
       .from("ai_message_buffer")
       .update({ 
         messages: updatedMessages, 
         last_message_at: new Date(now).toISOString() 
       })
-      .eq("id", existingBuffer.id);
-    
-    console.log(`[Buffer] Added msg #${updatedMessages.length} - first handler will process`);
+      .eq("id", existingBuffer.id)
+      .eq("is_processed", false);
+
+    console.log(`[Buffer] 📥 Added msg #${updatedMessages.length} to existing buffer ${existingBuffer.id}`);
     return { action: "let_first_handle", bufferId: existingBuffer.id };
-  } else {
-    // Create new buffer - THIS webhook becomes the processor
-    const { data: newBuffer } = await supabase
-      .from("ai_message_buffer")
-      .insert({
-        page_id: pageId,
-        sender_id: senderId,
-        messages: [messageData],
-        first_message_at: new Date(now).toISOString(),
-        last_message_at: new Date(now).toISOString(),
-        is_processed: false,
-      })
-      .select()
-      .single();
-    
-    console.log(`[Buffer] 🆕 New buffer created: ${newBuffer?.id} - this webhook will process`);
-    return { action: "be_processor", bufferId: newBuffer?.id };
   }
+
+  // *** STEP 2: No buffer exists - try to create one ***
+  // Use random delay to reduce collision chance
+  await new Promise(r => setTimeout(r, Math.random() * 100));
+  
+  // Double-check (another webhook might have just created)
+  const { data: doubleCheck } = await supabase
+    .from("ai_message_buffer")
+    .select("*")
+    .eq("page_id", pageId)
+    .eq("sender_id", senderId)
+    .eq("is_processed", false)
+    .limit(1)
+    .maybeSingle();
+  
+  if (doubleCheck) {
+    // Another webhook beat us - append to their buffer
+    const msgs = [...(doubleCheck.messages || []), messageData];
+    await supabase
+      .from("ai_message_buffer")
+      .update({ messages: msgs, last_message_at: new Date(now).toISOString() })
+      .eq("id", doubleCheck.id)
+      .eq("is_processed", false);
+    
+    console.log(`[Buffer] 📥 Added to just-created buffer ${doubleCheck.id}`);
+    return { action: "let_first_handle", bufferId: doubleCheck.id };
+  }
+
+  // Actually create the buffer
+  const { data: newBuffer, error: insertError } = await supabase
+    .from("ai_message_buffer")
+    .insert({
+      page_id: pageId,
+      sender_id: senderId,
+      messages: [messageData],
+      first_message_at: new Date(now).toISOString(),
+      last_message_at: new Date(now).toISOString(),
+      is_processed: false,
+    })
+    .select()
+    .single();
+
+  if (insertError) {
+    console.log(`[Buffer] Insert error (race condition?):`, insertError.message);
+    
+    // Final attempt - find and append
+    const { data: finalCheck } = await supabase
+      .from("ai_message_buffer")
+      .select("*")
+      .eq("page_id", pageId)
+      .eq("sender_id", senderId)
+      .eq("is_processed", false)
+      .maybeSingle();
+    
+    if (finalCheck) {
+      const msgs = [...(finalCheck.messages || []), messageData];
+      await supabase
+        .from("ai_message_buffer")
+        .update({ messages: msgs, last_message_at: new Date(now).toISOString() })
+        .eq("id", finalCheck.id);
+      
+      return { action: "let_first_handle", bufferId: finalCheck.id };
+    }
+    return { action: "skip_duplicate" };
+  }
+
+  console.log(`[Buffer] 🆕 Created buffer ${newBuffer?.id} - this webhook will process`);
+  return { action: "be_processor", bufferId: newBuffer?.id };
 }
 
 // *** NON-BLOCKING WAIT: Only the FIRST webhook waits and processes ***
