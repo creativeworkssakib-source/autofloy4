@@ -539,31 +539,31 @@ serve(async (req) => {
 //
 // **KEY FIX:** recentThreshold check করবে last_message_at, created_at না!
 
-// *** V13 BULLETPROOF: ULTRA LONG SYNC + SEQUENTIAL CHECK ***
-// সমস্যা: Parallel webhooks সবাই খালি buffer দেখে, সবাই নতুন buffer বানায়
-// সমাধান: 1500ms fixed sync delay + 3 consecutive DB checks
-//         এতে প্রথম webhook এর buffer অন্যরা GUARANTEED দেখতে পাবে
-const INITIAL_SYNC_DELAY_MS = 1500;      // 1.5 SECOND initial sync - GUARANTEED buffer visibility
-const SILENCE_WAIT_MS = 2000;            // 2 seconds silence = done typing
-const MAX_TOTAL_WAIT_MS = 15000;         // Max 15s total wait
-const STUCK_BUFFER_THRESHOLD_MS = 25000; // Process stuck buffers after 25s
-const POLL_INTERVAL_MS = 200;            // Check every 200ms
-const FINAL_CHECK_DELAY_MS = 300;        // Final check delay
-const REOPEN_WINDOW_MS = 60000;          // 60 seconds reopen window (extended)
+// *** V14 BULLETPROOF: TRUE "Last Message Timer Reset" Pattern ***
+// সমস্যা ছিল: V13 এ 1.5s sync delay silence এর সাথে যোগ হচ্ছিল
+// ফলে 1st message আসার মাত্র 3s পর reply দিচ্ছিল, 2nd message wait করত না
+//
+// V14 সমাধান:
+// 1. Sync delay কমানো 1s এ - parallel webhook দেখতে পাবে
+// 2. waitAndProcessBuffer এ startWaitTime track করা
+// 3. Silence ONLY count হবে last_message_at থেকে (sync delay বাদ)
+// 4. Timer প্রতি নতুন message এ RESET হবে
 
-// V13: TRIPLE CHECK before creating new buffer
-// সমস্যা ছিল: একবার check করে buffer না পেলে নতুন বানাতো
-// সমাধান: 3 বার check করবে, 300ms gap দিয়ে - এতে parallel webhook এর buffer দেখতে পারবে
-const BUFFER_CHECK_RETRIES = 3;
-const BUFFER_CHECK_GAP_MS = 300;
+const INITIAL_SYNC_DELAY_MS = 1000;      // 1 second sync delay (reduced from 1.5s)
+const BASE_SILENCE_WAIT_MS = 2000;       // 2 seconds silence AFTER last message
+const MAX_TOTAL_WAIT_MS = 20000;         // Max 20s total wait (for many messages)
+const STUCK_BUFFER_THRESHOLD_MS = 30000; // Process stuck buffers after 30s
+const POLL_INTERVAL_MS = 150;            // Check every 150ms (faster detection)
+const FINAL_CHECK_DELAY_MS = 400;        // 400ms final check for last-second messages
+const REOPEN_WINDOW_MS = 60000;          // 60 seconds reopen window
 
-// Silence wait scales with message count - FAST!
+// V14: Silence scales with message count
+// প্রতি নতুন message এ timer RESET হয়, last_message_at থেকে count
 function getRequiredSilence(messageCount: number): number {
-  // Customer পর পর message দিলে - সব আসার পর 2-3s এ reply
-  if (messageCount >= 4) return 3000; // 3s for 4+ messages
+  if (messageCount >= 4) return 3000; // 3s for 4+ messages (typing a lot)
   if (messageCount >= 3) return 2700; // 2.7s for 3 messages
   if (messageCount >= 2) return 2500; // 2.5s for 2 messages
-  return SILENCE_WAIT_MS; // 2s default for single message
+  return BASE_SILENCE_WAIT_MS;        // 2s default for single message
 }
 
 // *** CLEANUP STUCK BUFFERS (from previous failed runs) ***
@@ -688,9 +688,9 @@ async function addMessageToSmartBuffer(
     return { action: "skip_duplicate" };
   }
 
-  // *** V13 FIX: ULTRA LONG INITIAL SYNC + TRIPLE CHECK ***
-  // এটাই মূল সমাধান! 1.5 second wait + triple check করলে parallel webhooks GUARANTEED buffer দেখবে
-  console.log(`[Buffer ${webhookId}] ⏳ V13 Initial sync delay: ${INITIAL_SYNC_DELAY_MS}ms (fixed, no jitter)`);
+  // *** V14 FIX: INITIAL SYNC DELAY ***
+  // Parallel webhooks কে সময় দেওয়া হচ্ছে buffer দেখতে
+  console.log(`[Buffer ${webhookId}] ⏳ V14 Initial sync delay: ${INITIAL_SYNC_DELAY_MS}ms`);
   await new Promise(r => setTimeout(r, INITIAL_SYNC_DELAY_MS));
 
   const MAX_RETRIES = 12; // More retries
@@ -878,8 +878,9 @@ async function addMessageToSmartBuffer(
   return { action: "let_first_handle", bufferId: targetBuffer.id };
 }
 
-// *** SMART WAIT: Wait for 4 seconds of SILENCE after LAST message ***
-// Timer resets every time a new message arrives
+// *** V14 SMART WAIT: True "Last Message Timer Reset" Pattern ***
+// Timer ALWAYS resets from last_message_at, NOT from when processing started
+// This ensures we wait FULL silence period after the LAST message
 async function waitAndProcessBuffer(
   supabase: any,
   pageId: string,
@@ -889,18 +890,19 @@ async function waitAndProcessBuffer(
   account: any,
   pageMemory: any
 ): Promise<void> {
-  const startTime = Date.now();
-  let lastMessageCount = 0;
+  const processingStartTime = Date.now();
+  let lastKnownMsgCount = 0;
+  let lastKnownMsgAt = 0;
   
-  console.log(`[Buffer] ⏳ Processor starting for sender ${senderId}, buffer ${bufferId}`);
+  console.log(`[Buffer] ⏳ V14 Processor starting for sender ${senderId}, buffer ${bufferId}`);
   
-  // Poll for silence - wait until 4 seconds pass with NO new messages
+  // Poll for silence - wait until FULL silence period passes after LAST message
   while (true) {
-    const elapsed = Date.now() - startTime;
+    const totalElapsed = Date.now() - processingStartTime;
     
     // Safety: don't exceed max wait
-    if (elapsed > MAX_TOTAL_WAIT_MS) {
-      console.log(`[Buffer] ⏰ Max wait ${elapsed}ms reached, processing now`);
+    if (totalElapsed > MAX_TOTAL_WAIT_MS) {
+      console.log(`[Buffer] ⏰ Max wait ${totalElapsed}ms reached, processing now`);
       break;
     }
     
@@ -970,24 +972,25 @@ async function waitAndProcessBuffer(
     const lastMsgAt = new Date(ourBuffer.last_message_at).getTime();
     const silenceMs = Date.now() - lastMsgAt;
     
-    // Log if new messages arrived
-    if (currentMsgCount > lastMessageCount) {
-      console.log(`[Buffer] 📩 New message! Now ${currentMsgCount} msgs, resetting timer`);
-      lastMessageCount = currentMsgCount;
+    // V14: Log if new messages arrived - timer RESETS from this point
+    if (currentMsgCount > lastKnownMsgCount) {
+      console.log(`[Buffer] 📩 V14 New message detected! ${lastKnownMsgCount} → ${currentMsgCount} msgs. Timer RESET from last_message_at`);
+      lastKnownMsgCount = currentMsgCount;
+      lastKnownMsgAt = lastMsgAt;
     }
     
-    // *** V8 SILENCE CHECK WITH THRESHOLD ***
+    // V14: Silence is ALWAYS calculated from last_message_at
     const requiredSilence = getRequiredSilence(currentMsgCount);
     
-    // Check if we have enough silence
+    // Check if we have enough silence AFTER the LAST message
     if (silenceMs >= requiredSilence) {
-      console.log(`[Buffer] ✅ ${silenceMs}ms silence (required: ${requiredSilence}ms) after ${currentMsgCount} messages - processing!`);
+      console.log(`[Buffer] ✅ V14 ${silenceMs}ms silence (required: ${requiredSilence}ms) after ${currentMsgCount} messages - processing!`);
       break;
     }
     
-    // Only log every few polls to reduce noise
-    if (Math.floor(elapsed / 1000) !== Math.floor((elapsed - POLL_INTERVAL_MS) / 1000)) {
-      console.log(`[Buffer] 🔄 Waiting... ${Math.round(silenceMs/1000)}s since last msg (${currentMsgCount} msgs)`);
+    // Only log every second to reduce noise
+    if (Math.floor(totalElapsed / 1000) !== Math.floor((totalElapsed - POLL_INTERVAL_MS) / 1000)) {
+      console.log(`[Buffer] 🔄 V14 Waiting... ${Math.round(silenceMs)}ms since last msg, need ${requiredSilence}ms (${currentMsgCount} msgs)`);
     }
   }
   
