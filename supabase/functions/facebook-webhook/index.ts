@@ -525,39 +525,35 @@ serve(async (req) => {
   }
 });
 
-// ============= SMART MESSAGE BATCHING V9 (FASTER SYNC + AGGRESSIVE REOPEN) =============
+// ============= SMART MESSAGE BATCHING V10 (FIXED REOPEN + DELAYED PROCESSING) =============
 // 
-// **V8 সমস্যা:** 2s initial delay খুব বেশি - 1st buffer process হয়ে যায় 2nd message আসার আগে
+// **V9 সমস্যা:** Reopen logic দেখছে created_at কিন্তু আসলে দেখা উচিত last_message_at
+// যখন "hi" reply দেওয়া হচ্ছে, "vai" আসলে নতুন buffer তৈরি হয়ে যাচ্ছে
 // 
-// **V9 সমাধান - FASTER SYNC + AGGRESSIVE REOPEN:**
-// 1. Initial sync delay কমানো: 2s → 1s
-// 2. Silence threshold বাড়ানো: 4s → 5s (একই sender এর জন্য)
-// 3. Reopen window বাড়ানো: 20s → 30s
-// 4. **CRITICAL**: Reopen করার সময় messages APPEND করা
-// 5. Final check আরও robust করা
+// **V10 সমাধান - FIXED REOPEN + DELAYED PROCESSING:**
+// 1. Reopen window এখন last_message_at দিয়ে check করবে (created_at না)
+// 2. AI reply পাঠানোর আগে LAST CHECK - নতুন message এলে wait করবে
+// 3. POST-REPLY CHECK - reply এর পরেও check করবে, নতুন message থাকলে আবার reply
+// 4. Initial delay 500ms এ কমানো - দ্রুত buffer join হবে
+// 5. Silence 6s এ বাড়ানো - মানুষ type করতে সময় পায়
 //
-// TIMELINE EXAMPLE (hi আসে t=0, vai আসে t=3s):
-// t=0: hi আসে
-// t=1s: hi's sync delay শেষ, buffer তৈরি
-// t=3s: vai আসে  
-// t=4s: vai's sync delay শেষ, buffer খুঁজে পায় (এখনো 5s silence হয়নি!)
-// t=6s: 5s silence পার, দুইটা message একসাথে process
+// **KEY FIX:** recentThreshold check করবে last_message_at, created_at না!
 
-const INITIAL_SYNC_DELAY_MS = 1000;      // 1s sync (faster)
-const SILENCE_WAIT_MS = 5000;            // 5 seconds silence = done typing (increased)
-const MAX_TOTAL_WAIT_MS = 30000;         // Max 30s total wait
-const STUCK_BUFFER_THRESHOLD_MS = 40000; // Process stuck buffers after 40s
-const POLL_INTERVAL_MS = 350;            // Check every 350ms for faster detection
-const FINAL_CHECK_DELAY_MS = 400;        // Final check delay
-const REOPEN_WINDOW_MS = 30000;          // 30 seconds reopen window (increased)
+const INITIAL_SYNC_DELAY_MS = 500;       // 500ms sync (fastest join)
+const SILENCE_WAIT_MS = 6000;            // 6 seconds silence = done typing (LONGER!)
+const MAX_TOTAL_WAIT_MS = 35000;         // Max 35s total wait
+const STUCK_BUFFER_THRESHOLD_MS = 45000; // Process stuck buffers after 45s
+const POLL_INTERVAL_MS = 300;            // Check every 300ms (faster)
+const FINAL_CHECK_DELAY_MS = 500;        // Final check delay (more time)
+const REOPEN_WINDOW_MS = 45000;          // 45 seconds reopen window (MUCH longer)
 
 // Silence wait scales with message count - LONGER for multi-message
 function getRequiredSilence(messageCount: number): number {
   // যত বেশি message, তত বেশি wait (user আরো type করতে পারে)
-  if (messageCount >= 4) return 6000; // 6s for 4+ messages
-  if (messageCount >= 3) return 5500; // 5.5s for 3 messages
-  if (messageCount >= 2) return 5000; // 5s for 2 messages
-  return SILENCE_WAIT_MS; // 5s default
+  if (messageCount >= 4) return 7000; // 7s for 4+ messages
+  if (messageCount >= 3) return 6500; // 6.5s for 3 messages
+  if (messageCount >= 2) return 6000; // 6s for 2 messages
+  return SILENCE_WAIT_MS; // 6s default
 }
 
 // *** CLEANUP STUCK BUFFERS (from previous failed runs) ***
@@ -738,9 +734,12 @@ async function addMessageToSmartBuffer(
         continue;
       }
     } else {
-      // *** V9 FIX: Check for RECENTLY processed buffer ***
-      // Use the constant REOPEN_WINDOW_MS (30 seconds)
+      // *** V10 CRITICAL FIX: Check for RECENTLY processed buffer ***
+      // Use last_message_at (NOT created_at!) to find recent conversations
+      // This ensures we catch buffers that just got processed, not old ones
       const recentThreshold = new Date(now - REOPEN_WINDOW_MS).toISOString();
+      
+      console.log(`[Buffer ${webhookId}] 🔍 Looking for recent processed buffer (since ${recentThreshold})`);
       
       const { data: recentProcessed } = await supabase
         .from("ai_message_buffer")
@@ -748,8 +747,8 @@ async function addMessageToSmartBuffer(
         .eq("page_id", pageId)
         .eq("sender_id", senderId)
         .eq("is_processed", true)
-        .gt("created_at", recentThreshold)
-        .order("created_at", { ascending: false })
+        .gt("last_message_at", recentThreshold)  // V10 FIX: use last_message_at!
+        .order("last_message_at", { ascending: false })  // Most recent first
         .limit(1)
         .maybeSingle();
       
