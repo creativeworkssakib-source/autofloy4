@@ -534,13 +534,76 @@ serve(async (req) => {
 // - Other webhooks see this timestamp and back off
 // - Processor waits for silence, then sends single reply
 
-// *** TUNED FOR BANGLADESHI USERS: Most type 2-3 messages in 6-10 seconds ***
-const SILENCE_WAIT_MS = 6000;            // Wait 6 seconds after LAST message (increased from 4s)
-const BATCH_MAX_TOTAL_WAIT_MS = 20000;   // Max 20s total wait (increased from 15s for slow typers)
+// *** ADAPTIVE SILENCE DETECTION ***
+// Wait time adjusts based on MESSAGE VELOCITY (how fast customer is typing)
+// - Fast typer (multiple msgs in <2s each) → wait longer, they're still typing
+// - Slow typer (1 msg, 4+ seconds passed) → process sooner, they're done
+// - Single long message → process quickly (4s)
+// - Rapid-fire short messages → wait longer (8s)
+
+const BASE_SILENCE_WAIT_MS = 4000;       // Minimum 4s silence (for single complete message)
+const MAX_SILENCE_WAIT_MS = 8000;        // Maximum 8s silence (for rapid-fire typers)
+const BATCH_MAX_TOTAL_WAIT_MS = 20000;   // Max 20s total wait  
 const STUCK_BUFFER_THRESHOLD_MS = 30000; // Process stuck buffers after 30s
 const POLL_INTERVAL_MS = 300;            // Check every 300ms for new messages
 const LOCK_ACQUIRE_TIMEOUT_MS = 600;     // Wait max 600ms to acquire lock
 const RECENT_PROCESS_THRESHOLD_MS = 12000; // Consider buffers processed in last 12s as "recent"
+
+// *** CALCULATE ADAPTIVE SILENCE WAIT based on message velocity ***
+function calculateAdaptiveSilenceWait(messages: any[], firstMessageAt: string): number {
+  if (!messages || messages.length === 0) return BASE_SILENCE_WAIT_MS;
+  
+  // Single message - use base wait (customer might be done)
+  if (messages.length === 1) {
+    return BASE_SILENCE_WAIT_MS; // 4 seconds
+  }
+  
+  // Multiple messages - calculate average interval
+  // Sort by timestamp if available, otherwise use order
+  const timestamps: number[] = messages
+    .map((m: any) => m.receivedAt ? new Date(m.receivedAt).getTime() : 0)
+    .filter(t => t > 0)
+    .sort((a, b) => a - b);
+  
+  // If we have timestamps, calculate velocity
+  if (timestamps.length >= 2) {
+    let totalInterval = 0;
+    for (let i = 1; i < timestamps.length; i++) {
+      totalInterval += timestamps[i] - timestamps[i - 1];
+    }
+    const avgInterval = totalInterval / (timestamps.length - 1);
+    
+    // Fast typing (< 2s between messages) → wait longer, they're rapid-firing
+    if (avgInterval < 2000) {
+      console.log(`[Adaptive] ⚡ Fast typer detected (${Math.round(avgInterval)}ms avg) → wait ${MAX_SILENCE_WAIT_MS}ms`);
+      return MAX_SILENCE_WAIT_MS; // 8 seconds
+    }
+    
+    // Medium typing (2-4s between messages) → use medium wait
+    if (avgInterval < 4000) {
+      const wait = BASE_SILENCE_WAIT_MS + 2000; // 6 seconds
+      console.log(`[Adaptive] ⏱️ Medium typer (${Math.round(avgInterval)}ms avg) → wait ${wait}ms`);
+      return wait;
+    }
+    
+    // Slow typing (4+ seconds between messages) → use base wait
+    console.log(`[Adaptive] 🐢 Slow typer (${Math.round(avgInterval)}ms avg) → wait ${BASE_SILENCE_WAIT_MS}ms`);
+    return BASE_SILENCE_WAIT_MS; // 4 seconds
+  }
+  
+  // Fallback: More messages = likely rapid-fire = wait longer
+  if (messages.length >= 3) {
+    const elapsedSinceFirst = Date.now() - new Date(firstMessageAt).getTime();
+    if (elapsedSinceFirst < 5000) {
+      // 3+ messages in under 5 seconds = very fast typer
+      console.log(`[Adaptive] 🔥 Rapid-fire: ${messages.length} msgs in ${Math.round(elapsedSinceFirst/1000)}s → wait ${MAX_SILENCE_WAIT_MS}ms`);
+      return MAX_SILENCE_WAIT_MS; // 8 seconds
+    }
+  }
+  
+  // Default: 2 messages or slow pace → medium wait
+  return BASE_SILENCE_WAIT_MS + 1000; // 5 seconds
+}
 
 // *** CLEANUP STUCK BUFFERS (from previous failed runs) ***
 async function cleanupStuckBuffers(supabase: any): Promise<void> {
@@ -884,7 +947,7 @@ async function waitAndProcessBuffer(
     // Check ALL unprocessed buffers for this sender (in case of duplicates)
     const { data: allBuffers } = await supabase
       .from("ai_message_buffer")
-      .select("id, last_message_at, is_processed, messages")
+      .select("id, last_message_at, first_message_at, is_processed, messages, created_at")
       .eq("page_id", pageId)
       .eq("sender_id", senderId)
       .eq("is_processed", false)
@@ -950,9 +1013,16 @@ async function waitAndProcessBuffer(
       lastMessageCount = currentMsgCount;
     }
     
-    // Check for 4 seconds of silence
-    if (silenceMs >= SILENCE_WAIT_MS) {
-      console.log(`[Buffer] ✅ ${silenceMs}ms silence after ${currentMsgCount} messages - processing!`);
+    // *** ADAPTIVE SILENCE CHECK ***
+    // Calculate required silence based on message velocity
+    const requiredSilence = calculateAdaptiveSilenceWait(
+      ourBuffer.messages || [], 
+      ourBuffer.first_message_at || ourBuffer.created_at
+    );
+    
+    // Check if we have enough silence
+    if (silenceMs >= requiredSilence) {
+      console.log(`[Buffer] ✅ ${silenceMs}ms silence (required: ${requiredSilence}ms) after ${currentMsgCount} messages - processing!`);
       break;
     }
     
@@ -1197,6 +1267,7 @@ async function processMessagingEvent(supabase: any, pageId: string, event: any) 
       senderName,
       timestamp,
       messageId: message.mid,
+      receivedAt: new Date().toISOString(), // For adaptive velocity calculation
     };
     
     const bufferResult = await addMessageToSmartBuffer(supabase, pageId, senderId, messageData);
