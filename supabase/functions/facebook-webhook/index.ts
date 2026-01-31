@@ -483,6 +483,9 @@ serve(async (req) => {
 
       const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+      // *** FIRST: Cleanup stuck buffers from previous failed runs ***
+      await cleanupStuckBuffers(supabase);
+
       // Process Facebook webhook events
       if (body.object === "page") {
         for (const entry of body.entry || []) {
@@ -522,7 +525,622 @@ serve(async (req) => {
   }
 });
 
-// Process incoming messages
+// ============= SMART MESSAGE BATCHING V10 (FIXED REOPEN + DELAYED PROCESSING) =============
+// 
+// **V9 সমস্যা:** Reopen logic দেখছে created_at কিন্তু আসলে দেখা উচিত last_message_at
+// যখন "hi" reply দেওয়া হচ্ছে, "vai" আসলে নতুন buffer তৈরি হয়ে যাচ্ছে
+// 
+// **V10 সমাধান - FIXED REOPEN + DELAYED PROCESSING:**
+// 1. Reopen window এখন last_message_at দিয়ে check করবে (created_at না)
+// 2. AI reply পাঠানোর আগে LAST CHECK - নতুন message এলে wait করবে
+// 3. POST-REPLY CHECK - reply এর পরেও check করবে, নতুন message থাকলে আবার reply
+// 4. Initial delay 500ms এ কমানো - দ্রুত buffer join হবে
+// 5. Silence 6s এ বাড়ানো - মানুষ type করতে সময় পায়
+//
+// **KEY FIX:** recentThreshold check করবে last_message_at, created_at না!
+
+// *** V14 BULLETPROOF: TRUE "Last Message Timer Reset" Pattern ***
+// সমস্যা ছিল: V13 এ 1.5s sync delay silence এর সাথে যোগ হচ্ছিল
+// ফলে 1st message আসার মাত্র 3s পর reply দিচ্ছিল, 2nd message wait করত না
+//
+// V14 সমাধান:
+// 1. Sync delay কমানো 1s এ - parallel webhook দেখতে পাবে
+// 2. waitAndProcessBuffer এ startWaitTime track করা
+// 3. Silence ONLY count হবে last_message_at থেকে (sync delay বাদ)
+// 4. Timer প্রতি নতুন message এ RESET হবে
+
+const INITIAL_SYNC_DELAY_MS = 1000;      // 1 second sync delay (reduced from 1.5s)
+const BASE_SILENCE_WAIT_MS = 2000;       // 2 seconds silence AFTER last message
+const MAX_TOTAL_WAIT_MS = 20000;         // Max 20s total wait (for many messages)
+const STUCK_BUFFER_THRESHOLD_MS = 30000; // Process stuck buffers after 30s
+const POLL_INTERVAL_MS = 150;            // Check every 150ms (faster detection)
+const FINAL_CHECK_DELAY_MS = 400;        // 400ms final check for last-second messages
+const REOPEN_WINDOW_MS = 60000;          // 60 seconds reopen window
+
+// V14: Silence scales with message count
+// প্রতি নতুন message এ timer RESET হয়, last_message_at থেকে count
+function getRequiredSilence(messageCount: number): number {
+  if (messageCount >= 4) return 3000; // 3s for 4+ messages (typing a lot)
+  if (messageCount >= 3) return 2700; // 2.7s for 3 messages
+  if (messageCount >= 2) return 2500; // 2.5s for 2 messages
+  return BASE_SILENCE_WAIT_MS;        // 2s default for single message
+}
+
+// *** CLEANUP STUCK BUFFERS (from previous failed runs) ***
+async function cleanupStuckBuffers(supabase: any): Promise<void> {
+  try {
+    const threshold = new Date(Date.now() - STUCK_BUFFER_THRESHOLD_MS).toISOString();
+    
+    const { data: stuckBuffers } = await supabase
+      .from("ai_message_buffer")
+      .select("id, page_id, sender_id, messages, created_at")
+      .eq("is_processed", false)
+      .lt("created_at", threshold)
+      .limit(3);
+    
+    if (!stuckBuffers || stuckBuffers.length === 0) return;
+    
+    console.log(`[Cleanup] Found ${stuckBuffers.length} stuck buffers`);
+    
+    for (const buffer of stuckBuffers) {
+      // Atomically claim - only one instance processes
+      const { data: claimed } = await supabase
+        .from("ai_message_buffer")
+        .update({ is_processed: true })
+        .eq("id", buffer.id)
+        .eq("is_processed", false)
+        .select("id")
+        .maybeSingle();
+      
+      if (claimed) {
+        console.log(`[Cleanup] Processing stuck buffer ${buffer.id}`);
+        await processStuckBuffer(supabase, buffer);
+      }
+    }
+  } catch (error) {
+    console.error("[Cleanup] Error:", error);
+  }
+}
+
+// Process a stuck buffer
+async function processStuckBuffer(supabase: any, buffer: any): Promise<void> {
+  const { data: account } = await supabase
+    .from("connected_accounts")
+    .select("id, user_id, is_connected, access_token_encrypted, encryption_version")
+    .eq("external_id", buffer.page_id)
+    .eq("platform", "facebook")
+    .eq("is_connected", true)
+    .single();
+  
+  if (!account) return;
+  
+  let decryptedToken: string | null = null;
+  if (account.access_token_encrypted && account.encryption_version === 2) {
+    try { decryptedToken = await decryptToken(account.access_token_encrypted); } 
+    catch (e) { console.error("[Cleanup] Token decrypt failed"); }
+  }
+  
+  const { data: pageMemory } = await supabase
+    .from("page_memory")
+    .select("automation_settings")
+    .eq("page_id", buffer.page_id)
+    .eq("user_id", account.user_id)
+    .single();
+  
+  if (pageMemory?.automation_settings?.autoInboxReply === true && decryptedToken) {
+    await processBufferedMessages(supabase, buffer.page_id, buffer.sender_id, 
+      buffer.messages || [], decryptedToken, account, pageMemory);
+  }
+}
+
+// Database-based deduplication 
+async function isMessageAlreadySeen(supabase: any, pageId: string, senderId: string, messageId: string): Promise<boolean> {
+  if (!messageId) return false;
+  
+  const { data: buffers } = await supabase
+    .from("ai_message_buffer")
+    .select("id, messages")
+    .eq("page_id", pageId)
+    .eq("sender_id", senderId)
+    .order("created_at", { ascending: false })
+    .limit(3);
+  
+  if (!buffers) return false;
+  
+  for (const buffer of buffers) {
+    if ((buffer.messages || []).some((m: any) => m.messageId === messageId)) {
+      console.log(`[Dedup] Message ${messageId} already seen`);
+      return true;
+    }
+  }
+  return false;
+}
+
+// *** AGGRESSIVE BUFFER V3: Single-instance processing with claim mechanism ***
+// KEY INSIGHT: Facebook sends webhooks in parallel, so we need database-level coordination
+// STRATEGY: 
+//   1. All webhooks add their message to buffer
+//   2. Only ONE webhook becomes the "processor" using atomic claim
+//   3. Processor waits for silence, then processes ALL messages together
+
+// *** BULLETPROOF BATCHING V6: SENDER LOCK + REOPEN MECHANISM ***
+// Problem: Buffer gets processed after 6s, then new message creates NEW buffer
+// Solution: 
+//   1. Keep a "sender_lock" that prevents new buffers for X seconds after processing starts
+//   2. If new message arrives during processing window, APPEND to processing buffer
+//   3. Use "last_processed_at" to track when last reply was sent
+
+async function addMessageToSmartBuffer(
+  supabase: any, 
+  pageId: string, 
+  senderId: string, 
+  messageData: any
+): Promise<{ action: "be_processor" | "skip_duplicate" | "let_first_handle" | "reopen_buffer"; bufferId?: string }> {
+  const now = Date.now();
+  const messageId = messageData.messageId;
+  const webhookId = `wh_${now}_${Math.random().toString(36).slice(2, 8)}`;
+  
+  console.log(`[Buffer ${webhookId}] Processing message ${messageId?.slice(-8) || 'unknown'}`);
+  
+  // Quick duplicate check first
+  if (messageId && await isMessageAlreadySeen(supabase, pageId, senderId, messageId)) {
+    console.log(`[Buffer ${webhookId}] Duplicate message, skipping`);
+    return { action: "skip_duplicate" };
+  }
+
+  // *** V14 FIX: INITIAL SYNC DELAY ***
+  // Parallel webhooks কে সময় দেওয়া হচ্ছে buffer দেখতে
+  console.log(`[Buffer ${webhookId}] ⏳ V14 Initial sync delay: ${INITIAL_SYNC_DELAY_MS}ms`);
+  await new Promise(r => setTimeout(r, INITIAL_SYNC_DELAY_MS));
+
+  const MAX_RETRIES = 12; // More retries
+  let attempts = 0;
+  let targetBuffer: any = null;
+  let isFirstProcessor = false;
+  let reopenedBuffer = false;
+  
+  while (attempts < MAX_RETRIES && !targetBuffer) {
+    attempts++;
+    
+    // STEP 1: Find existing UNPROCESSED buffer (highest priority)
+    const { data: existingBuffer } = await supabase
+      .from("ai_message_buffer")
+      .select("*")
+      .eq("page_id", pageId)
+      .eq("sender_id", senderId)
+      .eq("is_processed", false)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    
+    if (existingBuffer) {
+      // Buffer exists! Add our message
+      const existingMsgs = existingBuffer.messages || [];
+      
+      if (existingMsgs.some((m: any) => m.messageId === messageId)) {
+        console.log(`[Buffer ${webhookId}] Message already in buffer`);
+        return { action: "skip_duplicate" };
+      }
+      
+      const { data: updatedBuffer } = await supabase
+        .from("ai_message_buffer")
+        .update({ 
+          messages: [...existingMsgs, messageData],
+          last_message_at: new Date(now).toISOString()
+        })
+        .eq("id", existingBuffer.id)
+        .eq("is_processed", false)
+        .select()
+        .maybeSingle();
+      
+      if (updatedBuffer) {
+        console.log(`[Buffer ${webhookId}] 📥 Added msg #${updatedBuffer.messages?.length} to buffer ${existingBuffer.id.slice(-8)}`);
+        targetBuffer = updatedBuffer;
+        isFirstProcessor = false;
+      } else {
+        console.log(`[Buffer ${webhookId}] Buffer was just processed, checking for reopen...`);
+        await new Promise(r => setTimeout(r, 200));
+        continue;
+      }
+    } else {
+      // *** V10 CRITICAL FIX: Check for RECENTLY processed buffer ***
+      // Use last_message_at (NOT created_at!) to find recent conversations
+      // This ensures we catch buffers that just got processed, not old ones
+      const recentThreshold = new Date(now - REOPEN_WINDOW_MS).toISOString();
+      
+      console.log(`[Buffer ${webhookId}] 🔍 Looking for recent processed buffer (since ${recentThreshold})`);
+      
+      const { data: recentProcessed } = await supabase
+        .from("ai_message_buffer")
+        .select("id, created_at, messages, last_message_at")
+        .eq("page_id", pageId)
+        .eq("sender_id", senderId)
+        .eq("is_processed", true)
+        .gt("last_message_at", recentThreshold)  // V10 FIX: use last_message_at!
+        .order("last_message_at", { ascending: false })  // Most recent first
+        .limit(1)
+        .maybeSingle();
+      
+      if (recentProcessed) {
+        // *** REOPEN: Set is_processed back to false and add our message ***
+        console.log(`[Buffer ${webhookId}] 🔄 Found recent buffer ${recentProcessed.id.slice(-8)}, attempting to REOPEN...`);
+        
+        // First wait a bit to see if another webhook already reopened
+        await new Promise(r => setTimeout(r, 300 + Math.random() * 200));
+        
+        // Check if another webhook already created an unprocessed buffer
+        const { data: recheckBuffer } = await supabase
+          .from("ai_message_buffer")
+          .select("*")
+          .eq("page_id", pageId)
+          .eq("sender_id", senderId)
+          .eq("is_processed", false)
+          .maybeSingle();
+        
+        if (recheckBuffer) {
+          // Someone created/reopened one! Join it
+          const msgs = recheckBuffer.messages || [];
+          if (!msgs.some((m: any) => m.messageId === messageId)) {
+            const { data: joinedBuffer } = await supabase
+              .from("ai_message_buffer")
+              .update({ 
+                messages: [...msgs, messageData],
+                last_message_at: new Date(now).toISOString()
+              })
+              .eq("id", recheckBuffer.id)
+              .eq("is_processed", false)
+              .select()
+              .maybeSingle();
+            
+            if (joinedBuffer) {
+              console.log(`[Buffer ${webhookId}] 📥 Joined existing buffer ${recheckBuffer.id.slice(-8)}`);
+              targetBuffer = joinedBuffer;
+              isFirstProcessor = false;
+            }
+          }
+          continue;
+        }
+        
+        // Try to reopen the recent buffer
+        const existingMsgs = recentProcessed.messages || [];
+        if (!existingMsgs.some((m: any) => m.messageId === messageId)) {
+          const { data: reopened, error: reopenError } = await supabase
+            .from("ai_message_buffer")
+            .update({ 
+              is_processed: false,
+              messages: [...existingMsgs, messageData],
+              last_message_at: new Date(now).toISOString()
+            })
+            .eq("id", recentProcessed.id)
+            .eq("is_processed", true) // Only if still processed (atomic)
+            .select()
+            .maybeSingle();
+          
+          if (reopened) {
+            console.log(`[Buffer ${webhookId}] ✅ REOPENED buffer ${reopened.id.slice(-8)} with msg #${reopened.messages?.length}`);
+            targetBuffer = reopened;
+            isFirstProcessor = true; // We become the new processor
+            reopenedBuffer = true;
+          } else {
+            console.log(`[Buffer ${webhookId}] Reopen failed (conflict), retrying...`);
+            await new Promise(r => setTimeout(r, 150));
+            continue;
+          }
+        }
+        continue;
+      }
+      
+      // No recent buffer - create fresh one
+      // Wait longer on first attempt to let parallel webhooks synchronize
+      if (attempts <= 2) {
+        await new Promise(r => setTimeout(r, 300 + Math.random() * 200));
+      }
+      
+      const { data: newBuffer, error: insertError } = await supabase
+        .from("ai_message_buffer")
+        .insert({
+          page_id: pageId,
+          sender_id: senderId,
+          messages: [messageData],
+          first_message_at: new Date(now).toISOString(),
+          last_message_at: new Date(now).toISOString(),
+          is_processed: false,
+        })
+        .select()
+        .single();
+      
+      if (newBuffer) {
+        console.log(`[Buffer ${webhookId}] 🆕 Created NEW buffer ${newBuffer.id.slice(-8)} - becoming processor`);
+        targetBuffer = newBuffer;
+        isFirstProcessor = true;
+      } else if (insertError) {
+        // Unique constraint violation - another webhook won
+        console.log(`[Buffer ${webhookId}] Insert conflict (${insertError.code}), finding winner's buffer...`);
+        await new Promise(r => setTimeout(r, 150 + Math.random() * 100));
+        continue;
+      }
+    }
+  }
+  
+  if (!targetBuffer) {
+    console.log(`[Buffer ${webhookId}] ⚠️ Failed after ${MAX_RETRIES} attempts`);
+    return { action: "skip_duplicate" };
+  }
+  
+  if (isFirstProcessor) {
+    return { 
+      action: reopenedBuffer ? "reopen_buffer" : "be_processor", 
+      bufferId: targetBuffer.id 
+    };
+  }
+  
+  console.log(`[Buffer ${webhookId}] 📥 Letting first webhook process`);
+  return { action: "let_first_handle", bufferId: targetBuffer.id };
+}
+
+// *** V14 SMART WAIT: True "Last Message Timer Reset" Pattern ***
+// Timer ALWAYS resets from last_message_at, NOT from when processing started
+// This ensures we wait FULL silence period after the LAST message
+async function waitAndProcessBuffer(
+  supabase: any,
+  pageId: string,
+  senderId: string,
+  bufferId: string,
+  decryptedToken: string | null,
+  account: any,
+  pageMemory: any
+): Promise<void> {
+  const processingStartTime = Date.now();
+  let lastKnownMsgCount = 0;
+  let lastKnownMsgAt = 0;
+  
+  console.log(`[Buffer] ⏳ V14 Processor starting for sender ${senderId}, buffer ${bufferId}`);
+  
+  // Poll for silence - wait until FULL silence period passes after LAST message
+  while (true) {
+    const totalElapsed = Date.now() - processingStartTime;
+    
+    // Safety: don't exceed max wait
+    if (totalElapsed > MAX_TOTAL_WAIT_MS) {
+      console.log(`[Buffer] ⏰ Max wait ${totalElapsed}ms reached, processing now`);
+      break;
+    }
+    
+    // Wait before checking
+    await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
+    
+    // Check ALL unprocessed buffers for this sender (in case of duplicates)
+    const { data: allBuffers } = await supabase
+      .from("ai_message_buffer")
+      .select("id, last_message_at, first_message_at, is_processed, messages, created_at")
+      .eq("page_id", pageId)
+      .eq("sender_id", senderId)
+      .eq("is_processed", false)
+      .order("created_at", { ascending: true });
+    
+    // No buffers left or all processed
+    if (!allBuffers || allBuffers.length === 0) {
+      console.log(`[Buffer] No unprocessed buffers found, another instance handled it`);
+      return;
+    }
+    
+    // Check if our buffer is still there
+    const ourBuffer = allBuffers.find((b: any) => b.id === bufferId);
+    if (!ourBuffer) {
+      console.log(`[Buffer] Our buffer ${bufferId} was merged into another`);
+      return;
+    }
+    
+    // If there are multiple buffers, merge them into ours (primary)
+    if (allBuffers.length > 1) {
+      console.log(`[Buffer] 🔀 Merging ${allBuffers.length} buffers into primary`);
+      let mergedMsgs = [...(ourBuffer.messages || [])];
+      let latestTimestamp = new Date(ourBuffer.last_message_at).getTime();
+      
+      for (const otherBuffer of allBuffers) {
+        if (otherBuffer.id === bufferId) continue;
+        
+        // Merge messages
+        for (const msg of (otherBuffer.messages || [])) {
+          if (!mergedMsgs.some((m: any) => m.messageId === msg.messageId)) {
+            mergedMsgs.push(msg);
+          }
+        }
+        
+        // Track latest timestamp
+        const otherTime = new Date(otherBuffer.last_message_at).getTime();
+        if (otherTime > latestTimestamp) latestTimestamp = otherTime;
+        
+        // Delete the duplicate buffer
+        await supabase.from("ai_message_buffer").delete().eq("id", otherBuffer.id);
+      }
+      
+      // Update our buffer with merged data
+      await supabase
+        .from("ai_message_buffer")
+        .update({ 
+          messages: mergedMsgs, 
+          last_message_at: new Date(latestTimestamp).toISOString() 
+        })
+        .eq("id", bufferId);
+      
+      ourBuffer.messages = mergedMsgs;
+      ourBuffer.last_message_at = new Date(latestTimestamp).toISOString();
+    }
+    
+    const currentMsgCount = ourBuffer.messages?.length || 0;
+    const lastMsgAt = new Date(ourBuffer.last_message_at).getTime();
+    const silenceMs = Date.now() - lastMsgAt;
+    
+    // V14: Log if new messages arrived - timer RESETS from this point
+    if (currentMsgCount > lastKnownMsgCount) {
+      console.log(`[Buffer] 📩 V14 New message detected! ${lastKnownMsgCount} → ${currentMsgCount} msgs. Timer RESET from last_message_at`);
+      lastKnownMsgCount = currentMsgCount;
+      lastKnownMsgAt = lastMsgAt;
+    }
+    
+    // V14: Silence is ALWAYS calculated from last_message_at
+    const requiredSilence = getRequiredSilence(currentMsgCount);
+    
+    // Check if we have enough silence AFTER the LAST message
+    if (silenceMs >= requiredSilence) {
+      console.log(`[Buffer] ✅ V14 ${silenceMs}ms silence (required: ${requiredSilence}ms) after ${currentMsgCount} messages - processing!`);
+      break;
+    }
+    
+    // Only log every second to reduce noise
+    if (Math.floor(totalElapsed / 1000) !== Math.floor((totalElapsed - POLL_INTERVAL_MS) / 1000)) {
+      console.log(`[Buffer] 🔄 V14 Waiting... ${Math.round(silenceMs)}ms since last msg, need ${requiredSilence}ms (${currentMsgCount} msgs)`);
+    }
+  }
+  
+  // *** V8 CRITICAL FIX: FINAL CONFIRMATION BEFORE CLAIMING ***
+  // Wait a tiny bit more to catch any last-second messages
+  await new Promise(r => setTimeout(r, FINAL_CHECK_DELAY_MS));
+  
+  // Final check: Did any new messages arrive during our final delay?
+  const { data: finalCheck } = await supabase
+    .from("ai_message_buffer")
+    .select("id, messages, last_message_at, is_processed")
+    .eq("id", bufferId)
+    .maybeSingle();
+  
+  if (!finalCheck || finalCheck.is_processed) {
+    console.log(`[Buffer] ⛔ Buffer gone or already processed during final check`);
+    return;
+  }
+  
+  const finalMsgCount = finalCheck.messages?.length || 0;
+  const finalLastMsgAt = new Date(finalCheck.last_message_at).getTime();
+  const finalSilenceMs = Date.now() - finalLastMsgAt;
+  const finalRequiredSilence = getRequiredSilence(finalMsgCount);
+  
+  // If new messages arrived during final check, go back to waiting
+  if (finalSilenceMs < finalRequiredSilence) {
+    console.log(`[Buffer] 🔄 New message during final check! ${finalMsgCount} msgs, ${finalSilenceMs}ms silence. Continuing wait...`);
+    // Recursively wait again
+    return await waitAndProcessBuffer(supabase, pageId, senderId, bufferId, decryptedToken, account, pageMemory);
+  }
+  
+  // *** ATOMIC CLAIM: Only one instance processes ***
+  const { data: claimedBuffer } = await supabase
+    .from("ai_message_buffer")
+    .update({ is_processed: true })
+    .eq("id", bufferId)
+    .eq("is_processed", false)
+    .select("*")
+    .maybeSingle();
+  
+  if (!claimedBuffer) {
+    console.log(`[Buffer] ⛔ Buffer already claimed by another instance`);
+    return;
+  }
+  
+  console.log(`[Buffer] ✅ Processing ${claimedBuffer.messages?.length || 0} batched messages`);
+  
+  await processBufferedMessages(
+    supabase,
+    pageId,
+    senderId,
+    claimedBuffer.messages,
+    decryptedToken,
+    account,
+    pageMemory
+  );
+}
+
+// Process all buffered messages as one context
+async function processBufferedMessages(
+  supabase: any,
+  pageId: string,
+  senderId: string,
+  messages: any[],
+  decryptedToken: string | null,
+  account: any,
+  pageMemory: any
+): Promise<void> {
+  const startTime = Date.now();
+  
+  console.log(`[Buffer] Processing ${messages.length} batched messages for sender ${senderId}`);
+  
+  // Combine all messages into context
+  let combinedText = "";
+  let allAttachments: any[] = [];
+  let senderName: string | undefined = messages[0]?.senderName;
+  let primaryMessageType = "text";
+  
+  for (const msg of messages) {
+    if (msg.messageText) {
+      combinedText += (combinedText ? "\n" : "") + msg.messageText;
+    }
+    if (msg.attachments) {
+      allAttachments.push(...msg.attachments);
+    }
+    // Prioritize image/video type over text
+    if (msg.messageType !== "text") {
+      primaryMessageType = msg.messageType;
+    }
+  }
+  
+  // If only media without text, add context
+  if (!combinedText && allAttachments.length > 0) {
+    combinedText = `[Customer sent ${allAttachments.length} ${primaryMessageType} message(s)]`;
+  }
+  
+  console.log(`[Buffer] Combined context: "${combinedText?.substring(0, 100)}...", attachments: ${allAttachments.length}`);
+  
+  // Call AI Agent with combined context
+  const aiResponse = await callAIAgent(supabase, {
+    pageId,
+    senderId,
+    senderName,
+    messageText: combinedText || `[${primaryMessageType} message]`,
+    messageType: primaryMessageType,
+    attachments: allAttachments.length > 0 ? allAttachments : undefined,
+    isComment: false,
+    userId: account.user_id,
+  });
+  
+  console.log(`[Buffer] AI response for batched messages: reply length=${aiResponse?.reply?.length || 0}`);
+  
+  // Log the execution
+  await supabase.from("execution_logs").insert({
+    user_id: account.user_id,
+    automation_id: null,
+    source_platform: "facebook",
+    event_type: "batched_message_received",
+    status: aiResponse?.reply ? "success" : "error",
+    incoming_payload: {
+      sender_id: senderId,
+      sender_name: senderName,
+      page_id: pageId,
+      message_count: messages.length,
+      combined_text: combinedText?.substring(0, 500),
+      primary_type: primaryMessageType,
+    },
+    response_payload: aiResponse || { error: "AI agent failed" },
+    processing_time_ms: Date.now() - startTime,
+  });
+  
+  // Send AI response
+  if (aiResponse?.reply && decryptedToken) {
+    console.log(`[Buffer] Attempting to send reply to ${senderId}, reply length: ${aiResponse.reply.length}`);
+    try {
+      const sendResult = await sendFacebookMessage(decryptedToken, senderId, aiResponse.reply);
+      if (sendResult.success) {
+        console.log("[Buffer] ✅ AI reply sent for batched messages to:", senderId);
+      } else {
+        console.log("[Buffer] ❌ Failed to send AI reply, error:", JSON.stringify(sendResult.error), "code:", sendResult.errorCode);
+      }
+    } catch (sendError) {
+      console.error("[Buffer] Exception while sending message:", sendError);
+    }
+  } else {
+    console.log(`[Buffer] Skipping send - reply: ${!!aiResponse?.reply}, token: ${!!decryptedToken}`);
+  }
+}
+
+// Process incoming messages with batching
 async function processMessagingEvent(supabase: any, pageId: string, event: any) {
   const senderId = event.sender?.id;
   const recipientId = event.recipient?.id;
@@ -560,8 +1178,6 @@ async function processMessagingEvent(supabase: any, pageId: string, event: any) 
     }
   }
 
-  const startTime = Date.now();
-
   // Get page memory for AI context
   const { data: pageMemory } = await supabase
     .from("page_memory")
@@ -598,54 +1214,32 @@ async function processMessagingEvent(supabase: any, pageId: string, event: any) 
       else if (firstAttachment.type === "video" || firstAttachment.type === "video_inline") messageType = "video";
       else if (firstAttachment.type === "file") messageType = "file";
       else if (firstAttachment.type === "sticker") messageType = "sticker";
-      // *** GIF DETECTION ***
       else if (firstAttachment.type === "animated_image_share" || 
                firstAttachment.type === "gif" ||
                firstAttachment.url?.includes(".gif") ||
                firstAttachment.payload?.url?.includes(".gif")) {
         messageType = "gif";
       }
-      // *** ANIMATED STICKER ***
       else if (firstAttachment.type === "animated_sticker") {
         messageType = "animated_sticker";
       }
       attachments = message.attachments;
     }
     
-    // Sticker detection (sticker_id present)
     if (message.sticker_id) {
       messageType = "sticker";
-      // Add sticker context to message
       messageText = messageText || `[Sticker: ${message.sticker_id}]`;
     }
     
-    console.log(`[Webhook] Message type: ${messageType}, Sticker ID: ${message.sticker_id || 'none'}, Has attachments: ${!!attachments}`);
+    console.log(`[Webhook] Message type: ${messageType}, Has attachments: ${!!attachments}`);
 
     // Check if AI Media Understanding is enabled for media messages (STRICT CHECK)
     const isMediaMessage = messageType !== "text";
     const aiMediaUnderstandingEnabled = pageMemory?.automation_settings?.aiMediaUnderstanding === true;
-    console.log(`[Webhook] aiMediaUnderstanding enabled: ${aiMediaUnderstandingEnabled}`);
     
     if (isMediaMessage && !aiMediaUnderstandingEnabled) {
-      console.log("[Webhook] AI Media Understanding disabled, using simple response for media:", messageType);
-      // Send a simple generic response instead of AI analysis
-      if (decryptedToken) {
-        await sendFacebookMessage(decryptedToken, senderId, "ধন্যবাদ! কিভাবে সাহায্য করতে পারি বলুন। 😊");
-      }
-      await supabase.from("execution_logs").insert({
-        user_id: account.user_id,
-        source_platform: "facebook",
-        event_type: "media_message_simple_reply",
-        status: "success",
-        incoming_payload: {
-          sender_id: senderId,
-          page_id: pageId,
-          message_type: messageType,
-          reason: "AI Media Understanding disabled"
-        },
-        processing_time_ms: Date.now() - startTime,
-      });
-      return;
+      console.log("[Webhook] AI Media Understanding disabled, buffering for simple response");
+      // Still buffer - maybe text will come after image
     }
 
     // Get sender profile
@@ -655,48 +1249,36 @@ async function processMessagingEvent(supabase: any, pageId: string, event: any) 
       senderName = profile?.name || undefined;
     }
 
-    // Call AI Agent with enhanced message info
-    const aiResponse = await callAIAgent(supabase, {
-      pageId,
-      senderId,
-      senderName,
-      messageText: messageText || `[${messageType} message]`,
+    // *** SMART BATCHING: Add message and wait for silence ***
+    const messageData = {
+      messageText,
       messageType,
       attachments,
-      isComment: false,
-      userId: account.user_id,
-    });
+      senderName,
+      timestamp,
+      messageId: message.mid,
+      receivedAt: new Date().toISOString(), // For adaptive velocity calculation
+    };
     
-    console.log(`[Webhook] AI response received: reply length=${aiResponse?.reply?.length || 0}`);
-
-    // Log the execution
-    await supabase.from("execution_logs").insert({
-      user_id: account.user_id,
-      automation_id: null,
-      source_platform: "facebook",
-      event_type: "message_received",
-      status: aiResponse?.reply ? "success" : "error",
-      incoming_payload: {
-        sender_id: senderId,
-        sender_name: senderName,
-        page_id: pageId,
-        message_text: message.text,
-        message_type: messageType,
-        message_id: message.mid,
-        timestamp,
-      },
-      response_payload: aiResponse || { error: "AI agent failed" },
-      processing_time_ms: Date.now() - startTime,
-    });
-
-    // Send AI response if available
-    if (aiResponse?.reply && decryptedToken) {
-      const sendResult = await sendFacebookMessage(decryptedToken, senderId, aiResponse.reply);
-      if (sendResult.success) {
-        console.log("[Webhook] AI reply sent to:", senderId);
-      } else {
-        console.log("[Webhook] Failed to send AI reply, error code:", sendResult.errorCode);
-      }
+    const bufferResult = await addMessageToSmartBuffer(supabase, pageId, senderId, messageData);
+    
+    // If duplicate, skip entirely
+    if (bufferResult.action === "skip_duplicate") {
+      console.log(`[Webhook] ⛔ Duplicate message, ignoring`);
+      return;
+    }
+    
+    // If this is not the first message (buffer already exists), let the first handler process
+    if (bufferResult.action === "let_first_handle") {
+      console.log(`[Webhook] 📥 Message added to existing buffer, first handler will process`);
+      return; // Don't wait - the first webhook is already handling this buffer
+    }
+    
+    // This is the first message (new buffer) OR reopened buffer - THIS webhook becomes the processor
+    if ((bufferResult.action === "be_processor" || bufferResult.action === "reopen_buffer") && bufferResult.bufferId) {
+      console.log(`[Webhook] 🎯 ${bufferResult.action === "reopen_buffer" ? "REOPENED buffer" : "First message"} - this webhook will wait and process`);
+      await waitAndProcessBuffer(supabase, pageId, senderId, 
+        bufferResult.bufferId, decryptedToken, account, pageMemory);
     }
   }
 
@@ -717,7 +1299,7 @@ async function processMessagingEvent(supabase: any, pageId: string, event: any) 
         timestamp,
       },
       response_payload: { status: "logged" },
-      processing_time_ms: Date.now() - startTime,
+      processing_time_ms: 0,
     });
   }
 }

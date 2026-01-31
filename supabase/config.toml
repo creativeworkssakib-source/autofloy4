@@ -72,6 +72,9 @@ verify_jwt = false
 [functions.dashboard-stats]
 verify_jwt = false
 
+[functions.data-cleanup-cron]
+verify_jwt = false
+
 [functions.execution-logs]
 verify_jwt = false
 

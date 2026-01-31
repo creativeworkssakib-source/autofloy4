@@ -1,6 +1,17 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "https://esm.sh/resend@2.0.0";
-import { getAccountSuspendedEmailTemplate, getAccountActivatedEmailTemplate, getPlanPurchaseEmailTemplate, getAccountUpdateEmailTemplate, getPlanExpiredEmailTemplate, getTrialAssignedEmailTemplate } from "../_shared/email-templates.ts";
+import { 
+  getAccountSuspendedEmailTemplate, 
+  getAccountActivatedEmailTemplate, 
+  getPlanPurchaseEmailTemplate, 
+  getAccountUpdateEmailTemplate, 
+  getPlanExpiredEmailTemplate, 
+  getTrialAssignedEmailTemplate,
+  getPasswordResetEmailTemplate,
+  getRoleChangedEmailTemplate,
+  getAccountDeletedEmailTemplate,
+  getSubscriptionTypeChangedEmailTemplate
+} from "../_shared/email-templates.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -29,9 +40,9 @@ function maskSecret(secret: string): string {
   return secret.slice(0, 4) + "••••••••" + secret.slice(-4);
 }
 
-// Email notification helper
+// Email notification helper - now uses professional templates
 async function sendAdminNotification(
-  type: "password_reset" | "account_suspended" | "account_activated" | "role_changed",
+  type: "password_reset" | "account_suspended" | "account_activated" | "role_changed" | "account_deleted" | "subscription_type_changed",
   userEmail: string,
   userName?: string,
   additionalData?: Record<string, string>
@@ -43,16 +54,8 @@ async function sendAdminNotification(
 
   switch (type) {
     case "password_reset":
-      subject = "Your Password Has Been Reset";
-      html = `
-        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <h1 style="color: #1a1a1a; font-size: 24px; margin-bottom: 20px;">Password Reset Notification</h1>
-          <p style="color: #4a4a4a; font-size: 16px; line-height: 1.6;">Hello ${name},</p>
-          <p style="color: #4a4a4a; font-size: 16px; line-height: 1.6;">Your account password has been reset by an administrator.</p>
-          <p style="color: #4a4a4a; font-size: 16px; line-height: 1.6;">If you did not request this change, please contact our support team immediately.</p>
-          <p style="color: #888; font-size: 14px; margin-top: 30px;">Best regards,<br>The ${companyName} Team</p>
-        </div>
-      `;
+      subject = "🔐 Your Password Has Been Reset";
+      html = getPasswordResetEmailTemplate(name, companyName);
       break;
     case "account_suspended":
       subject = "⚠️ Your Account Has Been Suspended";
@@ -64,21 +67,24 @@ async function sendAdminNotification(
       break;
     case "role_changed":
       const newRole = additionalData?.newRole || "user";
-      subject = "Your Account Role Has Been Updated";
-      html = `
-        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <h1 style="color: #1a1a1a; font-size: 24px; margin-bottom: 20px;">Role Update Notification</h1>
-          <p style="color: #4a4a4a; font-size: 16px; line-height: 1.6;">Hello ${name},</p>
-          <p style="color: #4a4a4a; font-size: 16px; line-height: 1.6;">Your account role has been updated to <strong style="color: #2563eb;">${newRole}</strong>.</p>
-          <p style="color: #888; font-size: 14px; margin-top: 30px;">Best regards,<br>The ${companyName} Team</p>
-        </div>
-      `;
+      subject = `👑 Your Account Role Updated to ${newRole.charAt(0).toUpperCase() + newRole.slice(1)}`;
+      html = getRoleChangedEmailTemplate(name, newRole, companyName);
+      break;
+    case "account_deleted":
+      subject = "👋 Your Account Has Been Deleted";
+      html = getAccountDeletedEmailTemplate(name, userEmail, companyName);
+      break;
+    case "subscription_type_changed":
+      const oldType = additionalData?.oldType || "online";
+      const newType = additionalData?.newType || "online";
+      subject = "🔄 Your Subscription Access Has Been Updated";
+      html = getSubscriptionTypeChangedEmailTemplate(name, oldType, newType, companyName);
       break;
   }
 
   try {
     const result = await resend.emails.send({
-      from: `${companyName} <noreply@autofloy.com>`,
+      from: `${companyName} <noreply@autofloy.online>`,
       to: [userEmail],
       subject,
       html,
@@ -691,13 +697,14 @@ Deno.serve(async (req) => {
       // Get current user data before update (for notification)
       const { data: currentUser } = await supabase
         .from("users")
-        .select("email, display_name, subscription_plan, status, is_trial_active, trial_end_date")
+        .select("email, display_name, subscription_plan, subscription_type, status, is_trial_active, trial_end_date")
         .eq("id", userId)
         .single();
 
       const previousPlan = currentUser?.subscription_plan;
       const previousStatus = currentUser?.status;
       const previousName = currentUser?.display_name;
+      const previousSubscriptionType = currentUser?.subscription_type;
 
       // Plan durations in days
       const PLAN_DURATIONS: Record<string, number | null> = {
@@ -721,7 +728,10 @@ Deno.serve(async (req) => {
 
       const updateData: Record<string, unknown> = {};
       if (display_name !== undefined) updateData.display_name = display_name;
-      if (status !== undefined) updateData.status = status;
+      if (status !== undefined) {
+        updateData.status = status;
+        updateData.is_suspended = status === "suspended"; // Sync is_suspended flag
+      }
       if (trial_end_date !== undefined) updateData.trial_end_date = trial_end_date;
       if (is_trial_active !== undefined) updateData.is_trial_active = is_trial_active;
       if (subscription_type !== undefined) updateData.subscription_type = subscription_type;
@@ -833,7 +843,7 @@ Deno.serve(async (req) => {
               const emailHtml = getPlanExpiredEmailTemplate(userName, previousPlanName, companyName);
               
               await resend.emails.send({
-                from: `${companyName} <noreply@autofloy.com>`,
+                from: `${companyName} <noreply@autofloy.online>`,
                 to: [currentUser.email],
                 subject: `⏰ Your ${previousPlanName} Plan Has Expired - ${companyName}`,
                 html: emailHtml,
@@ -852,7 +862,7 @@ Deno.serve(async (req) => {
               const emailHtml = getTrialAssignedEmailTemplate(userName, trialDays, endDate, companyName);
               
               await resend.emails.send({
-                from: `${companyName} <noreply@autofloy.com>`,
+                from: `${companyName} <noreply@autofloy.online>`,
                 to: [currentUser.email],
                 subject: `🎁 Free Trial Activated - ${companyName}`,
                 html: emailHtml,
@@ -878,13 +888,24 @@ Deno.serve(async (req) => {
               );
 
               await resend.emails.send({
-                from: `${companyName} <noreply@autofloy.com>`,
+                from: `${companyName} <noreply@autofloy.online>`,
                 to: [currentUser.email],
                 subject: `🎉 Your ${newPlanName} Plan is Now Active - ${companyName}`,
                 html: emailHtml,
               });
               console.log(`[Admin] Plan change email sent to ${currentUser.email} for plan ${newPlanName}`);
             }
+          }
+
+          // 2b. Subscription type change notification (online/offline/both)
+          if (subscription_type !== undefined && previousSubscriptionType !== subscription_type) {
+            await sendAdminNotification(
+              "subscription_type_changed",
+              currentUser.email,
+              userName,
+              { oldType: previousSubscriptionType || "online", newType: subscription_type }
+            );
+            console.log(`[Admin] Subscription type change email sent to ${currentUser.email} (${previousSubscriptionType} -> ${subscription_type})`);
           }
 
           // 3. Other profile changes notification (name, email, trial settings)
@@ -929,7 +950,7 @@ Deno.serve(async (req) => {
             const emailHtml = getAccountUpdateEmailTemplate(userName, otherChanges, companyName);
             
             await resend.emails.send({
-              from: `${companyName} <noreply@autofloy.com>`,
+              from: `${companyName} <noreply@autofloy.online>`,
               to: [currentUser.email],
               subject: `📝 Your Account Has Been Updated - ${companyName}`,
               html: emailHtml,
@@ -960,6 +981,13 @@ Deno.serve(async (req) => {
         );
       }
 
+      // Get user info BEFORE deletion for email notification
+      const { data: userToDelete } = await supabase
+        .from("users")
+        .select("email, display_name")
+        .eq("id", userId)
+        .single();
+
       // Use the delete_user_completely function to cascade delete all related data
       const { data: deleteResult, error } = await supabase.rpc("delete_user_completely", {
         p_user_id: userId,
@@ -972,6 +1000,21 @@ Deno.serve(async (req) => {
           JSON.stringify({ error: "Failed to delete user: " + error.message }),
           { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
+      }
+
+      // Send account deleted email notification AFTER successful deletion
+      if (userToDelete?.email) {
+        try {
+          await sendAdminNotification(
+            "account_deleted", 
+            userToDelete.email, 
+            userToDelete.display_name || undefined
+          );
+          console.log(`[Admin] Account deleted email sent to ${userToDelete.email}`);
+        } catch (emailError) {
+          console.error("[Admin] Failed to send account deleted email:", emailError);
+          // Don't fail the response - deletion was successful
+        }
       }
 
       console.log(`[Admin] User ${authResult.userId} permanently deleted user ${userId} and all related data`);
@@ -1202,9 +1245,13 @@ Deno.serve(async (req) => {
         .eq("id", userId)
         .single();
 
+      // Update both status and is_suspended for compatibility
       const { error } = await supabase
         .from("users")
-        .update({ status })
+        .update({ 
+          status,
+          is_suspended: status === "suspended"
+        })
         .eq("id", userId);
 
       if (error) throw error;
@@ -2367,7 +2414,7 @@ Deno.serve(async (req) => {
           
           try {
             await resend.emails.send({
-              from: `${companyName} <noreply@autofloy.com>`,
+              from: `${companyName} <noreply@autofloy.online>`,
               to: [userData.email],
               subject: `🎉 ${request.plan_name} Plan Activated!`,
               html,
