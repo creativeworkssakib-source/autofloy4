@@ -698,15 +698,19 @@ async function isMessageAlreadySeen(supabase: any, pageId: string, senderId: str
 //   2. Only ONE webhook becomes the "processor" using atomic claim
 //   3. Processor waits for silence, then processes ALL messages together
 
-// *** BULLETPROOF BATCHING V5: Session-Aware Batching ***
-// Key insight: If a buffer was just processed (within 15s), customer is still chatting
-// We should REOPEN that buffer or create a continuation session
+// *** BULLETPROOF BATCHING V6: SENDER LOCK + REOPEN MECHANISM ***
+// Problem: Buffer gets processed after 6s, then new message creates NEW buffer
+// Solution: 
+//   1. Keep a "sender_lock" that prevents new buffers for X seconds after processing starts
+//   2. If new message arrives during processing window, APPEND to processing buffer
+//   3. Use "last_processed_at" to track when last reply was sent
+
 async function addMessageToSmartBuffer(
   supabase: any, 
   pageId: string, 
   senderId: string, 
   messageData: any
-): Promise<{ action: "be_processor" | "skip_duplicate" | "let_first_handle"; bufferId?: string }> {
+): Promise<{ action: "be_processor" | "skip_duplicate" | "let_first_handle" | "reopen_buffer"; bufferId?: string }> {
   const now = Date.now();
   const messageId = messageData.messageId;
   const webhookId = `wh_${now}_${Math.random().toString(36).slice(2, 8)}`;
@@ -719,25 +723,30 @@ async function addMessageToSmartBuffer(
     return { action: "skip_duplicate" };
   }
 
-  // *** CRITICAL: Longer initial jitter to let parallel webhooks settle ***
-  // This gives the FIRST webhook time to create a buffer that others can join
-  await new Promise(r => setTimeout(r, 200 + Math.random() * 300)); // 200-500ms
+  // *** CRITICAL FIX: VERY LONG initial jitter (500-1000ms) ***
+  // This ensures ALL parallel webhooks see the same buffer state
+  const jitterMs = 500 + Math.random() * 500; // 500-1000ms
+  console.log(`[Buffer ${webhookId}] Initial jitter: ${Math.round(jitterMs)}ms`);
+  await new Promise(r => setTimeout(r, jitterMs));
 
-  const MAX_RETRIES = 8;
+  const MAX_RETRIES = 12; // More retries
   let attempts = 0;
   let targetBuffer: any = null;
   let isFirstProcessor = false;
+  let reopenedBuffer = false;
   
   while (attempts < MAX_RETRIES && !targetBuffer) {
     attempts++;
     
-    // STEP 1: Find existing UNPROCESSED buffer
+    // STEP 1: Find existing UNPROCESSED buffer (highest priority)
     const { data: existingBuffer } = await supabase
       .from("ai_message_buffer")
       .select("*")
       .eq("page_id", pageId)
       .eq("sender_id", senderId)
       .eq("is_processed", false)
+      .order("created_at", { ascending: false })
+      .limit(1)
       .maybeSingle();
     
     if (existingBuffer) {
@@ -765,17 +774,19 @@ async function addMessageToSmartBuffer(
         targetBuffer = updatedBuffer;
         isFirstProcessor = false;
       } else {
-        console.log(`[Buffer ${webhookId}] Buffer was just processed, retrying...`);
-        await new Promise(r => setTimeout(r, 150));
+        console.log(`[Buffer ${webhookId}] Buffer was just processed, checking for reopen...`);
+        await new Promise(r => setTimeout(r, 200));
         continue;
       }
     } else {
-      // *** KEY FIX: Check if there's a RECENTLY processed buffer ***
-      // If yes, the customer is rapid-firing - we should still batch!
-      const recentThreshold = new Date(now - RECENT_BUFFER_WINDOW_MS).toISOString();
-      const { data: recentBuffer } = await supabase
+      // *** KEY FIX V6: Check for VERY RECENTLY processed buffer (within 20s) ***
+      // If found, REOPEN it instead of creating new one!
+      const reopenWindowMs = 20000; // 20 seconds
+      const recentThreshold = new Date(now - reopenWindowMs).toISOString();
+      
+      const { data: recentProcessed } = await supabase
         .from("ai_message_buffer")
-        .select("id, created_at, messages")
+        .select("id, created_at, messages, last_message_at")
         .eq("page_id", pageId)
         .eq("sender_id", senderId)
         .eq("is_processed", true)
@@ -784,13 +795,14 @@ async function addMessageToSmartBuffer(
         .limit(1)
         .maybeSingle();
       
-      if (recentBuffer) {
-        // Recent session exists! Check if another webhook already created a new buffer
-        // Wait a bit and recheck for unprocessed buffer
-        console.log(`[Buffer ${webhookId}] 🔄 Recent session detected, waiting for other webhooks...`);
+      if (recentProcessed) {
+        // *** REOPEN: Set is_processed back to false and add our message ***
+        console.log(`[Buffer ${webhookId}] 🔄 Found recent buffer ${recentProcessed.id.slice(-8)}, attempting to REOPEN...`);
+        
+        // First wait a bit to see if another webhook already reopened
         await new Promise(r => setTimeout(r, 300 + Math.random() * 200));
         
-        // Recheck for unprocessed buffer (another webhook might have created one)
+        // Check if another webhook already created an unprocessed buffer
         const { data: recheckBuffer } = await supabase
           .from("ai_message_buffer")
           .select("*")
@@ -800,7 +812,7 @@ async function addMessageToSmartBuffer(
           .maybeSingle();
         
         if (recheckBuffer) {
-          // Someone created one! Join it
+          // Someone created/reopened one! Join it
           const msgs = recheckBuffer.messages || [];
           if (!msgs.some((m: any) => m.messageId === messageId)) {
             const { data: joinedBuffer } = await supabase
@@ -815,19 +827,47 @@ async function addMessageToSmartBuffer(
               .maybeSingle();
             
             if (joinedBuffer) {
-              console.log(`[Buffer ${webhookId}] 📥 Joined continuation buffer ${recheckBuffer.id.slice(-8)}`);
+              console.log(`[Buffer ${webhookId}] 📥 Joined existing buffer ${recheckBuffer.id.slice(-8)}`);
               targetBuffer = joinedBuffer;
               isFirstProcessor = false;
             }
           }
           continue;
         }
+        
+        // Try to reopen the recent buffer
+        const existingMsgs = recentProcessed.messages || [];
+        if (!existingMsgs.some((m: any) => m.messageId === messageId)) {
+          const { data: reopened, error: reopenError } = await supabase
+            .from("ai_message_buffer")
+            .update({ 
+              is_processed: false,
+              messages: [...existingMsgs, messageData],
+              last_message_at: new Date(now).toISOString()
+            })
+            .eq("id", recentProcessed.id)
+            .eq("is_processed", true) // Only if still processed (atomic)
+            .select()
+            .maybeSingle();
+          
+          if (reopened) {
+            console.log(`[Buffer ${webhookId}] ✅ REOPENED buffer ${reopened.id.slice(-8)} with msg #${reopened.messages?.length}`);
+            targetBuffer = reopened;
+            isFirstProcessor = true; // We become the new processor
+            reopenedBuffer = true;
+          } else {
+            console.log(`[Buffer ${webhookId}] Reopen failed (conflict), retrying...`);
+            await new Promise(r => setTimeout(r, 150));
+            continue;
+          }
+        }
+        continue;
       }
       
-      // No buffer exists - try to create one
-      // Use longer wait on first attempt to let parallel webhooks synchronize
-      if (attempts === 1) {
-        await new Promise(r => setTimeout(r, 150 + Math.random() * 150));
+      // No recent buffer - create fresh one
+      // Wait longer on first attempt to let parallel webhooks synchronize
+      if (attempts <= 2) {
+        await new Promise(r => setTimeout(r, 300 + Math.random() * 200));
       }
       
       const { data: newBuffer, error: insertError } = await supabase
@@ -844,13 +884,13 @@ async function addMessageToSmartBuffer(
         .single();
       
       if (newBuffer) {
-        console.log(`[Buffer ${webhookId}] 🆕 Created buffer ${newBuffer.id.slice(-8)} - becoming processor`);
+        console.log(`[Buffer ${webhookId}] 🆕 Created NEW buffer ${newBuffer.id.slice(-8)} - becoming processor`);
         targetBuffer = newBuffer;
         isFirstProcessor = true;
       } else if (insertError) {
         // Unique constraint violation - another webhook won
-        console.log(`[Buffer ${webhookId}] Insert conflict, finding winner's buffer...`);
-        await new Promise(r => setTimeout(r, 100 + Math.random() * 100));
+        console.log(`[Buffer ${webhookId}] Insert conflict (${insertError.code}), finding winner's buffer...`);
+        await new Promise(r => setTimeout(r, 150 + Math.random() * 100));
         continue;
       }
     }
@@ -862,7 +902,10 @@ async function addMessageToSmartBuffer(
   }
   
   if (isFirstProcessor) {
-    return { action: "be_processor", bufferId: targetBuffer.id };
+    return { 
+      action: reopenedBuffer ? "reopen_buffer" : "be_processor", 
+      bufferId: targetBuffer.id 
+    };
   }
   
   console.log(`[Buffer ${webhookId}] 📥 Letting first webhook process`);
@@ -1238,9 +1281,9 @@ async function processMessagingEvent(supabase: any, pageId: string, event: any) 
       return; // Don't wait - the first webhook is already handling this buffer
     }
     
-    // This is the first message (new buffer) - THIS webhook becomes the processor
-    if (bufferResult.action === "be_processor" && bufferResult.bufferId) {
-      console.log(`[Webhook] 🎯 First message - this webhook will wait and process`);
+    // This is the first message (new buffer) OR reopened buffer - THIS webhook becomes the processor
+    if ((bufferResult.action === "be_processor" || bufferResult.action === "reopen_buffer") && bufferResult.bufferId) {
+      console.log(`[Webhook] 🎯 ${bufferResult.action === "reopen_buffer" ? "REOPENED buffer" : "First message"} - this webhook will wait and process`);
       await waitAndProcessBuffer(supabase, pageId, senderId, 
         bufferResult.bufferId, decryptedToken, account, pageMemory);
     }
