@@ -46,10 +46,7 @@ export function usePlanLimits(): PlanLimitsResult {
   let hasActiveSubscription = false;
   let subscriptionType: SubscriptionType = 'online';
   
-  // CRITICAL: Check suspension status first - suspended users have NO access
-  const isSuspended = user?.is_suspended === true;
-  
-  if (user && !isSuspended) {
+  if (user) {
     const subPlan = user.subscriptionPlan?.toLowerCase() as PlanId;
     subscriptionType = user.subscriptionType || 'online';
     
@@ -83,10 +80,9 @@ export function usePlanLimits(): PlanLimitsResult {
     }
   }
   
-  // Determine access based on subscription type AND active subscription
-  // User must have active subscription to have any access
-  const hasOnlineAccess = hasActiveSubscription && (subscriptionType === 'online' || subscriptionType === 'both');
-  const hasOfflineAccess = hasActiveSubscription && (subscriptionType === 'offline' || subscriptionType === 'both');
+  // Determine access based on subscription type
+  const hasOnlineAccess = subscriptionType === 'online' || subscriptionType === 'both';
+  const hasOfflineAccess = subscriptionType === 'offline' || subscriptionType === 'both';
   
   const capabilities = getPlanCapabilities(planId);
   const planName = planDisplayNames[planId];

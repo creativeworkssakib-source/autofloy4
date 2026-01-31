@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import {
@@ -41,11 +41,12 @@ import { SyncStatusBadge } from "@/components/dashboard/SyncStatusBadge";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSyncSettings } from "@/hooks/useSyncSettings";
-import { useDashboardData } from "@/hooks/useDashboardData";
+import { fetchDashboardStats, fetchConnectedAccounts, fetchExecutionLogs, DashboardStats, ConnectedAccount, ExecutionLog } from "@/services/apiService";
 import { ProductPerformanceSection } from "@/components/analytics/ProductPerformanceSection";
 import { useProductType } from "@/contexts/ProductTypeContext";
-import { DigitalProduct } from "@/services/digitalProductService";
+import { digitalProductService, DigitalProduct } from "@/services/digitalProductService";
 
+import { offlineShopService } from "@/services/offlineShopService";
 import { formatDistanceToNow } from "date-fns";
 import { useIsMobile } from "@/hooks/use-mobile";
 
@@ -74,19 +75,102 @@ const UnifiedDashboard = () => {
   const isMobile = useIsMobile();
   const { isDigitalMode } = useProductType();
   
-  // Use optimized dashboard data hook with caching & realtime
-  const {
-    onlineStats,
-    connectedPages,
-    recentLogs,
-    offlineData,
-    digitalProducts,
-    digitalStats,
-    isLoading,
-  } = useDashboardData();
+  // Try to load cached stats on initial render to avoid showing 0
+  const getCachedStats = (): DashboardStats | null => {
+    try {
+      const cached = localStorage.getItem("autofloy_dashboard_stats_cache");
+      if (cached) {
+        const { data } = JSON.parse(cached);
+        return data;
+      }
+    } catch (e) {
+      console.warn("[Dashboard] Cache read error:", e);
+    }
+    return null;
+  };
 
-  // Mobile tab state
+  // Online data - start with cached data if available
+  const [onlineStats, setOnlineStats] = useState<DashboardStats | null>(getCachedStats);
+  const [connectedPages, setConnectedPages] = useState<ConnectedAccount[]>([]);
+  const [recentLogs, setRecentLogs] = useState<ExecutionLog[]>([]);
+  
+  // Offline data (always loaded to show in both modes)
+  const [offlineData, setOfflineData] = useState<any>(null);
+  
+  // Digital product data
+  const [digitalProducts, setDigitalProducts] = useState<DigitalProduct[]>([]);
+  const [digitalStats, setDigitalStats] = useState({ totalProducts: 0, totalSales: 0, totalRevenue: 0, pendingDeliveries: 0 });
+  
+  const [isLoading, setIsLoading] = useState(true);
   const [mobileTab, setMobileTab] = useState<"online" | "offline">("online");
+  const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Load all dashboard data - runs silently in background
+  const loadAllData = useCallback(async (showInitialLoading = true) => {
+    if (showInitialLoading) {
+      setIsLoading(true);
+    }
+    
+    try {
+      const [statsData, pagesData, logsData, shopData, digitalProductsData, digitalStatsData] = await Promise.all([
+        fetchDashboardStats().catch((e) => {
+          console.error("[Dashboard] Stats fetch error:", e);
+          return null;
+        }),
+        fetchConnectedAccounts("facebook").catch(() => []),
+        fetchExecutionLogs(5).catch(() => []),
+        offlineShopService.getDashboard("today").catch(() => null),
+        digitalProductService.getProducts().catch(() => []),
+        digitalProductService.getStats().catch(() => ({ totalProducts: 0, totalSales: 0, totalRevenue: 0, pendingDeliveries: 0 })),
+      ]);
+      
+      console.log("[Dashboard] Stats data received:", statsData);
+      
+      // Set the stats - prefer new data but keep cached data if new data seems empty incorrectly
+      if (statsData !== null && statsData !== undefined) {
+        // Check if the new data has meaningful values
+        const hasData = statsData.messagesHandled > 0 || statsData.autoRepliesSent > 0 || statsData.connectedPages > 0;
+        
+        // If new data has values OR we don't have cached data, use new data
+        if (hasData || !onlineStats) {
+          setOnlineStats(statsData);
+          console.log("[Dashboard] OnlineStats set to:", statsData);
+        } else {
+          console.log("[Dashboard] Keeping existing stats as new data appears empty:", statsData);
+        }
+      }
+      setConnectedPages(pagesData?.filter(p => p.is_connected) || []);
+      setRecentLogs(logsData || []);
+      if (shopData) setOfflineData(shopData);
+      setDigitalProducts(digitalProductsData);
+      setDigitalStats(digitalStatsData);
+    } catch (error) {
+      // Silent failure - no user notification needed
+      console.error("[Dashboard] Background sync failed:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []); // Remove dependencies to prevent stale closure issues
+
+  // Initial load and auto-refresh every 30 seconds
+  useEffect(() => {
+    if (!syncLoading) {
+      loadAllData(true);
+      
+      // Set up 30 second auto-refresh
+      refreshIntervalRef.current = setInterval(() => {
+        if (navigator.onLine) {
+          loadAllData(false);
+        }
+      }, 30000);
+    }
+    
+    return () => {
+      if (refreshIntervalRef.current) {
+        clearInterval(refreshIntervalRef.current);
+      }
+    };
+  }, [syncLoading, loadAllData]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-BD", {

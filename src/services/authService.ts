@@ -15,7 +15,6 @@ export interface User {
   email_verified: boolean;
   phone_verified?: boolean;
   is_active?: boolean;
-  is_suspended?: boolean;
   remaining_trial_days?: number | null;
 }
 

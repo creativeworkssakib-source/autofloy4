@@ -47,7 +47,6 @@ import { useOfflineShopTrial, useOfflineGracePeriod } from "@/hooks/useOfflineSh
 import OfflineTrialBanner from "./OfflineTrialBanner";
 import OfflineTrialExpiredOverlay from "./OfflineTrialExpiredOverlay";
 import { FeatureDisabledOverlay } from "@/components/FeatureDisabledOverlay";
-import { NoSubscriptionOverlay } from "@/components/NoSubscriptionOverlay";
 import { OfflineExpiredModal } from "./OfflineExpiredModal";
 import { UpdateNotification } from "./UpdateNotification";
 import { appUpdateService } from "@/services/appUpdateService";
@@ -72,39 +71,15 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
   const { isTrialUser, isOfflineTrialExpired } = useOfflineShopTrial();
   const { isExpired: isOfflineExpired } = useOfflineGracePeriod();
   const { currentShop } = useShop();
-  const { hasOfflineAccess, hasActiveSubscription, isTrialExpired, planId } = usePlanLimits();
+  const { hasOfflineAccess, canAccessOfflineShop } = usePlanLimits();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showOfflineExpiredModal, setShowOfflineExpiredModal] = useState(false);
 
   // Check if offline shop is disabled by admin
   const isOfflineShopDisabled = settings.offline_shop_enabled === false;
   
-  // Check if account is suspended
-  const isSuspended = user?.is_suspended === true;
-  
-  // Determine which overlay to show for no subscription
-  const getNoSubType = (): "no_plan" | "trial_expired" | "subscription_expired" | "suspended" | null => {
-    // Priority 0: Suspended account - block everything
-    if (isSuspended) return "suspended";
-    
-    // Priority 1: Trial expired
-    if (isTrialExpired) return "trial_expired";
-    
-    // Priority 2: No active subscription at all
-    if (!hasActiveSubscription) {
-      // Check if it was a paid plan that expired
-      if (planId !== "none" && planId !== "trial") {
-        return "subscription_expired";
-      }
-      // No plan at all
-      return "no_plan";
-    }
-    
-    return null;
-  };
-  const noSubType = getNoSubType();
-  
   // Check if user has offline access based on subscription_type
+  const offlineAccessCheck = canAccessOfflineShop();
   const noOfflineAccess = !hasOfflineAccess;
 
   // Initialize app update service and offline sync
@@ -331,35 +306,25 @@ const ShopLayout = ({ children }: ShopLayoutProps) => {
 
           {/* Page Content */}
           <main className="p-3 sm:p-4 lg:p-6 relative">
-            {/* Priority 1: Show overlay if user has no active subscription */}
-            {noSubType && (
-              <NoSubscriptionOverlay 
-                type={noSubType}
-                userName={user?.name}
-              />
-            )}
-            
-            {/* Priority 2: Show frozen overlay if user doesn't have offline access */}
-            {!noSubType && noOfflineAccess && (
+            {/* Show frozen overlay if user doesn't have offline access */}
+            {noOfflineAccess && (
               <FeatureDisabledOverlay 
                 featureName={language === "bn" ? "অফলাইন শপ সিস্টেম" : "Offline Shop System"} 
                 featureType="offline"
-                customMessage={language === "bn" 
-                  ? "আপনার শুধু Online Business subscription আছে। Offline Shop ব্যবহার করতে Offline plan কিনুন।"
-                  : "You have an Online Business subscription only. Please purchase an Offline plan to use Offline Shop."}
+                customMessage={offlineAccessCheck.message}
               />
             )}
             
-            {/* Priority 3: Show frozen overlay if feature is disabled by admin */}
-            {!noSubType && !noOfflineAccess && isOfflineShopDisabled && (
+            {/* Show frozen overlay if feature is disabled by admin */}
+            {!noOfflineAccess && isOfflineShopDisabled && (
               <FeatureDisabledOverlay featureName={language === "bn" ? "অফলাইন শপ সিস্টেম" : "Offline Shop System"} featureType="offline" />
             )}
             
-            {/* Trial Banner for trial users (only if they have active subscription) */}
-            {!noSubType && !noOfflineAccess && <OfflineTrialBanner />}
+            {/* Trial Banner for trial users */}
+            {!noOfflineAccess && <OfflineTrialBanner />}
             
-            {/* Show overlay if trial expired (only show if user HAD an active trial before) */}
-            {!noSubType && !noOfflineAccess && isTrialUser && isOfflineTrialExpired && <OfflineTrialExpiredOverlay />}
+            {/* Show overlay if trial expired */}
+            {!noOfflineAccess && isTrialUser && isOfflineTrialExpired && <OfflineTrialExpiredOverlay />}
             
             {children}
           </main>

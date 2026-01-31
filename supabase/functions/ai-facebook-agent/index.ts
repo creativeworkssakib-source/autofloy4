@@ -44,15 +44,13 @@ async function getAllProducts(supabase: any, userId: string): Promise<ProductCon
     category: p.category, sku: p.sku, is_active: p.is_active, isDigital: false
   }));
   
-  // FIXED: Use `price` as primary, NOT sale_price (sale_price is optional discount)
   (digital || []).forEach((d: any) => {
     products.push({
-      id: d.id, name: d.name, price: d.price, description: d.description,
+      id: d.id, name: d.name, price: d.sale_price || d.price, description: d.description,
       category: d.product_type, is_active: d.is_active, isDigital: true, product_type: d.product_type
     });
   });
   
-  console.log(`[AI Agent] Loaded products: ${products.map(p => `${p.name}=৳${p.price}`).join(", ")}`);
   return products;
 }
 
@@ -71,67 +69,27 @@ async function findProductByName(supabase: any, userId: string, text: string): P
 }
 
 async function getOrCreateConversation(supabase: any, userId: string, pageId: string, senderId: string, senderName?: string) {
-  // Try to find existing conversation
-  const { data: conv, error: selectError } = await supabase.from("ai_conversations")
+  let { data: conv } = await supabase.from("ai_conversations")
     .select("*").eq("page_id", pageId).eq("sender_id", senderId).single();
   
-  if (selectError) {
-    console.log(`[AI Agent] Select conversation error (may be normal for new):`, selectError.code);
+  if (!conv) {
+    const { data: newConv } = await supabase.from("ai_conversations")
+      .insert({ user_id: userId, page_id: pageId, sender_id: senderId, sender_name: senderName, 
+                conversation_state: "idle", message_history: [] })
+      .select().single();
+    conv = newConv;
   }
-  
-  if (conv) {
-    return conv;
-  }
-  
-  // Create new conversation if not found
-  console.log(`[AI Agent] Creating new conversation for sender ${senderId}`);
-  const { data: newConv, error: insertError } = await supabase.from("ai_conversations")
-    .insert({ 
-      user_id: userId, 
-      page_id: pageId, 
-      sender_id: senderId, 
-      sender_name: senderName, 
-      conversation_state: "idle", 
-      message_history: [] 
-    })
-    .select().single();
-  
-  if (insertError) {
-    console.error(`[AI Agent] Failed to create conversation:`, insertError);
-    // Return a minimal conversation object to prevent crash
-    return {
-      id: null,
-      user_id: userId,
-      page_id: pageId,
-      sender_id: senderId,
-      sender_name: senderName,
-      conversation_state: "idle",
-      message_history: [],
-      fake_order_score: 0,
-      total_messages_count: 0,
-    };
-  }
-  
-  return newConv;
+  return conv;
 }
 
-// AI Call with better error handling
+// AI Call
 async function callAI(systemPrompt: string, messages: any[], imageUrls?: string[]): Promise<string> {
   const aiMessages: any[] = [];
   
   for (const msg of messages.slice(-10)) {
     if (msg.role === "user" || msg.role === "assistant") {
-      const content = msg.content || msg.text || "";
-      // Ensure content is never empty
-      if (content.trim()) {
-        aiMessages.push({ role: msg.role, content: content.trim() });
-      }
+      aiMessages.push({ role: msg.role, content: msg.content || msg.text || "" });
     }
-  }
-  
-  // Ensure at least one user message exists
-  if (aiMessages.length === 0 || !aiMessages.some(m => m.role === "user")) {
-    aiMessages.push({ role: "user", content: "Hi" });
   }
   
   // Add images if present
@@ -146,42 +104,20 @@ async function callAI(systemPrompt: string, messages: any[], imageUrls?: string[
     }
   }
   
-  // Select model - use gpt-5 for images, gpt-5-mini for text (new Lovable AI Gateway models)
-  const model = imageUrls?.length ? "openai/gpt-5" : "openai/gpt-5-mini";
-  
-  const requestBody = {
-    model,
-    messages: [{ role: "system", content: systemPrompt }, ...aiMessages],
-    max_completion_tokens: 2048,  // Increased: GPT-5 needs more tokens for Bangla text
-  };
-  
-  console.log(`[AI Agent] Calling AI with model: ${model}, messages count: ${aiMessages.length}`);
-  
   const response = await fetch(AI_GATEWAY_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${LOVABLE_API_KEY}` },
-    body: JSON.stringify(requestBody),
+    body: JSON.stringify({
+      model: imageUrls?.length ? "gpt-4o" : "gpt-4o-mini",
+      messages: [{ role: "system", content: systemPrompt }, ...aiMessages],
+      temperature: 0.7,
+      max_tokens: 300,
+    }),
   });
   
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error(`[AI Agent] API Error ${response.status}:`, errorText);
-    throw new Error(`AI API error: ${response.status} - ${errorText.substring(0, 200)}`);
-  }
-  
+  if (!response.ok) throw new Error(`AI API error: ${response.status}`);
   const data = await response.json();
-  console.log(`[AI Agent] API Response structure:`, JSON.stringify(data).substring(0, 300));
-  
-  // Try different response formats (some APIs use different structures)
-  const reply = data.choices?.[0]?.message?.content 
-    || data.choices?.[0]?.text 
-    || data.message?.content
-    || data.content
-    || data.response
-    || "দুঃখিত, একটু সমস্যা হচ্ছে।";
-    
-  console.log(`[AI Agent] AI replied: ${reply.substring(0, 100)}...`);
-  return reply;
+  return data.choices?.[0]?.message?.content || "দুঃখিত, একটু সমস্যা হচ্ছে।";
 }
 
 // Create order
@@ -262,70 +198,8 @@ serve(async (req) => {
     
     console.log(`[AI Agent] Intent: ${intent}, Sentiment: ${sentiment}, State: ${conversation.conversation_state}`);
     
-    // CRITICAL: Check if we have any real products configured
-    const hasRealProducts = allProducts.length > 0 || (pageMemory.products_summary && pageMemory.products_summary.trim().length > 10);
-    
-    console.log(`[AI Agent] Products check: dbProducts=${allProducts.length}, summaryLength=${pageMemory.products_summary?.length || 0}, hasRealProducts=${hasRealProducts}`);
-    
-    // Get message history from database
+    // Update message history
     let messageHistory = conversation.message_history || [];
-    
-    // *** SMART HALLUCINATION DETECTION (only when NO products exist) ***
-    // Build valid product names/prices from our actual product list
-    const validProductNames = allProducts.map(p => p.name.toLowerCase());
-    const validPrices = allProducts.map(p => p.price);
-    
-    // Only check for hallucination if we have NO products at all
-    let hasHallucination = false;
-    if (!hasRealProducts) {
-      // If no products configured, ANY product/price mention is hallucination
-      const pricePattern = /৳\s*\d+|টাকা/i;
-      hasHallucination = messageHistory.some((m: any) => 
-        m.role === "assistant" && pricePattern.test(m.content || "")
-      );
-      
-      if (hasHallucination) {
-        console.log(`[AI Agent] 🚨 HALLUCINATION: AI mentioned prices but no products configured - PURGING history!`);
-      } else {
-        console.log(`[AI Agent] ⚠️ NO PRODUCTS CONFIGURED - Preventing hallucination`);
-      }
-      
-      // COMPLETELY RESET only when NO products
-      if (conversation.id) {
-        await supabase.from("ai_conversations").update({
-          message_history: [],
-          customer_summary: null,
-          current_product_id: null,
-          current_product_name: null,
-          current_product_price: null,
-          conversation_state: "idle",
-        }).eq("id", conversation.id);
-      }
-      messageHistory = [];
-    } else {
-      // We HAVE products - check for WRONG prices (not matching our actual products)
-      for (const msg of messageHistory) {
-        if (msg.role !== "assistant") continue;
-        const content = msg.content || "";
-        
-        // Extract any price mentioned
-        const priceMatches = content.match(/৳\s*(\d+)/g);
-        if (priceMatches) {
-          for (const match of priceMatches) {
-            const price = parseInt(match.replace(/৳\s*/, ""));
-            // If AI mentioned a price that's NOT in our valid prices list
-            if (!validPrices.includes(price) && price > 0 && price !== 50 && price !== 60 && price !== 100) {
-              console.log(`[AI Agent] ⚠️ Wrong price detected: ${price} not in valid prices [${validPrices.join(",")}]`);
-              // Don't purge all history, just trim to last 3 messages
-              messageHistory = messageHistory.slice(-3);
-              break;
-            }
-          }
-        }
-      }
-    }
-    
-    // Add current message to history
     messageHistory.push({
       role: "user", content: messageText, timestamp: new Date().toISOString(),
       intent, sentiment, messageType,

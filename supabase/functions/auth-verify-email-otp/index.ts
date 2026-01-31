@@ -133,7 +133,7 @@ serve(async (req) => {
         const emailHtml = getWelcomeEmailTemplate(userName, user.email);
 
         const { error: emailError } = await resend.emails.send({
-          from: "AutoFloy <noreply@autofloy.online>",
+          from: "AutoFloy <noreply@fileforge.site>",
           to: [user.email],
           subject: "🎉 Welcome to AutoFloy - Your Account is Verified!",
           html: emailHtml,

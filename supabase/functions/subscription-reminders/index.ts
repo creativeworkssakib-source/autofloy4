@@ -71,7 +71,7 @@ async function sendReminderEmail(
 
   try {
     const { error } = await resend.emails.send({
-      from: `${companyName} <noreply@autofloy.online>`,
+      from: `${companyName} <noreply@autofloy.com>`,
       to: [user.email],
       subject,
       html: htmlContent,

@@ -130,39 +130,6 @@ export type Database = {
         }
         Relationships: []
       }
-      ai_message_buffer: {
-        Row: {
-          created_at: string
-          first_message_at: string
-          id: string
-          is_processed: boolean | null
-          last_message_at: string
-          messages: Json
-          page_id: string
-          sender_id: string
-        }
-        Insert: {
-          created_at?: string
-          first_message_at?: string
-          id?: string
-          is_processed?: boolean | null
-          last_message_at?: string
-          messages?: Json
-          page_id: string
-          sender_id: string
-        }
-        Update: {
-          created_at?: string
-          first_message_at?: string
-          id?: string
-          is_processed?: boolean | null
-          last_message_at?: string
-          messages?: Json
-          page_id?: string
-          sender_id?: string
-        }
-        Relationships: []
-      }
       ai_orders: {
         Row: {
           advance_amount: number | null
@@ -4764,7 +4731,6 @@ export type Database = {
           has_used_trial: boolean
           id: string
           is_active: boolean | null
-          is_suspended: boolean | null
           is_trial_active: boolean | null
           password_hash: string
           phone: string | null
@@ -4791,7 +4757,6 @@ export type Database = {
           has_used_trial?: boolean
           id?: string
           is_active?: boolean | null
-          is_suspended?: boolean | null
           is_trial_active?: boolean | null
           password_hash: string
           phone?: string | null
@@ -4818,7 +4783,6 @@ export type Database = {
           has_used_trial?: boolean
           id?: string
           is_active?: boolean | null
-          is_suspended?: boolean | null
           is_trial_active?: boolean | null
           password_hash?: string
           phone?: string | null
@@ -4914,10 +4878,8 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      archive_old_conversations: { Args: never; Returns: Json }
       can_email_use_trial: { Args: { p_email: string }; Returns: Json }
       cleanup_old_execution_logs: { Args: never; Returns: undefined }
-      cleanup_processed_message_buffers: { Args: never; Returns: number }
       delete_user_completely: {
         Args: { p_preserve_email_history?: boolean; p_user_id: string }
         Returns: Json
@@ -4954,8 +4916,6 @@ export type Database = {
         Args: { p_shop_id?: string; p_user_id: string }
         Returns: undefined
       }
-      run_all_data_cleanups: { Args: never; Returns: Json }
-      trim_old_conversation_histories: { Args: never; Returns: Json }
     }
     Enums: {
       app_role: "admin" | "user"

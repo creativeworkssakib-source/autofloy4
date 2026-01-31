@@ -160,7 +160,6 @@ serve(async (req) => {
       email_verified: user.email_verified,
       phone_verified: user.phone_verified,
       is_active: isUserActive(user),
-      is_suspended: user.is_suspended || false, // IMPORTANT: Include for account suspension check
       remaining_trial_days: getRemainingTrialDays(user),
     };
 
