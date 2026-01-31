@@ -541,31 +541,29 @@ serve(async (req) => {
 // - Single long message → process quickly (4s)
 // - Rapid-fire short messages → wait longer (8s)
 
-const BASE_SILENCE_WAIT_MS = 4000;       // Minimum 4s silence (for single complete message)
-const MAX_SILENCE_WAIT_MS = 8000;        // Maximum 8s silence (for rapid-fire typers)
-const BATCH_MAX_TOTAL_WAIT_MS = 20000;   // Max 20s total wait  
-const STUCK_BUFFER_THRESHOLD_MS = 30000; // Process stuck buffers after 30s
-const POLL_INTERVAL_MS = 300;            // Check every 300ms for new messages
-const LOCK_ACQUIRE_TIMEOUT_MS = 600;     // Wait max 600ms to acquire lock
-const RECENT_PROCESS_THRESHOLD_MS = 12000; // Consider buffers processed in last 12s as "recent"
+const BASE_SILENCE_WAIT_MS = 6000;       // Minimum 6s silence (increased from 4s)
+const MAX_SILENCE_WAIT_MS = 12000;       // Maximum 12s silence for rapid-fire (increased from 8s)
+const BATCH_MAX_TOTAL_WAIT_MS = 25000;   // Max 25s total wait (increased from 20s)
+const STUCK_BUFFER_THRESHOLD_MS = 35000; // Process stuck buffers after 35s
+const POLL_INTERVAL_MS = 400;            // Check every 400ms for new messages
+const LOCK_ACQUIRE_TIMEOUT_MS = 800;     // Wait max 800ms to acquire lock
+const RECENT_BUFFER_WINDOW_MS = 15000;   // Consider ANY buffer from last 15s as "active session"
 
 // *** CALCULATE ADAPTIVE SILENCE WAIT based on message velocity ***
 function calculateAdaptiveSilenceWait(messages: any[], firstMessageAt: string): number {
   if (!messages || messages.length === 0) return BASE_SILENCE_WAIT_MS;
   
-  // Single message - use base wait (customer might be done)
+  // Single message - still wait longer to catch follow-ups
   if (messages.length === 1) {
-    return BASE_SILENCE_WAIT_MS; // 4 seconds
+    return BASE_SILENCE_WAIT_MS; // 6 seconds
   }
   
   // Multiple messages - calculate average interval
-  // Sort by timestamp if available, otherwise use order
   const timestamps: number[] = messages
     .map((m: any) => m.receivedAt ? new Date(m.receivedAt).getTime() : 0)
     .filter(t => t > 0)
     .sort((a, b) => a - b);
   
-  // If we have timestamps, calculate velocity
   if (timestamps.length >= 2) {
     let totalInterval = 0;
     for (let i = 1; i < timestamps.length; i++) {
@@ -573,36 +571,34 @@ function calculateAdaptiveSilenceWait(messages: any[], firstMessageAt: string): 
     }
     const avgInterval = totalInterval / (timestamps.length - 1);
     
-    // Fast typing (< 2s between messages) → wait longer, they're rapid-firing
-    if (avgInterval < 2000) {
+    // Very fast typing (< 3s between messages) → wait longest
+    if (avgInterval < 3000) {
       console.log(`[Adaptive] ⚡ Fast typer detected (${Math.round(avgInterval)}ms avg) → wait ${MAX_SILENCE_WAIT_MS}ms`);
-      return MAX_SILENCE_WAIT_MS; // 8 seconds
+      return MAX_SILENCE_WAIT_MS; // 12 seconds
     }
     
-    // Medium typing (2-4s between messages) → use medium wait
-    if (avgInterval < 4000) {
-      const wait = BASE_SILENCE_WAIT_MS + 2000; // 6 seconds
+    // Medium typing (3-6s between messages)
+    if (avgInterval < 6000) {
+      const wait = BASE_SILENCE_WAIT_MS + 3000; // 9 seconds
       console.log(`[Adaptive] ⏱️ Medium typer (${Math.round(avgInterval)}ms avg) → wait ${wait}ms`);
       return wait;
     }
     
-    // Slow typing (4+ seconds between messages) → use base wait
+    // Slow typing - use base
     console.log(`[Adaptive] 🐢 Slow typer (${Math.round(avgInterval)}ms avg) → wait ${BASE_SILENCE_WAIT_MS}ms`);
-    return BASE_SILENCE_WAIT_MS; // 4 seconds
+    return BASE_SILENCE_WAIT_MS;
   }
   
-  // Fallback: More messages = likely rapid-fire = wait longer
+  // Fallback: More messages = likely rapid-fire
   if (messages.length >= 3) {
     const elapsedSinceFirst = Date.now() - new Date(firstMessageAt).getTime();
-    if (elapsedSinceFirst < 5000) {
-      // 3+ messages in under 5 seconds = very fast typer
+    if (elapsedSinceFirst < 8000) {
       console.log(`[Adaptive] 🔥 Rapid-fire: ${messages.length} msgs in ${Math.round(elapsedSinceFirst/1000)}s → wait ${MAX_SILENCE_WAIT_MS}ms`);
-      return MAX_SILENCE_WAIT_MS; // 8 seconds
+      return MAX_SILENCE_WAIT_MS;
     }
   }
   
-  // Default: 2 messages or slow pace → medium wait
-  return BASE_SILENCE_WAIT_MS + 1000; // 5 seconds
+  return BASE_SILENCE_WAIT_MS + 2000; // 8 seconds default
 }
 
 // *** CLEANUP STUCK BUFFERS (from previous failed runs) ***
@@ -702,9 +698,9 @@ async function isMessageAlreadySeen(supabase: any, pageId: string, senderId: str
 //   2. Only ONE webhook becomes the "processor" using atomic claim
 //   3. Processor waits for silence, then processes ALL messages together
 
-// *** BULLETPROOF BATCHING V4: Single Buffer Enforcement ***
-// Uses database UNIQUE INDEX to GUARANTEE only ONE buffer exists per sender
-// All parallel webhooks UPSERT into the SAME buffer using ON CONFLICT
+// *** BULLETPROOF BATCHING V5: Session-Aware Batching ***
+// Key insight: If a buffer was just processed (within 15s), customer is still chatting
+// We should REOPEN that buffer or create a continuation session
 async function addMessageToSmartBuffer(
   supabase: any, 
   pageId: string, 
@@ -723,16 +719,11 @@ async function addMessageToSmartBuffer(
     return { action: "skip_duplicate" };
   }
 
-  // Random jitter (50-150ms) to slightly spread parallel requests
-  await new Promise(r => setTimeout(r, 50 + Math.random() * 100));
+  // *** CRITICAL: Longer initial jitter to let parallel webhooks settle ***
+  // This gives the FIRST webhook time to create a buffer that others can join
+  await new Promise(r => setTimeout(r, 200 + Math.random() * 300)); // 200-500ms
 
-  // *** STRATEGY: Optimistic insert with retry loop ***
-  // 1. Try to find existing unprocessed buffer
-  // 2. If found, append message atomically
-  // 3. If not found, try to create (unique index prevents duplicates)
-  // 4. If create fails (conflict), retry finding
-  
-  const MAX_RETRIES = 5;
+  const MAX_RETRIES = 8;
   let attempts = 0;
   let targetBuffer: any = null;
   let isFirstProcessor = false;
@@ -740,8 +731,8 @@ async function addMessageToSmartBuffer(
   while (attempts < MAX_RETRIES && !targetBuffer) {
     attempts++;
     
-    // STEP 1: Find existing unprocessed buffer
-    const { data: existingBuffer, error: findError } = await supabase
+    // STEP 1: Find existing UNPROCESSED buffer
+    const { data: existingBuffer } = await supabase
       .from("ai_message_buffer")
       .select("*")
       .eq("page_id", pageId)
@@ -750,24 +741,22 @@ async function addMessageToSmartBuffer(
       .maybeSingle();
     
     if (existingBuffer) {
-      // Buffer exists! Add our message atomically
+      // Buffer exists! Add our message
       const existingMsgs = existingBuffer.messages || [];
       
-      // Check if message already there
       if (existingMsgs.some((m: any) => m.messageId === messageId)) {
         console.log(`[Buffer ${webhookId}] Message already in buffer`);
         return { action: "skip_duplicate" };
       }
       
-      // Append message - use .select() to get latest state
-      const { data: updatedBuffer, error: updateError } = await supabase
+      const { data: updatedBuffer } = await supabase
         .from("ai_message_buffer")
         .update({ 
           messages: [...existingMsgs, messageData],
           last_message_at: new Date(now).toISOString()
         })
         .eq("id", existingBuffer.id)
-        .eq("is_processed", false) // Only if still unprocessed
+        .eq("is_processed", false)
         .select()
         .maybeSingle();
       
@@ -775,14 +764,72 @@ async function addMessageToSmartBuffer(
         console.log(`[Buffer ${webhookId}] 📥 Added msg #${updatedBuffer.messages?.length} to buffer ${existingBuffer.id.slice(-8)}`);
         targetBuffer = updatedBuffer;
         isFirstProcessor = false;
-      } else if (updateError) {
-        console.log(`[Buffer ${webhookId}] Update failed (buffer processed?), retrying...`);
-        await new Promise(r => setTimeout(r, 100));
+      } else {
+        console.log(`[Buffer ${webhookId}] Buffer was just processed, retrying...`);
+        await new Promise(r => setTimeout(r, 150));
         continue;
       }
     } else {
-      // No buffer exists - create one
-      // Unique index will prevent duplicates from parallel webhooks
+      // *** KEY FIX: Check if there's a RECENTLY processed buffer ***
+      // If yes, the customer is rapid-firing - we should still batch!
+      const recentThreshold = new Date(now - RECENT_BUFFER_WINDOW_MS).toISOString();
+      const { data: recentBuffer } = await supabase
+        .from("ai_message_buffer")
+        .select("id, created_at, messages")
+        .eq("page_id", pageId)
+        .eq("sender_id", senderId)
+        .eq("is_processed", true)
+        .gt("created_at", recentThreshold)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      if (recentBuffer) {
+        // Recent session exists! Check if another webhook already created a new buffer
+        // Wait a bit and recheck for unprocessed buffer
+        console.log(`[Buffer ${webhookId}] 🔄 Recent session detected, waiting for other webhooks...`);
+        await new Promise(r => setTimeout(r, 300 + Math.random() * 200));
+        
+        // Recheck for unprocessed buffer (another webhook might have created one)
+        const { data: recheckBuffer } = await supabase
+          .from("ai_message_buffer")
+          .select("*")
+          .eq("page_id", pageId)
+          .eq("sender_id", senderId)
+          .eq("is_processed", false)
+          .maybeSingle();
+        
+        if (recheckBuffer) {
+          // Someone created one! Join it
+          const msgs = recheckBuffer.messages || [];
+          if (!msgs.some((m: any) => m.messageId === messageId)) {
+            const { data: joinedBuffer } = await supabase
+              .from("ai_message_buffer")
+              .update({ 
+                messages: [...msgs, messageData],
+                last_message_at: new Date(now).toISOString()
+              })
+              .eq("id", recheckBuffer.id)
+              .eq("is_processed", false)
+              .select()
+              .maybeSingle();
+            
+            if (joinedBuffer) {
+              console.log(`[Buffer ${webhookId}] 📥 Joined continuation buffer ${recheckBuffer.id.slice(-8)}`);
+              targetBuffer = joinedBuffer;
+              isFirstProcessor = false;
+            }
+          }
+          continue;
+        }
+      }
+      
+      // No buffer exists - try to create one
+      // Use longer wait on first attempt to let parallel webhooks synchronize
+      if (attempts === 1) {
+        await new Promise(r => setTimeout(r, 150 + Math.random() * 150));
+      }
+      
       const { data: newBuffer, error: insertError } = await supabase
         .from("ai_message_buffer")
         .insert({
@@ -801,10 +848,9 @@ async function addMessageToSmartBuffer(
         targetBuffer = newBuffer;
         isFirstProcessor = true;
       } else if (insertError) {
-        // Unique constraint violation = another webhook created buffer
-        // Loop will find it on next iteration
-        console.log(`[Buffer ${webhookId}] Insert conflict (another webhook won), finding their buffer...`);
-        await new Promise(r => setTimeout(r, 50 + Math.random() * 100));
+        // Unique constraint violation - another webhook won
+        console.log(`[Buffer ${webhookId}] Insert conflict, finding winner's buffer...`);
+        await new Promise(r => setTimeout(r, 100 + Math.random() * 100));
         continue;
       }
     }
@@ -815,12 +861,10 @@ async function addMessageToSmartBuffer(
     return { action: "skip_duplicate" };
   }
   
-  // STEP 2: Decide if we process or let first webhook handle
   if (isFirstProcessor) {
     return { action: "be_processor", bufferId: targetBuffer.id };
   }
   
-  // Not the first - let the processor handle it
   console.log(`[Buffer ${webhookId}] 📥 Letting first webhook process`);
   return { action: "let_first_handle", bufferId: targetBuffer.id };
 }
