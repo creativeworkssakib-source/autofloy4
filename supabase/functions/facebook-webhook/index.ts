@@ -525,30 +525,36 @@ serve(async (req) => {
   }
 });
 
-// ============= SMART MESSAGE BATCHING V7 (SIMPLE & CORRECT) =============
+// ============= SMART MESSAGE BATCHING V8 (LAST MESSAGE TIMER RESET) =============
 // 
-// **সহজ লজিক:**
-// 1. Message এলে ➜ 2 সেকেন্ড wait (parallel webhooks sync করতে)
-// 2. Buffer খুঁজি বা তৈরি করি
-// 3. **4 সেকেন্ড silence** wait করি (last message থেকে)
-// 4. 4s-এ কোনো message না এলে ➜ একটাই reply পাঠাই
-// 5. 4s-এ নতুন message এলে ➜ timer reset, আবার 4s wait
+// **সমস্যা V7:** প্রথম message process হয়ে যাচ্ছে, তারপর দ্বিতীয় message নতুন buffer তৈরি করছে
+// 
+// **V8 সমাধান - LAST MESSAGE TIMER RESET:**
+// 1. Message এলে ➜ 2 সেকেন্ড sync wait
+// 2. Buffer খুঁজি বা তৈরি করি (unique constraint আছে)
+// 3. **4 সেকেন্ড STRICT SILENCE** wait করি
+//    - প্রতি poll-এ check: last_message_at থেকে 4s পেরিয়েছে?
+//    - নতুন message এলে timer RESET হয় (database-level)
+// 4. 4s silence পেলে ➜ **FINAL CHECK** করি, তারপরই process
+// 5. FIRST WINS: শুধু প্রথম webhook processor হয়, বাকিরা skip
 //
-// KEY FIX: প্রতিটা webhook আগে 2s wait করবে, তারপর buffer দেখবে
-// এতে সব parallel webhook একই buffer-এ join করতে পারবে
+// KEY INSIGHT: Database-based `last_message_at` ই timer source
+// নতুন message ➜ last_message_at update ➜ timer reset স্বয়ংক্রিয়
 
 const INITIAL_SYNC_DELAY_MS = 2000;      // প্রথমে 2s wait (webhooks sync করতে)
 const SILENCE_WAIT_MS = 4000;            // 4 seconds silence = done typing
-const MAX_TOTAL_WAIT_MS = 20000;         // Max 20s total wait
-const STUCK_BUFFER_THRESHOLD_MS = 30000; // Process stuck buffers after 30s
-const POLL_INTERVAL_MS = 500;            // Check every 500ms for new messages
+const MAX_TOTAL_WAIT_MS = 25000;         // Max 25s total wait (increased)
+const STUCK_BUFFER_THRESHOLD_MS = 35000; // Process stuck buffers after 35s
+const POLL_INTERVAL_MS = 400;            // Check every 400ms for faster detection
+const FINAL_CHECK_DELAY_MS = 300;        // Final check delay before processing
 
-// Simple silence wait - always 4 seconds after last message
+// Silence wait scales with message count
 function getRequiredSilence(messageCount: number): number {
-  // একাধিক message হলে একটু বেশি wait (মানুষ তখনো টাইপ করতে পারে)
-  if (messageCount >= 3) return 5000; // 5s for rapid messages
+  // যত বেশি message, তত বেশি wait (মানুষ আরো type করতে পারে)
+  if (messageCount >= 4) return 5500; // 5.5s for many messages
+  if (messageCount >= 3) return 5000; // 5s for 3+ messages
   if (messageCount >= 2) return 4500; // 4.5s for 2 messages
-  return SILENCE_WAIT_MS; // 4s default
+  return SILENCE_WAIT_MS; // 4s default for single message
 }
 
 // *** CLEANUP STUCK BUFFERS (from previous failed runs) ***
@@ -960,7 +966,7 @@ async function waitAndProcessBuffer(
       lastMessageCount = currentMsgCount;
     }
     
-    // *** SIMPLE SILENCE CHECK - 4 seconds ***
+    // *** V8 SILENCE CHECK WITH THRESHOLD ***
     const requiredSilence = getRequiredSilence(currentMsgCount);
     
     // Check if we have enough silence
@@ -975,7 +981,35 @@ async function waitAndProcessBuffer(
     }
   }
   
-  // Atomically claim buffer
+  // *** V8 CRITICAL FIX: FINAL CONFIRMATION BEFORE CLAIMING ***
+  // Wait a tiny bit more to catch any last-second messages
+  await new Promise(r => setTimeout(r, FINAL_CHECK_DELAY_MS));
+  
+  // Final check: Did any new messages arrive during our final delay?
+  const { data: finalCheck } = await supabase
+    .from("ai_message_buffer")
+    .select("id, messages, last_message_at, is_processed")
+    .eq("id", bufferId)
+    .maybeSingle();
+  
+  if (!finalCheck || finalCheck.is_processed) {
+    console.log(`[Buffer] ⛔ Buffer gone or already processed during final check`);
+    return;
+  }
+  
+  const finalMsgCount = finalCheck.messages?.length || 0;
+  const finalLastMsgAt = new Date(finalCheck.last_message_at).getTime();
+  const finalSilenceMs = Date.now() - finalLastMsgAt;
+  const finalRequiredSilence = getRequiredSilence(finalMsgCount);
+  
+  // If new messages arrived during final check, go back to waiting
+  if (finalSilenceMs < finalRequiredSilence) {
+    console.log(`[Buffer] 🔄 New message during final check! ${finalMsgCount} msgs, ${finalSilenceMs}ms silence. Continuing wait...`);
+    // Recursively wait again
+    return await waitAndProcessBuffer(supabase, pageId, senderId, bufferId, decryptedToken, account, pageMemory);
+  }
+  
+  // *** ATOMIC CLAIM: Only one instance processes ***
   const { data: claimedBuffer } = await supabase
     .from("ai_message_buffer")
     .update({ is_processed: true })
