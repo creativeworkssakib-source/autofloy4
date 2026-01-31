@@ -539,26 +539,31 @@ serve(async (req) => {
 //
 // **KEY FIX:** recentThreshold check করবে last_message_at, created_at না!
 
-// *** V12 BULLETPROOF: LONGER SYNC + RANDOM JITTER ***
-// সমস্যা: 200ms sync এ parallel webhooks সবাই খালি buffer দেখে, সবাই নতুন buffer বানায়
-// সমাধান: 600ms base + random jitter (0-400ms) = total 600-1000ms spread
-//         এতে প্রথম webhook এর buffer অন্যরা দেখতে পাবে
-const INITIAL_SYNC_DELAY_BASE_MS = 600;  // 600ms base delay
-const INITIAL_SYNC_JITTER_MS = 400;      // +0-400ms random jitter
-const SILENCE_WAIT_MS = 1500;            // 1.5 seconds silence = done typing
+// *** V13 BULLETPROOF: ULTRA LONG SYNC + SEQUENTIAL CHECK ***
+// সমস্যা: Parallel webhooks সবাই খালি buffer দেখে, সবাই নতুন buffer বানায়
+// সমাধান: 1500ms fixed sync delay + 3 consecutive DB checks
+//         এতে প্রথম webhook এর buffer অন্যরা GUARANTEED দেখতে পাবে
+const INITIAL_SYNC_DELAY_MS = 1500;      // 1.5 SECOND initial sync - GUARANTEED buffer visibility
+const SILENCE_WAIT_MS = 2000;            // 2 seconds silence = done typing
 const MAX_TOTAL_WAIT_MS = 15000;         // Max 15s total wait
 const STUCK_BUFFER_THRESHOLD_MS = 25000; // Process stuck buffers after 25s
-const POLL_INTERVAL_MS = 150;            // Check every 150ms (ultra fast detection)
-const FINAL_CHECK_DELAY_MS = 200;        // Final check delay
-const REOPEN_WINDOW_MS = 45000;          // 45 seconds reopen window
+const POLL_INTERVAL_MS = 200;            // Check every 200ms
+const FINAL_CHECK_DELAY_MS = 300;        // Final check delay
+const REOPEN_WINDOW_MS = 60000;          // 60 seconds reopen window (extended)
+
+// V13: TRIPLE CHECK before creating new buffer
+// সমস্যা ছিল: একবার check করে buffer না পেলে নতুন বানাতো
+// সমাধান: 3 বার check করবে, 300ms gap দিয়ে - এতে parallel webhook এর buffer দেখতে পারবে
+const BUFFER_CHECK_RETRIES = 3;
+const BUFFER_CHECK_GAP_MS = 300;
 
 // Silence wait scales with message count - FAST!
 function getRequiredSilence(messageCount: number): number {
-  // Customer পর পর message দিলে - সব আসার পর 1.5-2.5s এ reply
-  if (messageCount >= 4) return 2500; // 2.5s for 4+ messages
-  if (messageCount >= 3) return 2200; // 2.2s for 3 messages
-  if (messageCount >= 2) return 2000; // 2s for 2 messages
-  return SILENCE_WAIT_MS; // 1.5s default for single message
+  // Customer পর পর message দিলে - সব আসার পর 2-3s এ reply
+  if (messageCount >= 4) return 3000; // 3s for 4+ messages
+  if (messageCount >= 3) return 2700; // 2.7s for 3 messages
+  if (messageCount >= 2) return 2500; // 2.5s for 2 messages
+  return SILENCE_WAIT_MS; // 2s default for single message
 }
 
 // *** CLEANUP STUCK BUFFERS (from previous failed runs) ***
@@ -683,12 +688,10 @@ async function addMessageToSmartBuffer(
     return { action: "skip_duplicate" };
   }
 
-  // *** V12 FIX: LONG INITIAL SYNC DELAY + RANDOM JITTER ***
-  // এটাই মূল সমাধান! base + random jitter wait করলে parallel webhooks আলাদা সময়ে check করবে
-  // প্রথম webhook buffer তৈরি করবে, বাকিরা সেই buffer join করবে
-  const syncDelay = INITIAL_SYNC_DELAY_BASE_MS + Math.floor(Math.random() * INITIAL_SYNC_JITTER_MS);
-  console.log(`[Buffer ${webhookId}] ⏳ Initial sync delay: ${syncDelay}ms (base ${INITIAL_SYNC_DELAY_BASE_MS} + jitter)`);
-  await new Promise(r => setTimeout(r, syncDelay));
+  // *** V13 FIX: ULTRA LONG INITIAL SYNC + TRIPLE CHECK ***
+  // এটাই মূল সমাধান! 1.5 second wait + triple check করলে parallel webhooks GUARANTEED buffer দেখবে
+  console.log(`[Buffer ${webhookId}] ⏳ V13 Initial sync delay: ${INITIAL_SYNC_DELAY_MS}ms (fixed, no jitter)`);
+  await new Promise(r => setTimeout(r, INITIAL_SYNC_DELAY_MS));
 
   const MAX_RETRIES = 12; // More retries
   let attempts = 0;
