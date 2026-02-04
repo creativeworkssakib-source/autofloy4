@@ -4954,6 +4954,7 @@ export type Database = {
         Args: { p_shop_id?: string; p_user_id: string }
         Returns: undefined
       }
+      owns_product: { Args: { p_product_id: string }; Returns: boolean }
       run_all_data_cleanups: { Args: never; Returns: Json }
       trim_old_conversation_histories: { Args: never; Returns: Json }
     }
