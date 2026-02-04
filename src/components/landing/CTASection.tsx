@@ -15,157 +15,121 @@ const CTASection = memo(() => {
   ];
 
   return (
-    <section ref={sectionRef} className="py-16 lg:py-24 relative overflow-hidden">
-      <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+    <section ref={sectionRef} className="py-12 lg:py-16 relative overflow-hidden">
+      <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         <motion.div
-          initial={{ opacity: 0, y: 60, scale: 0.9 }}
-          animate={isInView ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 60, scale: 0.9 }}
-          transition={{ duration: 0.8, ease: [0.25, 0.46, 0.45, 0.94] }}
-          className="relative rounded-[2rem] overflow-hidden"
+          initial={{ opacity: 0, y: 40, scale: 0.95 }}
+          animate={isInView ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 40, scale: 0.95 }}
+          transition={{ duration: 0.7, ease: [0.25, 0.46, 0.45, 0.94] }}
+          className="relative rounded-2xl overflow-hidden"
         >
-          {/* Premium Gradient Background - matching reference image */}
+          {/* Premium Gradient Background */}
           <div className="absolute inset-0 bg-gradient-to-br from-primary via-primary to-secondary" />
           
-          {/* Animated Gradient Shift */}
+          {/* Subtle Animated Gradient */}
           <motion.div 
-            className="absolute inset-0"
+            className="absolute inset-0 opacity-80"
             style={{
               background: 'linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--secondary)) 50%, hsl(var(--primary)) 100%)',
               backgroundSize: '200% 200%'
             }}
-            animate={{
-              backgroundPosition: ['0% 0%', '100% 100%', '0% 0%']
-            }}
-            transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
+            animate={{ backgroundPosition: ['0% 0%', '100% 100%', '0% 0%'] }}
+            transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
           />
           
-          {/* Premium Grid Pattern Overlay - matching reference */}
+          {/* Premium Grid Pattern */}
           <div 
-            className="absolute inset-0 opacity-[0.15]"
+            className="absolute inset-0 opacity-10"
             style={{
               backgroundImage: `
-                linear-gradient(to right, rgba(255,255,255,0.4) 1px, transparent 1px),
-                linear-gradient(to bottom, rgba(255,255,255,0.4) 1px, transparent 1px)
+                linear-gradient(to right, rgba(255,255,255,0.3) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255,255,255,0.3) 1px, transparent 1px)
               `,
-              backgroundSize: '40px 40px'
+              backgroundSize: '32px 32px'
             }}
           />
           
-          {/* Animated Floating Orbs */}
+          {/* Subtle Floating Orb */}
           <motion.div 
-            className="absolute -top-20 -right-20 w-80 h-80 rounded-full"
-            style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.15) 0%, transparent 70%)' }}
-            animate={{ 
-              x: [0, 30, 0],
-              y: [0, -30, 0],
-              scale: [1, 1.2, 1],
-              opacity: [0.5, 0.8, 0.5]
-            }}
+            className="absolute -top-16 -right-16 w-48 h-48 rounded-full"
+            style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.12) 0%, transparent 70%)' }}
+            animate={{ scale: [1, 1.15, 1], opacity: [0.5, 0.7, 0.5] }}
+            transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+          />
+          <motion.div 
+            className="absolute -bottom-16 -left-16 w-56 h-56 rounded-full"
+            style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 70%)' }}
+            animate={{ scale: [1, 1.2, 1], opacity: [0.4, 0.6, 0.4] }}
             transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
           />
-          <motion.div 
-            className="absolute -bottom-20 -left-20 w-96 h-96 rounded-full"
-            style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%)' }}
-            animate={{ 
-              x: [0, -40, 0],
-              y: [0, 40, 0],
-              scale: [1, 1.3, 1],
-              opacity: [0.4, 0.7, 0.4]
-            }}
-            transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
-          />
-          
-          {/* Premium Shimmer Effect */}
-          <motion.div 
-            className="absolute inset-0"
-            style={{
-              background: 'linear-gradient(110deg, transparent 20%, rgba(255,255,255,0.15) 40%, rgba(255,255,255,0.3) 50%, rgba(255,255,255,0.15) 60%, transparent 80%)',
-              backgroundSize: '200% 100%'
-            }}
-            animate={{ backgroundPosition: ['-200% 0', '200% 0'] }}
-            transition={{ duration: 4, repeat: Infinity, ease: "linear", repeatDelay: 2 }}
-          />
 
-          {/* Corner Glow Effects */}
-          <div className="absolute top-0 left-0 w-64 h-64 bg-gradient-radial from-white/10 to-transparent rounded-full blur-2xl" />
-          <div className="absolute bottom-0 right-0 w-64 h-64 bg-gradient-radial from-secondary/30 to-transparent rounded-full blur-2xl" />
-
-          {/* Content */}
-          <div className="relative px-8 py-16 md:px-16 md:py-20 text-center">
-            {/* Premium Badge */}
+          {/* Content - More Compact */}
+          <div className="relative px-6 py-10 md:px-12 md:py-12 text-center">
+            {/* Premium Badge - Smaller */}
             <motion.div
-              initial={{ opacity: 0, scale: 0.8, y: 20 }}
-              animate={isInView ? { opacity: 1, scale: 1, y: 0 } : { opacity: 0, scale: 0.8, y: 20 }}
-              transition={{ delay: 0.2, duration: 0.6 }}
-              className="inline-flex items-center gap-2.5 px-5 py-2.5 rounded-full bg-white/20 text-white text-sm font-semibold mb-8 backdrop-blur-md border border-white/30 shadow-lg"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={isInView ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.9 }}
+              transition={{ delay: 0.15, duration: 0.5 }}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/15 text-white text-xs font-semibold mb-5 backdrop-blur-sm border border-white/25"
             >
               <motion.div
                 animate={{ rotate: [0, 360] }}
-                transition={{ duration: 6, repeat: Infinity, ease: "linear" }}
-                className="w-7 h-7 rounded-full bg-white/25 flex items-center justify-center"
+                transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
+                className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center"
               >
-                <Sparkles className="w-4 h-4 text-white drop-shadow-sm" />
+                <Sparkles className="w-3 h-3 text-white" />
               </motion.div>
               Limited Time Offer
             </motion.div>
 
-            {/* Premium Headline */}
+            {/* Headline - Smaller */}
             <motion.h2
-              initial={{ opacity: 0, y: 40 }}
-              animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 40 }}
-              transition={{ delay: 0.3, duration: 0.7 }}
-              className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-white mb-6 max-w-3xl mx-auto leading-tight"
-              style={{ textShadow: '0 4px 30px rgba(0,0,0,0.2)' }}
+              initial={{ opacity: 0, y: 25 }}
+              animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 25 }}
+              transition={{ delay: 0.2, duration: 0.6 }}
+              className="text-2xl md:text-3xl lg:text-4xl font-bold text-white mb-4 max-w-2xl mx-auto leading-tight"
+              style={{ textShadow: '0 2px 20px rgba(0,0,0,0.15)' }}
             >
               Ready to Transform Your Business?
             </motion.h2>
 
-            {/* Subtitle */}
+            {/* Subtitle - Smaller */}
             <motion.p
-              initial={{ opacity: 0, y: 40 }}
-              animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 40 }}
-              transition={{ delay: 0.4, duration: 0.7 }}
-              className="text-lg md:text-xl text-white/90 max-w-2xl mx-auto mb-10 leading-relaxed"
+              initial={{ opacity: 0, y: 25 }}
+              animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 25 }}
+              transition={{ delay: 0.3, duration: 0.6 }}
+              className="text-sm md:text-base text-white/85 max-w-xl mx-auto mb-7 leading-relaxed"
             >
               Online business with Facebook automation + Offline shop with POS system.
-              Join 500+ sellers saving 50+ hours monthly — start your free trial today.
+              Join 500+ sellers saving 50+ hours monthly.
             </motion.p>
 
-            {/* CTA Buttons */}
+            {/* CTA Buttons - Smaller */}
             <motion.div
-              initial={{ opacity: 0, y: 40 }}
-              animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 40 }}
-              transition={{ delay: 0.5, duration: 0.7 }}
-              className="flex flex-col sm:flex-row gap-4 justify-center mb-10"
+              initial={{ opacity: 0, y: 25 }}
+              animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 25 }}
+              transition={{ delay: 0.4, duration: 0.6 }}
+              className="flex flex-col sm:flex-row gap-3 justify-center mb-7"
             >
-              <motion.div
-                whileHover={{ scale: 1.05, y: -2 }}
-                whileTap={{ scale: 0.98 }}
-              >
+              <motion.div whileHover={{ scale: 1.03, y: -1 }} whileTap={{ scale: 0.98 }}>
                 <Button
-                  size="lg"
-                  className="bg-white text-primary hover:bg-white/95 shadow-2xl hover:shadow-[0_20px_50px_rgba(0,0,0,0.3)] transition-all duration-300 px-10 py-7 text-lg font-bold group rounded-full"
+                  size="default"
+                  className="bg-white text-primary hover:bg-white/95 shadow-xl hover:shadow-2xl transition-all duration-300 px-7 py-5 text-sm font-bold group rounded-full"
                   asChild
                 >
                   <Link to="/signup" className="flex items-center gap-2">
                     Start Free Trial
-                    <motion.span
-                      animate={{ x: [0, 5, 0] }}
-                      transition={{ duration: 1.5, repeat: Infinity }}
-                    >
-                      <ArrowRight className="w-5 h-5" />
+                    <motion.span animate={{ x: [0, 4, 0] }} transition={{ duration: 1.5, repeat: Infinity }}>
+                      <ArrowRight className="w-4 h-4" />
                     </motion.span>
                   </Link>
                 </Button>
               </motion.div>
-              <motion.div
-                whileHover={{ scale: 1.05, y: -2 }}
-                whileTap={{ scale: 0.98 }}
-              >
+              <motion.div whileHover={{ scale: 1.03, y: -1 }} whileTap={{ scale: 0.98 }}>
                 <Button
-                  size="lg"
+                  size="default"
                   variant="outline"
-                  className="border-2 border-white/50 bg-white/10 text-white hover:bg-white/20 hover:border-white/70 backdrop-blur-md px-10 py-7 text-lg font-semibold rounded-full transition-all duration-300"
+                  className="border-2 border-white/40 bg-white/10 text-white hover:bg-white/20 hover:border-white/60 backdrop-blur-sm px-7 py-5 text-sm font-semibold rounded-full transition-all duration-300"
                   asChild
                 >
                   <Link to="/pricing">View Pricing</Link>
@@ -173,28 +137,24 @@ const CTASection = memo(() => {
               </motion.div>
             </motion.div>
 
-            {/* Trust Features */}
+            {/* Trust Features - Compact */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={isInView ? { opacity: 1 } : { opacity: 0 }}
-              transition={{ delay: 0.7, duration: 0.6 }}
-              className="flex flex-wrap items-center justify-center gap-6 md:gap-10"
+              transition={{ delay: 0.5, duration: 0.5 }}
+              className="flex flex-wrap items-center justify-center gap-4 md:gap-8"
             >
               {features.map((feature, index) => (
                 <motion.span 
                   key={feature}
-                  className="flex items-center gap-2.5 text-white/95 text-sm md:text-base font-medium"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
-                  transition={{ delay: 0.8 + index * 0.1 }}
+                  className="flex items-center gap-2 text-white/90 text-xs md:text-sm font-medium"
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 15 }}
+                  transition={{ delay: 0.55 + index * 0.08 }}
                 >
-                  <motion.div
-                    animate={{ scale: [1, 1.2, 1] }}
-                    transition={{ duration: 2, repeat: Infinity, delay: index * 0.3 }}
-                    className="w-7 h-7 rounded-full bg-white/25 flex items-center justify-center backdrop-blur-sm"
-                  >
-                    <CheckCircle2 className="w-4 h-4 text-white" />
-                  </motion.div>
+                  <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center">
+                    <CheckCircle2 className="w-3 h-3 text-white" />
+                  </div>
                   {feature}
                 </motion.span>
               ))}
