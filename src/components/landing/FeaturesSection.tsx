@@ -283,10 +283,15 @@ const FeaturesSection = memo(() => {
 
   return (
     <section id="features" ref={sectionRef} className="py-16 lg:py-24 relative overflow-hidden">
-      {/* Animated Background */}
-      <div className="absolute inset-0 bg-muted/30" />
+      {/* Seamless Background - gradient fade from transparent */}
+      <div 
+        className="absolute inset-0"
+        style={{
+          background: 'linear-gradient(to bottom, transparent 0%, hsl(var(--muted) / 0.3) 15%, hsl(var(--muted) / 0.3) 100%)'
+        }}
+      />
       <motion.div 
-        className="absolute top-0 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl"
+        className="absolute top-20 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl"
         animate={{ 
           x: [0, 50, 0],
           y: [0, 30, 0]

@@ -16,62 +16,14 @@ import {
 
 const Hero3DVisualization = memo(() => {
   return (
-    <div className="relative w-full max-w-6xl mx-auto h-[320px] sm:h-[380px] md:h-[520px] flex items-center justify-center overflow-hidden px-2 sm:px-4">
-      {/* Seamless Animated Background - ultra-soft blending */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        {/* Central radial glow - fades to transparent */}
-        <motion.div 
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] sm:w-[800px] md:w-[1200px] h-[400px] sm:h-[500px] md:h-[700px]"
-          style={{
-            background: 'radial-gradient(ellipse at center, hsl(var(--primary) / 0.08) 0%, hsl(var(--secondary) / 0.05) 30%, transparent 70%)',
-          }}
-          animate={{ 
-            scale: [1, 1.05, 1],
-            opacity: [0.8, 1, 0.8]
-          }}
-          transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-        />
-        {/* Soft ambient orb - very subtle */}
-        <motion.div 
-          className="absolute top-1/3 left-1/3 w-[300px] sm:w-[400px] md:w-[500px] h-[300px] sm:h-[400px] md:h-[500px]"
-          style={{
-            background: 'radial-gradient(circle, hsl(var(--primary) / 0.06) 0%, transparent 60%)',
-          }}
-          animate={{ 
-            x: [0, 30, 0],
-            y: [0, -20, 0],
-          }}
-          transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
-        />
-        <motion.div 
-          className="absolute bottom-1/3 right-1/3 w-[250px] sm:w-[350px] md:w-[450px] h-[250px] sm:h-[350px] md:h-[450px]"
-          style={{
-            background: 'radial-gradient(circle, hsl(var(--secondary) / 0.05) 0%, transparent 60%)',
-          }}
-          animate={{ 
-            x: [0, -25, 0],
-            y: [0, 25, 0],
-          }}
-          transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
-        />
-      </div>
-
-      {/* Hexagon Pattern - hidden on mobile, very subtle */}
-      <div className="absolute inset-0 opacity-[0.02] pointer-events-none hidden md:block">
-        <svg width="100%" height="100%">
-          <defs>
-            <pattern id="hexagons" width="50" height="43.4" patternUnits="userSpaceOnUse">
-              <polygon 
-                points="24.8,22 37.3,29.2 37.3,43.4 24.8,36.2 12.3,43.4 12.3,29.2" 
-                fill="none" 
-                stroke="currentColor" 
-                strokeWidth="0.5"
-              />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#hexagons)" />
-        </svg>
-      </div>
+    <div className="relative w-full max-w-6xl mx-auto h-[320px] sm:h-[380px] md:h-[520px] flex items-center justify-center px-2 sm:px-4">
+      {/* Ultra-soft central glow - no visible edges */}
+      <div 
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background: 'radial-gradient(ellipse 80% 60% at 50% 50%, hsl(var(--primary) / 0.06) 0%, transparent 60%)',
+        }}
+      />
 
       {/* Main Flow Container - CENTERED with scale for mobile */}
       <div className="relative flex items-center justify-center w-full scale-[0.65] sm:scale-[0.8] md:scale-100 origin-center">
@@ -482,11 +434,8 @@ const Hero3DVisualization = memo(() => {
         />
       </div>
 
-      {/* Enhanced Floating Particles */}
+      {/* Subtle floating particles only */}
       <FloatingParticles />
-      
-      {/* Energy Lines */}
-      <EnergyLines />
     </div>
   );
 });

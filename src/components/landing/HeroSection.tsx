@@ -52,24 +52,7 @@ const HeroSection = memo(() => {
   };
 
   return (
-    <section ref={sectionRef} className="relative min-h-screen flex items-center overflow-hidden">
-      {/* Seamless Background - no visible edges */}
-      <div className="absolute inset-0 pointer-events-none">
-        {/* Smooth gradient fade from top */}
-        <div 
-          className="absolute inset-x-0 top-0 h-40"
-          style={{
-            background: 'linear-gradient(to bottom, hsl(var(--background)) 0%, transparent 100%)'
-          }}
-        />
-        {/* Smooth gradient fade from bottom */}
-        <div 
-          className="absolute inset-x-0 bottom-0 h-40"
-          style={{
-            background: 'linear-gradient(to top, hsl(var(--background)) 0%, transparent 100%)'
-          }}
-        />
-      </div>
+    <section ref={sectionRef} className="relative min-h-screen flex items-center overflow-hidden bg-transparent">
 
       <motion.div 
         className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-16 relative z-10"
