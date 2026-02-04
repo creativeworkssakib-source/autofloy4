@@ -71,58 +71,81 @@ const BenefitCard = memo(({ benefit, index }: { benefit: typeof benefits[0]; ind
   return (
     <motion.div
       ref={cardRef}
-      initial={{ opacity: 0, y: 40, scale: 0.9 }}
-      animate={isInView ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 40, scale: 0.9 }}
+      initial={{ opacity: 0, y: 50, scale: 0.85 }}
+      animate={isInView ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 50, scale: 0.85 }}
       transition={{ 
-        duration: 0.5, 
-        delay: index * 0.1,
+        duration: 0.7, 
+        delay: index * 0.12,
         ease: [0.25, 0.46, 0.45, 0.94]
       }}
-      whileHover={{ y: -8, scale: 1.02 }}
-      className="relative bg-card/80 backdrop-blur-sm rounded-2xl p-6 border border-border/50 text-center overflow-hidden group card-professional"
+      whileHover={{ y: -12, scale: 1.03 }}
+      className="relative bg-card/90 backdrop-blur-xl rounded-2xl p-6 border border-border/40 text-center overflow-hidden group shadow-xl hover:shadow-2xl transition-all duration-500"
+      style={{
+        boxShadow: '0 4px 30px -10px hsl(var(--foreground) / 0.1)'
+      }}
     >
-      {/* Hover Effect */}
+      {/* Premium Hover Gradient */}
       <motion.div 
-        className="absolute inset-0 bg-gradient-to-br from-primary/5 to-secondary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+        style={{
+          background: 'linear-gradient(135deg, hsl(var(--primary) / 0.08) 0%, hsl(var(--secondary) / 0.08) 100%)'
+        }}
       />
       
-      {/* Shimmer */}
-      <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 overflow-hidden">
-        <div className="absolute inset-0 animate-shimmer" />
-      </div>
-      
-      {/* Premium Icon Container */}
+      {/* Premium Shimmer Effect */}
       <motion.div 
-        className={`w-16 h-16 rounded-xl bg-gradient-to-br ${benefit.gradient} flex items-center justify-center mx-auto mb-4 relative z-10 overflow-hidden shadow-lg`}
-        whileHover={{ rotate: 10, scale: 1.1, y: -2 }}
-        transition={{ type: "spring", stiffness: 400, damping: 15 }}
+        className="absolute inset-0 opacity-0 group-hover:opacity-100"
+        style={{
+          background: 'linear-gradient(110deg, transparent 25%, rgba(255,255,255,0.15) 50%, transparent 75%)',
+          backgroundSize: '200% 100%'
+        }}
+        animate={{ backgroundPosition: ['-200% 0', '200% 0'] }}
+        transition={{ duration: 1.5, repeat: Infinity, repeatDelay: 2 }}
+      />
+      
+      {/* Premium Icon with 3D Effect */}
+      <motion.div 
+        className={`w-18 h-18 rounded-2xl bg-gradient-to-br ${benefit.gradient} flex items-center justify-center mx-auto mb-5 relative z-10 overflow-hidden`}
+        whileHover={{ rotate: 12, scale: 1.15, y: -4 }}
+        transition={{ type: "spring", stiffness: 400, damping: 12 }}
+        style={{
+          width: '72px',
+          height: '72px',
+          boxShadow: '0 15px 35px -10px rgba(0,0,0,0.25), inset 0 2px 0 rgba(255,255,255,0.35)'
+        }}
       >
-        {/* Shine effect */}
-        <div className="premium-icon-shine" />
+        {/* Shine sweep */}
+        <motion.div 
+          className="absolute inset-0 opacity-0 group-hover:opacity-100"
+          style={{
+            background: 'linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.5) 45%, rgba(255,255,255,0.7) 50%, rgba(255,255,255,0.5) 55%, transparent 60%)'
+          }}
+          animate={{ x: ['-150%', '250%'] }}
+          transition={{ duration: 1.2, repeat: Infinity, repeatDelay: 4 }}
+        />
         {/* Top highlight */}
-        <div className="absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-white/30 to-transparent rounded-t-xl pointer-events-none" />
-        {/* Bottom shadow */}
-        <div className="absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-black/15 to-transparent rounded-b-xl pointer-events-none" />
+        <div className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/40 to-transparent rounded-t-2xl pointer-events-none" />
         
-        <benefit.icon className="w-8 h-8 text-white relative z-10 drop-shadow-sm" />
+        <benefit.icon className="w-9 h-9 text-white relative z-10 drop-shadow-lg" />
       </motion.div>
       
-      {/* Counter */}
+      {/* Animated Counter */}
       <motion.div 
-        className="text-3xl lg:text-4xl font-bold mb-2 relative z-10"
-        initial={{ scale: 0.5 }}
-        animate={isInView ? { scale: 1 } : { scale: 0.5 }}
-        transition={{ delay: 0.3 + index * 0.1, type: "spring" }}
+        className="text-4xl lg:text-5xl font-extrabold mb-3 relative z-10"
+        initial={{ scale: 0.5, opacity: 0 }}
+        animate={isInView ? { scale: 1, opacity: 1 } : { scale: 0.5, opacity: 0 }}
+        transition={{ delay: 0.4 + index * 0.1, type: "spring", stiffness: 200 }}
       >
-        <Counter from={0} to={benefit.value} prefix={benefit.prefix} suffix={benefit.suffix} duration={2} />
+        <Counter from={0} to={benefit.value} prefix={benefit.prefix} suffix={benefit.suffix} duration={2.5} />
       </motion.div>
       
-      <h3 className="text-lg font-semibold mb-1 relative z-10">{benefit.label}</h3>
-      <p className="text-sm text-muted-foreground relative z-10">{benefit.description}</p>
+      <h3 className="text-lg font-bold mb-2 relative z-10">{benefit.label}</h3>
+      <p className="text-sm text-muted-foreground relative z-10 leading-relaxed">{benefit.description}</p>
       
-      {/* Border Glow */}
+      {/* Premium Border Glow */}
       <motion.div 
-        className="absolute inset-0 rounded-2xl border-2 border-primary/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+        className="absolute inset-0 rounded-2xl border-2 border-primary/30 opacity-0 group-hover:opacity-100 transition-all duration-300"
+        style={{ boxShadow: '0 0 30px hsl(var(--primary) / 0.15)' }}
       />
     </motion.div>
   );
@@ -257,47 +280,53 @@ const BenefitsSection = forwardRef<HTMLElement, Record<string, never>>((_props, 
   };
 
   return (
-    <section ref={sectionRef} className="py-10 lg:py-14 relative overflow-hidden">
-      {/* Animated Background */}
+    <section ref={sectionRef} className="py-20 lg:py-28 relative overflow-hidden">
+      {/* Premium Background with Mesh */}
+      <div className="absolute inset-0 gradient-mesh opacity-40" />
       <div className="absolute inset-0 bg-gradient-to-b from-background via-primary/5 to-background" />
+      
+      {/* Animated Orbs */}
       <motion.div 
-        className="absolute top-1/4 left-0 w-72 h-72 bg-primary/10 rounded-full blur-3xl"
-        animate={{ x: [0, 100, 0], opacity: [0.3, 0.5, 0.3] }}
-        transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
+        className="absolute top-1/4 left-0 w-[500px] h-[500px] rounded-full blur-[120px]"
+        style={{ background: 'radial-gradient(circle, hsl(var(--primary) / 0.15) 0%, transparent 70%)' }}
+        animate={{ x: [0, 120, 0], opacity: [0.3, 0.6, 0.3] }}
+        transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }}
       />
       <motion.div 
-        className="absolute bottom-1/4 right-0 w-96 h-96 bg-secondary/10 rounded-full blur-3xl"
+        className="absolute bottom-1/4 right-0 w-[600px] h-[600px] rounded-full blur-[120px]"
+        style={{ background: 'radial-gradient(circle, hsl(var(--secondary) / 0.12) 0%, transparent 70%)' }}
         animate={{ x: [0, -100, 0], opacity: [0.3, 0.5, 0.3] }}
-        transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }}
+        transition={{ duration: 25, repeat: Infinity, ease: "easeInOut" }}
       />
 
       <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-        {/* Section Header */}
+        {/* Premium Section Header */}
         <motion.div 
-          className="text-center max-w-3xl mx-auto mb-10"
-          initial={{ opacity: 0, y: 30 }}
-          animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
-          transition={{ duration: 0.6 }}
+          className="text-center max-w-3xl mx-auto mb-14"
+          initial={{ opacity: 0, y: 40 }}
+          animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 40 }}
+          transition={{ duration: 0.8 }}
         >
           <motion.span 
-            className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-gradient-to-r from-success/15 to-primary/10 text-success text-sm font-semibold mb-4 border border-success/20 shadow-sm"
-            whileHover={{ scale: 1.05 }}
+            className="inline-flex items-center gap-3 px-6 py-3 rounded-full bg-gradient-to-r from-success/15 via-primary/10 to-success/15 text-success text-sm font-bold mb-6 border border-success/25 shadow-xl backdrop-blur-sm"
+            whileHover={{ scale: 1.05, y: -2 }}
+            style={{ boxShadow: '0 10px 40px -10px hsl(var(--success) / 0.3)' }}
           >
-            <span className="text-lg">✅</span> Real Results from Real Businesses
+            <span className="text-xl">✅</span> Real Results from Real Businesses
           </motion.span>
-          <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-6">
+          <h2 className="text-4xl md:text-5xl lg:text-6xl font-extrabold mb-8 leading-tight">
             Why Thousands of Businesses{" "}
-            <span className="gradient-text">Choose {settings.company_name}</span>
+            <span className="text-gradient-premium">Choose {settings.company_name}</span>
           </h2>
-          <p className="text-lg text-muted-foreground">
+          <p className="text-lg md:text-xl text-muted-foreground leading-relaxed">
             21+ features in one platform: AI Sales Agent handles Facebook messages, takes orders & negotiates prices 
             while Complete POS manages your shop inventory, sales, expenses & reports - even offline. 
             Save 100+ hours monthly and ৳1,50,000+ in staff costs.
           </p>
         </motion.div>
 
-        {/* Benefits Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6 mb-12">
+        {/* Premium Benefits Grid */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-5 lg:gap-8 mb-16">
           {benefits.map((benefit, index) => (
             <BenefitCard key={benefit.label} benefit={benefit} index={index} />
           ))}

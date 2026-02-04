@@ -43,40 +43,59 @@ const FeatureCard = memo(({
   return (
     <motion.div
       ref={cardRef}
-      initial={{ opacity: 0, y: 40 }}
-      animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 40 }}
+      initial={{ opacity: 0, y: 50, scale: 0.9 }}
+      animate={isInView ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 50, scale: 0.9 }}
       transition={{ 
-        duration: 0.5, 
-        delay: index * 0.08,
+        duration: 0.6, 
+        delay: index * 0.06,
         ease: [0.25, 0.46, 0.45, 0.94]
       }}
-      whileHover={{ y: -8 }}
-      className={`group relative bg-card/80 backdrop-blur-sm rounded-2xl border border-border/50 overflow-hidden card-professional ${
+      whileHover={{ y: -10, scale: 1.02 }}
+      className={`group relative bg-card/90 backdrop-blur-xl rounded-2xl border border-border/40 overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-500 ${
         variant === "compact" ? "p-5" : "p-6"
       }`}
     >
-      {/* Hover Gradient Overlay */}
+      {/* Animated Gradient Border */}
       <motion.div 
-        className="absolute inset-0 bg-gradient-to-br from-primary/5 to-secondary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+        style={{
+          background: 'linear-gradient(135deg, hsl(var(--primary) / 0.1) 0%, hsl(var(--secondary) / 0.1) 100%)'
+        }}
       />
       
-      {/* Shimmer Effect on Hover */}
-      <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 overflow-hidden">
-        <div className="absolute inset-0 animate-shimmer" />
-      </div>
-      
-      {/* Premium Icon Container */}
+      {/* Premium Shimmer Effect */}
       <motion.div 
-        className={`${variant === "compact" ? "w-11 h-11 mb-3" : "w-14 h-14 mb-4"} rounded-xl bg-gradient-to-br ${feature.gradient} flex items-center justify-center relative overflow-hidden shadow-lg icon-container-premium`}
-        whileHover={{ scale: 1.1, rotate: 5, y: -2 }}
-        transition={{ type: "spring", stiffness: 400, damping: 15 }}
+        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+        style={{
+          background: 'linear-gradient(110deg, transparent 25%, rgba(255,255,255,0.1) 50%, transparent 75%)',
+          backgroundSize: '200% 100%'
+        }}
+        animate={{ backgroundPosition: ['-200% 0', '200% 0'] }}
+        transition={{ duration: 2, repeat: Infinity, repeatDelay: 1 }}
+      />
+      
+      {/* Premium Icon Container with 3D Effect */}
+      <motion.div 
+        className={`${variant === "compact" ? "w-12 h-12 mb-3" : "w-14 h-14 mb-4"} rounded-xl bg-gradient-to-br ${feature.gradient} flex items-center justify-center relative overflow-hidden shadow-xl`}
+        whileHover={{ scale: 1.15, rotate: 8, y: -4 }}
+        transition={{ type: "spring", stiffness: 400, damping: 12 }}
+        style={{
+          boxShadow: '0 8px 25px -5px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.3)'
+        }}
       >
+        {/* Shine sweep effect */}
+        <motion.div 
+          className="absolute inset-0 opacity-0 group-hover:opacity-100"
+          style={{
+            background: 'linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.4) 45%, rgba(255,255,255,0.6) 50%, rgba(255,255,255,0.4) 55%, transparent 60%)'
+          }}
+          animate={{ x: ['-100%', '200%'] }}
+          transition={{ duration: 1.5, repeat: Infinity, repeatDelay: 3 }}
+        />
         {/* Top highlight */}
-        <div className="absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-white/30 to-transparent rounded-t-xl pointer-events-none" />
-        {/* Bottom shadow */}
-        <div className="absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-black/15 to-transparent rounded-b-xl pointer-events-none" />
+        <div className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/35 to-transparent rounded-t-xl pointer-events-none" />
         
-        <feature.icon className={`${variant === "compact" ? "w-5 h-5" : "w-6 h-6"} text-white relative z-10 drop-shadow-sm`} />
+        <feature.icon className={`${variant === "compact" ? "w-5 h-5" : "w-6 h-6"} text-white relative z-10 drop-shadow-md`} />
       </motion.div>
       
       {/* Content */}
@@ -87,24 +106,28 @@ const FeatureCard = memo(({
         {feature.description}
       </p>
       
-      {/* Link */}
+      {/* Premium Link with Arrow Animation */}
       <Link
         to={`/features/${feature.slug}`}
-        className={`inline-flex items-center ${variant === "compact" ? "text-success-accessible text-xs" : "text-primary text-sm"} font-medium group/link relative z-10`}
+        className={`inline-flex items-center ${variant === "compact" ? "text-success-accessible text-xs" : "text-primary text-sm"} font-semibold group/link relative z-10 hover:gap-2 transition-all duration-300`}
       >
         <span>Learn More<span className="sr-only"> about {feature.title}</span></span>
         <motion.span
-          className="ml-1"
-          initial={{ x: 0 }}
+          className="ml-1 inline-block"
           whileHover={{ x: 5 }}
         >
           <ArrowRight className="w-3.5 h-3.5" />
         </motion.span>
       </Link>
       
-      {/* Border Glow on Hover */}
+      {/* Premium Border Glow on Hover */}
       <motion.div 
-        className={`absolute inset-0 rounded-2xl border-2 ${variant === "compact" ? "border-success/30" : "border-primary/30"} opacity-0 group-hover:opacity-100 transition-opacity duration-300`}
+        className={`absolute inset-0 rounded-2xl border-2 ${variant === "compact" ? "border-success/40" : "border-primary/40"} opacity-0 group-hover:opacity-100 transition-all duration-300`}
+        style={{
+          boxShadow: variant === "compact" 
+            ? '0 0 20px hsl(var(--success) / 0.2)' 
+            : '0 0 25px hsl(var(--primary) / 0.2)'
+        }}
       />
     </motion.div>
   );
@@ -282,54 +305,66 @@ const FeaturesSection = memo(() => {
   };
 
   return (
-    <section id="features" ref={sectionRef} className="py-16 lg:py-24 relative overflow-hidden">
-      {/* Seamless Background - gradient fade from transparent */}
+    <section id="features" ref={sectionRef} className="py-20 lg:py-32 relative overflow-hidden">
+      {/* Premium Background with Mesh Gradient */}
+      <div className="absolute inset-0 gradient-mesh opacity-50" />
       <div 
         className="absolute inset-0"
         style={{
-          background: 'linear-gradient(to bottom, transparent 0%, hsl(var(--muted) / 0.3) 15%, hsl(var(--muted) / 0.3) 100%)'
+          background: 'linear-gradient(to bottom, transparent 0%, hsl(var(--muted) / 0.4) 20%, hsl(var(--muted) / 0.4) 80%, transparent 100%)'
         }}
       />
+      
+      {/* Animated Floating Orbs */}
       <motion.div 
-        className="absolute top-20 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl"
+        className="absolute top-20 left-[10%] w-[500px] h-[500px] rounded-full blur-[100px]"
+        style={{ background: 'radial-gradient(circle, hsl(var(--primary) / 0.15) 0%, transparent 70%)' }}
         animate={{ 
-          x: [0, 50, 0],
-          y: [0, 30, 0]
-        }}
-        transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }}
-      />
-      <motion.div 
-        className="absolute bottom-0 right-1/4 w-96 h-96 bg-secondary/5 rounded-full blur-3xl"
-        animate={{ 
-          x: [0, -50, 0],
-          y: [0, -30, 0]
+          x: [0, 80, 0],
+          y: [0, 50, 0],
+          scale: [1, 1.2, 1]
         }}
         transition={{ duration: 25, repeat: Infinity, ease: "easeInOut" }}
       />
+      <motion.div 
+        className="absolute bottom-20 right-[10%] w-[600px] h-[600px] rounded-full blur-[100px]"
+        style={{ background: 'radial-gradient(circle, hsl(var(--secondary) / 0.12) 0%, transparent 70%)' }}
+        animate={{ 
+          x: [0, -60, 0],
+          y: [0, -40, 0],
+          scale: [1, 1.15, 1]
+        }}
+        transition={{ duration: 30, repeat: Infinity, ease: "easeInOut" }}
+      />
 
       <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-        {/* Section Header */}
+        {/* Premium Section Header */}
         <motion.div 
-          className="text-center max-w-3xl mx-auto mb-16"
+          className="text-center max-w-3xl mx-auto mb-20"
           variants={headerVariants}
           initial="hidden"
           animate={isInView ? "visible" : "hidden"}
         >
           <motion.span 
-            className="inline-flex items-center gap-2.5 px-5 py-2.5 rounded-full bg-gradient-to-r from-primary/15 to-secondary/10 text-primary-accessible text-sm font-semibold mb-4 border border-primary/20 shadow-lg"
-            whileHover={{ scale: 1.05 }}
+            className="inline-flex items-center gap-3 px-6 py-3 rounded-full bg-gradient-to-r from-primary/15 via-secondary/10 to-primary/15 text-primary-accessible text-sm font-bold mb-6 border border-primary/25 shadow-xl backdrop-blur-sm"
+            whileHover={{ scale: 1.05, y: -2 }}
+            style={{ boxShadow: '0 10px 40px -10px hsl(var(--primary) / 0.3)' }}
           >
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#F97316] to-[#EA580C] flex items-center justify-center shadow-md relative overflow-hidden">
-              <div className="absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-white/30 to-transparent rounded-t-lg pointer-events-none" />
-              <Rocket className="w-4 h-4 text-white relative z-10" />
-            </div>
+            <motion.div 
+              className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#F97316] to-[#EA580C] flex items-center justify-center shadow-lg relative overflow-hidden"
+              animate={{ rotate: [0, 5, -5, 0] }}
+              transition={{ duration: 4, repeat: Infinity }}
+            >
+              <div className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/40 to-transparent rounded-t-lg" />
+              <Rocket className="w-4 h-4 text-white relative z-10 drop-shadow-sm" />
+            </motion.div>
             Complete Business Solution
           </motion.span>
-          <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-6">
+          <h2 className="text-4xl md:text-5xl lg:text-6xl font-extrabold mb-8 leading-tight">
             Every Feature You Need{" "}
-            <span className="gradient-text">In One Platform</span>
+            <span className="text-gradient-premium">In One Platform</span>
           </h2>
-          <p className="text-lg text-muted-foreground">
+          <p className="text-lg md:text-xl text-muted-foreground leading-relaxed">
             21+ powerful features for both online automation and offline shop management. 
             From AI sales agents to complete POS system - everything to run your business efficiently.
           </p>
