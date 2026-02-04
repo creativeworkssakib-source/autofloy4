@@ -5,11 +5,9 @@ import { motion } from "framer-motion";
 import { ArrowRight, Play, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Hero3DVisualization from "./Hero3DVisualization";
-import HeroBackgroundAnimation from "./HeroBackgroundAnimation";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSiteSettings } from "@/contexts/SiteSettingsContext";
 import DemoVideoModal from "./DemoVideoModal";
-
 const HeroSection = memo(() => {
   const { t } = useLanguage();
   const { settings } = useSiteSettings();
@@ -55,8 +53,11 @@ const HeroSection = memo(() => {
 
   return (
     <section ref={sectionRef} className="relative min-h-screen flex items-center overflow-hidden">
-      {/* Full-width immersive AI background animation - no box constraints */}
-      <HeroBackgroundAnimation />
+      {/* Clean Background */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-20 left-10 w-72 h-72 bg-primary/5 rounded-full blur-3xl" />
+        <div className="absolute bottom-20 right-10 w-96 h-96 bg-secondary/5 rounded-full blur-3xl" />
+      </div>
 
       <motion.div 
         className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-16 relative z-10"
