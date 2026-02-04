@@ -4911,7 +4911,261 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      payment_methods_public: {
+        Row: {
+          account_name: string | null
+          account_number: string | null
+          api_key: string | null
+          api_secret: string | null
+          created_at: string | null
+          display_order: number | null
+          gateway_url: string | null
+          icon: string | null
+          id: string | null
+          instructions: string | null
+          is_active: boolean | null
+          name: string | null
+          type: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          account_name?: string | null
+          account_number?: string | null
+          api_key?: never
+          api_secret?: never
+          created_at?: string | null
+          display_order?: number | null
+          gateway_url?: string | null
+          icon?: string | null
+          id?: string | null
+          instructions?: string | null
+          is_active?: boolean | null
+          name?: string | null
+          type?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          account_name?: string | null
+          account_number?: string | null
+          api_key?: never
+          api_secret?: never
+          created_at?: string | null
+          display_order?: number | null
+          gateway_url?: string | null
+          icon?: string | null
+          id?: string | null
+          instructions?: string | null
+          is_active?: boolean | null
+          name?: string | null
+          type?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      reviews_public: {
+        Row: {
+          comment: string | null
+          created_at: string | null
+          id: string | null
+          is_verified: boolean | null
+          likes_count: number | null
+          name: string | null
+          rating: number | null
+          user_id: string | null
+        }
+        Insert: {
+          comment?: string | null
+          created_at?: string | null
+          id?: string | null
+          is_verified?: boolean | null
+          likes_count?: number | null
+          name?: string | null
+          rating?: number | null
+          user_id?: never
+        }
+        Update: {
+          comment?: string | null
+          created_at?: string | null
+          id?: string | null
+          is_verified?: boolean | null
+          likes_count?: number | null
+          name?: string | null
+          rating?: number | null
+          user_id?: never
+        }
+        Relationships: []
+      }
+      seo_settings_public: {
+        Row: {
+          bing_verification_code: string | null
+          created_at: string | null
+          default_description: string | null
+          default_keywords: string | null
+          default_title: string | null
+          google_verification_code: string | null
+          id: string | null
+          og_image_url: string | null
+          robots_txt_content: string | null
+          sitemap_enabled: boolean | null
+          twitter_card_type: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          bing_verification_code?: never
+          created_at?: string | null
+          default_description?: string | null
+          default_keywords?: string | null
+          default_title?: string | null
+          google_verification_code?: never
+          id?: string | null
+          og_image_url?: string | null
+          robots_txt_content?: string | null
+          sitemap_enabled?: boolean | null
+          twitter_card_type?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          bing_verification_code?: never
+          created_at?: string | null
+          default_description?: string | null
+          default_keywords?: string | null
+          default_title?: string | null
+          google_verification_code?: never
+          id?: string | null
+          og_image_url?: string | null
+          robots_txt_content?: string | null
+          sitemap_enabled?: boolean | null
+          twitter_card_type?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      site_settings_public: {
+        Row: {
+          about_us: string | null
+          billing_email: string | null
+          city: string | null
+          company_address: string | null
+          company_name: string | null
+          copyright_text: string | null
+          country: string | null
+          created_at: string | null
+          demo_video_enabled: boolean | null
+          demo_video_type: string | null
+          demo_video_upload_url: string | null
+          demo_video_youtube_url: string | null
+          facebook_url: string | null
+          favicon_url: string | null
+          id: string | null
+          instagram_url: string | null
+          legal_contact_email: string | null
+          linkedin_url: string | null
+          logo_url: string | null
+          offline_shop_enabled: boolean | null
+          online_business_enabled: boolean | null
+          phone_number: string | null
+          platform_sms_api_key: string | null
+          platform_sms_enabled: boolean | null
+          platform_sms_provider: string | null
+          platform_sms_sender_id: string | null
+          postal_code: string | null
+          sms_limit_business: number | null
+          sms_limit_lifetime: number | null
+          sms_limit_professional: number | null
+          sms_limit_starter: number | null
+          sms_limit_trial: number | null
+          state: string | null
+          support_email: string | null
+          tagline: string | null
+          twitter_url: string | null
+          updated_at: string | null
+          website_url: string | null
+          youtube_url: string | null
+        }
+        Insert: {
+          about_us?: string | null
+          billing_email?: string | null
+          city?: string | null
+          company_address?: string | null
+          company_name?: string | null
+          copyright_text?: string | null
+          country?: string | null
+          created_at?: string | null
+          demo_video_enabled?: boolean | null
+          demo_video_type?: string | null
+          demo_video_upload_url?: string | null
+          demo_video_youtube_url?: string | null
+          facebook_url?: string | null
+          favicon_url?: string | null
+          id?: string | null
+          instagram_url?: string | null
+          legal_contact_email?: string | null
+          linkedin_url?: string | null
+          logo_url?: string | null
+          offline_shop_enabled?: boolean | null
+          online_business_enabled?: boolean | null
+          phone_number?: string | null
+          platform_sms_api_key?: never
+          platform_sms_enabled?: boolean | null
+          platform_sms_provider?: string | null
+          platform_sms_sender_id?: string | null
+          postal_code?: string | null
+          sms_limit_business?: number | null
+          sms_limit_lifetime?: number | null
+          sms_limit_professional?: number | null
+          sms_limit_starter?: number | null
+          sms_limit_trial?: number | null
+          state?: string | null
+          support_email?: string | null
+          tagline?: string | null
+          twitter_url?: string | null
+          updated_at?: string | null
+          website_url?: string | null
+          youtube_url?: string | null
+        }
+        Update: {
+          about_us?: string | null
+          billing_email?: string | null
+          city?: string | null
+          company_address?: string | null
+          company_name?: string | null
+          copyright_text?: string | null
+          country?: string | null
+          created_at?: string | null
+          demo_video_enabled?: boolean | null
+          demo_video_type?: string | null
+          demo_video_upload_url?: string | null
+          demo_video_youtube_url?: string | null
+          facebook_url?: string | null
+          favicon_url?: string | null
+          id?: string | null
+          instagram_url?: string | null
+          legal_contact_email?: string | null
+          linkedin_url?: string | null
+          logo_url?: string | null
+          offline_shop_enabled?: boolean | null
+          online_business_enabled?: boolean | null
+          phone_number?: string | null
+          platform_sms_api_key?: never
+          platform_sms_enabled?: boolean | null
+          platform_sms_provider?: string | null
+          platform_sms_sender_id?: string | null
+          postal_code?: string | null
+          sms_limit_business?: number | null
+          sms_limit_lifetime?: number | null
+          sms_limit_professional?: number | null
+          sms_limit_starter?: number | null
+          sms_limit_trial?: number | null
+          state?: string | null
+          support_email?: string | null
+          tagline?: string | null
+          twitter_url?: string | null
+          updated_at?: string | null
+          website_url?: string | null
+          youtube_url?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       archive_old_conversations: { Args: never; Returns: Json }
