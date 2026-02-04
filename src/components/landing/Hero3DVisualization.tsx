@@ -4,7 +4,7 @@ import { Bot, Sparkles } from "lucide-react";
 
 const Hero3DVisualization = memo(() => {
   return (
-    <div className="relative w-full max-w-4xl mx-auto h-[280px] sm:h-[320px] md:h-[380px] flex items-center justify-center px-4">
+    <div className="relative w-full max-w-2xl mx-auto h-[180px] sm:h-[200px] md:h-[240px] flex items-center justify-center px-4">
       {/* Subtle ambient glow */}
       <div 
         className="absolute inset-0 pointer-events-none"
@@ -22,7 +22,7 @@ const Hero3DVisualization = memo(() => {
       >
         {/* Outer rotating ring */}
         <motion.div
-          className="absolute inset-0 -m-16 md:-m-20"
+          className="absolute inset-0 -m-10 md:-m-14"
           animate={{ rotate: 360 }}
           transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
         >
@@ -47,8 +47,8 @@ const Hero3DVisualization = memo(() => {
             <motion.div
               key={deg}
               className="absolute top-1/2 left-1/2 w-2 h-2"
-              style={{ 
-                transform: `rotate(${deg}deg) translateX(76px) translateY(-50%)`,
+              style={{
+                transform: `rotate(${deg}deg) translateX(56px) translateY(-50%)`,
               }}
             >
               <motion.div 
@@ -66,7 +66,7 @@ const Hero3DVisualization = memo(() => {
 
         {/* Inner counter-rotating ring */}
         <motion.div
-          className="absolute inset-0 -m-10 md:-m-12"
+          className="absolute inset-0 -m-6 md:-m-8"
           animate={{ rotate: -360 }}
           transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
         >
@@ -94,7 +94,7 @@ const Hero3DVisualization = memo(() => {
         />
 
         {/* Main AI Core Card */}
-        <div className="relative w-24 h-24 md:w-32 md:h-32" style={{ perspective: '800px' }}>
+        <div className="relative w-16 h-16 md:w-20 md:h-20" style={{ perspective: '600px' }}>
           {/* Shadow layers */}
           <div className="absolute inset-0 rounded-2xl bg-primary/30 transform translate-x-2 translate-y-2 blur-xl" />
           <div className="absolute inset-0 rounded-2xl bg-primary/50 transform translate-x-1 translate-y-1 blur-lg" />
@@ -134,8 +134,8 @@ const Hero3DVisualization = memo(() => {
               animate={{ scale: [1, 1.05, 1] }}
               transition={{ duration: 3, repeat: Infinity }}
             >
-              <Bot 
-                className="w-10 h-10 md:w-14 md:h-14 text-white" 
+              <Bot
+                className="w-7 h-7 md:w-9 md:h-9 text-white" 
                 strokeWidth={1.5}
                 style={{ filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.3))' }} 
               />
@@ -145,17 +145,17 @@ const Hero3DVisualization = memo(() => {
 
         {/* AI Label */}
         <motion.div
-          className="absolute -bottom-10 md:-bottom-12 inset-x-0 flex flex-col items-center"
+          className="absolute -bottom-8 md:-bottom-10 inset-x-0 flex flex-col items-center"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
         >
-          <span className="text-base md:text-lg font-bold bg-gradient-to-r from-primary via-secondary to-primary bg-clip-text text-transparent bg-[length:200%] animate-gradient">
+          <span className="text-sm md:text-base font-bold bg-gradient-to-r from-primary via-secondary to-primary bg-clip-text text-transparent bg-[length:200%] animate-gradient">
             AI Agent
           </span>
-          <div className="flex items-center gap-1 mt-0.5 text-muted-foreground">
+          <div className="flex items-center gap-1 text-muted-foreground">
             <Sparkles className="w-3 h-3" />
-            <span className="text-[10px] md:text-xs">Smart Automation</span>
+            <span className="text-[9px] md:text-[10px]">Smart Automation</span>
           </div>
         </motion.div>
       </motion.div>
