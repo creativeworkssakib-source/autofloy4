@@ -29,9 +29,16 @@ const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
 const AI_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
+const GOOGLE_AI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+
+type AIProvider = 'lovable' | 'openai' | 'google';
 
 // Check if AI is globally enabled from admin settings
-async function isAIEnabled(supabase: any): Promise<{ enabled: boolean; useCustomKey: boolean; customApiKey: string | null }> {
+async function isAIEnabled(supabase: any): Promise<{ 
+  enabled: boolean; 
+  provider: AIProvider; 
+  customApiKey: string | null 
+}> {
   const { data } = await supabase
     .from("api_integrations")
     .select("is_enabled, api_key")
@@ -40,21 +47,34 @@ async function isAIEnabled(supabase: any): Promise<{ enabled: boolean; useCustom
   
   if (!data) {
     // Default: use Lovable AI if no config
-    return { enabled: true, useCustomKey: false, customApiKey: null };
+    return { enabled: true, provider: 'lovable', customApiKey: null };
   }
   
   // If disabled, AI won't work at all
   if (!data.is_enabled) {
-    return { enabled: false, useCustomKey: false, customApiKey: null };
+    return { enabled: false, provider: 'lovable', customApiKey: null };
   }
   
-  // If enabled with custom API key, use OpenAI directly
+  // If enabled with custom API key, detect provider type
   if (data.api_key && data.api_key.trim().length > 10) {
-    return { enabled: true, useCustomKey: true, customApiKey: data.api_key };
+    const key = data.api_key.trim();
+    
+    // Detect Google AI Studio API key (starts with AIza)
+    if (key.startsWith('AIza')) {
+      return { enabled: true, provider: 'google', customApiKey: key };
+    }
+    
+    // Detect OpenAI API key (starts with sk-)
+    if (key.startsWith('sk-')) {
+      return { enabled: true, provider: 'openai', customApiKey: key };
+    }
+    
+    // Unknown key format - try as OpenAI
+    return { enabled: true, provider: 'openai', customApiKey: key };
   }
   
   // Enabled but no custom key - use Lovable AI
-  return { enabled: true, useCustomKey: false, customApiKey: null };
+  return { enabled: true, provider: 'lovable', customApiKey: null };
 }
 
 // Database helpers
@@ -143,24 +163,110 @@ async function getOrCreateConversation(supabase: any, userId: string, pageId: st
   return newConv;
 }
 
-// AI Call with better error handling - supports both Lovable AI and custom OpenAI key
-async function callAI(systemPrompt: string, messages: any[], imageUrls?: string[], customApiKey?: string | null): Promise<string> {
-  const aiMessages: any[] = [];
+// AI Call with better error handling - supports Lovable AI, OpenAI, and Google AI
+async function callAI(
+  systemPrompt: string, 
+  messages: any[], 
+  imageUrls?: string[], 
+  aiConfig?: { provider: AIProvider; customApiKey: string | null }
+): Promise<string> {
+  const provider = aiConfig?.provider || 'lovable';
+  const customApiKey = aiConfig?.customApiKey;
   
+  console.log(`[AI Agent] Calling AI: provider=${provider}, hasImages=${!!imageUrls?.length}`);
+  
+  // Prepare messages
+  const aiMessages: any[] = [];
   for (const msg of messages.slice(-10)) {
     if (msg.role === "user" || msg.role === "assistant") {
       const content = msg.content || msg.text || "";
-      // Ensure content is never empty
       if (content.trim()) {
         aiMessages.push({ role: msg.role, content: content.trim() });
       }
     }
   }
   
-  // Ensure at least one user message exists
   if (aiMessages.length === 0 || !aiMessages.some(m => m.role === "user")) {
     aiMessages.push({ role: "user", content: "Hi" });
   }
+  
+  // Handle Google AI (Gemini) - different API format
+  if (provider === 'google' && customApiKey) {
+    return await callGoogleAI(systemPrompt, aiMessages, customApiKey, imageUrls);
+  }
+  
+  // Handle OpenAI or Lovable AI (both use OpenAI-compatible format)
+  return await callOpenAICompatible(systemPrompt, aiMessages, provider, customApiKey, imageUrls);
+}
+
+// Google AI (Gemini) API call
+async function callGoogleAI(
+  systemPrompt: string, 
+  messages: any[], 
+  apiKey: string,
+  imageUrls?: string[]
+): Promise<string> {
+  // Convert to Gemini format
+  const contents: any[] = [];
+  
+  // Add system instruction as first user message for context
+  contents.push({
+    role: "user",
+    parts: [{ text: `[System Instructions]\n${systemPrompt}\n\n[End System Instructions]\n\nNow respond to the conversation below:` }]
+  });
+  contents.push({
+    role: "model",
+    parts: [{ text: "বুঝেছি। আমি এখন কাস্টমারদের সাথে কথা বলার জন্য প্রস্তুত।" }]
+  });
+  
+  // Add conversation history
+  for (const msg of messages) {
+    const role = msg.role === "user" ? "user" : "model";
+    contents.push({
+      role,
+      parts: [{ text: msg.content }]
+    });
+  }
+  
+  const requestBody = {
+    contents,
+    generationConfig: {
+      temperature: 0.7,
+      maxOutputTokens: 2048,
+    }
+  };
+  
+  const response = await fetch(`${GOOGLE_AI_URL}?key=${apiKey}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(requestBody),
+  });
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`[AI Agent] Google AI Error ${response.status}:`, errorText);
+    throw new Error(`Google AI error: ${response.status} - ${errorText.substring(0, 200)}`);
+  }
+  
+  const data = await response.json();
+  console.log(`[AI Agent] Google AI Response:`, JSON.stringify(data).substring(0, 300));
+  
+  const reply = data.candidates?.[0]?.content?.parts?.[0]?.text 
+    || "দুঃখিত, একটু সমস্যা হচ্ছে।";
+  
+  console.log(`[AI Agent] AI replied: ${reply.substring(0, 100)}...`);
+  return reply;
+}
+
+// OpenAI-compatible API call (for OpenAI and Lovable AI Gateway)
+async function callOpenAICompatible(
+  systemPrompt: string,
+  messages: any[],
+  provider: AIProvider,
+  customApiKey: string | null,
+  imageUrls?: string[]
+): Promise<string> {
+  const aiMessages = [...messages];
   
   // Add images if present
   if (imageUrls && imageUrls.length > 0) {
@@ -174,15 +280,13 @@ async function callAI(systemPrompt: string, messages: any[], imageUrls?: string[
     }
   }
   
-  // Determine API endpoint and model based on whether using custom key
-  const useCustomKey = customApiKey && customApiKey.trim().length > 10;
-  const apiUrl = useCustomKey ? OPENAI_API_URL : AI_GATEWAY_URL;
-  const apiKey = useCustomKey ? customApiKey : LOVABLE_API_KEY;
+  const isOpenAI = provider === 'openai' && customApiKey;
+  const apiUrl = isOpenAI ? OPENAI_API_URL : AI_GATEWAY_URL;
+  const apiKey = isOpenAI ? customApiKey : LOVABLE_API_KEY;
   
-  // Select model based on provider
-  const model = useCustomKey 
-    ? (imageUrls?.length ? "gpt-4o" : "gpt-4o-mini")  // OpenAI models
-    : (imageUrls?.length ? "openai/gpt-5" : "openai/gpt-5-mini");  // Lovable AI Gateway models
+  const model = isOpenAI 
+    ? (imageUrls?.length ? "gpt-4o" : "gpt-4o-mini")
+    : (imageUrls?.length ? "openai/gpt-5" : "openai/gpt-5-mini");
   
   const requestBody = {
     model,
@@ -190,7 +294,7 @@ async function callAI(systemPrompt: string, messages: any[], imageUrls?: string[
     max_tokens: 2048,
   };
   
-  console.log(`[AI Agent] Calling AI: provider=${useCustomKey ? 'OpenAI' : 'Lovable'}, model=${model}, messages=${aiMessages.length}`);
+  console.log(`[AI Agent] Calling ${isOpenAI ? 'OpenAI' : 'Lovable AI'}, model=${model}`);
   
   const response = await fetch(apiUrl, {
     method: "POST",
@@ -205,14 +309,8 @@ async function callAI(systemPrompt: string, messages: any[], imageUrls?: string[
   }
   
   const data = await response.json();
-  console.log(`[AI Agent] API Response structure:`, JSON.stringify(data).substring(0, 300));
-  
-  // Try different response formats (some APIs use different structures)
   const reply = data.choices?.[0]?.message?.content 
     || data.choices?.[0]?.text 
-    || data.message?.content
-    || data.content
-    || data.response
     || "দুঃখিত, একটু সমস্যা হচ্ছে।";
     
   console.log(`[AI Agent] AI replied: ${reply.substring(0, 100)}...`);
@@ -257,7 +355,7 @@ serve(async (req) => {
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
   
-  console.log(`[AI Agent] AI enabled: useCustomKey=${aiConfig.useCustomKey}`);
+  console.log(`[AI Agent] AI enabled: provider=${aiConfig.provider}, hasCustomKey=${!!aiConfig.customApiKey}`);
   
   try {
     const body = await req.json();
@@ -391,7 +489,7 @@ serve(async (req) => {
       let inboxMessage: string | undefined;
       if (smartAnalysis.needsInboxMessage) {
         const prompt = buildSystemPrompt(pageMemory, productContext, allProducts, orderTakingEnabled);
-        inboxMessage = await callAI(prompt, messageHistory);
+        inboxMessage = await callAI(prompt, messageHistory, undefined, aiConfig);
       }
       
       // Update conversation
@@ -453,7 +551,7 @@ serve(async (req) => {
       }
     }
     
-    const aiReply = await callAI(systemPrompt, messageHistory, imageUrls.length > 0 ? imageUrls : undefined);
+    const aiReply = await callAI(systemPrompt, messageHistory, imageUrls.length > 0 ? imageUrls : undefined, aiConfig);
     
     // Create order if complete
     let orderId: string | undefined, invoiceNumber: string | undefined;

@@ -1,27 +1,45 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Power, Sparkles, Loader2, Bot, Zap, CheckCircle, XCircle, Shield } from 'lucide-react';
+import { Power, Sparkles, Loader2, Bot, Zap, CheckCircle, XCircle, Shield, Settings2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { useToast } from '@/hooks/use-toast';
+import { Label } from '@/components/ui/label';
 
-const SUPABASE_URL = "https://klkrzfwvrmffqkmkyqrh.supabase.co";
+type AIProvider = 'lovable' | 'openai' | 'google' | 'unknown';
 
 interface LovableAIPowerSectionProps {
   isEnabled: boolean;
-  hasCustomKey: boolean;
+  apiKey: string;
   onToggle: (enabled: boolean) => Promise<void>;
   isLoading: boolean;
 }
 
+// Detect AI provider from API key format
+function detectProvider(apiKey: string): AIProvider {
+  if (!apiKey || apiKey.trim().length < 10) return 'lovable';
+  const key = apiKey.trim();
+  if (key.startsWith('AIza')) return 'google';
+  if (key.startsWith('sk-')) return 'openai';
+  return 'unknown';
+}
+
+const providerInfo: Record<AIProvider, { name: string; color: string; bgColor: string }> = {
+  lovable: { name: 'Lovable AI', color: 'text-primary', bgColor: 'bg-primary/10' },
+  openai: { name: 'OpenAI', color: 'text-green-600', bgColor: 'bg-green-500/10' },
+  google: { name: 'Google AI (Gemini)', color: 'text-blue-600', bgColor: 'bg-blue-500/10' },
+  unknown: { name: 'Custom AI', color: 'text-orange-600', bgColor: 'bg-orange-500/10' },
+};
+
 const LovableAIPowerSection = ({ 
   isEnabled, 
-  hasCustomKey, 
+  apiKey, 
   onToggle, 
   isLoading 
 }: LovableAIPowerSectionProps) => {
   const [isToggling, setIsToggling] = useState(false);
+  const provider = detectProvider(apiKey);
+  const hasCustomKey = apiKey && apiKey.trim().length > 10;
 
   const handleToggle = async (checked: boolean) => {
     setIsToggling(true);
@@ -42,7 +60,7 @@ const LovableAIPowerSection = ({
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="relative"
+      className="relative mb-6"
     >
       {/* Premium Glow Effect */}
       <div className="absolute -inset-1 bg-gradient-to-r from-primary/20 via-secondary/20 to-primary/20 rounded-2xl blur-xl opacity-50" />
@@ -99,7 +117,7 @@ const LovableAIPowerSection = ({
 
               <div>
                 <CardTitle className="text-xl flex items-center gap-3">
-                  Lovable AI Power
+                  AI Automation Power
                   <AnimatePresence mode="wait">
                     {isEnabled ? (
                       <motion.div
@@ -142,8 +160,12 @@ const LovableAIPowerSection = ({
               {(isLoading || isToggling) && (
                 <Loader2 className="w-5 h-5 animate-spin text-primary" />
               )}
-              <div className="relative">
+              <div className="flex items-center gap-3 p-2 rounded-xl bg-muted/30">
+                <Label htmlFor="ai-power-toggle" className="text-sm font-medium cursor-pointer">
+                  {isEnabled ? 'ON' : 'OFF'}
+                </Label>
                 <Switch
+                  id="ai-power-toggle"
                   checked={isEnabled}
                   onCheckedChange={handleToggle}
                   disabled={isLoading || isToggling}
@@ -192,7 +214,7 @@ const LovableAIPowerSection = ({
             ))}
           </div>
 
-          {/* Status Message */}
+          {/* Provider & Status Message */}
           <motion.div
             className={`p-4 rounded-xl border ${
               isEnabled 
@@ -200,32 +222,41 @@ const LovableAIPowerSection = ({
                 : 'bg-muted/30 border-border/50'
             }`}
           >
-            <div className="flex items-center gap-3">
-              <div className={`p-2 rounded-lg ${
-                isEnabled ? 'bg-green-500/20' : 'bg-muted'
-              }`}>
-                <Power className={`w-5 h-5 ${
-                  isEnabled ? 'text-green-600' : 'text-muted-foreground'
-                }`} />
-              </div>
-              <div>
-                <p className={`text-sm font-medium ${
-                  isEnabled ? 'text-green-700 dark:text-green-400' : 'text-muted-foreground'
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className={`p-2 rounded-lg ${
+                  isEnabled ? 'bg-green-500/20' : 'bg-muted'
                 }`}>
-                  {isEnabled 
-                    ? hasCustomKey 
-                      ? '✓ Using your custom OpenAI API key'
-                      : '✓ Using Lovable AI Gateway (free tier included)'
-                    : 'AI automation is currently disabled'
-                  }
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {isEnabled 
-                    ? 'AI will respond to comments, messages, and process orders automatically'
-                    : 'Enable to start AI-powered automation for your Facebook pages'
-                  }
-                </p>
+                  <Power className={`w-5 h-5 ${
+                    isEnabled ? 'text-green-600' : 'text-muted-foreground'
+                  }`} />
+                </div>
+                <div>
+                  <p className={`text-sm font-medium ${
+                    isEnabled ? 'text-green-700 dark:text-green-400' : 'text-muted-foreground'
+                  }`}>
+                    {isEnabled 
+                      ? hasCustomKey 
+                        ? `✓ Using ${providerInfo[provider].name}`
+                        : '✓ Using Lovable AI Gateway (free tier included)'
+                      : 'AI automation is currently disabled'
+                    }
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {isEnabled 
+                      ? 'AI will respond to comments, messages, and process orders automatically'
+                      : 'Enable to start AI-powered automation for your Facebook pages'
+                    }
+                  </p>
+                </div>
               </div>
+              
+              {isEnabled && hasCustomKey && (
+                <Badge className={`${providerInfo[provider].bgColor} ${providerInfo[provider].color} border-0`}>
+                  <Settings2 className="w-3 h-3 mr-1" />
+                  {providerInfo[provider].name}
+                </Badge>
+              )}
             </div>
           </motion.div>
         </CardContent>
