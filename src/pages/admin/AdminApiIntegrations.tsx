@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Save, Loader2, Eye, EyeOff, CheckCircle, XCircle, RefreshCw, Zap, Bot } from 'lucide-react';
+import { Save, Loader2, Eye, EyeOff, CheckCircle, XCircle, RefreshCw, Zap, Bot, Info } from 'lucide-react';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -36,7 +36,7 @@ const providerLabels: Record<string, { name: string; icon: string; color: string
   apify: { name: 'Apify', icon: apifyIcon, color: 'bg-orange-500' },
   firecrawl: { name: 'Firecrawl', icon: firecrawlIcon, color: 'bg-red-500' },
   google_maps: { name: 'Google Maps', icon: googleMapsIcon, color: 'bg-blue-500' },
-  openai: { name: 'OpenAI', icon: openaiIcon, color: 'bg-green-500', isAI: true },
+  openai: { name: 'AI Provider', icon: openaiIcon, color: 'bg-green-500', isAI: true },
 };
 
 const AdminApiIntegrations = () => {
@@ -91,11 +91,18 @@ const AdminApiIntegrations = () => {
     fetchIntegrations();
   }, []);
 
-  const handleSave = async (provider: string) => {
+  const handleSave = async (provider: string, overrideData?: { is_enabled: boolean }) => {
     try {
       setSavingProvider(provider);
       const token = localStorage.getItem("autofloy_token");
-      const data = formData[provider];
+      const data = formData[provider] || { api_key: '', api_secret: '', is_enabled: false };
+      
+      const payload = {
+        provider,
+        api_key: data.api_key || null,
+        api_secret: data.api_secret || null,
+        is_enabled: overrideData?.is_enabled ?? data.is_enabled,
+      };
 
       const response = await fetch(`${SUPABASE_URL}/functions/v1/admin/api-integrations`, {
         method: 'PUT',
@@ -103,12 +110,7 @@ const AdminApiIntegrations = () => {
           'Content-Type': 'application/json',
           ...(token && { Authorization: `Bearer ${token}` }),
         },
-        body: JSON.stringify({
-          provider,
-          api_key: data.api_key || null,
-          api_secret: data.api_secret || null,
-          is_enabled: data.is_enabled,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
@@ -157,6 +159,10 @@ const AdminApiIntegrations = () => {
     );
   }
 
+  // Get OpenAI integration data for the power section
+  const openaiData = formData['openai'] || { api_key: '', api_secret: '', is_enabled: false };
+  const isSavingOpenAI = savingProvider === 'openai';
+
   return (
     <AdminLayout>
       <div className="p-6 max-w-4xl mx-auto">
@@ -176,26 +182,95 @@ const AdminApiIntegrations = () => {
           </Button>
         </div>
 
-        {/* Lovable AI Power Section - Dedicated Premium Section */}
-        {(() => {
-          const openaiIntegration = integrations.find(i => i.provider === 'openai');
-          const openaiData = formData['openai'] || { api_key: '', api_secret: '', is_enabled: false };
-          const hasCustomKey = !!openaiData.api_key && openaiData.api_key.trim().length > 10;
-          
-          if (!openaiIntegration) return null;
-          
-          return (
-            <LovableAIPowerSection
-              isEnabled={openaiData.is_enabled}
-              hasCustomKey={hasCustomKey}
-              isLoading={isLoading}
-              onToggle={async (enabled) => {
-                handleChange('openai', 'is_enabled', enabled);
-                await handleSave('openai');
-              }}
-            />
-          );
-        })()}
+        {/* Lovable AI Power Section - Master Toggle */}
+        <LovableAIPowerSection
+          isEnabled={openaiData.is_enabled}
+          apiKey={openaiData.api_key}
+          isLoading={isLoading || isSavingOpenAI}
+          onToggle={async (enabled) => {
+            handleChange('openai', 'is_enabled', enabled);
+            await handleSave('openai', { is_enabled: enabled });
+          }}
+        />
+
+        {/* AI API Key Configuration */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="mb-6"
+        >
+          <Card className="border-primary/20 bg-gradient-to-br from-card to-primary/5">
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl overflow-hidden shadow border border-border/50">
+                  <img src={openaiIcon} alt="AI" className="w-full h-full object-cover" />
+                </div>
+                <div className="flex-1">
+                  <CardTitle className="text-base">AI Provider API Key</CardTitle>
+                  <CardDescription className="text-xs">
+                    Add your OpenAI or Google AI Studio key for custom AI usage
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Info Box */}
+              <div className="flex items-start gap-3 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                <Info className="w-5 h-5 text-blue-500 mt-0.5 shrink-0" />
+                <div className="text-xs text-muted-foreground">
+                  <p className="font-medium text-foreground mb-1">Supported API Keys:</p>
+                  <ul className="space-y-1">
+                    <li>• <strong>OpenAI:</strong> Starts with <code className="px-1 py-0.5 rounded bg-muted">sk-...</code></li>
+                    <li>• <strong>Google AI Studio:</strong> Starts with <code className="px-1 py-0.5 rounded bg-muted">AIza...</code></li>
+                    <li>• <strong>Leave empty:</strong> Uses built-in Lovable AI (free tier included)</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="openai-key" className="text-sm">
+                  API Key
+                </Label>
+                <div className="flex gap-3">
+                  <div className="relative flex-1">
+                    <Input
+                      id="openai-key"
+                      type={showSecrets['openai'] ? 'text' : 'password'}
+                      value={openaiData.api_key}
+                      onChange={(e) => handleChange('openai', 'api_key', e.target.value)}
+                      placeholder="sk-... or AIza... (optional)"
+                      className="pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => toggleShowSecret('openai')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      {showSecrets['openai'] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  <Button
+                    onClick={() => handleSave('openai')}
+                    disabled={isSavingOpenAI}
+                    className="gap-2"
+                  >
+                    {isSavingOpenAI ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    Save
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* Other Integrations Header */}
+        <div className="mb-4">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <Bot className="w-5 h-5 text-primary" />
+            Other Integrations
+          </h2>
+        </div>
 
         <div className="grid gap-6">
           {integrations.filter(i => i.provider !== 'openai').map((integration) => {
@@ -316,82 +391,6 @@ const AdminApiIntegrations = () => {
               </Card>
             );
           })}
-        </div>
-
-        {/* OpenAI Custom Key Section (Optional) */}
-        {(() => {
-          const openaiIntegration = integrations.find(i => i.provider === 'openai');
-          const openaiData = formData['openai'] || { api_key: '', api_secret: '', is_enabled: false };
-          const isSaving = savingProvider === 'openai';
-          
-          if (!openaiIntegration) return null;
-          
-          return (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-            >
-              <Card className="border-border/50 bg-card/50">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl overflow-hidden shadow border border-border/50">
-                      <img src={openaiIcon} alt="OpenAI" className="w-full h-full object-cover" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-base">Custom OpenAI API Key</CardTitle>
-                      <CardDescription className="text-xs">
-                        Optional - Use your own OpenAI account instead of Lovable AI
-                      </CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="openai-key" className="text-sm">
-                      API Key <span className="text-xs text-muted-foreground">(leave empty to use Lovable AI)</span>
-                    </Label>
-                    <div className="flex gap-3">
-                      <div className="relative flex-1">
-                        <Input
-                          id="openai-key"
-                          type={showSecrets['openai'] ? 'text' : 'password'}
-                          value={openaiData.api_key}
-                          onChange={(e) => handleChange('openai', 'api_key', e.target.value)}
-                          placeholder="sk-... (optional)"
-                          className="pr-10"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => toggleShowSecret('openai')}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                        >
-                          {showSecrets['openai'] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      </div>
-                      <Button
-                        onClick={() => handleSave('openai')}
-                        disabled={isSaving}
-                        size="sm"
-                        className="gap-2"
-                      >
-                        {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                        Save
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          );
-        })()}
-
-        {/* Other Integrations Header */}
-        <div className="mt-6">
-          <h2 className="text-lg font-semibold flex items-center gap-2 mb-4">
-            <Bot className="w-5 h-5 text-primary" />
-            Other Integrations
-          </h2>
         </div>
       </div>
     </AdminLayout>
