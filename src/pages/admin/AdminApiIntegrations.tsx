@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Save, Key, Loader2, Eye, EyeOff, CheckCircle, XCircle, RefreshCw, Zap, Power, Bot, Sparkles } from 'lucide-react';
+import { Save, Loader2, Eye, EyeOff, CheckCircle, XCircle, RefreshCw, Zap, Bot } from 'lucide-react';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,7 +8,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
+import LovableAIPowerSection from '@/components/admin/LovableAIPowerSection';
 
 // Import premium icons
 import apifyIcon from '@/assets/icons/apify-icon.png';
@@ -175,8 +176,29 @@ const AdminApiIntegrations = () => {
           </Button>
         </div>
 
+        {/* Lovable AI Power Section - Dedicated Premium Section */}
+        {(() => {
+          const openaiIntegration = integrations.find(i => i.provider === 'openai');
+          const openaiData = formData['openai'] || { api_key: '', api_secret: '', is_enabled: false };
+          const hasCustomKey = !!openaiData.api_key && openaiData.api_key.trim().length > 10;
+          
+          if (!openaiIntegration) return null;
+          
+          return (
+            <LovableAIPowerSection
+              isEnabled={openaiData.is_enabled}
+              hasCustomKey={hasCustomKey}
+              isLoading={isLoading}
+              onToggle={async (enabled) => {
+                handleChange('openai', 'is_enabled', enabled);
+                await handleSave('openai');
+              }}
+            />
+          );
+        })()}
+
         <div className="grid gap-6">
-          {integrations.map((integration) => {
+          {integrations.filter(i => i.provider !== 'openai').map((integration) => {
             const providerInfo = providerLabels[integration.provider] || {
               name: integration.provider,
               icon: '🔌',
@@ -185,7 +207,6 @@ const AdminApiIntegrations = () => {
             const data = formData[integration.provider] || { api_key: '', api_secret: '', is_enabled: false };
             const hasApiKey = !!data.api_key && data.api_key.trim().length > 10;
             const isSaving = savingProvider === integration.provider;
-            const isOpenAI = integration.provider === 'openai';
 
             return (
               <Card key={integration.id} className="relative overflow-hidden">
@@ -204,21 +225,10 @@ const AdminApiIntegrations = () => {
                       <div>
                         <CardTitle className="text-lg flex items-center gap-2">
                           {providerInfo.name}
-                          {isOpenAI && (
-                            <Badge variant="outline" className="text-xs bg-gradient-to-r from-primary/10 to-secondary/10 border-primary/30">
-                              <Bot className="w-3 h-3 mr-1" />
-                              AI Power
-                            </Badge>
-                          )}
                           {data.is_enabled && hasApiKey ? (
                             <Badge variant="default" className="bg-green-500 text-xs">
                               <CheckCircle className="w-3 h-3 mr-1" />
                               Active
-                            </Badge>
-                          ) : data.is_enabled && !hasApiKey && isOpenAI ? (
-                            <Badge variant="default" className="bg-blue-500 text-xs">
-                              <Sparkles className="w-3 h-3 mr-1" />
-                              Using Lovable AI
                             </Badge>
                           ) : (
                             <Badge variant="secondary" className="text-xs">
@@ -236,103 +246,27 @@ const AdminApiIntegrations = () => {
                 </CardHeader>
                 
                 <CardContent className="space-y-4">
-                  {/* AI Power Toggle for OpenAI */}
-                  {isOpenAI && (
-                    <motion.div 
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="p-4 rounded-xl bg-gradient-to-r from-primary/5 via-secondary/5 to-primary/5 border border-primary/20"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className={`p-2.5 rounded-xl ${data.is_enabled ? 'bg-green-500/20' : 'bg-muted'} transition-colors`}>
-                            <Power className={`w-5 h-5 ${data.is_enabled ? 'text-green-500' : 'text-muted-foreground'}`} />
-                          </div>
-                          <div>
-                            <h4 className="font-semibold flex items-center gap-2">
-                              AI Power Switch
-                              <AnimatePresence mode="wait">
-                                {data.is_enabled ? (
-                                  <motion.span
-                                    key="on"
-                                    initial={{ scale: 0 }}
-                                    animate={{ scale: 1 }}
-                                    exit={{ scale: 0 }}
-                                    className="text-xs text-green-500 font-medium"
-                                  >
-                                    ON
-                                  </motion.span>
-                                ) : (
-                                  <motion.span
-                                    key="off"
-                                    initial={{ scale: 0 }}
-                                    animate={{ scale: 1 }}
-                                    exit={{ scale: 0 }}
-                                    className="text-xs text-muted-foreground font-medium"
-                                  >
-                                    OFF
-                                  </motion.span>
-                                )}
-                              </AnimatePresence>
-                            </h4>
-                            <p className="text-xs text-muted-foreground">
-                              {data.is_enabled 
-                                ? hasApiKey 
-                                  ? '✓ Using your OpenAI API key' 
-                                  : '✓ Using Lovable AI (built-in)'
-                                : 'AI features are currently disabled'}
-                            </p>
-                          </div>
-                        </div>
-                        <Switch
-                          checked={data.is_enabled}
-                          onCheckedChange={(checked) => handleChange(integration.provider, 'is_enabled', checked)}
-                          className="data-[state=checked]:bg-green-500"
-                        />
-                      </div>
-                      
-                      {data.is_enabled && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          className="mt-3 pt-3 border-t border-primary/10"
-                        >
-                          <p className="text-xs text-muted-foreground">
-                            {hasApiKey 
-                              ? '🔑 Custom OpenAI key active - AI will use your API key for all requests'
-                              : '✨ No custom key - AI uses Lovable AI Gateway (free tier included)'}
-                          </p>
-                        </motion.div>
-                      )}
-                    </motion.div>
-                  )}
-
-                  {/* Regular Enable Toggle for non-OpenAI */}
-                  {!isOpenAI && (
-                    <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
-                      <Label htmlFor={`enable-${integration.provider}`} className="text-sm">
-                        Enable Integration
-                      </Label>
-                      <Switch
-                        id={`enable-${integration.provider}`}
-                        checked={data.is_enabled}
-                        onCheckedChange={(checked) => handleChange(integration.provider, 'is_enabled', checked)}
-                      />
-                    </div>
-                  )}
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
+                    <Label htmlFor={`enable-${integration.provider}`} className="text-sm">
+                      Enable Integration
+                    </Label>
+                    <Switch
+                      id={`enable-${integration.provider}`}
+                      checked={data.is_enabled}
+                      onCheckedChange={(checked) => handleChange(integration.provider, 'is_enabled', checked)}
+                    />
+                  </div>
 
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
-                      <Label htmlFor={`api-key-${integration.provider}`}>
-                        API Key {isOpenAI && <span className="text-xs text-muted-foreground">(optional - uses Lovable AI if empty)</span>}
-                      </Label>
+                      <Label htmlFor={`api-key-${integration.provider}`}>API Key</Label>
                       <div className="relative">
                         <Input
                           id={`api-key-${integration.provider}`}
                           type={showSecrets[integration.provider] ? 'text' : 'password'}
                           value={data.api_key}
                           onChange={(e) => handleChange(integration.provider, 'api_key', e.target.value)}
-                          placeholder={isOpenAI ? "sk-... (optional)" : "Enter API key..."}
+                          placeholder="Enter API key..."
                           className="pr-10"
                         />
                         <button
@@ -349,21 +283,19 @@ const AdminApiIntegrations = () => {
                       </div>
                     </div>
                     
-                    {!isOpenAI && (
-                      <div className="space-y-2">
-                        <Label htmlFor={`api-secret-${integration.provider}`}>API Secret (optional)</Label>
-                        <div className="relative">
-                          <Input
-                            id={`api-secret-${integration.provider}`}
-                            type={showSecrets[integration.provider] ? 'text' : 'password'}
-                            value={data.api_secret}
-                            onChange={(e) => handleChange(integration.provider, 'api_secret', e.target.value)}
-                            placeholder="Enter API secret..."
-                            className="pr-10"
-                          />
-                        </div>
+                    <div className="space-y-2">
+                      <Label htmlFor={`api-secret-${integration.provider}`}>API Secret (optional)</Label>
+                      <div className="relative">
+                        <Input
+                          id={`api-secret-${integration.provider}`}
+                          type={showSecrets[integration.provider] ? 'text' : 'password'}
+                          value={data.api_secret}
+                          onChange={(e) => handleChange(integration.provider, 'api_secret', e.target.value)}
+                          placeholder="Enter API secret..."
+                          className="pr-10"
+                        />
                       </div>
-                    )}
+                    </div>
                   </div>
 
                   <div className="flex justify-end pt-2">
@@ -386,28 +318,81 @@ const AdminApiIntegrations = () => {
           })}
         </div>
 
-        {/* AI Status Info Card */}
-        <Card className="mt-6 bg-gradient-to-r from-primary/5 to-secondary/5 border-primary/20">
-          <CardContent className="pt-6">
-            <div className="flex items-start gap-3">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <Bot className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <h3 className="font-medium flex items-center gap-2">
-                  AI Configuration Guide
-                  <Badge variant="outline" className="text-xs">Real-time</Badge>
-                </h3>
-                <div className="text-sm text-muted-foreground mt-2 space-y-1">
-                  <p>• <strong>Toggle ON:</strong> AI features work (comment replies, inbox automation, order taking)</p>
-                  <p>• <strong>Toggle OFF:</strong> All AI features stop immediately</p>
-                  <p>• <strong>With API Key:</strong> Uses your OpenAI account & credits</p>
-                  <p>• <strong>Without API Key:</strong> Uses Lovable AI Gateway (free tier included)</p>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        {/* OpenAI Custom Key Section (Optional) */}
+        {(() => {
+          const openaiIntegration = integrations.find(i => i.provider === 'openai');
+          const openaiData = formData['openai'] || { api_key: '', api_secret: '', is_enabled: false };
+          const isSaving = savingProvider === 'openai';
+          
+          if (!openaiIntegration) return null;
+          
+          return (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+            >
+              <Card className="border-border/50 bg-card/50">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl overflow-hidden shadow border border-border/50">
+                      <img src={openaiIcon} alt="OpenAI" className="w-full h-full object-cover" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-base">Custom OpenAI API Key</CardTitle>
+                      <CardDescription className="text-xs">
+                        Optional - Use your own OpenAI account instead of Lovable AI
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="openai-key" className="text-sm">
+                      API Key <span className="text-xs text-muted-foreground">(leave empty to use Lovable AI)</span>
+                    </Label>
+                    <div className="flex gap-3">
+                      <div className="relative flex-1">
+                        <Input
+                          id="openai-key"
+                          type={showSecrets['openai'] ? 'text' : 'password'}
+                          value={openaiData.api_key}
+                          onChange={(e) => handleChange('openai', 'api_key', e.target.value)}
+                          placeholder="sk-... (optional)"
+                          className="pr-10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => toggleShowSecret('openai')}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        >
+                          {showSecrets['openai'] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                      <Button
+                        onClick={() => handleSave('openai')}
+                        disabled={isSaving}
+                        size="sm"
+                        className="gap-2"
+                      >
+                        {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                        Save
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          );
+        })()}
+
+        {/* Other Integrations Header */}
+        <div className="mt-6">
+          <h2 className="text-lg font-semibold flex items-center gap-2 mb-4">
+            <Bot className="w-5 h-5 text-primary" />
+            Other Integrations
+          </h2>
+        </div>
       </div>
     </AdminLayout>
   );
