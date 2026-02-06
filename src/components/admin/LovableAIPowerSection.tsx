@@ -160,16 +160,16 @@ const LovableAIPowerSection = ({
               {(isLoading || isToggling) && (
                 <Loader2 className="w-5 h-5 animate-spin text-primary" />
               )}
-              <div className="flex items-center gap-3 p-2 rounded-xl bg-muted/30">
-                <Label htmlFor="ai-power-toggle" className="text-sm font-medium cursor-pointer">
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/50 border border-border/50">
+                <span className={`text-sm font-bold px-2 py-1 rounded ${isEnabled ? 'bg-green-500/20 text-green-600' : 'bg-red-500/20 text-red-500'}`}>
                   {isEnabled ? 'ON' : 'OFF'}
-                </Label>
+                </span>
                 <Switch
                   id="ai-power-toggle"
                   checked={isEnabled}
                   onCheckedChange={handleToggle}
                   disabled={isLoading || isToggling}
-                  className={`scale-125 ${isEnabled ? 'data-[state=checked]:bg-green-500' : ''}`}
+                  className={`scale-125 data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-red-400`}
                 />
               </div>
             </div>

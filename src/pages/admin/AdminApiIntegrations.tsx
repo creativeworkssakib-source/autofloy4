@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Save, Loader2, Eye, EyeOff, CheckCircle, XCircle, RefreshCw, Zap, Bot, Info } from 'lucide-react';
+import { Save, Loader2, Eye, EyeOff, CheckCircle, XCircle, RefreshCw, Zap, Bot, Info, Trash2 } from 'lucide-react';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -250,6 +250,24 @@ const AdminApiIntegrations = () => {
                       {showSecrets['openai'] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
+                  {openaiData.api_key && openaiData.api_key.trim().length > 0 && (
+                    <Button
+                      variant="outline"
+                      onClick={async () => {
+                        handleChange('openai', 'api_key', '');
+                        await handleSave('openai', { is_enabled: openaiData.is_enabled });
+                        toast({
+                          title: 'API Key Removed',
+                          description: 'Switched to built-in Lovable AI',
+                        });
+                      }}
+                      disabled={isSavingOpenAI}
+                      className="gap-2 text-destructive hover:text-destructive"
+                    >
+                      <XCircle className="w-4 h-4" />
+                      Clear
+                    </Button>
+                  )}
                   <Button
                     onClick={() => handleSave('openai')}
                     disabled={isSavingOpenAI}
