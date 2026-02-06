@@ -32,19 +32,22 @@ const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
 
 // Check if AI is globally enabled from admin settings
 async function isAIEnabled(supabase: any): Promise<{ enabled: boolean; useCustomKey: boolean; customApiKey: string | null }> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("api_integrations")
     .select("is_enabled, api_key")
     .eq("provider", "openai")
     .single();
   
-  if (!data) {
-    // Default: use Lovable AI if no config
-    return { enabled: true, useCustomKey: false, customApiKey: null };
+  // If no openai config exists or error, AI is DISABLED by default
+  // User must explicitly enable it from admin panel
+  if (error || !data) {
+    console.log(`[AI Agent] No OpenAI config found - AI disabled by default`);
+    return { enabled: false, useCustomKey: false, customApiKey: null };
   }
   
-  // If disabled, AI won't work at all
-  if (!data.is_enabled) {
+  // If explicitly disabled, AI won't work at all
+  if (data.is_enabled !== true) {
+    console.log(`[AI Agent] AI is explicitly disabled (is_enabled=${data.is_enabled})`);
     return { enabled: false, useCustomKey: false, customApiKey: null };
   }
   
@@ -187,7 +190,7 @@ async function callAI(systemPrompt: string, messages: any[], imageUrls?: string[
   const requestBody = {
     model,
     messages: [{ role: "system", content: systemPrompt }, ...aiMessages],
-    max_tokens: 2048,
+    max_completion_tokens: 2048,
   };
   
   console.log(`[AI Agent] Calling AI: provider=${useCustomKey ? 'OpenAI' : 'Lovable'}, model=${model}, messages=${aiMessages.length}`);
