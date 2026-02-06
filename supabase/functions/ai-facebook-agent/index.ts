@@ -28,6 +28,34 @@ const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
 const AI_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
+const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
+
+// Check if AI is globally enabled from admin settings
+async function isAIEnabled(supabase: any): Promise<{ enabled: boolean; useCustomKey: boolean; customApiKey: string | null }> {
+  const { data } = await supabase
+    .from("api_integrations")
+    .select("is_enabled, api_key")
+    .eq("provider", "openai")
+    .single();
+  
+  if (!data) {
+    // Default: use Lovable AI if no config
+    return { enabled: true, useCustomKey: false, customApiKey: null };
+  }
+  
+  // If disabled, AI won't work at all
+  if (!data.is_enabled) {
+    return { enabled: false, useCustomKey: false, customApiKey: null };
+  }
+  
+  // If enabled with custom API key, use OpenAI directly
+  if (data.api_key && data.api_key.trim().length > 10) {
+    return { enabled: true, useCustomKey: true, customApiKey: data.api_key };
+  }
+  
+  // Enabled but no custom key - use Lovable AI
+  return { enabled: true, useCustomKey: false, customApiKey: null };
+}
 
 // Database helpers
 async function getPageMemory(supabase: any, pageId: string) {
@@ -115,8 +143,8 @@ async function getOrCreateConversation(supabase: any, userId: string, pageId: st
   return newConv;
 }
 
-// AI Call with better error handling
-async function callAI(systemPrompt: string, messages: any[], imageUrls?: string[]): Promise<string> {
+// AI Call with better error handling - supports both Lovable AI and custom OpenAI key
+async function callAI(systemPrompt: string, messages: any[], imageUrls?: string[], customApiKey?: string | null): Promise<string> {
   const aiMessages: any[] = [];
   
   for (const msg of messages.slice(-10)) {
@@ -146,20 +174,27 @@ async function callAI(systemPrompt: string, messages: any[], imageUrls?: string[
     }
   }
   
-  // Select model - use gpt-5 for images, gpt-5-mini for text (new Lovable AI Gateway models)
-  const model = imageUrls?.length ? "openai/gpt-5" : "openai/gpt-5-mini";
+  // Determine API endpoint and model based on whether using custom key
+  const useCustomKey = customApiKey && customApiKey.trim().length > 10;
+  const apiUrl = useCustomKey ? OPENAI_API_URL : AI_GATEWAY_URL;
+  const apiKey = useCustomKey ? customApiKey : LOVABLE_API_KEY;
+  
+  // Select model based on provider
+  const model = useCustomKey 
+    ? (imageUrls?.length ? "gpt-4o" : "gpt-4o-mini")  // OpenAI models
+    : (imageUrls?.length ? "openai/gpt-5" : "openai/gpt-5-mini");  // Lovable AI Gateway models
   
   const requestBody = {
     model,
     messages: [{ role: "system", content: systemPrompt }, ...aiMessages],
-    max_completion_tokens: 2048,  // Increased: GPT-5 needs more tokens for Bangla text
+    max_tokens: 2048,
   };
   
-  console.log(`[AI Agent] Calling AI with model: ${model}, messages count: ${aiMessages.length}`);
+  console.log(`[AI Agent] Calling AI: provider=${useCustomKey ? 'OpenAI' : 'Lovable'}, model=${model}, messages=${aiMessages.length}`);
   
-  const response = await fetch(AI_GATEWAY_URL, {
+  const response = await fetch(apiUrl, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${LOVABLE_API_KEY}` },
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
     body: JSON.stringify(requestBody),
   });
   
@@ -210,6 +245,19 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
+  
+  // Check if AI is globally enabled
+  const aiConfig = await isAIEnabled(supabase);
+  if (!aiConfig.enabled) {
+    console.log(`[AI Agent] AI is globally disabled from admin settings`);
+    return new Response(JSON.stringify({ 
+      skip: true, 
+      reason: "AI is disabled from admin panel",
+      reply: "AI বর্তমানে বন্ধ আছে।" 
+    }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  }
+  
+  console.log(`[AI Agent] AI enabled: useCustomKey=${aiConfig.useCustomKey}`);
   
   try {
     const body = await req.json();
