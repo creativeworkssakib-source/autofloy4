@@ -504,16 +504,34 @@ export async function deleteAutomation(id: string): Promise<{ success: boolean; 
   }
 }
 
-// Notifications
+// Notifications - with retry on 401 to handle token refresh race condition
 export async function fetchNotifications(): Promise<Notification[]> {
-  try {
+  const attempt = async (): Promise<Notification[]> => {
     const response = await fetch(`${SUPABASE_URL}/functions/v1/notifications`, {
       headers: getAuthHeaders(),
     });
-    if (!response.ok) return [];
+    if (!response.ok) {
+      if (response.status === 401) throw new Error("UNAUTHORIZED");
+      return [];
+    }
     const data = await response.json();
     return data.notifications || [];
+  };
+
+  try {
+    return await attempt();
   } catch (error) {
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      // Wait for token refresh to complete, then retry once
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      const token = localStorage.getItem("autofloy_token");
+      if (!token) return [];
+      try {
+        return await attempt();
+      } catch {
+        return [];
+      }
+    }
     console.error("Failed to fetch notifications:", error);
     return [];
   }
