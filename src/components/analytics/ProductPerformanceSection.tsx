@@ -88,8 +88,9 @@ export const ProductPerformanceSection = ({ type, shopId, syncEnabled, title }: 
       const params = new URLSearchParams({ type, limit: "10" });
       if (shopId) params.append("shop_id", shopId);
       
+      const workerUrl = import.meta.env.VITE_WORKER_API_URL || "https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1";
       const response = await fetch(
-        `https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1/product-performance?${params}`,
+        `${workerUrl}/product-performance?${params}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,

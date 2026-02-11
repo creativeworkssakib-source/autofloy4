@@ -20,7 +20,7 @@ interface SyncResponse {
 }
 
 const SYNC_SETTINGS_URL =
-  "https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1/offline-shop/sync-settings";
+  (import.meta.env.VITE_WORKER_API_URL || "https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1") + "/offline-shop/sync-settings";
 
 export const useSyncSettings = () => {
   const [syncSettings, setSyncSettings] = useState<SyncSettings | null>(null);

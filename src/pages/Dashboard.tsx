@@ -154,8 +154,9 @@ const Dashboard = () => {
     setIsResubscribing(true);
     try {
       const token = localStorage.getItem("autofloy_token");
+      const workerUrl = import.meta.env.VITE_WORKER_API_URL || "https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1";
       const response = await fetch(
-        "https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1/connected-accounts?action=resubscribe-webhooks",
+        `${workerUrl}/connected-accounts?action=resubscribe-webhooks`,
         {
           method: "POST",
           headers: {

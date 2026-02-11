@@ -1,4 +1,4 @@
-const SUPABASE_URL = "https://klkrzfwvrmffqkmkyqrh.supabase.co";
+import { WORKER_API_URL } from "@/config/api";
 
 export interface User {
   id: string;
@@ -45,7 +45,7 @@ class AuthService {
     }
 
     const response = await fetch(
-      `${SUPABASE_URL}/functions/v1/${endpoint}`,
+      `${WORKER_API_URL}/${endpoint}`,
       {
         ...options,
         headers,
@@ -217,7 +217,7 @@ export const authService = new AuthService();
 
 // Reviews API
 export async function getReviews(): Promise<{ reviews: any[] }> {
-  const response = await fetch(`${SUPABASE_URL}/functions/v1/reviews`);
+  const response = await fetch(`${WORKER_API_URL}/reviews`);
   return response.json();
 }
 
@@ -226,7 +226,7 @@ export async function createReview(
   comment: string
 ): Promise<{ review: any }> {
   const token = authService.getToken();
-  const response = await fetch(`${SUPABASE_URL}/functions/v1/reviews`, {
+  const response = await fetch(`${WORKER_API_URL}/reviews`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -240,7 +240,7 @@ export async function createReview(
 // Notifications API
 export async function getNotifications(): Promise<{ notifications: any[] }> {
   const token = authService.getToken();
-  const response = await fetch(`${SUPABASE_URL}/functions/v1/notifications`, {
+  const response = await fetch(`${WORKER_API_URL}/notifications`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -253,7 +253,7 @@ export async function markNotificationRead(
   markAll?: boolean
 ): Promise<{ message: string }> {
   const token = authService.getToken();
-  const response = await fetch(`${SUPABASE_URL}/functions/v1/notifications`, {
+  const response = await fetch(`${WORKER_API_URL}/notifications`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -270,7 +270,7 @@ export async function markNotificationRead(
 // Like review
 export async function likeReview(reviewId: string, unlike: boolean = false): Promise<{ success: boolean; likes_count: number }> {
   const token = authService.getToken();
-  const response = await fetch(`${SUPABASE_URL}/functions/v1/reviews`, {
+  const response = await fetch(`${WORKER_API_URL}/reviews`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

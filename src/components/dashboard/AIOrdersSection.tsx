@@ -110,8 +110,9 @@ const AIOrdersSection = () => {
     
     setLoading(true);
     try {
+      const workerUrl = import.meta.env.VITE_WORKER_API_URL || "https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1";
       const response = await fetch(
-        `https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1/ai-orders`,
+        `${workerUrl}/ai-orders`,
         {
           method: "GET",
           headers: {
@@ -187,8 +188,9 @@ const AIOrdersSection = () => {
     
     setUpdatingStatus(orderId);
     try {
+      const workerUrl = import.meta.env.VITE_WORKER_API_URL || "https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1";
       const response = await fetch(
-        `https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1/ai-orders`,
+        `${workerUrl}/ai-orders`,
         {
           method: "PATCH",
           headers: {
