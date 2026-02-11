@@ -51,8 +51,9 @@ const GlobalAutomationSettings = ({ className }: GlobalAutomationSettingsProps) 
 
       // Use direct fetch with PUT method instead of supabase.functions.invoke
       // because invoke() always uses POST
+      const workerUrl = import.meta.env.VITE_WORKER_API_URL || "https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1";
       const response = await fetch(
-        `https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1/me`,
+        `${workerUrl}/me`,
         {
           method: "PUT",
           headers: {

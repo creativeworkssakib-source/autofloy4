@@ -77,9 +77,9 @@ const AutomationStatus = () => {
       // Get auth token
       const token = localStorage.getItem("auth_token");
       
-      // Use direct fetch with URL params - more reliable
+      const workerUrl = import.meta.env.VITE_WORKER_API_URL || "https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1";
       const response = await fetch(
-        `https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1/page-memory?page_id=${pageId}&_t=${Date.now()}`,
+        `${workerUrl}/page-memory?page_id=${pageId}&_t=${Date.now()}`,
         {
           method: "GET",
           headers: {
@@ -219,8 +219,9 @@ const AutomationStatus = () => {
     setIsFixingWebhook(true);
     try {
       const token = authService.getToken();
+      const workerUrl = import.meta.env.VITE_WORKER_API_URL || "https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1";
       const response = await fetch(
-        `https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1/connected-accounts?action=resubscribe-webhooks`,
+        `${workerUrl}/connected-accounts?action=resubscribe-webhooks`,
         {
           method: "POST",
           headers: {

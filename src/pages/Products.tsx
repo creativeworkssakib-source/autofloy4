@@ -518,8 +518,9 @@ const Products = () => {
         return;
       }
       
+      const workerUrl = import.meta.env.VITE_WORKER_API_URL || "https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1";
       const response = await fetch(
-        "https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1/products",
+        `${workerUrl}/products`,
         {
           method: "POST",
           headers: {

@@ -1,7 +1,9 @@
 import { supabase } from "@/integrations/supabase/client";
+import { WORKER_API_URL, SUPABASE_URL } from "@/config/api";
 // markRpcFallbackSuccess removed - component disabled
 
-const SUPABASE_URL = "https://klkrzfwvrmffqkmkyqrh.supabase.co";
+// All API calls route through WORKER_API_URL (Cloudflare Workers)
+// SUPABASE_URL is only used for direct SDK database access (RPC fallbacks)
 
 function getAuthHeaders(): HeadersInit {
   const token = localStorage.getItem("autofloy_token");
@@ -113,7 +115,6 @@ export interface BusinessOverviewStats {
   totalBuyCost: number;
   profit: number;
   damagedOrLost: number;
-  // Product inventory stats
   totalProducts?: number;
   lowStockCount?: number;
   outOfStockCount?: number;
@@ -165,7 +166,7 @@ export interface ImportResult {
 // User Profile
 export async function fetchUserProfile(): Promise<UserProfile | null> {
   try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/me`, {
+    const response = await fetch(`${WORKER_API_URL}/me`, {
       headers: getAuthHeaders(),
     });
     if (!response.ok) return null;
@@ -197,9 +198,8 @@ export interface ConnectedAccountsResponse {
 // Connected Accounts
 export async function fetchConnectedAccounts(platform?: string): Promise<ConnectedAccount[]> {
   try {
-    const url = new URL(`${SUPABASE_URL}/functions/v1/connected-accounts`);
+    const url = new URL(`${WORKER_API_URL}/connected-accounts`);
     if (platform) url.searchParams.set("platform", platform);
-    // Add cache busting timestamp
     url.searchParams.set("_t", Date.now().toString());
     
     const response = await fetch(url.toString(), {
@@ -218,9 +218,8 @@ export async function fetchConnectedAccounts(platform?: string): Promise<Connect
 // Fetch connected accounts with plan limits
 export async function fetchConnectedAccountsWithLimits(platform?: string): Promise<ConnectedAccountsResponse> {
   try {
-    const url = new URL(`${SUPABASE_URL}/functions/v1/connected-accounts`);
+    const url = new URL(`${WORKER_API_URL}/connected-accounts`);
     if (platform) url.searchParams.set("platform", platform);
-    // Add cache busting timestamp
     url.searchParams.set("_t", Date.now().toString());
     
     const response = await fetch(url.toString(), {
@@ -263,7 +262,7 @@ export async function fetchConnectedAccountsWithLimits(platform?: string): Promi
 
 export async function disconnectAccount(id: string): Promise<{ success: boolean; message?: string }> {
   try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/connected-accounts?id=${id}&action=disconnect`, {
+    const response = await fetch(`${WORKER_API_URL}/connected-accounts?id=${id}&action=disconnect`, {
       method: "DELETE",
       headers: getAuthHeaders(),
     });
@@ -276,7 +275,7 @@ export async function disconnectAccount(id: string): Promise<{ success: boolean;
 
 export async function removeAccount(id: string): Promise<{ success: boolean; message?: string }> {
   try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/connected-accounts?id=${id}&action=remove`, {
+    const response = await fetch(`${WORKER_API_URL}/connected-accounts?id=${id}&action=remove`, {
       method: "DELETE",
       headers: getAuthHeaders(),
     });
@@ -290,7 +289,7 @@ export async function removeAccount(id: string): Promise<{ success: boolean; mes
 // Facebook OAuth
 export async function getFacebookOAuthUrl(): Promise<{ url?: string; configured: boolean; error?: string }> {
   try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/connected-accounts?action=fb-start`, {
+    const response = await fetch(`${WORKER_API_URL}/connected-accounts?action=fb-start`, {
       headers: getAuthHeaders(),
     });
     if (!response.ok) {
@@ -323,9 +322,9 @@ export async function togglePageAutomation(pageId: string, enabled: boolean): Pr
     }
     
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
     
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/toggle-page-automation`, {
+    const response = await fetch(`${WORKER_API_URL}/toggle-page-automation`, {
       method: "POST",
       mode: "cors",
       credentials: "omit",
@@ -382,7 +381,7 @@ export interface AutomationsResponse {
 
 export async function fetchAutomations(): Promise<Automation[]> {
   try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/automations`, {
+    const response = await fetch(`${WORKER_API_URL}/automations`, {
       headers: getAuthHeaders(),
     });
     if (!response.ok) return [];
@@ -396,9 +395,8 @@ export async function fetchAutomations(): Promise<Automation[]> {
 
 export async function fetchAutomationsWithAccess(): Promise<AutomationsResponse> {
   try {
-    // Add cache-busting timestamp to prevent stale cached responses
     const cacheBuster = `_t=${Date.now()}`;
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/automations?${cacheBuster}`, {
+    const response = await fetch(`${WORKER_API_URL}/automations?${cacheBuster}`, {
       headers: {
         ...getAuthHeaders(),
         'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -406,7 +404,6 @@ export async function fetchAutomationsWithAccess(): Promise<AutomationsResponse>
       },
     });
     if (!response.ok) {
-      // Check if it's an auth/access error vs server error
       if (response.status === 401) {
         return { automations: [], hasAccess: false, accessDeniedReason: "Please log in to access automations" };
       }
@@ -418,7 +415,6 @@ export async function fetchAutomationsWithAccess(): Promise<AutomationsResponse>
           accessDeniedReason: data.error || "Access denied" 
         };
       }
-      // For other errors, still show content but with error message
       console.error("Automations API error:", response.status);
       return { automations: [], hasAccess: true, accessDeniedReason: undefined };
     }
@@ -431,8 +427,6 @@ export async function fetchAutomationsWithAccess(): Promise<AutomationsResponse>
     };
   } catch (error) {
     console.error("Failed to fetch automations:", error);
-    // Network error - don't block access, just show empty state
-    // The user might have connectivity issues but still have valid subscription
     return { automations: [], hasAccess: true, accessDeniedReason: undefined };
   }
 }
@@ -445,7 +439,7 @@ export interface AutomationMutationResult {
 
 export async function createAutomation(automation: Partial<Automation>): Promise<AutomationMutationResult> {
   try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/automations`, {
+    const response = await fetch(`${WORKER_API_URL}/automations`, {
       method: "POST",
       headers: getAuthHeaders(),
       body: JSON.stringify(automation),
@@ -467,7 +461,7 @@ export async function createAutomation(automation: Partial<Automation>): Promise
 
 export async function updateAutomation(id: string, updates: Partial<Automation>): Promise<AutomationMutationResult> {
   try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/automations`, {
+    const response = await fetch(`${WORKER_API_URL}/automations`, {
       method: "PUT",
       headers: getAuthHeaders(),
       body: JSON.stringify({ id, ...updates }),
@@ -489,7 +483,7 @@ export async function updateAutomation(id: string, updates: Partial<Automation>)
 
 export async function deleteAutomation(id: string): Promise<{ success: boolean; error?: string; trialExpired?: boolean }> {
   try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/automations?id=${id}`, {
+    const response = await fetch(`${WORKER_API_URL}/automations?id=${id}`, {
       method: "DELETE",
       headers: getAuthHeaders(),
     });
@@ -507,7 +501,7 @@ export async function deleteAutomation(id: string): Promise<{ success: boolean; 
 // Notifications - with retry on 401 to handle token refresh race condition
 export async function fetchNotifications(): Promise<Notification[]> {
   const attempt = async (): Promise<Notification[]> => {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/notifications`, {
+    const response = await fetch(`${WORKER_API_URL}/notifications`, {
       headers: getAuthHeaders(),
     });
     if (!response.ok) {
@@ -522,7 +516,6 @@ export async function fetchNotifications(): Promise<Notification[]> {
     return await attempt();
   } catch (error) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
-      // Wait for token refresh to complete, then retry once
       await new Promise(resolve => setTimeout(resolve, 2000));
       const token = localStorage.getItem("autofloy_token");
       if (!token) return [];
@@ -539,7 +532,7 @@ export async function fetchNotifications(): Promise<Notification[]> {
 
 export async function markNotificationAsRead(notificationId: string): Promise<boolean> {
   try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/notifications`, {
+    const response = await fetch(`${WORKER_API_URL}/notifications`, {
       method: "POST",
       headers: getAuthHeaders(),
       body: JSON.stringify({ notification_id: notificationId }),
@@ -553,7 +546,7 @@ export async function markNotificationAsRead(notificationId: string): Promise<bo
 
 export async function markAllNotificationsAsRead(): Promise<boolean> {
   try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/notifications`, {
+    const response = await fetch(`${WORKER_API_URL}/notifications`, {
       method: "POST",
       headers: getAuthHeaders(),
       body: JSON.stringify({ markAll: true }),
@@ -567,7 +560,7 @@ export async function markAllNotificationsAsRead(): Promise<boolean> {
 
 export async function deleteNotification(notificationId: string): Promise<boolean> {
   try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/notifications`, {
+    const response = await fetch(`${WORKER_API_URL}/notifications`, {
       method: "DELETE",
       headers: getAuthHeaders(),
       body: JSON.stringify({ notification_id: notificationId }),
@@ -581,31 +574,19 @@ export async function deleteNotification(notificationId: string): Promise<boolea
 
 // Cache key for dashboard stats
 const DASHBOARD_STATS_CACHE_KEY = "autofloy_dashboard_stats_cache";
-const DASHBOARD_STATS_CACHE_TTL = 2 * 60 * 1000; // 2 minutes - shorter TTL for fresher data
-const DASHBOARD_STATS_MAX_AGE = 10 * 60 * 1000; // 10 minutes max - don't use very stale data
+const DASHBOARD_STATS_CACHE_TTL = 2 * 60 * 1000;
+const DASHBOARD_STATS_MAX_AGE = 10 * 60 * 1000;
 
-// Get cached dashboard stats
 function getCachedDashboardStats(): DashboardStats | null {
   try {
     const cached = localStorage.getItem(DASHBOARD_STATS_CACHE_KEY);
     if (cached) {
       const { data, timestamp } = JSON.parse(cached);
       const age = Date.now() - timestamp;
-      
-      // Don't use data older than max age - could be outdated
       if (age > DASHBOARD_STATS_MAX_AGE) {
-        console.log("[dashboard-stats] Cache too old, clearing");
         localStorage.removeItem(DASHBOARD_STATS_CACHE_KEY);
         return null;
       }
-      
-      // Return cached data if still valid (within TTL)
-      if (age < DASHBOARD_STATS_CACHE_TTL) {
-        console.log("[dashboard-stats] Using cached data (valid)");
-        return data;
-      }
-      // Return stale data as fallback (better than showing 0)
-      console.log("[dashboard-stats] Using stale cached data as fallback");
       return data;
     }
   } catch (e) {
@@ -614,14 +595,12 @@ function getCachedDashboardStats(): DashboardStats | null {
   return null;
 }
 
-// Save dashboard stats to cache
 function cacheDashboardStats(stats: DashboardStats): void {
   try {
     localStorage.setItem(DASHBOARD_STATS_CACHE_KEY, JSON.stringify({
       data: stats,
       timestamp: Date.now(),
     }));
-    console.log("[dashboard-stats] Cached stats successfully");
   } catch (e) {
     console.warn("[dashboard-stats] Cache write error:", e);
   }
@@ -629,12 +608,12 @@ function cacheDashboardStats(stats: DashboardStats): void {
 
 // Dashboard Stats - with retry, FALLBACK to direct Supabase RPC, and LOCAL CACHE
 export async function fetchDashboardStats(): Promise<DashboardStats | null> {
-  // First try Edge Function
+  // First try Worker API
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
     
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/dashboard-stats`, {
+    const response = await fetch(`${WORKER_API_URL}/dashboard-stats`, {
       headers: getAuthHeaders(),
       signal: controller.signal,
     });
@@ -643,40 +622,32 @@ export async function fetchDashboardStats(): Promise<DashboardStats | null> {
     
     if (response.ok) {
       const data = await response.json();
-      console.log("[dashboard-stats] Edge Function success:", data.stats);
       if (data.stats) {
         cacheDashboardStats(data.stats);
       }
       return data.stats;
     }
   } catch (error) {
-    console.warn("[dashboard-stats] Edge Function failed, trying RPC fallback:", error);
+    console.warn("[dashboard-stats] Worker API failed, trying RPC fallback:", error);
   }
 
-  // FALLBACK: Use direct Supabase RPC (works even if Edge Functions are blocked)
+  // FALLBACK: Use direct Supabase RPC
   try {
     const { supabase } = await import("@/integrations/supabase/client");
     const userId = await getUserIdFromStorage();
     
     if (!userId) {
-      console.error("[dashboard-stats] No user ID for RPC fallback");
-      // Return cached data if available
       return getCachedDashboardStats();
     }
 
-    console.log("[dashboard-stats] Using RPC fallback for user:", userId);
-    
     const { data, error } = await supabase.rpc('get_user_dashboard_stats', {
       p_user_id: userId
     });
 
     if (error) {
-      console.error("[dashboard-stats] RPC fallback failed:", error);
-      // Return cached data if API fails
       return getCachedDashboardStats();
     }
 
-    console.log("[dashboard-stats] RPC fallback success:", data);
     const stats = data as unknown as DashboardStats;
     if (stats) {
       cacheDashboardStats(stats);
@@ -684,74 +655,55 @@ export async function fetchDashboardStats(): Promise<DashboardStats | null> {
     return stats;
   } catch (fallbackError) {
     console.error("[dashboard-stats] RPC fallback error:", fallbackError);
-    // Return cached data on complete failure
     return getCachedDashboardStats();
   }
 }
 
 // Helper to get user ID from multiple sources
 async function getUserIdFromStorage(): Promise<string | null> {
-  // First try from autofloy_user_id (direct storage)
   const storedUserId = localStorage.getItem("autofloy_user_id");
-  if (storedUserId) {
-    console.log("[getUserId] Got user ID from autofloy_user_id:", storedUserId);
-    return storedUserId;
-  }
+  if (storedUserId) return storedUserId;
 
-  // Second: try from autofloy_current_user object
   const currentUserStr = localStorage.getItem("autofloy_current_user");
   if (currentUserStr) {
     try {
       const user = JSON.parse(currentUserStr);
-      if (user?.id) {
-        console.log("[getUserId] Got user ID from autofloy_current_user:", user.id);
-        return user.id;
-      }
+      if (user?.id) return user.id;
     } catch (e) {
       console.warn("[getUserId] Failed to parse autofloy_current_user:", e);
     }
   }
 
-  // Third: try from autofloy_token JWT
   const token = localStorage.getItem("autofloy_token");
   if (token) {
     try {
       const payload = JSON.parse(atob(token.split('.')[1]));
-      if (payload.sub) {
-        console.log("[getUserId] Got user ID from autofloy_token:", payload.sub);
-        return payload.sub;
-      }
+      if (payload.sub) return payload.sub;
     } catch (e) {
       console.warn("[getUserId] Failed to parse autofloy_token:", e);
     }
   }
 
-  // Last fallback: try Supabase session
   try {
     const storedSession = localStorage.getItem(`sb-klkrzfwvrmffqkmkyqrh-auth-token`);
     if (storedSession) {
       const session = JSON.parse(storedSession);
-      if (session?.user?.id) {
-        console.log("[getUserId] Got user ID from Supabase session:", session.user.id);
-        return session.user.id;
-      }
+      if (session?.user?.id) return session.user.id;
     }
   } catch (e) {
     console.warn("[getUserId] Failed to get from Supabase session:", e);
   }
 
-  console.error("[getUserId] Could not find user ID in any source");
   return null;
 }
 
 // Execution Logs - with retry and timeout
 export async function fetchExecutionLogs(limit: number = 5): Promise<ExecutionLog[]> {
-  // First try Edge Function
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 8000);
     
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/execution-logs?limit=${limit}`, {
+    const response = await fetch(`${WORKER_API_URL}/execution-logs?limit=${limit}`, {
       headers: getAuthHeaders(),
       signal: controller.signal,
     });
@@ -760,34 +712,23 @@ export async function fetchExecutionLogs(limit: number = 5): Promise<ExecutionLo
     
     if (response.ok) {
       const data = await response.json();
-      console.log("[execution-logs] Edge Function success:", data.logs?.length || 0, "logs");
       return data.logs || [];
     }
   } catch (error) {
-    console.warn("[execution-logs] Edge Function failed, trying direct Supabase:", error);
+    console.warn("[execution-logs] Worker API failed, trying direct Supabase:", error);
   }
   
-  // Fallback: Use RPC function (bypasses RLS which blocks direct client access)
+  // Fallback: Use RPC function
   try {
     const userId = await getUserIdFromStorage();
-    if (!userId) {
-      console.warn("[execution-logs] No user ID found for fallback");
-      return [];
-    }
-    
-    console.log("[execution-logs] Using RPC fallback for user:", userId);
+    if (!userId) return [];
     
     const { data, error } = await supabase.rpc('get_user_execution_logs', {
       p_user_id: userId,
       p_limit: limit
     });
     
-    if (error) {
-      console.error("[execution-logs] RPC fallback error:", error);
-      return [];
-    }
-    
-    console.log("[execution-logs] RPC fallback success:", data?.length || 0, "logs");
+    if (error) return [];
     return (data || []) as ExecutionLog[];
   } catch (error) {
     console.error("[execution-logs] All fallbacks failed:", error);
@@ -806,7 +747,7 @@ export async function fetchBusinessOverview(
   orders: Order[];
 } | null> {
   try {
-    const url = new URL(`${SUPABASE_URL}/functions/v1/dashboard-overview`);
+    const url = new URL(`${WORKER_API_URL}/dashboard-overview`);
     url.searchParams.set("range", range);
     if (range === "custom" && customStart && customEnd) {
       url.searchParams.set("start", customStart);
@@ -875,7 +816,7 @@ export interface ProductImportResult {
 
 export async function fetchProducts(): Promise<{ products: Product[]; categories: string[] }> {
   try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/products`, {
+    const response = await fetch(`${WORKER_API_URL}/products`, {
       headers: getAuthHeaders(),
     });
     if (!response.ok) return { products: [], categories: [] };
@@ -889,7 +830,7 @@ export async function fetchProducts(): Promise<{ products: Product[]; categories
 
 export async function createProduct(product: Partial<Product>): Promise<Product | null> {
   try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/products`, {
+    const response = await fetch(`${WORKER_API_URL}/products`, {
       method: "POST",
       headers: getAuthHeaders(),
       body: JSON.stringify(product),
@@ -905,7 +846,7 @@ export async function createProduct(product: Partial<Product>): Promise<Product 
 
 export async function updateProduct(id: string, updates: Partial<Product>): Promise<Product | null> {
   try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/products`, {
+    const response = await fetch(`${WORKER_API_URL}/products`, {
       method: "PUT",
       headers: getAuthHeaders(),
       body: JSON.stringify({ id, ...updates }),
@@ -921,7 +862,7 @@ export async function updateProduct(id: string, updates: Partial<Product>): Prom
 
 export async function deleteProduct(id: string): Promise<boolean> {
   try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/products?id=${id}`, {
+    const response = await fetch(`${WORKER_API_URL}/products?id=${id}`, {
       method: "DELETE",
       headers: getAuthHeaders(),
     });
@@ -934,7 +875,7 @@ export async function deleteProduct(id: string): Promise<boolean> {
 
 export async function bulkDeleteProducts(ids: string[]): Promise<{ success: boolean; deleted: number }> {
   try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/products`, {
+    const response = await fetch(`${WORKER_API_URL}/products`, {
       method: "POST",
       headers: getAuthHeaders(),
       body: JSON.stringify({ action: "bulk_delete", ids }),
@@ -952,7 +893,7 @@ export async function bulkUpdateProducts(
   updates: { category?: string; is_active?: boolean }
 ): Promise<{ success: boolean; updated: number }> {
   try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/products`, {
+    const response = await fetch(`${WORKER_API_URL}/products`, {
       method: "POST",
       headers: getAuthHeaders(),
       body: JSON.stringify({ action: "bulk_update", ids, updates }),
@@ -968,7 +909,7 @@ export async function bulkUpdateProducts(
 export async function exportProducts(includeVariants = false): Promise<Blob | null> {
   try {
     const token = localStorage.getItem("autofloy_token");
-    const url = `${SUPABASE_URL}/functions/v1/products?action=export${includeVariants ? "&include_variants=true" : ""}`;
+    const url = `${WORKER_API_URL}/products?action=export${includeVariants ? "&include_variants=true" : ""}`;
     const response = await fetch(url, {
       headers: {
         ...(token && { Authorization: `Bearer ${token}` }),
@@ -986,7 +927,7 @@ export async function exportProducts(includeVariants = false): Promise<Blob | nu
 export async function fetchProductVariants(productId: string): Promise<ProductVariant[]> {
   try {
     const response = await fetch(
-      `${SUPABASE_URL}/functions/v1/products?action=variants&product_id=${productId}`,
+      `${WORKER_API_URL}/products?action=variants&product_id=${productId}`,
       { headers: getAuthHeaders() }
     );
     if (!response.ok) return [];
@@ -1002,7 +943,7 @@ export async function createProductVariant(
   variant: Partial<ProductVariant> & { product_id: string }
 ): Promise<ProductVariant | null> {
   try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/products`, {
+    const response = await fetch(`${WORKER_API_URL}/products`, {
       method: "POST",
       headers: getAuthHeaders(),
       body: JSON.stringify({ action: "create_variant", ...variant }),
@@ -1021,7 +962,7 @@ export async function updateProductVariant(
   updates: Partial<ProductVariant>
 ): Promise<ProductVariant | null> {
   try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/products`, {
+    const response = await fetch(`${WORKER_API_URL}/products`, {
       method: "POST",
       headers: getAuthHeaders(),
       body: JSON.stringify({ action: "update_variant", id, ...updates }),
@@ -1037,7 +978,7 @@ export async function updateProductVariant(
 
 export async function deleteProductVariant(id: string): Promise<boolean> {
   try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/products`, {
+    const response = await fetch(`${WORKER_API_URL}/products`, {
       method: "POST",
       headers: getAuthHeaders(),
       body: JSON.stringify({ action: "delete_variant", id }),
@@ -1056,7 +997,7 @@ export async function importSalesReport(file: File): Promise<ImportResult> {
     const formData = new FormData();
     formData.append("file", file);
     
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/reports-import`, {
+    const response = await fetch(`${WORKER_API_URL}/reports-import`, {
       method: "POST",
       headers: {
         ...(token && { Authorization: `Bearer ${token}` }),
@@ -1079,7 +1020,7 @@ export async function importSalesReport(file: File): Promise<ImportResult> {
 export async function exportSalesReport(fromDate: string, toDate: string, format: 'csv' | 'xlsx' = 'csv'): Promise<Blob | null> {
   try {
     const token = localStorage.getItem("autofloy_token");
-    const url = new URL(`${SUPABASE_URL}/functions/v1/reports-export`);
+    const url = new URL(`${WORKER_API_URL}/reports-export`);
     url.searchParams.set("from", fromDate);
     url.searchParams.set("to", toDate);
     url.searchParams.set("format", format);
@@ -1105,7 +1046,7 @@ export async function importProducts(file: File): Promise<ProductImportResult> {
     const formData = new FormData();
     formData.append("file", file);
     
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/products-import`, {
+    const response = await fetch(`${WORKER_API_URL}/products-import`, {
       method: "POST",
       headers: {
         ...(token && { Authorization: `Bearer ${token}` }),
@@ -1140,7 +1081,7 @@ export interface UserSettings {
 
 export async function fetchUserSettings(): Promise<UserSettings | null> {
   try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/user-settings`, {
+    const response = await fetch(`${WORKER_API_URL}/user-settings`, {
       headers: getAuthHeaders(),
     });
     if (!response.ok) return null;
@@ -1154,7 +1095,7 @@ export async function fetchUserSettings(): Promise<UserSettings | null> {
 
 export async function updateUserSettings(settings: Partial<Omit<UserSettings, "id" | "user_id" | "created_at" | "updated_at">>): Promise<UserSettings | null> {
   try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/user-settings`, {
+    const response = await fetch(`${WORKER_API_URL}/user-settings`, {
       method: "PUT",
       headers: getAuthHeaders(),
       body: JSON.stringify(settings),
@@ -1186,13 +1127,11 @@ export interface PageMemory {
   webhook_subscribed: boolean;
   webhook_subscribed_at: string | null;
   automation_settings: Record<string, boolean>;
-  // AI Behavior Configuration
   selling_rules: {
     usePriceFromProduct: boolean;
     allowDiscount: boolean;
     maxDiscountPercent: number;
     allowLowProfitSale: boolean;
-    // Bargaining Power
     bargainingEnabled?: boolean;
     bargainingLevel?: "low" | "medium" | "high" | "aggressive";
     minAcceptableDiscount?: number;
@@ -1209,7 +1148,6 @@ export interface PageMemory {
     advanceRequiredAbove: number;
     advancePercentage: number;
   } | null;
-  // Support WhatsApp number for customers who need call/urgent help
   support_whatsapp_number: string | null;
   created_at: string;
   updated_at: string;
@@ -1217,7 +1155,7 @@ export interface PageMemory {
 
 export async function fetchPageMemory(pageId?: string): Promise<PageMemory | PageMemory[] | null> {
   try {
-    const url = new URL(`${SUPABASE_URL}/functions/v1/page-memory`);
+    const url = new URL(`${WORKER_API_URL}/page-memory`);
     if (pageId) url.searchParams.set("page_id", pageId);
     
     const response = await fetch(url.toString(), {
@@ -1234,13 +1172,11 @@ export async function fetchPageMemory(pageId?: string): Promise<PageMemory | Pag
 
 export async function savePageMemory(memory: Partial<PageMemory>, retries = 3): Promise<PageMemory | null> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
   
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      console.log(`[savePageMemory] Attempt ${attempt}/${retries}`);
-      
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/page-memory`, {
+      const response = await fetch(`${WORKER_API_URL}/page-memory`, {
         method: "POST",
         headers: getAuthHeaders(),
         body: JSON.stringify(memory),
@@ -1250,22 +1186,19 @@ export async function savePageMemory(memory: Partial<PageMemory>, retries = 3): 
       clearTimeout(timeoutId);
       
       if (!response.ok) {
-        console.error(`[savePageMemory] Response not OK: ${response.status}`);
         if (attempt === retries) return null;
-        await new Promise(r => setTimeout(r, 1000 * attempt)); // Wait before retry
+        await new Promise(r => setTimeout(r, 1000 * attempt));
         continue;
       }
       
       const data = await response.json();
-      console.log("[savePageMemory] Success:", data);
       return data.memory;
     } catch (error) {
       clearTimeout(timeoutId);
       console.error(`[savePageMemory] Attempt ${attempt} failed:`, error);
       
       if (attempt === retries) {
-        // On final failure, try to save directly via supabase client as fallback
-        console.log("[savePageMemory] Trying direct database fallback...");
+        // On final failure, try direct database fallback
         try {
           const { supabase } = await import("@/integrations/supabase/client");
           
@@ -1295,7 +1228,6 @@ export async function savePageMemory(memory: Partial<PageMemory>, retries = 3): 
               .single();
             
             if (!error && data) {
-              console.log("[savePageMemory] Direct fallback success");
               return data as unknown as PageMemory;
             }
           }
@@ -1305,7 +1237,7 @@ export async function savePageMemory(memory: Partial<PageMemory>, retries = 3): 
         return null;
       }
       
-      await new Promise(r => setTimeout(r, 1000 * attempt)); // Wait before retry
+      await new Promise(r => setTimeout(r, 1000 * attempt));
     }
   }
   
@@ -1314,7 +1246,7 @@ export async function savePageMemory(memory: Partial<PageMemory>, retries = 3): 
 
 export async function subscribePageToWebhook(pageId: string, subscribe: boolean = true): Promise<boolean> {
   try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/page-memory`, {
+    const response = await fetch(`${WORKER_API_URL}/page-memory`, {
       method: "PUT",
       headers: getAuthHeaders(),
       body: JSON.stringify({ page_id: pageId, subscribe }),
