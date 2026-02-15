@@ -50,9 +50,12 @@ export async function handleAIFacebookAgent(request: Request, env: Env): Promise
       });
     }
     
-    // Check if AI is enabled for this page (support both legacy and new field)
+    // Check if AI is enabled for this page based on automation_settings
     const automationSettings = pageMemory.automation_settings || {};
-    const isAIEnabled = pageMemory.is_ai_enabled === true || automationSettings.master_toggle === true;
+    // Check specific toggles: autoInboxReply for messages, autoCommentReply for comments
+    const isAIEnabled = isComment 
+      ? automationSettings.autoCommentReply === true 
+      : automationSettings.autoInboxReply === true;
     if (!isAIEnabled) {
       return jsonResponse({ 
         success: false, 
@@ -128,7 +131,7 @@ export async function handleAIFacebookAgent(request: Request, env: Env): Promise
     if (isComment && messageText) {
       const sentiment = analyzeCommentSentiment(messageText);
       
-      if (sentiment.sentiment === 'negative' && pageMemory.hide_negative_comments) {
+      if (sentiment.sentiment === 'negative' && automationSettings.hideNegativeComments === true) {
         return jsonResponse({
           success: true,
           action: 'hide_comment',
