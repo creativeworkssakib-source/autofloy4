@@ -53,6 +53,8 @@ const navItems = [
   { name: "SMS Settings", href: "/admin/sms-settings", icon: MessageSquare },
   { name: "Webhooks", href: "/admin/webhooks", icon: Webhook },
   { name: "API Integrations", href: "/admin/api-integrations", icon: Zap },
+  { name: "AI Codes", href: "/admin/activation-codes", icon: KeyRound },
+  { name: "User AI Limits", href: "/admin/user-limits", icon: Shield },
   { name: "Site Settings", href: "/admin/settings", icon: Settings },
   { name: "Passcode Reset", href: "/admin/passcode-reset", icon: KeyRound },
 ];

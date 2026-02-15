@@ -52,6 +52,62 @@ export type Database = {
           },
         ]
       }
+      admin_activation_codes: {
+        Row: {
+          assigned_user_id: string | null
+          code: string
+          created_at: string
+          created_by: string
+          current_uses: number
+          daily_comment_limit: number | null
+          daily_message_limit: number | null
+          expires_at: string | null
+          id: string
+          is_active: boolean
+          max_uses: number | null
+          monthly_total_limit: number | null
+          updated_at: string
+        }
+        Insert: {
+          assigned_user_id?: string | null
+          code: string
+          created_at?: string
+          created_by: string
+          current_uses?: number
+          daily_comment_limit?: number | null
+          daily_message_limit?: number | null
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          max_uses?: number | null
+          monthly_total_limit?: number | null
+          updated_at?: string
+        }
+        Update: {
+          assigned_user_id?: string | null
+          code?: string
+          created_at?: string
+          created_by?: string
+          current_uses?: number
+          daily_comment_limit?: number | null
+          daily_message_limit?: number | null
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          max_uses?: number | null
+          monthly_total_limit?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_activation_codes_assigned_user_id_fkey"
+            columns: ["assigned_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_conversations: {
         Row: {
           collected_address: string | null
@@ -236,6 +292,56 @@ export type Database = {
             columns: ["conversation_id"]
             isOneToOne: false
             referencedRelation: "ai_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_provider_settings: {
+        Row: {
+          admin_code_id: string | null
+          api_key_encrypted: string | null
+          base_url: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          model_name: string | null
+          provider: string
+          updated_at: string
+          use_admin_ai: boolean
+          user_id: string
+        }
+        Insert: {
+          admin_code_id?: string | null
+          api_key_encrypted?: string | null
+          base_url?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          model_name?: string | null
+          provider?: string
+          updated_at?: string
+          use_admin_ai?: boolean
+          user_id: string
+        }
+        Update: {
+          admin_code_id?: string | null
+          api_key_encrypted?: string | null
+          base_url?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          model_name?: string | null
+          provider?: string
+          updated_at?: string
+          use_admin_ai?: boolean
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_provider_settings_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -664,6 +770,50 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      daily_usage_tracker: {
+        Row: {
+          comment_count: number
+          created_at: string
+          id: string
+          is_limit_reached: boolean
+          message_count: number
+          total_ai_calls: number
+          updated_at: string
+          usage_date: string
+          user_id: string
+        }
+        Insert: {
+          comment_count?: number
+          created_at?: string
+          id?: string
+          is_limit_reached?: boolean
+          message_count?: number
+          total_ai_calls?: number
+          updated_at?: string
+          usage_date?: string
+          user_id: string
+        }
+        Update: {
+          comment_count?: number
+          created_at?: string
+          id?: string
+          is_limit_reached?: boolean
+          message_count?: number
+          total_ai_calls?: number
+          updated_at?: string
+          usage_date?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_usage_tracker_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       digital_product_sales: {
         Row: {
@@ -4751,6 +4901,50 @@ export type Database = {
         }
         Relationships: []
       }
+      user_usage_limits: {
+        Row: {
+          created_at: string
+          daily_comment_limit: number
+          daily_message_limit: number
+          id: string
+          is_automation_enabled: boolean
+          monthly_total_limit: number
+          set_by: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          daily_comment_limit?: number
+          daily_message_limit?: number
+          id?: string
+          is_automation_enabled?: boolean
+          monthly_total_limit?: number
+          set_by?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          daily_comment_limit?: number
+          daily_message_limit?: number
+          id?: string
+          is_automation_enabled?: boolean
+          monthly_total_limit?: number
+          set_by?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_usage_limits_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       users: {
         Row: {
           auth_provider: string | null
@@ -4935,6 +5129,24 @@ export type Database = {
       }
     }
     Views: {
+      monthly_usage_summary: {
+        Row: {
+          month: string | null
+          total_ai_calls: number | null
+          total_comments: number | null
+          total_messages: number | null
+          user_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_usage_tracker_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payment_methods_public: {
         Row: {
           account_name: string | null
@@ -5228,6 +5440,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      increment_ai_usage: {
+        Args: { p_usage_type: string; p_user_id: string }
+        Returns: Json
+      }
       increment_scanner_scans: {
         Args: { p_shop_id?: string; p_user_id: string }
         Returns: undefined
@@ -5235,6 +5451,10 @@ export type Database = {
       owns_product: { Args: { p_product_id: string }; Returns: boolean }
       run_all_data_cleanups: { Args: never; Returns: Json }
       trim_old_conversation_histories: { Args: never; Returns: Json }
+      validate_activation_code: {
+        Args: { p_code: string; p_user_id: string }
+        Returns: Json
+      }
     }
     Enums: {
       app_role: "admin" | "user"
