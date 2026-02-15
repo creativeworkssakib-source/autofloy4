@@ -1,14 +1,22 @@
 import { useState, useEffect } from 'react';
 import { BarChart3, Loader2, RefreshCw, Save, Users } from 'lucide-react';
 import AdminLayout from '@/components/admin/AdminLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+
+const SUPABASE_URL = "https://klkrzfwvrmffqkmkyqrh.supabase.co";
+
+function getAuthHeaders() {
+  const token = localStorage.getItem('autofloy_token');
+  return {
+    'Content-Type': 'application/json',
+    ...(token && { Authorization: `Bearer ${token}` }),
+  };
+}
 
 interface UserLimit {
   id: string;
@@ -30,27 +38,12 @@ const AdminUserLimits = () => {
   const fetchLimits = async () => {
     setIsLoading(true);
     try {
-      const { data: limitsData, error } = await supabase
-        .from('user_usage_limits')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-
-      // Fetch user info
-      const userIds = (limitsData || []).map((l: any) => l.user_id);
-      const { data: users } = await supabase
-        .from('users')
-        .select('id, email, display_name')
-        .in('id', userIds);
-
-      const userMap = new Map((users || []).map((u: any) => [u.id, u]));
-
-      setLimits((limitsData || []).map((l: any) => ({
-        ...l,
-        user_email: userMap.get(l.user_id)?.email || 'Unknown',
-        user_name: userMap.get(l.user_id)?.display_name || '',
-      })));
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/admin/user-limits`, {
+        headers: getAuthHeaders(),
+      });
+      if (!res.ok) throw new Error('Failed to fetch');
+      const data = await res.json();
+      setLimits(data.limits || []);
     } catch (error) {
       console.error('Failed to fetch limits:', error);
     } finally {
@@ -63,19 +56,20 @@ const AdminUserLimits = () => {
   const handleUpdate = async (limit: UserLimit) => {
     setSavingId(limit.id);
     try {
-      const { error } = await supabase
-        .from('user_usage_limits')
-        .update({
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/admin/user-limits/${limit.id}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
           daily_message_limit: limit.daily_message_limit,
           daily_comment_limit: limit.daily_comment_limit,
           monthly_total_limit: limit.monthly_total_limit,
           is_automation_enabled: limit.is_automation_enabled,
-        })
-        .eq('id', limit.id);
+        }),
+      });
 
-      if (error) throw error;
+      if (!res.ok) throw new Error('Failed');
       toast({ title: 'Limits Updated', description: `Updated for ${limit.user_email}` });
-    } catch (error) {
+    } catch {
       toast({ title: 'Failed', variant: 'destructive' });
     } finally {
       setSavingId(null);
