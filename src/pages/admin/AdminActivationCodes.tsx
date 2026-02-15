@@ -62,14 +62,26 @@ const AdminActivationCodes = () => {
   const fetchCodes = async () => {
     setIsLoading(true);
     try {
+      const headers = getAuthHeaders();
+      if (!headers.Authorization) {
+        console.error('No auth token available');
+        toast({ title: 'Authentication Error', description: 'Please log in again', variant: 'destructive' });
+        setIsLoading(false);
+        return;
+      }
       const res = await fetch(`${SUPABASE_URL}/functions/v1/admin/activation-codes`, {
-        headers: getAuthHeaders(),
+        headers,
       });
+      if (res.status === 401) {
+        toast({ title: 'Session Expired', description: 'Please log in again', variant: 'destructive' });
+        return;
+      }
       if (!res.ok) throw new Error('Failed to fetch');
       const data = await res.json();
       setCodes(data.codes || []);
     } catch (error) {
       console.error('Failed to fetch codes:', error);
+      toast({ title: 'Failed to Load', description: 'Could not load activation codes', variant: 'destructive' });
     } finally {
       setIsLoading(false);
     }
