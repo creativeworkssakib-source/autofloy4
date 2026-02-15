@@ -25,8 +25,8 @@ import { digitalProductService, DigitalProduct } from "@/services/digitalProduct
 
 // Cache configuration
 const CACHE_KEY = "autofloy_dashboard_unified_cache";
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-const REFRESH_INTERVAL = 2 * 60 * 1000; // 2 minutes background refresh
+const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes background refresh (reduced from 2min)
 
 interface DashboardCache {
   onlineStats: DashboardStats | null;
@@ -217,22 +217,7 @@ export function useDashboardData(): UseDashboardDataReturn {
             });
           }
         )
-        // Listen for automation changes
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'automations',
-            filter: `user_id=eq.${userId}`
-          },
-          () => {
-            console.log("[Realtime] Automation changed");
-            fetchDashboardStats().then(stats => {
-              if (stats && isMountedRef.current) setOnlineStats(stats);
-            });
-          }
-        )
+        // Removed automations realtime listener — rarely changes, saves DB connections
         // Listen for connected accounts changes
         .on(
           'postgres_changes',

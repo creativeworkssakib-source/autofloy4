@@ -160,10 +160,9 @@ async function getAllProducts(supabase: any, userId: string): Promise<ProductCon
   return products;
 }
 
-async function findProductByName(supabase: any, userId: string, text: string): Promise<ProductContext | null> {
+// Find product by name from a pre-loaded product list (avoids duplicate DB calls)
+function findProductFromList(products: ProductContext[], text: string): ProductContext | null {
   const lowerText = text.toLowerCase();
-  const products = await getAllProducts(supabase, userId);
-  
   for (const product of products) {
     const productNameLower = product.name.toLowerCase();
     if (lowerText.includes(productNameLower) || 
@@ -461,11 +460,11 @@ serve(async (req) => {
         { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
     
-    // Get products
+    // Get products (single DB call, reused for matching)
     const allProducts = await getAllProducts(supabase, effectiveUserId);
-    let productContext = await findProductByName(supabase, effectiveUserId, messageText);
+    let productContext = findProductFromList(allProducts, messageText);
     if (!productContext && postContent) {
-      productContext = await findProductByName(supabase, effectiveUserId, postContent);
+      productContext = findProductFromList(allProducts, postContent);
     }
     
     // Get or create conversation

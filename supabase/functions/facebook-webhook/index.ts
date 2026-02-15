@@ -483,8 +483,10 @@ serve(async (req) => {
 
       const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-      // *** FIRST: Cleanup stuck buffers from previous failed runs ***
-      await cleanupStuckBuffers(supabase);
+      // Cleanup stuck buffers only ~10% of the time to reduce DB usage
+      if (Math.random() < 0.1) {
+        await cleanupStuckBuffers(supabase);
+      }
 
       // Process Facebook webhook events
       if (body.object === "page") {
@@ -553,7 +555,7 @@ const INITIAL_SYNC_DELAY_MS = 1000;      // 1 second sync delay (reduced from 1.
 const BASE_SILENCE_WAIT_MS = 2000;       // 2 seconds silence AFTER last message
 const MAX_TOTAL_WAIT_MS = 20000;         // Max 20s total wait (for many messages)
 const STUCK_BUFFER_THRESHOLD_MS = 30000; // Process stuck buffers after 30s
-const POLL_INTERVAL_MS = 150;            // Check every 150ms (faster detection)
+const POLL_INTERVAL_MS = 500;            // Check every 500ms (reduced from 150ms to save DB calls)
 const FINAL_CHECK_DELAY_MS = 400;        // 400ms final check for last-second messages
 const REOPEN_WINDOW_MS = 60000;          // 60 seconds reopen window
 
@@ -1402,22 +1404,8 @@ async function processFeedChange(supabase: any, pageId: string, change: any) {
     console.log(`[Webhook] Comment aiMediaUnderstanding enabled: ${aiMediaUnderstandingEnabled}`);
     
     if (isMediaComment && !aiMediaUnderstandingEnabled) {
-      console.log("[Webhook] AI Media Understanding disabled, skipping media comment analysis:", commentMessageType);
-      // Still log but skip AI processing for media
-      await supabase.from("execution_logs").insert({
-        user_id: account.user_id,
-        source_platform: "facebook",
-        event_type: "media_comment_skipped",
-        status: "skipped",
-        incoming_payload: {
-          page_id: pageId,
-          post_id: value.post_id,
-          comment_id: value.comment_id,
-          message_type: commentMessageType,
-          reason: "AI Media Understanding disabled"
-        },
-        processing_time_ms: Date.now() - startTime,
-      });
+      console.log("[Webhook] AI Media Understanding disabled, skipping media comment:", commentMessageType);
+      // Skip logging for media_comment_skipped to save DB calls
       return;
     }
 
@@ -1596,28 +1584,7 @@ async function processFeedChange(supabase: any, pageId: string, change: any) {
         }
       } else if (aiResponse.skipInboxMessage) {
         console.log(`[Webhook] ⏭️ Skipping inbox message - AI decision: ${aiResponse.smartAnalysis?.reason || 'not needed'}`);
-        
-        // Log that we intelligently skipped inbox
-        await supabase.from("execution_logs").insert({
-          user_id: account.user_id,
-          source_platform: "facebook",
-          event_type: "inbox_skipped_smart",
-          status: "success",
-          incoming_payload: {
-            page_id: pageId,
-            comment_id: value.comment_id,
-            message: commentText,
-            from: value.from,
-          },
-          response_payload: { 
-            skipped: true,
-            reason: aiResponse.smartAnalysis?.reason,
-            comment_type: aiResponse.smartAnalysis?.type,
-            reaction_given: aiResponse.reactionType,
-            comment_reply_sent: true,
-          },
-          processing_time_ms: Date.now() - startTime,
-        });
+        // No extra execution_log for skipped inbox — already logged above as comment_received
       }
     }
   }
