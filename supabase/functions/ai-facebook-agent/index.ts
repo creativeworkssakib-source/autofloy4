@@ -33,48 +33,104 @@ const GOOGLE_AI_URL = "https://generativelanguage.googleapis.com/v1beta/models/g
 
 type AIProvider = 'lovable' | 'openai' | 'google';
 
-// Check if AI is globally enabled from admin settings
-async function isAIEnabled(supabase: any): Promise<{ 
+// Detect AI provider from API key prefix
+function detectProviderFromKey(key: string): AIProvider {
+  if (key.startsWith('AIza')) return 'google';
+  if (key.startsWith('sk-')) return 'openai';
+  return 'openai'; // default
+}
+
+// Get per-user AI config: checks ai_provider_settings first, then falls back to global api_integrations
+async function getUserAIConfig(supabase: any, userId: string): Promise<{ 
   enabled: boolean; 
   provider: AIProvider; 
-  customApiKey: string | null 
+  customApiKey: string | null;
+  reason?: string;
 }> {
-  const { data } = await supabase
+  // Step 1: Check user_usage_limits — is automation enabled for this user?
+  const { data: limits } = await supabase
+    .from("user_usage_limits")
+    .select("is_automation_enabled")
+    .eq("user_id", userId)
+    .maybeSingle();
+  
+  if (limits && !limits.is_automation_enabled) {
+    return { enabled: false, provider: 'lovable', customApiKey: null, reason: 'Automation disabled by admin' };
+  }
+
+  // Step 2: Check per-user ai_provider_settings
+  const { data: userAi } = await supabase
+    .from("ai_provider_settings")
+    .select("provider, api_key_encrypted, base_url, model_name, is_active, use_admin_ai")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (userAi) {
+    // User has Admin AI Power activated
+    if (userAi.use_admin_ai) {
+      // Get global admin API key from api_integrations
+      const { data: adminConfig } = await supabase
+        .from("api_integrations")
+        .select("is_enabled, api_key")
+        .eq("provider", "openai")
+        .maybeSingle();
+
+      if (adminConfig?.is_enabled && adminConfig?.api_key?.trim().length > 5) {
+        const key = adminConfig.api_key.trim();
+        return { enabled: true, provider: detectProviderFromKey(key), customApiKey: key };
+      }
+      // Admin AI enabled but no global key — use Lovable AI
+      return { enabled: true, provider: 'lovable', customApiKey: null };
+    }
+
+    // User has their own API key
+    if (userAi.is_active && userAi.api_key_encrypted?.trim().length > 5) {
+      const key = userAi.api_key_encrypted.trim();
+      const provider = (userAi.provider as AIProvider) || detectProviderFromKey(key);
+      return { enabled: true, provider, customApiKey: key };
+    }
+  }
+
+  // Step 3: Fallback — check global api_integrations (legacy)
+  const { data: globalConfig } = await supabase
     .from("api_integrations")
     .select("is_enabled, api_key")
     .eq("provider", "openai")
-    .single();
-  
-  if (!data) {
-    // Default: use Lovable AI if no config
+    .maybeSingle();
+
+  if (globalConfig?.is_enabled && globalConfig?.api_key?.trim().length > 5) {
+    const key = globalConfig.api_key.trim();
+    return { enabled: true, provider: detectProviderFromKey(key), customApiKey: key };
+  }
+
+  if (globalConfig?.is_enabled) {
     return { enabled: true, provider: 'lovable', customApiKey: null };
   }
-  
-  // If disabled, AI won't work at all
-  if (!data.is_enabled) {
-    return { enabled: false, provider: 'lovable', customApiKey: null };
+
+  // No AI configured at all
+  return { enabled: false, provider: 'lovable', customApiKey: null, reason: 'No AI API configured' };
+}
+
+// Check and increment usage limits — returns false if limit reached
+async function checkAndIncrementUsage(supabase: any, userId: string, isComment: boolean): Promise<{ allowed: boolean; reason?: string }> {
+  const usageType = isComment ? 'comment' : 'message';
+  const { data: result, error } = await supabase.rpc('increment_ai_usage', {
+    p_user_id: userId,
+    p_usage_type: usageType,
+  });
+
+  if (error) {
+    console.error('[AI Agent] Usage check error:', error);
+    // Allow on error — don't block automation due to tracking failure
+    return { allowed: true };
   }
-  
-  // If enabled with custom API key, detect provider type
-  if (data.api_key && data.api_key.trim().length > 10) {
-    const key = data.api_key.trim();
-    
-    // Detect Google AI Studio API key (starts with AIza)
-    if (key.startsWith('AIza')) {
-      return { enabled: true, provider: 'google', customApiKey: key };
-    }
-    
-    // Detect OpenAI API key (starts with sk-)
-    if (key.startsWith('sk-')) {
-      return { enabled: true, provider: 'openai', customApiKey: key };
-    }
-    
-    // Unknown key format - try as OpenAI
-    return { enabled: true, provider: 'openai', customApiKey: key };
+
+  if (result && !result.allowed) {
+    console.log(`[AI Agent] Usage limit reached: ${result.reason}`);
+    return { allowed: false, reason: result.reason };
   }
-  
-  // Enabled but no custom key - use Lovable AI
-  return { enabled: true, provider: 'lovable', customApiKey: null };
+
+  return { allowed: true };
 }
 
 // Database helpers
@@ -344,18 +400,8 @@ serve(async (req) => {
   
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
   
-  // Check if AI is globally enabled
-  const aiConfig = await isAIEnabled(supabase);
-  if (!aiConfig.enabled) {
-    console.log(`[AI Agent] AI is globally disabled from admin settings`);
-    return new Response(JSON.stringify({ 
-      skip: true, 
-      reason: "AI is disabled from admin panel",
-      reply: "AI বর্তমানে বন্ধ আছে।" 
-    }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-  }
-  
-  console.log(`[AI Agent] AI enabled: provider=${aiConfig.provider}, hasCustomKey=${!!aiConfig.customApiKey}`);
+  // NOTE: Per-user AI config is checked AFTER we know the userId (below)
+  console.log(`[AI Agent] Request received`);
   
   try {
     const body = await req.json();
@@ -373,6 +419,30 @@ serve(async (req) => {
     }
     
     const effectiveUserId = userId || pageMemory.user_id;
+    
+    // === PER-USER AI CONFIG CHECK ===
+    const aiConfig = await getUserAIConfig(supabase, effectiveUserId);
+    if (!aiConfig.enabled) {
+      console.log(`[AI Agent] AI disabled for user ${effectiveUserId}: ${aiConfig.reason}`);
+      return new Response(JSON.stringify({ 
+        skip: true, 
+        reason: aiConfig.reason || "AI disabled",
+        reply: "AI বর্তমানে বন্ধ আছে।" 
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    
+    console.log(`[AI Agent] User AI config: provider=${aiConfig.provider}, hasKey=${!!aiConfig.customApiKey}`);
+    
+    // === USAGE LIMIT CHECK ===
+    const usageCheck = await checkAndIncrementUsage(supabase, effectiveUserId, isComment);
+    if (!usageCheck.allowed) {
+      console.log(`[AI Agent] Usage limit reached for ${effectiveUserId}: ${usageCheck.reason}`);
+      return new Response(JSON.stringify({ 
+        skip: true, 
+        reason: usageCheck.reason || "Usage limit reached",
+        reply: "আজকের AI ব্যবহার সীমা শেষ হয়ে গেছে।" 
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
     
     // Check automation settings
     const settings = pageMemory.automation_settings || {};
