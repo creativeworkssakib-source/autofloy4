@@ -108,6 +108,8 @@ const AdminAppearance = lazy(() => import("./pages/admin/AdminAppearance"));
 const AdminSEO = lazy(() => import("./pages/admin/AdminSEO"));
 const AdminEmailTemplates = lazy(() => import("./pages/admin/AdminEmailTemplates"));
 const AdminApiIntegrations = lazy(() => import("./pages/admin/AdminApiIntegrations"));
+const AdminActivationCodes = lazy(() => import("./pages/admin/AdminActivationCodes"));
+const AdminUserLimits = lazy(() => import("./pages/admin/AdminUserLimits"));
 const AdminPaymentRequests = lazy(() => import("./pages/admin/AdminPaymentRequests"));
 const AdminPaymentMethods = lazy(() => import("./pages/admin/AdminPaymentMethods"));
 const AdminSmsSettings = lazy(() => import("./pages/admin/AdminSmsSettings"));
@@ -450,6 +452,16 @@ const App = () => (
                   <Route path="/admin/api-integrations" element={
                     <AdminProtectedRoute>
                       <AdminApiIntegrations />
+                    </AdminProtectedRoute>
+                  } />
+                  <Route path="/admin/activation-codes" element={
+                    <AdminProtectedRoute>
+                      <AdminActivationCodes />
+                    </AdminProtectedRoute>
+                  } />
+                  <Route path="/admin/user-limits" element={
+                    <AdminProtectedRoute>
+                      <AdminUserLimits />
                     </AdminProtectedRoute>
                   } />
                   <Route path="/admin/payment-requests" element={

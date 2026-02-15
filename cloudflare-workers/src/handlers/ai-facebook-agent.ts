@@ -59,18 +59,66 @@ export async function handleAIFacebookAgent(request: Request, env: Env): Promise
       });
     }
     
-    // Get API config
-    const { data: apiConfig } = await supabase
-      .from('api_integrations')
-      .select('is_enabled, api_key')
-      .eq('provider', 'openai')
+    // === USER AI CONFIG: Check per-user AI provider settings ===
+    const userId = pageMemory.user_id;
+    
+    const { data: userAiConfig } = await supabase
+      .from('ai_provider_settings')
+      .select('*')
+      .eq('user_id', userId)
       .maybeSingle();
     
-    if (!apiConfig?.is_enabled) {
-      return jsonResponse({ 
-        success: false, 
-        reason: 'AI is globally disabled',
-        processingTime: Date.now() - startTime 
+    // Check usage limits before proceeding
+    const usageType = isComment ? 'comment' : 'message';
+    const { data: usageResult } = await supabase.rpc('increment_ai_usage', {
+      p_user_id: userId,
+      p_usage_type: usageType,
+    });
+    
+    if (usageResult && !(usageResult as any).allowed) {
+      console.log(`[AI Agent] Usage limit reached for user ${userId}: ${(usageResult as any).reason}`);
+      return jsonResponse({
+        success: false,
+        reason: (usageResult as any).reason || 'Usage limit reached',
+        processingTime: Date.now() - startTime,
+      });
+    }
+    
+    // Determine AI source: user's own key, admin AI, or global fallback
+    let aiApiKey: string | null = null;
+    let aiProvider: string = 'lovable';
+    let aiBaseUrl: string | null = null;
+    let aiModel: string | null = null;
+    
+    if (userAiConfig?.use_admin_ai) {
+      // Using admin AI — use global api_integrations config
+      const { data: apiConfig } = await supabase
+        .from('api_integrations')
+        .select('is_enabled, api_key')
+        .eq('provider', 'openai')
+        .maybeSingle();
+      
+      if (!apiConfig?.is_enabled) {
+        return jsonResponse({
+          success: false,
+          reason: 'Admin AI is disabled globally',
+          processingTime: Date.now() - startTime,
+        });
+      }
+      aiApiKey = apiConfig.api_key;
+      aiProvider = detectProvider(aiApiKey);
+    } else if (userAiConfig?.is_active && userAiConfig?.api_key_encrypted) {
+      // User's own API key
+      aiApiKey = userAiConfig.api_key_encrypted;
+      aiProvider = userAiConfig.provider || detectProvider(aiApiKey);
+      aiBaseUrl = userAiConfig.base_url;
+      aiModel = userAiConfig.model_name;
+    } else {
+      // No AI configured — automation should not run
+      return jsonResponse({
+        success: false,
+        reason: 'No AI API configured. Please configure in Settings > AI.',
+        processingTime: Date.now() - startTime,
       });
     }
     
@@ -153,16 +201,15 @@ export async function handleAIFacebookAgent(request: Request, env: Env): Promise
       });
     }
     
-    // Detect provider and call AI
-    const provider = detectProvider(apiConfig.api_key);
+    // Use resolved AI config from per-user settings
     const hasMedia = messageType !== 'text' || attachments?.length > 0;
     
-    console.log(`[AI Agent] Using provider: ${provider}, hasMedia: ${hasMedia}`);
+    console.log(`[AI Agent] Using provider: ${aiProvider}, user: ${userId}, hasMedia: ${hasMedia}`);
     
     const { response: aiResponse, provider: usedProvider } = await callAI(
       messages,
-      provider,
-      apiConfig.api_key,
+      aiProvider as any,
+      aiApiKey,
       env.LOVABLE_API_KEY,
       hasMedia
     );

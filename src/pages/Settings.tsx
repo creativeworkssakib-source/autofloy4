@@ -27,6 +27,7 @@ import { DeleteAccountDialog } from "@/components/settings/DeleteAccountDialog";
 import { ChangePasswordForm } from "@/components/settings/ChangePasswordForm";
 import { VerificationBadge } from "@/components/settings/VerificationBadge";
 import { PlanComparisonModal } from "@/components/upgrade/PlanComparisonModal";
+import AIProviderSettings from "@/components/settings/AIProviderSettings";
 import {
   User,
   Mail,
@@ -36,6 +37,7 @@ import {
   Camera,
   Save,
   Bot,
+  Cpu,
   Globe,
   Bell,
   BellRing,
@@ -521,10 +523,14 @@ const Settings = () => {
           animate={{ opacity: 1, y: 0 }}
         >
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-grid bg-muted/50 p-1 h-auto">
+            <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:inline-grid bg-muted/50 p-1 h-auto">
               <TabsTrigger value="account" className="gap-2 px-3 py-2.5">
                 <User className="h-4 w-4 shrink-0" />
                 <span className="text-xs sm:text-sm">{t("settings.account")}</span>
+              </TabsTrigger>
+              <TabsTrigger value="ai" className="gap-2 px-3 py-2.5">
+                <Cpu className="h-4 w-4 shrink-0" />
+                <span className="text-xs sm:text-sm">AI</span>
               </TabsTrigger>
               <TabsTrigger value="automations" className="gap-2 px-3 py-2.5">
                 <Bot className="h-4 w-4 shrink-0" />
@@ -740,6 +746,11 @@ const Settings = () => {
                   </div>
                 </CardContent>
               </Card>
+            </TabsContent>
+
+            {/* AI Tab */}
+            <TabsContent value="ai" className="space-y-6">
+              <AIProviderSettings />
             </TabsContent>
 
             {/* Automations Tab */}
