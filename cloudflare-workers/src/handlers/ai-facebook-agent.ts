@@ -50,8 +50,10 @@ export async function handleAIFacebookAgent(request: Request, env: Env): Promise
       });
     }
     
-    // Check if AI is enabled for this page
-    if (!pageMemory.is_ai_enabled) {
+    // Check if AI is enabled for this page (support both legacy and new field)
+    const automationSettings = pageMemory.automation_settings || {};
+    const isAIEnabled = pageMemory.is_ai_enabled === true || automationSettings.master_toggle === true;
+    if (!isAIEnabled) {
       return jsonResponse({ 
         success: false, 
         reason: 'AI disabled for this page',

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Bot, Key, Eye, EyeOff, Save, Loader2, CheckCircle, XCircle, Sparkles, ShieldCheck, AlertTriangle, BarChart3 } from 'lucide-react';
+import { Bot, Key, Eye, EyeOff, Save, Loader2, CheckCircle, XCircle, Sparkles, ShieldCheck, AlertTriangle, BarChart3, RefreshCw } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,6 +35,7 @@ interface UsageLimits {
   daily_message_limit: number;
   daily_comment_limit: number;
   monthly_total_limit: number;
+  is_automation_enabled: boolean;
 }
 
 interface DailyUsage {
@@ -81,6 +82,7 @@ const AIProviderSettings = () => {
     daily_message_limit: 50,
     daily_comment_limit: 50,
     monthly_total_limit: 1000,
+    is_automation_enabled: false,
   });
 
   const [usage, setUsage] = useState<DailyUsage>({
@@ -118,6 +120,7 @@ const AIProviderSettings = () => {
           daily_message_limit: data.limits.daily_message_limit,
           daily_comment_limit: data.limits.daily_comment_limit,
           monthly_total_limit: data.limits.monthly_total_limit,
+          is_automation_enabled: data.limits.is_automation_enabled ?? false,
         });
       }
 
@@ -190,11 +193,13 @@ const AIProviderSettings = () => {
 
       if (result?.valid) {
         setConfig(prev => ({ ...prev, use_admin_ai: true, is_active: true }));
-        setLimits({
+        setLimits(prev => ({
+          ...prev,
           daily_message_limit: result.daily_message_limit,
           daily_comment_limit: result.daily_comment_limit,
           monthly_total_limit: result.monthly_total_limit,
-        });
+          is_automation_enabled: true,
+        }));
         setActivationCode('');
         toast({
           title: '🎉 Admin AI Activated!',
@@ -243,6 +248,7 @@ const AIProviderSettings = () => {
 
   const hasApiKey = !config.use_admin_ai && config.api_key_encrypted?.trim().length > 5;
   const isAIReady = config.use_admin_ai || hasApiKey;
+  const isAutomationEnabled = limits.is_automation_enabled;
   const msgPercent = limits.daily_message_limit > 0 ? (usage.message_count / limits.daily_message_limit) * 100 : 0;
   const commentPercent = limits.daily_comment_limit > 0 ? (usage.comment_count / limits.daily_comment_limit) * 100 : 0;
 
@@ -250,25 +256,32 @@ const AIProviderSettings = () => {
     <div className="space-y-6">
       {/* AI Status Banner */}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-        <Card className={`border-2 ${isAIReady ? 'border-green-500/30 bg-green-500/5' : 'border-destructive/30 bg-destructive/5'}`}>
+        <Card className={`border-2 ${isAIReady && isAutomationEnabled ? 'border-green-500/30 bg-green-500/5' : 'border-destructive/30 bg-destructive/5'}`}>
           <CardContent className="py-4">
-            <div className="flex items-center gap-3">
-              <div className={`p-2 rounded-lg ${isAIReady ? 'bg-green-500/20' : 'bg-destructive/20'}`}>
-                {isAIReady ? <CheckCircle className="w-5 h-5 text-green-600" /> : <XCircle className="w-5 h-5 text-destructive" />}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className={`p-2 rounded-lg ${isAIReady && isAutomationEnabled ? 'bg-green-500/20' : 'bg-destructive/20'}`}>
+                  {isAIReady && isAutomationEnabled ? <CheckCircle className="w-5 h-5 text-green-600" /> : <XCircle className="w-5 h-5 text-destructive" />}
+                </div>
+                <div>
+                  <p className="font-medium">
+                    {!isAIReady ? '⚠️ AI Not Configured' : !isAutomationEnabled ? '⚠️ Automation Disabled by Admin' : '✅ AI Automation Ready'}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {config.use_admin_ai 
+                      ? isAutomationEnabled 
+                        ? 'Using Admin AI Power — your automation is running with admin-provided AI'
+                        : 'Admin AI active but automation is disabled by admin. Contact admin to enable.'
+                      : isAIReady
+                        ? `Using ${providerOptions.find(p => p.value === config.provider)?.label}`
+                        : 'Automation will not work until you configure an AI API key or activate Admin AI'
+                    }
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="font-medium">
-                  {isAIReady ? '✅ AI Automation Ready' : '⚠️ AI Not Configured'}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {config.use_admin_ai 
-                    ? 'Using Admin AI Power — your automation is running with admin-provided AI'
-                    : isAIReady
-                      ? `Using ${providerOptions.find(p => p.value === config.provider)?.label}`
-                      : 'Automation will not work until you configure an AI API key or activate Admin AI'
-                  }
-                </p>
-              </div>
+              <Button variant="ghost" size="sm" onClick={loadSettings} className="gap-1">
+                <RefreshCw className="w-4 h-4" />
+              </Button>
             </div>
           </CardContent>
         </Card>
