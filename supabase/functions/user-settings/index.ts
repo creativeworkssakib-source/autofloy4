@@ -123,6 +123,8 @@ async function handleGetAIConfig(supabase: any, userId: string) {
     .eq("user_id", userId)
     .maybeSingle();
 
+  console.log(`[AI Config] user=${userId}, ai_active=${aiSettings?.is_active}, use_admin=${aiSettings?.use_admin_ai}, automation_enabled=${limits?.is_automation_enabled}`);
+
   // Get today's usage
   const today = new Date().toISOString().split("T")[0];
   const { data: usage } = await supabase
@@ -146,6 +148,7 @@ async function handleGetAIConfig(supabase: any, userId: string) {
       daily_message_limit: 50,
       daily_comment_limit: 50,
       monthly_total_limit: 1000,
+      is_automation_enabled: false,
     },
     usage: usage || {
       message_count: 0,
