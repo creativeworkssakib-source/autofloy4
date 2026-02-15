@@ -153,7 +153,8 @@ const AIProviderSettings = () => {
         }),
       });
 
-      if (!res.ok) throw new Error('Failed to save');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Failed to save');
 
       toast({
         title: '✅ AI Settings Saved',
@@ -184,8 +185,8 @@ const AIProviderSettings = () => {
         body: JSON.stringify({ code: activationCode.trim() }),
       });
 
-      if (!res.ok) throw new Error('Validation failed');
       const result = await res.json();
+      if (!res.ok && !result?.valid) throw new Error(result?.reason || 'Validation failed');
 
       if (result?.valid) {
         setConfig(prev => ({ ...prev, use_admin_ai: true, is_active: true }));
