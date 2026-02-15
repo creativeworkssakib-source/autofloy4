@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { Key, Plus, Trash2, Copy, Loader2, RefreshCw, Users, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { Key, Plus, Trash2, Copy, Loader2, RefreshCw, CheckCircle, XCircle } from 'lucide-react';
 import AdminLayout from '@/components/admin/AdminLayout';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,7 +9,16 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+
+const SUPABASE_URL = "https://klkrzfwvrmffqkmkyqrh.supabase.co";
+
+function getAuthHeaders() {
+  const token = localStorage.getItem('autofloy_token');
+  return {
+    'Content-Type': 'application/json',
+    ...(token && { Authorization: `Bearer ${token}` }),
+  };
+}
 
 interface ActivationCode {
   id: string;
@@ -54,13 +62,12 @@ const AdminActivationCodes = () => {
   const fetchCodes = async () => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('admin_activation_codes')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setCodes((data || []) as ActivationCode[]);
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/admin/activation-codes`, {
+        headers: getAuthHeaders(),
+      });
+      if (!res.ok) throw new Error('Failed to fetch');
+      const data = await res.json();
+      setCodes(data.codes || []);
     } catch (error) {
       console.error('Failed to fetch codes:', error);
     } finally {
@@ -73,22 +80,23 @@ const AdminActivationCodes = () => {
   const handleCreate = async () => {
     setIsCreating(true);
     try {
-      const token = localStorage.getItem('autofloy_token');
-      // Get admin user ID from token
-      const adminId = JSON.parse(atob(token?.split('.')[1] || '{}'))?.userId;
-
-      const { error } = await supabase.from('admin_activation_codes').insert({
-        code: newCode.code,
-        max_uses: newCode.max_uses,
-        daily_message_limit: newCode.daily_message_limit,
-        daily_comment_limit: newCode.daily_comment_limit,
-        monthly_total_limit: newCode.monthly_total_limit,
-        expires_at: newCode.expires_at || null,
-        created_by: adminId,
-        is_active: true,
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/admin/activation-codes`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          code: newCode.code,
+          max_uses: newCode.max_uses,
+          daily_message_limit: newCode.daily_message_limit,
+          daily_comment_limit: newCode.daily_comment_limit,
+          monthly_total_limit: newCode.monthly_total_limit,
+          expires_at: newCode.expires_at || null,
+        }),
       });
 
-      if (error) throw error;
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed');
+      }
 
       toast({ title: '✅ Code Created', description: `Code: ${newCode.code}` });
       setShowCreateDialog(false);
@@ -106,14 +114,25 @@ const AdminActivationCodes = () => {
   };
 
   const handleToggleActive = async (id: string, isActive: boolean) => {
-    await supabase.from('admin_activation_codes').update({ is_active: !isActive }).eq('id', id);
-    fetchCodes();
+    try {
+      await fetch(`${SUPABASE_URL}/functions/v1/admin/activation-codes/${id}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ is_active: !isActive }),
+      });
+      fetchCodes();
+    } catch { /* ignore */ }
   };
 
   const handleDelete = async (id: string) => {
-    await supabase.from('admin_activation_codes').delete().eq('id', id);
-    fetchCodes();
-    toast({ title: 'Code Deleted' });
+    try {
+      await fetch(`${SUPABASE_URL}/functions/v1/admin/activation-codes/${id}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      });
+      fetchCodes();
+      toast({ title: 'Code Deleted' });
+    } catch { /* ignore */ }
   };
 
   const copyCode = (code: string) => {

@@ -1,18 +1,25 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Bot, Key, Globe, Cpu, Eye, EyeOff, Save, Loader2, CheckCircle, XCircle, Sparkles, ShieldCheck, AlertTriangle, BarChart3 } from 'lucide-react';
+import { Bot, Key, Eye, EyeOff, Save, Loader2, CheckCircle, XCircle, Sparkles, ShieldCheck, AlertTriangle, BarChart3 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+
+const SUPABASE_URL = "https://klkrzfwvrmffqkmkyqrh.supabase.co";
+
+function getAuthHeaders() {
+  const token = localStorage.getItem('autofloy_token');
+  return {
+    'Content-Type': 'application/json',
+    ...(token && { Authorization: `Bearer ${token}` }),
+  };
+}
 
 interface AIProviderConfig {
   provider: string;
@@ -83,59 +90,43 @@ const AIProviderSettings = () => {
     is_limit_reached: false,
   });
 
-  useEffect(() => {
-    loadSettings();
-  }, []);
+  useEffect(() => { loadSettings(); }, []);
 
   const loadSettings = async () => {
     setIsLoading(true);
     try {
-      // Load AI provider settings
-      const { data: aiSettings } = await supabase
-        .from('ai_provider_settings')
-        .select('*')
-        .maybeSingle();
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/user-settings/ai-config`, {
+        headers: getAuthHeaders(),
+      });
+      if (!res.ok) throw new Error('Failed to load');
+      const data = await res.json();
 
-      if (aiSettings) {
+      if (data.ai_settings) {
         setConfig({
-          provider: aiSettings.provider || 'openai',
-          api_key_encrypted: aiSettings.api_key_encrypted || '',
-          base_url: aiSettings.base_url || '',
-          model_name: aiSettings.model_name || '',
-          is_active: aiSettings.is_active || false,
-          use_admin_ai: aiSettings.use_admin_ai || false,
-          admin_code_id: aiSettings.admin_code_id || null,
+          provider: data.ai_settings.provider || 'openai',
+          api_key_encrypted: data.ai_settings.api_key_encrypted || '',
+          base_url: data.ai_settings.base_url || '',
+          model_name: data.ai_settings.model_name || '',
+          is_active: data.ai_settings.is_active || false,
+          use_admin_ai: data.ai_settings.use_admin_ai || false,
+          admin_code_id: data.ai_settings.admin_code_id || null,
         });
       }
 
-      // Load usage limits
-      const { data: limitsData } = await supabase
-        .from('user_usage_limits')
-        .select('*')
-        .maybeSingle();
-
-      if (limitsData) {
+      if (data.limits) {
         setLimits({
-          daily_message_limit: limitsData.daily_message_limit,
-          daily_comment_limit: limitsData.daily_comment_limit,
-          monthly_total_limit: limitsData.monthly_total_limit,
+          daily_message_limit: data.limits.daily_message_limit,
+          daily_comment_limit: data.limits.daily_comment_limit,
+          monthly_total_limit: data.limits.monthly_total_limit,
         });
       }
 
-      // Load today's usage
-      const today = new Date().toISOString().split('T')[0];
-      const { data: usageData } = await supabase
-        .from('daily_usage_tracker')
-        .select('*')
-        .eq('usage_date', today)
-        .maybeSingle();
-
-      if (usageData) {
+      if (data.usage) {
         setUsage({
-          message_count: usageData.message_count,
-          comment_count: usageData.comment_count,
-          total_ai_calls: usageData.total_ai_calls,
-          is_limit_reached: usageData.is_limit_reached || false,
+          message_count: data.usage.message_count,
+          comment_count: data.usage.comment_count,
+          total_ai_calls: data.usage.total_ai_calls,
+          is_limit_reached: data.usage.is_limit_reached || false,
         });
       }
     } catch (error) {
@@ -149,19 +140,20 @@ const AIProviderSettings = () => {
     if (!user?.id) return;
     setIsSaving(true);
     try {
-      const { error } = await supabase
-        .from('ai_provider_settings')
-        .upsert({
-          user_id: user.id,
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/user-settings/ai-config`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
           provider: config.provider,
           api_key_encrypted: config.api_key_encrypted || null,
           base_url: config.base_url || null,
           model_name: config.model_name || null,
           is_active: config.is_active,
           use_admin_ai: config.use_admin_ai,
-        }, { onConflict: 'user_id' });
+        }),
+      });
 
-      if (error) throw error;
+      if (!res.ok) throw new Error('Failed to save');
 
       toast({
         title: '✅ AI Settings Saved',
@@ -186,14 +178,15 @@ const AIProviderSettings = () => {
     if (!activationCode.trim() || !user?.id) return;
     setIsValidatingCode(true);
     try {
-      const { data, error } = await supabase.rpc('validate_activation_code', {
-        p_user_id: user.id,
-        p_code: activationCode.trim(),
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/user-settings/validate-code`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ code: activationCode.trim() }),
       });
 
-      if (error) throw error;
+      if (!res.ok) throw new Error('Validation failed');
+      const result = await res.json();
 
-      const result = data as any;
       if (result?.valid) {
         setConfig(prev => ({ ...prev, use_admin_ai: true, is_active: true }));
         setLimits({
@@ -227,12 +220,14 @@ const AIProviderSettings = () => {
 
   const handleDeactivateAdminAI = async () => {
     if (!user?.id) return;
-    setConfig(prev => ({ ...prev, use_admin_ai: false, admin_code_id: null, is_active: false }));
-    await supabase
-      .from('ai_provider_settings')
-      .update({ use_admin_ai: false, admin_code_id: null, is_active: false })
-      .eq('user_id', user.id);
-    toast({ title: 'Admin AI Deactivated', description: 'You can now use your own API key' });
+    try {
+      await fetch(`${SUPABASE_URL}/functions/v1/user-settings/deactivate-admin-ai`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+      });
+      setConfig(prev => ({ ...prev, use_admin_ai: false, admin_code_id: null, is_active: false }));
+      toast({ title: 'Admin AI Deactivated', description: 'You can now use your own API key' });
+    } catch { /* ignore */ }
   };
 
   if (isLoading) {
@@ -285,9 +280,7 @@ const AIProviderSettings = () => {
             <ShieldCheck className="w-5 h-5 text-primary" />
             Admin AI Power
           </CardTitle>
-          <CardDescription>
-            Use admin-provided AI instead of your own API key
-          </CardDescription>
+          <CardDescription>Use admin-provided AI instead of your own API key</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border/50">
@@ -327,33 +320,27 @@ const AIProviderSettings = () => {
         </CardContent>
       </Card>
 
-      {/* Own API Key Section - disabled when using admin AI */}
+      {/* Own API Key Section */}
       <Card className={`border-border/50 ${config.use_admin_ai ? 'opacity-50 pointer-events-none' : ''}`}>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
             <Bot className="w-5 h-5 text-primary" />
             AI Provider Configuration
           </CardTitle>
-          <CardDescription>
-            Configure your own AI API key for automation
-          </CardDescription>
+          <CardDescription>Configure your own AI API key for automation</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Provider Select */}
           <div className="space-y-2">
             <Label>AI Provider</Label>
             <Select
               value={config.provider}
               onValueChange={(v) => setConfig(prev => ({ 
-                ...prev, 
-                provider: v, 
+                ...prev, provider: v, 
                 model_name: defaultModels[v] || '',
                 base_url: v === 'custom' ? prev.base_url : '',
               }))}
             >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 {providerOptions.map(opt => (
                   <SelectItem key={opt.value} value={opt.value}>
@@ -367,7 +354,6 @@ const AIProviderSettings = () => {
             </Select>
           </div>
 
-          {/* API Key */}
           <div className="space-y-2">
             <Label>API Key</Label>
             <div className="relative">
@@ -388,7 +374,6 @@ const AIProviderSettings = () => {
             </div>
           </div>
 
-          {/* Base URL (for custom) */}
           {config.provider === 'custom' && (
             <div className="space-y-2">
               <Label>Base URL</Label>
@@ -400,7 +385,6 @@ const AIProviderSettings = () => {
             </div>
           )}
 
-          {/* Model Name */}
           <div className="space-y-2">
             <Label>Model Name</Label>
             <Input
@@ -424,9 +408,7 @@ const AIProviderSettings = () => {
             <BarChart3 className="w-5 h-5 text-primary" />
             Today's AI Usage
           </CardTitle>
-          <CardDescription>
-            Your daily automation usage quota
-          </CardDescription>
+          <CardDescription>Your daily automation usage quota</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {usage.is_limit_reached && (

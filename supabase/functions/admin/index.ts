@@ -2577,6 +2577,156 @@ Deno.serve(async (req) => {
       );
     }
 
+    // ============ ACTIVATION CODES CRUD ============
+
+    // GET /admin/activation-codes
+    if (req.method === "GET" && path === "activation-codes") {
+      const { data, error } = await supabase
+        .from("admin_activation_codes")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        return new Response(JSON.stringify({ error: error.message }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify({ codes: data || [] }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // POST /admin/activation-codes
+    if (req.method === "POST" && path === "activation-codes") {
+      const body = await req.json();
+      const { code, max_uses, daily_message_limit, daily_comment_limit, monthly_total_limit, expires_at } = body;
+
+      const { data, error } = await supabase
+        .from("admin_activation_codes")
+        .insert({
+          code,
+          max_uses: max_uses || 1,
+          daily_message_limit: daily_message_limit || 50,
+          daily_comment_limit: daily_comment_limit || 50,
+          monthly_total_limit: monthly_total_limit || 1000,
+          expires_at: expires_at || null,
+          created_by: authResult.userId,
+          is_active: true,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        return new Response(JSON.stringify({ error: error.message }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify({ code: data }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // PUT /admin/activation-codes/:id
+    if (req.method === "PUT" && path === "activation-codes" && subPath) {
+      const body = await req.json();
+      const { error } = await supabase
+        .from("admin_activation_codes")
+        .update(body)
+        .eq("id", subPath);
+
+      if (error) {
+        return new Response(JSON.stringify({ error: error.message }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // DELETE /admin/activation-codes/:id
+    if (req.method === "DELETE" && path === "activation-codes" && subPath) {
+      const { error } = await supabase
+        .from("admin_activation_codes")
+        .delete()
+        .eq("id", subPath);
+
+      if (error) {
+        return new Response(JSON.stringify({ error: error.message }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ============ USER LIMITS CRUD ============
+
+    // GET /admin/user-limits
+    if (req.method === "GET" && path === "user-limits") {
+      const { data: limitsData, error } = await supabase
+        .from("user_usage_limits")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        return new Response(JSON.stringify({ error: error.message }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Fetch user info
+      const userIds = (limitsData || []).map((l: any) => l.user_id);
+      let users: any[] = [];
+      if (userIds.length > 0) {
+        const { data: usersData } = await supabase
+          .from("users")
+          .select("id, email, display_name")
+          .in("id", userIds);
+        users = usersData || [];
+      }
+
+      const userMap = new Map(users.map((u: any) => [u.id, u]));
+      const enrichedLimits = (limitsData || []).map((l: any) => ({
+        ...l,
+        user_email: userMap.get(l.user_id)?.email || "Unknown",
+        user_name: userMap.get(l.user_id)?.display_name || "",
+      }));
+
+      return new Response(JSON.stringify({ limits: enrichedLimits }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // PUT /admin/user-limits/:id
+    if (req.method === "PUT" && path === "user-limits" && subPath) {
+      const body = await req.json();
+      const { error } = await supabase
+        .from("user_usage_limits")
+        .update({
+          daily_message_limit: body.daily_message_limit,
+          daily_comment_limit: body.daily_comment_limit,
+          monthly_total_limit: body.monthly_total_limit,
+          is_automation_enabled: body.is_automation_enabled,
+        })
+        .eq("id", subPath);
+
+      if (error) {
+        return new Response(JSON.stringify({ error: error.message }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     return new Response(
       JSON.stringify({ error: "Not found" }),
       { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
