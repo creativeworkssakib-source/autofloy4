@@ -224,6 +224,23 @@ const Signup = () => {
             </span>
           </Link>
 
+          {settings.signup_disabled ? (
+            <div className="text-center py-12">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-destructive/10 flex items-center justify-center">
+                <AlertCircle className="w-8 h-8 text-destructive" />
+              </div>
+              <h2 className="text-2xl font-bold mb-3">Registration Closed</h2>
+              <p className="text-muted-foreground mb-6">
+                New account registration is currently disabled. Please try again later or contact support.
+              </p>
+              <Link to="/login">
+                <Button variant="outline" className="gap-2">
+                  <ArrowRight className="w-4 h-4" /> Go to Login
+                </Button>
+              </Link>
+            </div>
+          ) : (
+          <>
           <div className="mb-8">
             <h2 className="text-3xl font-bold mb-2">Create your account</h2>
             <p className="text-muted-foreground">
@@ -413,6 +430,8 @@ const Signup = () => {
             and{" "}
             <Link to="/privacy" className="text-primary hover:underline">Privacy Policy</Link>
           </p>
+          </>
+          )}
         </motion.div>
       </div>
     </div>

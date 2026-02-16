@@ -151,7 +151,24 @@ serve(async (req) => {
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    
+
+    // Check if signups are globally disabled by admin
+    const { data: siteSettings } = await supabase
+      .from("site_settings")
+      .select("signup_disabled")
+      .limit(1)
+      .maybeSingle();
+
+    if (siteSettings?.signup_disabled === true) {
+      console.warn("[SIGNUP BLOCKED] Admin has disabled new signups globally");
+      return new Response(JSON.stringify({ 
+        error: "New account registration is currently disabled. Please try again later." 
+      }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Check if this email has already used trial (prevent trial abuse)
     const { data: trialCheck } = await supabase
       .rpc("can_email_use_trial", { p_email: email });
