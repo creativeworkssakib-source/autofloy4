@@ -9,16 +9,94 @@ const ALLOWED_EMAIL_DOMAINS = [
   'icloud.com',
 ];
 
+// Common typos/misspellings mapped to correct domains
+const EMAIL_TYPO_MAP: Record<string, string> = {
+  // Gmail typos
+  'gmal.com': 'gmail.com',
+  'gmial.com': 'gmail.com',
+  'gmaill.com': 'gmail.com',
+  'gmil.com': 'gmail.com',
+  'gamil.com': 'gmail.com',
+  'gnail.com': 'gmail.com',
+  'gmsil.com': 'gmail.com',
+  'gmaik.com': 'gmail.com',
+  'gmali.com': 'gmail.com',
+  'gemail.com': 'gmail.com',
+  'gimail.com': 'gmail.com',
+  'gmail.co': 'gmail.com',
+  'gmail.con': 'gmail.com',
+  'gmail.cm': 'gmail.com',
+  'gmail.om': 'gmail.com',
+  'gmail.cpm': 'gmail.com',
+  'gmail.vom': 'gmail.com',
+  'gmail.xom': 'gmail.com',
+  'gmai.com': 'gmail.com',
+  'gmaiil.com': 'gmail.com',
+  'gmaol.com': 'gmail.com',
+  'gmaul.com': 'gmail.com',
+  'gmqil.com': 'gmail.com',
+  'gmeil.com': 'gmail.com',
+  'g mail.com': 'gmail.com',
+  'gamail.com': 'gmail.com',
+  'gmaail.com': 'gmail.com',
+  // Yahoo typos
+  'yaho.com': 'yahoo.com',
+  'yahooo.com': 'yahoo.com',
+  'yhaoo.com': 'yahoo.com',
+  'yahoo.co': 'yahoo.com',
+  'yahoo.con': 'yahoo.com',
+  'yaoo.com': 'yahoo.com',
+  'yaooh.com': 'yahoo.com',
+  // Outlook typos
+  'outlok.com': 'outlook.com',
+  'outllook.com': 'outlook.com',
+  'outlool.com': 'outlook.com',
+  'outlook.co': 'outlook.com',
+  'outlook.con': 'outlook.com',
+  'outook.com': 'outlook.com',
+  // Hotmail typos
+  'hotmal.com': 'hotmail.com',
+  'hotmial.com': 'hotmail.com',
+  'hotmil.com': 'hotmail.com',
+  'hotmail.co': 'hotmail.com',
+  'hotmail.con': 'hotmail.com',
+  'homail.com': 'hotmail.com',
+  'htmail.com': 'hotmail.com',
+  // iCloud typos
+  'iclould.com': 'icloud.com',
+  'icloud.co': 'icloud.com',
+  'icloud.con': 'icloud.com',
+  'iclod.com': 'icloud.com',
+};
+
 export const isAllowedEmailDomain = (email: string): boolean => {
   const domain = email.toLowerCase().split('@')[1];
   if (!domain) return false;
   return ALLOWED_EMAIL_DOMAINS.includes(domain);
 };
 
+export const getEmailTypoSuggestion = (email: string): string | null => {
+  const parts = email.toLowerCase().split('@');
+  if (parts.length !== 2) return null;
+  const [localPart, domain] = parts;
+  const suggestion = EMAIL_TYPO_MAP[domain];
+  if (suggestion) {
+    return `${localPart}@${suggestion}`;
+  }
+  return null;
+};
+
 export const getEmailDomainError = (email: string): string | undefined => {
   if (!isValidEmail(email)) {
     return 'Please enter a valid email address';
   }
+  
+  // Check for typos first
+  const suggestion = getEmailTypoSuggestion(email);
+  if (suggestion) {
+    return `Did you mean ${suggestion}? Please check your email address.`;
+  }
+  
   if (!isAllowedEmailDomain(email)) {
     return 'Only Gmail, Outlook, Yahoo, or iCloud email addresses are allowed.';
   }
