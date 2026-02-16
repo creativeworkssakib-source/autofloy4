@@ -1055,6 +1055,30 @@ const AdminSiteSettings = () => {
                   </div>
                 </div>
 
+                {/* Signup Block Toggle */}
+                <div className="flex items-center justify-between p-4 border-2 border-red-500/30 rounded-lg bg-red-500/5">
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 rounded-lg bg-red-500/10">
+                      <XCircle className="w-6 h-6 text-red-500" />
+                    </div>
+                    <div>
+                      <h4 className="font-medium text-red-600 dark:text-red-400">🚫 Block New Signups</h4>
+                      <p className="text-sm text-muted-foreground">
+                        When enabled, no one can create a new account. Existing users can still log in.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className={`text-sm font-medium ${formData.signup_disabled ? 'text-red-600' : 'text-green-600'}`}>
+                      {formData.signup_disabled ? 'BLOCKED' : 'Allowed'}
+                    </span>
+                    <Switch
+                      checked={formData.signup_disabled ?? false}
+                      onCheckedChange={(checked) => handleChange('signup_disabled', checked)}
+                    />
+                  </div>
+                </div>
+
                 <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
                   <p className="text-sm text-yellow-700 dark:text-yellow-400">
                     <strong>⚠️ Warning:</strong> Disabling a module will immediately block all users from accessing it.

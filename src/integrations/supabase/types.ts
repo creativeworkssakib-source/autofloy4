@@ -4545,6 +4545,7 @@ export type Database = {
           platform_sms_provider: string | null
           platform_sms_sender_id: string | null
           postal_code: string | null
+          signup_disabled: boolean | null
           sms_limit_business: number | null
           sms_limit_lifetime: number | null
           sms_limit_professional: number | null
@@ -4586,6 +4587,7 @@ export type Database = {
           platform_sms_provider?: string | null
           platform_sms_sender_id?: string | null
           postal_code?: string | null
+          signup_disabled?: boolean | null
           sms_limit_business?: number | null
           sms_limit_lifetime?: number | null
           sms_limit_professional?: number | null
@@ -4627,6 +4629,7 @@ export type Database = {
           platform_sms_provider?: string | null
           platform_sms_sender_id?: string | null
           postal_code?: string | null
+          signup_disabled?: boolean | null
           sms_limit_business?: number | null
           sms_limit_lifetime?: number | null
           sms_limit_professional?: number | null

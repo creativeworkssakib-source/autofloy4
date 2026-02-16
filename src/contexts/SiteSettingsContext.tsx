@@ -44,6 +44,8 @@ export interface SiteSettings {
   // Business module toggles (admin can enable/disable globally)
   online_business_enabled: boolean | null;
   offline_shop_enabled: boolean | null;
+  // Signup control
+  signup_disabled: boolean | null;
   created_at: string;
   updated_at: string;
 }
@@ -90,6 +92,8 @@ const defaultSettings: SiteSettings = {
   // Business module toggles
   online_business_enabled: true,
   offline_shop_enabled: true,
+  // Signup control
+  signup_disabled: false,
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
 };
