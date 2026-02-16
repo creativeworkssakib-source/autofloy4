@@ -152,28 +152,51 @@ const Checkout = () => {
     }
   };
 
+  const ALLOWED_UPLOAD_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+  const MAX_UPLOAD_SIZE = 5 * 1024 * 1024; // 5MB
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Validate file type
+    const fileExt = file.name.split('.').pop()?.toLowerCase();
+    if (!fileExt || !ALLOWED_UPLOAD_EXTENSIONS.includes(fileExt)) {
+      toast({ title: "Invalid file type", description: "Only JPG, PNG, GIF, WEBP allowed", variant: "destructive" });
+      return;
+    }
+
+    // Validate file size
+    if (file.size > MAX_UPLOAD_SIZE) {
+      toast({ title: "File too large", description: "Maximum size is 5MB", variant: "destructive" });
+      return;
+    }
+
     setUploadedFile(file);
     toast({ title: "File selected!", description: file.name });
 
-    // Upload to storage
+    // Upload through secure edge function
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `payment-screenshots/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-      
-      const { data, error } = await supabase.storage
-        .from("uploads")
-        .upload(fileName, file);
+      const token = localStorage.getItem('autofloy_token');
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('bucket', 'return-photos');
+      formData.append('folder', 'returns');
 
-      if (error) {
-        console.error("Upload error:", error);
-        // If bucket doesn't exist, we'll still proceed but without screenshot
-      } else if (data) {
-        const { data: urlData } = supabase.storage.from("uploads").getPublicUrl(fileName);
-        setScreenshotUrl(urlData.publicUrl);
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL || 'https://klkrzfwvrmffqkmkyqrh.supabase.co'}/functions/v1/storage-upload`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData,
+        }
+      );
+
+      const result = await response.json();
+      if (result.success && result.url) {
+        setScreenshotUrl(result.url);
+      } else {
+        console.error("Upload error:", result.error);
       }
     } catch (err) {
       console.error("Upload failed:", err);

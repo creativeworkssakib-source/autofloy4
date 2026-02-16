@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 // Webhook verification token - must match what's in Facebook Developer Console
-const VERIFY_TOKEN = "autofloy_fb_webhook_2024";
+const VERIFY_TOKEN = Deno.env.get("FACEBOOK_WEBHOOK_VERIFY_TOKEN") || "autofloy_fb_webhook_2024";
 
 // Create Supabase client
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
