@@ -12,6 +12,7 @@ import { PhoneInput } from "@/components/auth/PhoneInput";
 import { PasswordStrengthIndicator } from "@/components/auth/PasswordStrengthIndicator";
 import { 
   getEmailDomainError,
+  getEmailTypoSuggestion,
   checkPasswordStrength,
   isPasswordStrong,
   CountryCode,
@@ -59,6 +60,12 @@ const Signup = () => {
   // Password strength calculation
   const passwordStrength = useMemo(() => checkPasswordStrength(formData.password), [formData.password]);
   const isStrongPassword = useMemo(() => isPasswordStrong(formData.password), [formData.password]);
+
+  // Email typo suggestion
+  const emailSuggestion = useMemo(() => {
+    if (formData.email) return getEmailTypoSuggestion(formData.email);
+    return null;
+  }, [formData.email]);
 
   // Validate email in real-time
   useEffect(() => {
@@ -329,10 +336,23 @@ const Signup = () => {
                 />
               </div>
               {emailError && (
-                <p className="text-sm text-destructive flex items-center gap-1.5">
-                  <AlertCircle className="w-4 h-4" />
-                  {emailError}
-                </p>
+                <div className="space-y-1">
+                  <p className="text-sm text-destructive flex items-center gap-1.5">
+                    <AlertCircle className="w-4 h-4" />
+                    {emailError}
+                  </p>
+                  {emailSuggestion && (
+                    <Button
+                      type="button"
+                      variant="link"
+                      size="sm"
+                      className="h-auto p-0 text-xs text-primary font-medium"
+                      onClick={() => setFormData({ ...formData, email: emailSuggestion })}
+                    >
+                      ✨ Use {emailSuggestion} instead
+                    </Button>
+                  )}
+                </div>
               )}
             </div>
 
