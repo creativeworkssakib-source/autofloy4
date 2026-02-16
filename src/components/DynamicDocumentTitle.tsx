@@ -161,14 +161,45 @@ export const DynamicDocumentTitle = () => {
         document.head.appendChild(fbPixel);
       }
 
-      // Inject custom head scripts
+      // Inject custom head scripts (with domain allowlist for security)
       if (seoData.custom_head_scripts && !document.getElementById('custom-head-scripts')) {
-        const customScript = document.createElement('div');
-        customScript.id = 'custom-head-scripts';
-        customScript.innerHTML = seoData.custom_head_scripts;
-        // Move script contents to head
-        Array.from(customScript.children).forEach(child => {
-          document.head.appendChild(child.cloneNode(true));
+        const ALLOWED_SCRIPT_DOMAINS = [
+          'www.googletagmanager.com',
+          'www.google-analytics.com',
+          'googleads.g.doubleclick.net',
+          'connect.facebook.net',
+          'static.hotjar.com',
+          'cdn.segment.com',
+          'js.hs-scripts.com',
+          'snap.licdn.com',
+          'analytics.tiktok.com',
+        ];
+
+        const isScriptAllowed = (el: Element): boolean => {
+          if (el.tagName !== 'SCRIPT') return true; // Allow non-script elements like noscript, meta
+          const scriptEl = el as HTMLScriptElement;
+          if (!scriptEl.src) return false; // Block inline scripts
+          try {
+            const url = new URL(scriptEl.src);
+            return ALLOWED_SCRIPT_DOMAINS.includes(url.hostname);
+          } catch {
+            return false;
+          }
+        };
+
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = seoData.custom_head_scripts;
+        const marker = document.createElement('meta');
+        marker.id = 'custom-head-scripts';
+        marker.setAttribute('name', 'custom-head-scripts-marker');
+        document.head.appendChild(marker);
+
+        Array.from(tempDiv.children).forEach(child => {
+          if (isScriptAllowed(child)) {
+            document.head.appendChild(child.cloneNode(true));
+          } else {
+            console.warn('[SEO] Blocked unauthorized script:', (child as HTMLScriptElement).src || 'inline');
+          }
         });
       }
     }

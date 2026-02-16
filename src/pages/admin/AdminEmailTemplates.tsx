@@ -320,14 +320,14 @@ const AdminEmailTemplates = () => {
                   Subject: {editingTemplate?.subject}
                 </p>
                 <hr className="my-3" />
-                <div 
-                  className="prose prose-sm max-w-none"
-                  dangerouslySetInnerHTML={{ 
-                    __html: getPreviewHtml(
-                      editingTemplate?.html_content || '', 
-                      editingTemplate?.variables || []
-                    ) 
-                  }}
+                <iframe
+                  sandbox="allow-same-origin"
+                  className="w-full h-96 border rounded"
+                  title="Email Preview"
+                  srcDoc={getPreviewHtml(
+                    editingTemplate?.html_content || '', 
+                    editingTemplate?.variables || []
+                  )}
                 />
               </div>
             </div>
