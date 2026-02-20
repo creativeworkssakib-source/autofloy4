@@ -8,6 +8,8 @@ import type { PageMemory, ProductContext } from "./ai-agent-helpers.ts";
 function normalizeLanguage(lang: string | undefined): string {
   if (!lang) return "bangla";
   const normalized = lang.toLowerCase().trim();
+  // "auto" means detect automatically - default to bangla for Bangladesh context
+  if (normalized === "auto" || normalized === "" || !normalized) return "bangla";
   if (normalized === "bn" || normalized === "bangla" || normalized === "bengali" || normalized === "বাংলা") {
     return "bangla";
   }
