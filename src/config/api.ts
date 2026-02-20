@@ -10,9 +10,8 @@
  */
 
 // Cloudflare Worker URL - all API requests go here
-// During development, falls back to Supabase Edge Functions URL
 export const WORKER_API_URL = import.meta.env.VITE_WORKER_API_URL 
-  || "https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1";
+  || "https://autofloy-api.creativeworkssakib.workers.dev";
 
 // Supabase URL - ONLY for direct SDK database access (no business logic)
 export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL 
