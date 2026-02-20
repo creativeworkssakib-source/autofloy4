@@ -26,7 +26,8 @@ export default {
     
     try {
       // ============ Facebook Webhook ============
-      if (path === '/facebook-webhook') {
+      // Support both paths for compatibility
+      if (path === '/facebook-webhook' || path === '/webhook/facebook') {
         if (method === 'GET') {
           return handleWebhookVerify(request, env);
         }
