@@ -40,7 +40,8 @@ export async function handleWebhookEvent(request: Request, env: Env): Promise<Re
     
     // Verify signature only if FACEBOOK_APP_SECRET is configured
     if (env.FACEBOOK_APP_SECRET && signature) {
-      if (!verifyFacebookSignature(payload, signature, env.FACEBOOK_APP_SECRET)) {
+      const isValid = await verifyFacebookSignature(payload, signature, env.FACEBOOK_APP_SECRET);
+      if (!isValid) {
         console.error('[Webhook] Invalid signature');
         return errorResponse('Invalid signature', 401);
       }
