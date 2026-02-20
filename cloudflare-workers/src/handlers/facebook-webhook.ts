@@ -14,13 +14,20 @@ export async function handleWebhookVerify(request: Request, env: Env): Promise<R
   
   console.log('[Webhook] Verification request:', { mode, token });
   
-  // Accept any valid subscription request (token check optional for compatibility)
-  if (mode === 'subscribe') {
+  // Verify token check
+  const expectedToken = env.FACEBOOK_WEBHOOK_VERIFY_TOKEN || 'autofloy_fb_webhook_2024';
+  
+  if (mode === 'subscribe' && token === expectedToken) {
     console.log('[Webhook] Verification successful');
-    return new Response(challenge || '', { status: 200 });
+    // Must return plain text challenge - NOT JSON
+    return new Response(challenge || '', { 
+      status: 200,
+      headers: { 'Content-Type': 'text/plain' }
+    });
   }
   
-  return errorResponse('Verification failed', 403);
+  console.error('[Webhook] Verification failed - mode:', mode, 'token match:', token === expectedToken);
+  return new Response('Verification failed', { status: 403 });
 }
 
 // Handle Facebook webhook events (POST)
