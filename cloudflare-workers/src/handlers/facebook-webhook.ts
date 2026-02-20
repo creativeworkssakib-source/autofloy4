@@ -14,7 +14,6 @@ export async function handleWebhookVerify(request: Request, env: Env): Promise<R
   
   console.log('[Webhook] Verification request:', { mode, token });
   
-  // Verify token should match your Facebook app's verify token
   if (mode === 'subscribe' && token) {
     console.log('[Webhook] Verification successful');
     return new Response(challenge || '', { status: 200 });
@@ -78,6 +77,49 @@ export async function handleWebhookEvent(request: Request, env: Env): Promise<Re
   }
 }
 
+// Resolve AI credentials for a user
+async function resolveAICredentials(
+  userId: string,
+  supabase: any,
+  env: Env
+): Promise<{ apiKey: string; provider: string; baseUrl: string | null; model: string | null } | null> {
+  const { data: userAiConfig } = await supabase
+    .from('ai_provider_settings')
+    .select('*')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (userAiConfig?.use_admin_ai) {
+    const { data: apiConfig } = await supabase
+      .from('api_integrations')
+      .select('is_enabled, api_key')
+      .eq('provider', 'openai')
+      .maybeSingle();
+    if (!apiConfig?.is_enabled || !apiConfig?.api_key) {
+      console.log('[AI] Admin AI disabled globally');
+      return null;
+    }
+    return {
+      apiKey: apiConfig.api_key,
+      provider: detectProvider(apiConfig.api_key),
+      baseUrl: null,
+      model: null,
+    };
+  }
+
+  if (userAiConfig?.is_active && userAiConfig?.api_key_encrypted) {
+    return {
+      apiKey: userAiConfig.api_key_encrypted,
+      provider: userAiConfig.provider || detectProvider(userAiConfig.api_key_encrypted),
+      baseUrl: userAiConfig.base_url || null,
+      model: userAiConfig.model_name || null,
+    };
+  }
+
+  console.log('[AI] No AI API configured for user:', userId);
+  return null;
+}
+
 // Process incoming message
 async function processMessage(
   event: any,
@@ -89,7 +131,7 @@ async function processMessage(
   const messageText = event.message.text || '';
   const attachments = event.message.attachments || [];
   
-  console.log(`[Message] From ${senderId}: ${messageText.substring(0, 50)}...`);
+  console.log(`[Message] From ${senderId}: ${messageText.substring(0, 50)}`);
   
   // Get page memory
   const { data: pageMemory } = await supabase
@@ -103,23 +145,18 @@ async function processMessage(
     return;
   }
   
-  // Check if AI is enabled
-  if (!pageMemory.is_ai_enabled) {
-    console.log('[Message] AI is disabled for this page');
+  // Check if autoInboxReply is enabled via automation_settings
+  const automationSettings = pageMemory.automation_settings || {};
+  if (!automationSettings.autoInboxReply) {
+    console.log('[Message] autoInboxReply is disabled');
     return;
   }
-  
-  // Get API config
-  const { data: apiConfig } = await supabase
-    .from('api_integrations')
-    .select('is_enabled, api_key')
-    .eq('provider', 'openai')
-    .maybeSingle();
-  
-  if (!apiConfig?.is_enabled) {
-    console.log('[Message] AI integration is disabled');
-    return;
-  }
+
+  const userId = pageMemory.user_id;
+
+  // Resolve AI credentials
+  const aiCreds = await resolveAICredentials(userId, supabase, env);
+  if (!aiCreds) return;
   
   // Get access token
   const { data: account } = await supabase
@@ -143,7 +180,6 @@ async function processMessage(
     .maybeSingle();
   
   if (!conversation) {
-    // Get sender profile
     const profile = await getSenderProfile(senderId, account.access_token);
     
     const { data: newConv } = await supabase
@@ -151,7 +187,7 @@ async function processMessage(
       .insert({
         page_id: pageId,
         sender_id: senderId,
-        user_id: pageMemory.user_id,
+        user_id: userId,
         sender_name: profile?.name,
         message_history: [],
         conversation_state: 'active',
@@ -169,19 +205,19 @@ async function processMessage(
     { role: 'user', content: messageText || '[Media received]' },
   ];
   
-  // Detect provider and call AI
-  const provider = detectProvider(apiConfig.api_key);
   const hasMedia = attachments.length > 0;
   
   const { response: aiResponse, provider: usedProvider } = await callAI(
     messages,
-    provider,
-    apiConfig.api_key,
+    aiCreds.provider as any,
+    aiCreds.apiKey,
     env.LOVABLE_API_KEY,
     hasMedia
   );
   
-  // Send reply
+  console.log(`[Message] AI response (${usedProvider}): ${aiResponse.substring(0, 80)}`);
+  
+  // Send reply via Facebook
   const sent = await sendFacebookMessage(
     pageId,
     senderId,
@@ -189,9 +225,9 @@ async function processMessage(
     account.access_token
   );
   
-  console.log(`[Message] Reply sent: ${sent}, provider: ${usedProvider}`);
+  console.log(`[Message] Reply sent: ${sent}`);
   
-  // Update conversation
+  // Update conversation history
   const updatedHistory = [
     ...(conversation?.message_history || []),
     { role: 'user', content: messageText, timestamp: new Date().toISOString() },
@@ -209,11 +245,10 @@ async function processMessage(
   
   // Log execution
   await supabase.from('execution_logs').insert({
-    user_id: pageMemory.user_id,
+    user_id: userId,
     event_type: 'message_reply',
     status: sent ? 'success' : 'failed',
     source_platform: 'facebook',
-    processing_time_ms: Date.now() - Date.now(),
     incoming_payload: { pageId, senderId, messageText: messageText.substring(0, 100) },
     response_payload: { aiResponse: aiResponse.substring(0, 200), provider: usedProvider },
   });
@@ -235,7 +270,7 @@ async function processComment(
   // Skip own comments
   if (fromId === pageId) return;
   
-  console.log(`[Comment] From ${fromName}: ${message.substring(0, 50)}...`);
+  console.log(`[Comment] From ${fromName}: ${message.substring(0, 50)}`);
   
   // Get page memory
   const { data: pageMemory } = await supabase
@@ -245,6 +280,9 @@ async function processComment(
     .maybeSingle();
   
   if (!pageMemory) return;
+
+  // Check automation_settings for comments
+  const automationSettings = pageMemory.automation_settings || {};
   
   // Get access token
   const { data: account } = await supabase
@@ -261,56 +299,48 @@ async function processComment(
   console.log(`[Comment] Sentiment: ${analysis.sentiment}`);
   
   // Handle negative comments
-  if (analysis.sentiment === 'negative' && pageMemory.hide_negative_comments) {
+  if (analysis.sentiment === 'negative' && automationSettings.hideNegativeComments) {
     await hideComment(commentId, account.access_token);
     console.log('[Comment] Hidden negative comment');
     return;
   }
   
-  // Auto-like/react
-  if (pageMemory.auto_like_comments && analysis.suggestedReaction !== 'NONE') {
+  // Auto-react
+  if (automationSettings.reactionOnComments && analysis.suggestedReaction !== 'NONE') {
     await reactToComment(commentId, analysis.suggestedReaction, account.access_token);
   }
   
-  // Auto-reply
-  if (pageMemory.auto_reply_comments && analysis.shouldReply) {
-    // Check API config
-    const { data: apiConfig } = await supabase
-      .from('api_integrations')
-      .select('is_enabled, api_key')
-      .eq('provider', 'openai')
-      .maybeSingle();
+  // Auto-reply to comment
+  if (automationSettings.autoCommentReply && analysis.shouldReply) {
+    const userId = pageMemory.user_id;
+    const aiCreds = await resolveAICredentials(userId, supabase, env);
+    if (!aiCreds) return;
     
-    if (!apiConfig?.is_enabled) return;
-    
-    // Build AI prompt for comment
     const systemPrompt = buildSystemPrompt(pageMemory);
     const messages = [
       { role: 'system', content: systemPrompt + '\n\nএটা একটা পাবলিক কমেন্টের রিপ্লাই। ছোট ও professional রাখো।' },
       { role: 'user', content: `কমেন্ট: "${message}"\nকমেন্টকারী: ${fromName}` },
     ];
     
-    const provider = detectProvider(apiConfig.api_key);
     const { response: aiResponse } = await callAI(
       messages,
-      provider,
-      apiConfig.api_key,
+      aiCreds.provider as any,
+      aiCreds.apiKey,
       env.LOVABLE_API_KEY,
       false
     );
     
-    // Reply to comment
     await replyToComment(commentId, aiResponse, account.access_token);
-    console.log('[Comment] Replied');
+    console.log('[Comment] Replied:', aiResponse.substring(0, 50));
+    
+    // Log
+    await supabase.from('execution_logs').insert({
+      user_id: userId,
+      event_type: 'comment_reply',
+      status: 'success',
+      source_platform: 'facebook',
+      incoming_payload: { commentId, postId, message: message.substring(0, 100) },
+      response_payload: { sentiment: analysis.sentiment, reply: aiResponse.substring(0, 100) },
+    });
   }
-  
-  // Log
-  await supabase.from('execution_logs').insert({
-    user_id: pageMemory.user_id,
-    event_type: 'comment_processed',
-    status: 'success',
-    source_platform: 'facebook',
-    incoming_payload: { commentId, postId, message: message.substring(0, 100) },
-    response_payload: { sentiment: analysis.sentiment },
-  });
 }
