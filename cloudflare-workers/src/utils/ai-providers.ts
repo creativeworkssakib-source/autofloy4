@@ -85,9 +85,9 @@ export async function callLovableAI(
   apiKey: string, 
   hasMedia: boolean
 ): Promise<string> {
-  const model = hasMedia ? 'openai/gpt-4o' : 'openai/gpt-4o-mini';
+  const model = hasMedia ? 'openai/gpt-5' : 'google/gemini-3-flash-preview';
   
-  const response = await fetch('https://ai.lovable.dev/api/chat/completions', {
+  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${apiKey}`,
@@ -101,8 +101,8 @@ export async function callLovableAI(
   });
   
   if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Lovable AI error: ${error}`);
+    const errorText = await response.text();
+    throw new Error(`Lovable AI error (${response.status}): ${errorText}`);
   }
   
   const data = await response.json() as any;

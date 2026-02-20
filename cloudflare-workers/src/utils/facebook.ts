@@ -153,3 +153,46 @@ export async function getSenderProfile(
     return null;
   }
 }
+
+// Mark message as seen (read receipt)
+export async function markMessageSeen(
+  senderId: string,
+  pageId: string,
+  accessToken: string
+): Promise<void> {
+  try {
+    await fetch(`https://graph.facebook.com/v18.0/${pageId}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        recipient: { id: senderId },
+        sender_action: 'mark_seen',
+        access_token: accessToken,
+      }),
+    });
+  } catch (error) {
+    console.error('Mark seen error:', error);
+  }
+}
+
+// Send typing indicator (typing_on / typing_off)
+export async function sendTypingIndicator(
+  senderId: string,
+  pageId: string,
+  accessToken: string,
+  action: 'typing_on' | 'typing_off' = 'typing_on'
+): Promise<void> {
+  try {
+    await fetch(`https://graph.facebook.com/v18.0/${pageId}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        recipient: { id: senderId },
+        sender_action: action,
+        access_token: accessToken,
+      }),
+    });
+  } catch (error) {
+    console.error('Typing indicator error:', error);
+  }
+}
