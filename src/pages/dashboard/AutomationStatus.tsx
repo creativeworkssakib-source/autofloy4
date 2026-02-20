@@ -212,6 +212,38 @@ const AutomationStatus = () => {
     });
   };
 
+  // Test webhook by checking last buffer activity
+  const [webhookDiag, setWebhookDiag] = useState<{lastActivity: string | null; bufferCount: number} | null>(null);
+  const [isTestingWebhook, setIsTestingWebhook] = useState(false);
+
+  const handleTestWebhook = async () => {
+    setIsTestingWebhook(true);
+    try {
+      const { supabase: sb } = await import('@/integrations/supabase/client');
+      const { data } = await sb
+        .from('ai_message_buffer')
+        .select('created_at, is_processed')
+        .order('created_at', { ascending: false })
+        .limit(5);
+      
+      const { data: execLogs } = await sb
+        .from('execution_logs')
+        .select('created_at')
+        .eq('source_platform', 'facebook')
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      setWebhookDiag({
+        lastActivity: execLogs?.[0]?.created_at || null,
+        bufferCount: data?.length || 0,
+      });
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsTestingWebhook(false);
+    }
+  };
+
   // Fix webhook subscription for selected page
   const handleFixWebhook = async () => {
     if (!selectedPageId || !pageStatusData?.page) return;
@@ -343,7 +375,17 @@ const AutomationStatus = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleTestWebhook}
+              disabled={isTestingWebhook}
+              className="gap-2"
+            >
+              <Activity className={`h-4 w-4 ${isTestingWebhook ? "animate-pulse" : ""}`} />
+              {isTestingWebhook ? "Checking..." : "🔍 Diagnose"}
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -468,6 +510,45 @@ const AutomationStatus = () => {
             {/* Content when pageStatusData is available */}
             {pageStatusData && (
               <>
+                {/* Webhook Diagnostic Result */}
+                {webhookDiag && (
+                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+                    <Card className={`border-2 ${webhookDiag.lastActivity ? 'border-green-500/30 bg-green-500/5' : 'border-destructive/30 bg-destructive/5'}`}>
+                      <CardContent className="py-3">
+                        <div className="flex items-start gap-3">
+                          <div className={`p-2 rounded-lg ${webhookDiag.lastActivity ? 'bg-green-500/20' : 'bg-destructive/20'}`}>
+                            <Activity className={`w-4 h-4 ${webhookDiag.lastActivity ? 'text-green-600' : 'text-destructive'}`} />
+                          </div>
+                          <div className="flex-1">
+                            <p className="font-medium text-sm">Webhook Diagnostic</p>
+                            {webhookDiag.lastActivity ? (
+                              <p className="text-xs text-muted-foreground">
+                                ✅ Last Facebook activity: {new Date(webhookDiag.lastActivity).toLocaleString('bn-BD')}
+                              </p>
+                            ) : (
+                              <p className="text-xs text-destructive">
+                                ❌ No Facebook webhook activity found. Facebook থেকে কোনো event আসছে না।
+                              </p>
+                            )}
+                            {!webhookDiag.lastActivity && (
+                              <div className="mt-2 p-2 rounded bg-destructive/10 border border-destructive/20">
+                                <p className="text-xs font-medium text-destructive">করণীয়:</p>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  1. Facebook Developer Console → Webhooks → Callback URL:<br/>
+                                  <code className="bg-muted px-1 rounded text-[10px]">https://klkrzfwvrmffqkmkyqrh.supabase.co/functions/v1/facebook-webhook</code>
+                                </p>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  2. তারপর উপরের <strong>"🔧 Fix Webhook"</strong> button click করো
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                )}
+
                 {/* Warnings Section */}
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
