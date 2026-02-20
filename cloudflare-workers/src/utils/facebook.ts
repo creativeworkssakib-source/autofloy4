@@ -1,21 +1,38 @@
 import { Env } from './types';
-import { createHmac } from 'node:crypto';
 
-// Verify Facebook webhook signature
-export function verifyFacebookSignature(
+// Verify Facebook webhook signature using Web Crypto API (Cloudflare Workers compatible)
+export async function verifyFacebookSignature(
   payload: string,
   signature: string | null,
   appSecret: string
-): boolean {
+): Promise<boolean> {
   if (!signature) return false;
   
-  const expectedSignature = createHmac('sha256', appSecret)
-    .update(payload)
-    .digest('hex');
-  
-  const providedSignature = signature.replace('sha256=', '');
-  
-  return expectedSignature === providedSignature;
+  try {
+    const providedSignature = signature.replace('sha256=', '');
+    
+    const encoder = new TextEncoder();
+    const keyData = encoder.encode(appSecret);
+    const payloadData = encoder.encode(payload);
+    
+    const cryptoKey = await crypto.subtle.importKey(
+      'raw',
+      keyData,
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
+    );
+    
+    const signatureBuffer = await crypto.subtle.sign('HMAC', cryptoKey, payloadData);
+    const expectedSignature = Array.from(new Uint8Array(signatureBuffer))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+    
+    return expectedSignature === providedSignature;
+  } catch (error) {
+    console.error('Signature verification error:', error);
+    return false;
+  }
 }
 
 // Send message via Facebook Graph API
