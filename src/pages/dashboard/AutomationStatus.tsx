@@ -276,7 +276,12 @@ const AutomationStatus = () => {
       isPageSelected: page.is_connected,
       hasBusinessInfo: !!(memory?.business_description && memory.business_description.length > 10),
       hasAutomationsEnabled: hasAnyToggle,
-      hasPricingRules: !!(memory?.selling_rules || memory?.payment_rules),
+      hasPricingRules: !!(
+        (memory?.selling_rules && typeof memory.selling_rules === 'object' && Object.keys(memory.selling_rules).length > 0) ||
+        (memory?.payment_rules && typeof memory.payment_rules === 'object' && Object.keys(memory.payment_rules).length > 0) ||
+        (typeof memory?.selling_rules === 'string' && (memory.selling_rules as string).length > 0) ||
+        (typeof memory?.payment_rules === 'string' && (memory.payment_rules as string).length > 0)
+      ),
     };
   };
 
